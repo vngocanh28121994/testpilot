@@ -1,0 +1,37 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "DiscoverProjectsPoolsDevices",
+      "Effect": "Allow",
+      "Action": [
+        "devicefarm:ListProjects",
+        "devicefarm:ListDevicePools",
+        "devicefarm:ListDevices"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "CreateDevicePoolFromPickedDevices",
+      "Effect": "Allow",
+      "Action": ["devicefarm:CreateDevicePool"],
+      "Resource": "*"
+    },
+    {
+      "Sid": "UploadAppAndTestPackage",
+      "Effect": "Allow",
+      "Action": ["devicefarm:CreateUpload", "devicefarm:GetUpload"],
+      "Resource": "*"
+    },
+    {
+      "Sid": "ScheduleAndTrackRun",
+      "Effect": "Allow",
+      "Action": [
+        "devicefarm:ScheduleRun",
+        "devicefarm:GetRun",
+        "devicefarm:ListArtifacts"
+      ],
+      "Resource": "*"
+    }
+  ]
+}

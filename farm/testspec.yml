@@ -1,0 +1,95 @@
+version: 0.1
+
+# AWS Device Farm test spec for the Appium Node package produced by
+# `npm run farm` (bundle step). Device Farm starts Appium for us and injects
+# $DEVICEFARM_* variables; the runner reads them instead of hard-coded caps.
+
+phases:
+  install:
+    commands:
+      - export NVM_DIR=$HOME/.nvm
+      - . $NVM_DIR/nvm.sh
+      - nvm install 20
+      - nvm use 20
+      - node --version
+      - cd $DEVICEFARM_TEST_PACKAGE_PATH
+      - npm ci --omit=dev || npm install --omit=dev
+
+  pre_test:
+    commands:
+      # Device Farm's own Appium server. Do not start a second one.
+      - export APPIUM_VERSION=2
+      - avm $APPIUM_VERSION || true
+      # chromedriver_autodownload is an *insecure feature*: the
+      # `appium:chromedriverAutodownload` capability is refused unless the
+      # server was started allowing it. Without this flag a hybrid app dies on
+      # "No Chromedriver found that can automate Chrome <version>" the moment
+      # the driver switches into the WebView — the device's WebView updates far
+      # faster than the chromedrivers bundled with the Appium image.
+      - >
+        appium --base-path=/wd/hub --log-timestamp --log-no-colors
+        --allow-insecure=chromedriver_autodownload,adb_shell
+        >> $DEVICEFARM_LOG_DIR/appium.log 2>&1 &
+      - >
+        start_appium_timeout=0;
+        while [ true ]; do
+          if [ $start_appium_timeout -gt 60 ]; then
+            echo "appium did not start within 60 seconds"; exit 1;
+          fi;
+          grep -i "Appium REST http interface listener started" $DEVICEFARM_LOG_DIR/appium.log >/dev/null 2>&1 && break;
+          echo "waiting for appium"; start_appium_timeout=$((start_appium_timeout+1)); sleep 1;
+        done
+
+  test:
+    commands:
+      - cd $DEVICEFARM_TEST_PACKAGE_PATH
+      # TESTPILOT_PLATFORM is read by src/cli/run.ts; the device name and
+      # Appium endpoint come from the Device Farm environment.
+      - export TESTPILOT_PLATFORM=$DEVICEFARM_DEVICE_PLATFORM_NAME
+      # Echoed so the log says which phone this job ran on even before the
+      # artifacts are pulled, and so a missing variable is visible rather than
+      # silently falling back to the placeholder in the config file.
+      # No ": " anywhere in this line: an unquoted YAML scalar containing a
+      # colon followed by a space is a mapping, not a string. Written that way
+      # once, it reached the device as `{echo "device: ...}`, killed the test
+      # phase before the runner started, and cost a full run.
+      - echo "device=${DEVICEFARM_DEVICE_NAME:-KHONG_CO_BIEN_NAY}"
+      - export TESTPILOT_APPIUM_HOST=127.0.0.1
+      - export TESTPILOT_APPIUM_PORT=4723
+      - export TESTPILOT_APPIUM_PATH=/wd/hub
+      - export TESTPILOT_ARTIFACTS=$DEVICEFARM_LOG_DIR
+      # Hand the bundled chromedriver to the driver. The zip does not carry the
+      # executable bit, so restore it before Appium tries to spawn the binary.
+      - >
+        if [ -f "$DEVICEFARM_TEST_PACKAGE_PATH/chromedriver/chromedriver" ]; then
+          chmod +x "$DEVICEFARM_TEST_PACKAGE_PATH/chromedriver/chromedriver";
+          export TESTPILOT_CHROMEDRIVER="$DEVICEFARM_TEST_PACKAGE_PATH/chromedriver/chromedriver";
+          echo "using bundled chromedriver: $TESTPILOT_CHROMEDRIVER";
+          "$TESTPILOT_CHROMEDRIVER" --version || echo "chromedriver không chạy được trên host này";
+        else
+          echo "no bundled chromedriver; relying on Appium autodownload";
+        fi
+      # TESTPILOT_TAG lets one scenario be isolated on the farm. Running the
+      # whole suite makes every scenario inherit whatever state the previous
+      # one left in the app, which is exactly the thing you need to rule out.
+      - >
+        node dist/cli/run.js --platform "$TESTPILOT_PLATFORM" --on-farm
+        ${TESTPILOT_TAG:+--tag "$TESTPILOT_TAG"}
+
+  post_test:
+    commands:
+      # The run directory holds the report, its screenshots and its videos
+      # together. Without this the verdict, the flake classification and the
+      # heal suggestions are computed on the device and then thrown away when
+      # the container is destroyed.
+      - mkdir -p $DEVICEFARM_LOG_DIR/runs
+      - cp -r $DEVICEFARM_TEST_PACKAGE_PATH/runs/* $DEVICEFARM_LOG_DIR/runs/ || true
+      # The flake window travels up in the package and was then thrown away
+      # with the container: six device runs produced no history at all, so
+      # flaky-versus-broken on native could never be decided. It has to come
+      # back or the rolling window stays at whatever was last bundled.
+      - mkdir -p $DEVICEFARM_LOG_DIR/flake
+      - cp $DEVICEFARM_TEST_PACKAGE_PATH/registry/flake.json $DEVICEFARM_LOG_DIR/flake/ || true
+
+artifacts:
+  - $DEVICEFARM_LOG_DIR

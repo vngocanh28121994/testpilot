@@ -1,0 +1,255 @@
+{
+  "version": 1,
+  "screens": {
+    "login": {
+      "id": "login",
+      "title": "Đăng nhập TCInvest",
+      "description": "Màn hình đầu tiên của bản web đóng trong APK TCInvest 6.4.7.",
+      "source": {
+        "kind": "confluence",
+        "ref": "docs/dang-nhap.md"
+      }
+    },
+    "home": {
+      "id": "home",
+      "title": "Trang chủ sau đăng nhập",
+      "description": "Màn hình sau khi đăng nhập thành công."
+    }
+  },
+  "elements": {
+    "login.usernameField": {
+      "id": "login.usernameField",
+      "label": "Ô tên đăng nhập",
+      "screen": "login",
+      "candidates": {
+        "web": [
+          {
+            "strategy": "placeholder",
+            "value": "Email / Số tài khoản / Điện thoại",
+            "weight": 0.95,
+            "origin": "authored"
+          },
+          {
+            "strategy": "css",
+            "value": "input[type='text']",
+            "weight": 0.5,
+            "origin": "authored"
+          }
+        ],
+        "android": [
+          {
+            "strategy": "predicate",
+            "value": "new UiSelector().className(\"android.widget.EditText\").instance(0)",
+            "weight": 0.85,
+            "origin": "authored"
+          }
+        ]
+      },
+      "health": {
+        "resolutions": 63,
+        "heals": 0,
+        "winners": {
+          "placeholder:Email / Số tài khoản / Điện thoại": 63
+        }
+      }
+    },
+    "login.passwordField": {
+      "id": "login.passwordField",
+      "label": "Ô mật khẩu",
+      "screen": "login",
+      "candidates": {
+        "web": [
+          {
+            "strategy": "placeholder",
+            "value": "Mật khẩu",
+            "weight": 0.95,
+            "origin": "authored"
+          },
+          {
+            "strategy": "css",
+            "value": "input[type='password']",
+            "weight": 0.6,
+            "origin": "authored"
+          }
+        ],
+        "android": [
+          {
+            "strategy": "predicate",
+            "value": "new UiSelector().className(\"android.widget.EditText\").instance(1)",
+            "weight": 0.85,
+            "origin": "authored"
+          }
+        ]
+      },
+      "health": {
+        "resolutions": 30,
+        "heals": 0,
+        "winners": {
+          "placeholder:Mật khẩu": 30
+        }
+      }
+    },
+    "login.submitButton": {
+      "id": "login.submitButton",
+      "label": "Nút đăng nhập",
+      "screen": "login",
+      "candidates": {
+        "web": [
+          {
+            "strategy": "role",
+            "value": "button",
+            "name": "ĐĂNG NHẬP",
+            "weight": 0.9,
+            "origin": "authored"
+          },
+          {
+            "strategy": "label",
+            "value": "ĐĂNG NHẬP",
+            "weight": 0.75,
+            "origin": "authored"
+          }
+        ],
+        "android": [
+          {
+            "strategy": "predicate",
+            "value": "new UiSelector().className(\"android.widget.Button\").text(\"ĐĂNG NHẬP\")",
+            "weight": 0.9,
+            "origin": "authored"
+          },
+          {
+            "strategy": "predicate",
+            "value": "new UiSelector().className(\"android.widget.Button\").textContains(\"ĐĂNG NHẬP\")",
+            "weight": 0.7,
+            "origin": "authored"
+          }
+        ]
+      },
+      "health": {
+        "resolutions": 30,
+        "heals": 0,
+        "winners": {
+          "role:button": 30
+        }
+      }
+    },
+    "login.openAccountLink": {
+      "id": "login.openAccountLink",
+      "label": "Mở tài khoản",
+      "screen": "login",
+      "candidates": {
+        "web": [
+          {
+            "strategy": "label",
+            "value": "Mở tài khoản",
+            "weight": 0.8,
+            "origin": "authored"
+          }
+        ],
+        "android": [
+          {
+            "strategy": "predicate",
+            "value": "new UiSelector().text(\"Mở tài khoản\")",
+            "weight": 0.85,
+            "origin": "authored"
+          }
+        ]
+      },
+      "health": {
+        "resolutions": 11,
+        "heals": 0,
+        "winners": {
+          "label:Mở tài khoản": 11
+        }
+      }
+    },
+    "login.priceBoardCard": {
+      "id": "login.priceBoardCard",
+      "label": "Thẻ Bảng giá",
+      "screen": "login",
+      "candidates": {
+        "web": [
+          {
+            "strategy": "label",
+            "value": "Bảng giá",
+            "weight": 0.8,
+            "origin": "authored"
+          }
+        ],
+        "android": [
+          {
+            "strategy": "predicate",
+            "value": "new UiSelector().text(\"Bảng giá\")",
+            "weight": 0.85,
+            "origin": "authored"
+          }
+        ]
+      },
+      "health": {
+        "resolutions": 11,
+        "heals": 0,
+        "winners": {
+          "label:Bảng giá": 11
+        }
+      }
+    },
+    "login.missingOnPurpose": {
+      "id": "login.missingOnPurpose",
+      "label": "Không Tồn Tại Trên Màn Hình",
+      "screen": "login",
+      "candidates": {
+        "web": [
+          {
+            "strategy": "css",
+            "value": "#khong-bao-gio-co-phan-tu-nay",
+            "weight": 0.9,
+            "origin": "authored"
+          }
+        ],
+        "android": [
+          {
+            "strategy": "label",
+            "value": "Khong Bao Gio Co Chuoi Nay",
+            "weight": 0.9,
+            "origin": "authored"
+          }
+        ]
+      }
+    },
+    "home.totalAssets": {
+      "id": "home.totalAssets",
+      "label": "Tổng tài sản",
+      "screen": "home",
+      "candidates": {
+        "web": [
+          {
+            "strategy": "label",
+            "value": "Tổng tài sản",
+            "weight": 0.85,
+            "origin": "authored"
+          }
+        ],
+        "android": [
+          {
+            "strategy": "predicate",
+            "value": "new UiSelector().textContains(\"Tổng tài sản\").className(\"android.widget.TextView\")",
+            "weight": 0.8,
+            "origin": "authored"
+          },
+          {
+            "strategy": "predicate",
+            "value": "new UiSelector().textContains(\"Tổng tài sản\")",
+            "weight": 0.6,
+            "origin": "authored"
+          }
+        ]
+      },
+      "health": {
+        "resolutions": 18,
+        "heals": 0,
+        "winners": {
+          "label:Tổng tài sản": 18
+        }
+      }
+    }
+  }
+}

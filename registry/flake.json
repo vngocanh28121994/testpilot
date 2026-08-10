@@ -1,0 +1,77 @@
+{
+  "version": 1,
+  "window": 30,
+  "scenarios": {
+    "ang-nhap-tcinvest-man-hinh-ang-nhap-hien-u-cac-thanh-phan::web::Pixel 7": {
+      "outcomes": [
+        "p",
+        "f"
+      ],
+      "lastSeen": "2026-08-07T10:57:02.305Z"
+    },
+    "ang-nhap-tcinvest-nhap-uoc-thong-tin-ang-nhap::web::Pixel 7": {
+      "outcomes": [
+        "p",
+        "f"
+      ],
+      "lastSeen": "2026-08-07T10:57:02.305Z"
+    },
+    "ang-nhap-tcinvest-co-loi-vao-mo-tai-khoan-va-bang-gia::web::Pixel 7": {
+      "outcomes": [
+        "p",
+        "f"
+      ],
+      "lastSeen": "2026-08-07T10:57:02.305Z"
+    },
+    "ang-nhap-tcinvest-xoa-uoc-o-a-nhap::web::Pixel 7": {
+      "outcomes": [
+        "p",
+        "f"
+      ],
+      "lastSeen": "2026-08-07T10:57:02.305Z"
+    },
+    "ang-nhap-tcinvest-bat-loi-co-y-chung-minh-test-fail-that-chu-khong-luon-xanh::web::Pixel 7": {
+      "outcomes": [
+        "f",
+        "f"
+      ],
+      "lastSeen": "2026-08-07T10:57:02.305Z"
+    },
+    "ang-nhap-tcinvest-man-hinh-ang-nhap-hien-u-cac-thanh-phan::android::Google Pixel 8a (Android 17)": {
+      "outcomes": [
+        "p"
+      ],
+      "lastSeen": "2026-08-09T07:22:41.957Z"
+    },
+    "ang-nhap-tcinvest-nhap-uoc-thong-tin-ang-nhap::android::Google Pixel 8a (Android 17)": {
+      "outcomes": [
+        "p"
+      ],
+      "lastSeen": "2026-08-09T07:22:41.958Z"
+    },
+    "ang-nhap-tcinvest-co-loi-vao-mo-tai-khoan-va-bang-gia::android::Google Pixel 8a (Android 17)": {
+      "outcomes": [
+        "p"
+      ],
+      "lastSeen": "2026-08-09T07:22:41.958Z"
+    },
+    "ang-nhap-tcinvest-xoa-uoc-o-a-nhap::android::Google Pixel 8a (Android 17)": {
+      "outcomes": [
+        "p"
+      ],
+      "lastSeen": "2026-08-09T07:22:41.958Z"
+    },
+    "ang-nhap-tcinvest-bat-loi-co-y-chung-minh-test-fail-that-chu-khong-luon-xanh::android::Google Pixel 8a (Android 17)": {
+      "outcomes": [
+        "f"
+      ],
+      "lastSeen": "2026-08-09T07:22:41.958Z"
+    },
+    "ang-nhap-tcinvest-ang-nhap-thanh-cong-vao-tai-khoan::android::Google Pixel 8a (Android 17)": {
+      "outcomes": [
+        "p"
+      ],
+      "lastSeen": "2026-08-09T07:22:41.958Z"
+    }
+  }
+}

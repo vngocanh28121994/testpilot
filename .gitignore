@@ -1,0 +1,16 @@
+node_modules/
+dist/
+build/
+artifacts/
+reports/
+runs/
+testpilot.config.json
+docs/
+.DS_Store
+*.log
+
+# Test-account passwords. Never commit (see src/core/secrets.ts).
+.testpilot.secrets.json
+
+# Workflow history written by the UI.
+registry/history.json

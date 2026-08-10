@@ -1,0 +1,54 @@
+{
+  "web": {
+    "baseUrl": "https://staging.example.com",
+    "headless": true,
+    "device": "chromium-desktop",
+    "record": true
+  },
+  "android": {
+    "deviceName": "Pixel 7",
+    "app": "./builds/app-debug.apk",
+    "appPackage": "com.example.app",
+    "appActivity": "com.example.app.MainActivity"
+  },
+  "ios": {
+    "deviceName": "iPhone 15",
+    "app": "./builds/App.app",
+    "bundleId": "com.example.app"
+  },
+  "paths": {
+    "registry": "registry/elements.json",
+    "features": "features",
+    "artifacts": "artifacts",
+    "reports": "reports",
+    "runs": "runs",
+    "flakeDb": "registry/flake.json",
+    "docs": "docs"
+  },
+  "resolve": {
+    "timeoutMs": 10000,
+    "pollMs": 250,
+    "verifyHealedMatch": true
+  },
+  "executor": { "retries": 1 },
+  "flake": {
+    "window": 30,
+    "minRuns": 5,
+    "quarantineAt": 0.15,
+    "brokenAt": 0.95
+  },
+  "sources": [
+    "https://your-space.atlassian.net/wiki/spaces/PROD/pages/123456/Login",
+    "https://www.figma.com/design/AbCdEf/App?node-id=12-345"
+  ],
+  "llm": { "model": "claude-opus-5", "effort": "high" },
+  "farm": {
+    "region": "us-west-2",
+    "projectArn": "arn:aws:devicefarm:us-west-2:000000000000:project:REPLACE-ME",
+    "devicePoolArn": "arn:aws:devicefarm:us-west-2:000000000000:devicepool:REPLACE-ME",
+    "platform": "android",
+    "appPath": "./builds/app-debug.apk",
+    "testPackagePath": "build/testpilot-appium.zip",
+    "testSpecPath": "farm/testspec.yml"
+  }
+}

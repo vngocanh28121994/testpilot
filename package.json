@@ -1,0 +1,42 @@
+{
+  "name": "testpilot",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Doc -> Gherkin -> cross-platform (web + native) test execution with self-healing locators and flake detection.",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json && mkdir -p dist/ui && cp -R src/ui/public dist/ui/public",
+    "typecheck": "tsc -p tsconfig.check.json",
+    "ui": "tsx watch src/ui/server.ts",
+    "smoke": "tsx scripts/smoke.ts",
+    "gen": "tsx src/cli/gen.ts",
+    "run:web": "tsx src/cli/run.ts --platform web",
+    "run:android": "tsx src/cli/run.ts --platform android",
+    "run:ios": "tsx src/cli/run.ts --platform ios",
+    "farm:bundle": "npm run build && bash scripts/bundle-farm.sh",
+    "farm": "tsx src/cli/farm.ts",
+    "flake": "tsx scripts/flake-forget.ts",
+    "crawl": "tsx src/cli/crawl.ts",
+    "farm:pull": "tsx src/cli/farm-pull.ts",
+    "rerender": "tsx scripts/rerender.ts",
+    "backfill:device": "tsx scripts/backfill-device.ts"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.68.0",
+    "@aws-sdk/client-device-farm": "^3.700.0",
+    "@cucumber/gherkin": "^32.0.0",
+    "@cucumber/messages": "^27.0.0",
+    "@modelcontextprotocol/sdk": "^1.30.0",
+    "playwright": "^1.49.0",
+    "webdriverio": "^9.4.0",
+    "zod": "^3.24.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.7.0"
+  }
+}

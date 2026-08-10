@@ -1,0 +1,429 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Nephele — Scenario Studio</title>
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<div class="app" id="app">
+
+  <aside class="sidebar">
+    <div class="brand">
+      <div class="brand-name">Nephele</div>
+      <div class="brand-sub">Powered by TCBS</div>
+    </div>
+
+    <nav id="nav" aria-label="Điều hướng chính"></nav>
+
+    <div class="user">
+      <div class="user-name" id="userName">Vương Ngọc Anh</div>
+      <button class="iconbtn" id="logout" title="Đăng xuất" aria-label="Đăng xuất"></button>
+      <button class="iconbtn" id="collapse" title="Thu gọn thanh bên" aria-label="Thu gọn thanh bên"></button>
+    </div>
+  </aside>
+
+  <main id="main">
+
+    <!-- ============================ Scenario Studio ============================ -->
+    <section class="page" data-page="studio">
+      <h1 class="page-title">Scenario Studio</h1>
+
+      <div class="card">
+        <div class="field">
+          <label for="srcInput">Tài liệu đầu vào (link Confluence)</label>
+          <div class="inline-input">
+            <input id="srcInput" type="url" placeholder="Dán link Confluence… (Enter để thêm)"
+                   autocomplete="off" spellcheck="false">
+            <button class="chip-btn" id="srcAdd" type="button">Thêm</button>
+          </div>
+          <ul class="chips" id="srcList"></ul>
+        </div>
+
+        <div class="field">
+          <label for="baseUrl">Test Environment URL</label>
+          <input id="baseUrl" type="url" placeholder="https://backend-sit.tcbs.com.vn"
+                 autocomplete="off" spellcheck="false">
+        </div>
+
+        <div class="field">
+          <label for="targetFeature">Target Feature Name</label>
+          <input id="targetFeature" type="text" placeholder="checkout-flow"
+                 autocomplete="off" spellcheck="false">
+        </div>
+
+        <div class="field">
+          <label>Test Accounts</label>
+          <div id="accounts"></div>
+          <button class="ghost-btn" id="acctAdd" type="button">+ Thêm account</button>
+          <p class="hint">Mật khẩu lưu riêng ở <code>.testpilot.secrets.json</code> (không nằm trong
+             config, không vào git). Trong Gherkin dùng
+             <code>{{account.&lt;mô-tả&gt;.password}}</code>.</p>
+        </div>
+
+        <div class="field">
+          <label for="model">Model</label>
+          <select id="model"><option value="auto">auto</option></select>
+          <p class="hint" id="modelHint"></p>
+        </div>
+
+        <div class="field">
+          <label for="note">Additional Note</label>
+          <textarea id="note" rows="3" placeholder="Hướng dẫn bổ sung cho pipeline (tuỳ chọn)"></textarea>
+        </div>
+
+        <div class="btnrow" style="margin-bottom:12px">
+          <button class="ghost-btn" id="studioSave" type="button">Lưu (không chạy)</button>
+          <span class="status" id="studioSaveStatus"></span>
+        </div>
+        <button class="primary-btn" id="runWorkflow" type="button">Bắt đầu chạy workflow</button>
+        <p class="err" id="studioErr" hidden></p>
+      </div>
+
+      <div class="card progress-card" id="progressCard" hidden>
+        <ol class="stages" id="stages"></ol>
+        <pre class="console" id="genLog"></pre>
+      </div>
+
+      <h2 class="section-title">My Recent Scenarios</h2>
+      <div class="table-card">
+        <table class="grid">
+          <thead>
+            <tr><th>Feature</th><th>Date</th><th>Status</th><th class="right">Stages</th></tr>
+          </thead>
+          <tbody id="recent"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ============================ Dashboard ============================ -->
+    <section class="page" data-page="dashboard" hidden>
+      <h1 class="page-title">Dashboard</h1>
+      <div class="tiles" id="tiles"></div>
+      <h2 class="section-title">Feature đã sinh</h2>
+      <div class="table-card">
+        <table class="grid">
+          <thead><tr><th>File</th><th>Feature</th><th class="right">Scenario</th><th class="right">Step</th></tr></thead>
+          <tbody id="featureRows"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ============================ Scenario History ============================ -->
+    <section class="page" data-page="scenario-history" hidden>
+      <h1 class="page-title">Scenario History</h1>
+      <div id="historyList"></div>
+    </section>
+
+    <!-- ============================ E2E Runner ============================ -->
+    <section class="page" data-page="e2e-runner" hidden>
+      <h1 class="page-title">E2E Runner</h1>
+      <div class="card">
+        <div class="cols">
+          <div class="field">
+            <label for="platform">Platform</label>
+            <select id="platform">
+              <option value="web">web — Playwright</option>
+              <option value="android">android — Appium</option>
+              <option value="ios">ios — Appium</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="tag">Lọc theo tag</label>
+            <input id="tag" type="text" placeholder="@smoke" autocomplete="off">
+          </div>
+        </div>
+        <p class="hint">Android/iOS chạy qua Appium nên đưa được lên AWS Device Farm.
+           Web chạy Playwright cục bộ — Device Farm không hỗ trợ Playwright.</p>
+
+        <label class="check"><input type="checkbox" id="headed">
+          Hiện trình duyệt để theo dõi (headed)</label>
+        <p class="hint" id="headedHint">Chỉ áp dụng cho web. Cửa sổ Chromium sẽ mở trên máy bạn
+           và chạy chậm lại để nhìn kịp. Native xem trực tiếp trên thiết bị; Device Farm
+           không theo dõi trực tiếp được, chỉ có video sau khi chạy.</p>
+
+        <div class="field" id="slowMoField" hidden>
+          <label for="slowMo">Chậm lại giữa các thao tác (ms)</label>
+          <input id="slowMo" type="number" min="0" max="3000" step="50">
+        </div>
+
+        <button class="primary-btn" id="runSuite" type="button">Chạy test</button>
+      </div>
+      <pre class="console" id="runLog"></pre>
+    </section>
+
+    <!-- ============================ Device Farm ============================ -->
+    <section class="page" data-page="device-farm" hidden>
+      <h1 class="page-title">AWS Device Farm</h1>
+
+      <div class="card">
+        <h3 class="card-title">Kết nối</h3>
+        <p class="hint">TestPilot dùng credential chain mặc định của AWS SDK
+           (biến môi trường, <code>AWS_PROFILE</code>, hoặc IAM role). Không có ô nhập
+           key ở đây — key không nên đi qua trình duyệt.</p>
+
+        <div class="aws-status" id="awsStatus" data-state="unknown">
+          <span class="dot"></span>
+          <span id="awsStatusText">Đang kiểm tra credential…</span>
+          <button type="button" class="ghost-btn" id="awsLogin" hidden>Đăng nhập AWS</button>
+          <button type="button" class="ghost-btn" id="awsRecheck">Kiểm tra lại</button>
+        </div>
+        <pre class="console" id="awsLoginLog" hidden></pre>
+
+        <div class="cols">
+          <div class="field">
+            <label for="fRegion">Region</label>
+            <select id="fRegion">
+              <option value="us-west-2">us-west-2 (Oregon)</option>
+              <option value="us-east-1">us-east-1 (N. Virginia)</option>
+            </select>
+            <p class="hint">Device Farm chỉ chạy ở us-west-2.</p>
+          </div>
+          <div class="field">
+            <label for="fProject">Project</label>
+            <select id="fProject"><option value="">— tải danh sách —</option></select>
+          </div>
+        </div>
+        <div class="btnrow">
+          <button class="ghost-btn" id="fLoad" type="button">Tải project</button>
+          <span class="status" id="fConn"></span>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3 class="card-title">Hệ điều hành &amp; thiết bị</h3>
+
+        <div class="cols">
+          <div class="field">
+            <label for="fPlatform">Hệ điều hành</label>
+            <select id="fPlatform">
+              <option value="android">Android — .apk</option>
+              <option value="ios">iOS — .ipa</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="fPool">Device pool</label>
+            <select id="fPool"><option value="">— chọn project trước —</option></select>
+          </div>
+        </div>
+
+        <details class="picker" id="fPicker">
+          <summary>Hoặc tự chọn thiết bị và tạo pool mới</summary>
+
+          <div class="cols">
+            <div class="field">
+              <label for="fSearch">Lọc theo tên / hãng / phiên bản OS</label>
+              <input id="fSearch" type="search" placeholder="Pixel 8, Samsung, 14.0…" autocomplete="off">
+            </div>
+            <div class="field">
+              <label for="fPoolName">Tên pool sẽ tạo</label>
+              <input id="fPoolName" type="text" placeholder="testpilot-regression">
+            </div>
+          </div>
+          <label class="check"><input type="checkbox" id="fRealOnly"> Chỉ thiết bị thật đang rảnh</label>
+
+          <div class="devices" id="fDevices">
+            <p class="empty">Bấm “Tải thiết bị” để xem danh sách.</p>
+          </div>
+
+          <div class="btnrow">
+            <button class="ghost-btn" id="fLoadDevices" type="button">Tải thiết bị</button>
+            <button class="ghost-btn" id="fCreatePool" type="button">Tạo pool từ thiết bị đã chọn</button>
+            <span class="status" id="fPoolStatus"></span>
+          </div>
+        </details>
+      </div>
+
+      <div class="card">
+        <h3 class="card-title">Gói cài đặt</h3>
+
+        <div class="field">
+          <label for="fAppFile">App build (<span id="fExt">.apk</span>)</label>
+          <div class="drop" id="fDrop">
+            <input type="file" id="fAppFile" accept=".apk,.ipa">
+            <span id="fDropText">Kéo file vào đây hoặc bấm để chọn</span>
+          </div>
+          <p class="hint" id="fAppPath">Chưa có file nào.</p>
+        </div>
+
+        <div class="cols">
+          <div class="field">
+            <label for="fTestPkg">Test package (zip Appium)</label>
+            <input id="fTestPkg" type="text" placeholder="build/testpilot-appium.zip">
+          </div>
+          <div class="field">
+            <label for="fTestSpec">Testspec</label>
+            <input id="fTestSpec" type="text" placeholder="farm/testspec.yml">
+          </div>
+        </div>
+        <label class="check"><input type="checkbox" id="fBundle" checked>
+          Đóng gói lại test package trước khi chạy (<code>npm run farm:bundle</code>)</label>
+      </div>
+
+      <div class="card">
+        <h3 class="card-title">Môi trường chạy</h3>
+        <p class="hint">Các biến này được chèn thành <code>export</code> ở đầu phase
+           <code>test</code> của testspec. File testspec được upload nguyên văn lên AWS —
+           đừng để secret ở đây.</p>
+        <div id="fEnv"></div>
+        <button class="ghost-btn" id="fEnvAdd" type="button">+ Thêm biến</button>
+
+        <div class="cols" style="margin-top:18px">
+          <div class="field">
+            <label for="fRunName">Tên run</label>
+            <input id="fRunName" type="text" placeholder="testpilot-<thời điểm>">
+          </div>
+          <div class="field">
+            <label for="fJobTimeout">Giới hạn mỗi job (phút)</label>
+            <input id="fJobTimeout" type="number" min="5" max="150" placeholder="30">
+          </div>
+        </div>
+        <label class="check"><input type="checkbox" id="fVideo" checked>
+          Quay video (cần thiết để chẩn đoán fail native)</label>
+
+        <label class="check"><input type="checkbox" id="fSendSecrets">
+          Gửi mật khẩu test account lên thiết bị</label>
+        <p class="hint warn-hint">Cần bật thì <code>{{account.*.password}}</code> mới có giá trị
+           trên máy thật. Mật khẩu được chèn vào testspec, mà testspec
+           <strong>upload lên S3 dưới dạng văn bản thuần</strong> và lưu theo lịch sử run —
+           ai vào được tài khoản AWS này đều đọc được. Nên đổi mật khẩu sau khi test xong.
+           Tắt thì placeholder giữ nguyên và login sẽ không qua.</p>
+      </div>
+
+      <button class="primary-btn" id="fRun" type="button">Chạy trên Device Farm</button>
+      <p class="err" id="fErr" hidden></p>
+
+      <div class="card progress-card" id="fProgressCard" hidden>
+        <ol class="stages" id="fStages"></ol>
+        <pre class="console" id="fLog"></pre>
+      </div>
+    </section>
+
+    <!-- ============================ E2E History ============================ -->
+    <section class="page" data-page="e2e-history" hidden>
+      <h1 class="page-title">E2E History</h1>
+      <div class="tabbar" id="reportTabs">
+        <a class="ghost-btn" id="reportOpen" href="#" target="_blank" rel="noreferrer" hidden>Mở tab mới ↗</a>
+      </div>
+      <!-- Platform picks the tab; the runs inside it are the content, because
+           platforms are a fixed set of three and runs grow without limit. -->
+      <div class="runfilter">
+        <label for="reportWeek">Tuần</label>
+        <select id="reportWeek"></select>
+        <label for="reportDevice">Thiết bị</label>
+        <select id="reportDevice"></select>
+        <span class="sub" id="reportWeekCount"></span>
+      </div>
+      <div class="table-card runlist" id="reportRunsCard">
+        <table class="grid">
+          <thead>
+            <tr>
+              <th>Thời gian</th><th>Kết quả</th><th class="right">Pass</th>
+              <th class="right">Fail</th><th class="right">Thời lượng</th>
+              <th>Tag</th><th>Thiết bị</th>
+            </tr>
+          </thead>
+          <tbody id="reportRuns"></tbody>
+        </table>
+      </div>
+      <iframe class="report" id="reportFrame" title="Báo cáo chạy test" hidden></iframe>
+      <p class="empty" id="noReports">Chưa có báo cáo nào. Chạy một lượt test ở E2E Runner trước.</p>
+    </section>
+
+    <!-- ============================ Personal Settings ============================ -->
+    <section class="page" data-page="settings" hidden>
+      <h1 class="page-title">Personal Settings</h1>
+
+      <div class="card">
+        <h3 class="card-title">MCP server đọc Confluence / Figma</h3>
+        <p class="hint">TestPilot không giữ token. Nó gọi sang MCP server sẵn có của bạn,
+           server đó mới là nơi cầm credential.</p>
+
+        <div class="cols">
+          <div class="field">
+            <label for="mcpTransport">Transport</label>
+            <select id="mcpTransport">
+              <option value="">— không dùng MCP —</option>
+              <option value="stdio">stdio</option>
+              <option value="http">http</option>
+            </select>
+          </div>
+          <div class="field" data-mcp="http" hidden>
+            <label for="mcpUrl">URL</label>
+            <input id="mcpUrl" type="url" placeholder="https://mcp.internal/mcp">
+          </div>
+        </div>
+
+        <div class="cols" data-mcp="stdio" hidden>
+          <div class="field">
+            <label for="mcpCommand">Command</label>
+            <input id="mcpCommand" type="text" placeholder="node_modules/.bin/tsx">
+          </div>
+          <div class="field">
+            <label for="mcpArgs">Args (cách nhau bằng dấu cách)</label>
+            <input id="mcpArgs" type="text" placeholder="scripts/mock-mcp.ts">
+          </div>
+        </div>
+
+        <div class="cols" data-mcp="any" hidden>
+          <div class="field">
+            <label for="toolConfluence">Tool đọc Confluence</label>
+            <input id="toolConfluence" list="mcpTools" type="text" placeholder="confluence_get_page">
+          </div>
+          <div class="field">
+            <label for="toolFigma">Tool đọc Figma</label>
+            <input id="toolFigma" list="mcpTools" type="text" placeholder="figma_get_file">
+          </div>
+        </div>
+        <datalist id="mcpTools"></datalist>
+
+        <div class="btnrow" data-mcp="any" hidden>
+          <button class="ghost-btn" id="mcpProbe" type="button">Kết nối &amp; liệt kê tool</button>
+          <span class="status" id="mcpStatus"></span>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3 class="card-title">Thư mục</h3>
+        <div class="cols">
+          <div class="field"><label for="pDocs">Tài liệu export (fallback khi không có MCP)</label><input id="pDocs"></div>
+          <div class="field"><label for="pFeatures">Feature files</label><input id="pFeatures"></div>
+        </div>
+        <div class="cols">
+          <div class="field"><label for="pRegistry">Element registry</label><input id="pRegistry"></div>
+          <div class="field"><label for="pReports">Báo cáo</label><input id="pReports"></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3 class="card-title">Môi trường</h3>
+        <dl class="kv">
+          <dt>Config file</dt><dd id="cfgFile">—</dd>
+          <dt>ANTHROPIC_API_KEY</dt><dd id="apiKey">—</dd>
+          <dt>Element trong registry</dt><dd id="elCount">—</dd>
+        </dl>
+        <p class="err" id="cfgErr" hidden></p>
+      </div>
+
+      <div class="btnrow">
+        <button class="primary-btn narrow" id="saveSettings" type="button">Lưu cấu hình</button>
+        <span class="status" id="saveStatus"></span>
+      </div>
+    </section>
+
+    <!-- ============================ Chưa triển khai ============================ -->
+    <section class="page" data-page="todo" hidden>
+      <h1 class="page-title" id="todoTitle">—</h1>
+      <div class="card todo">
+        <p><b id="todoName">Mục này</b> có trong design nhưng chưa có gì đứng sau nó trong TestPilot.</p>
+        <p class="hint" id="todoWhy"></p>
+      </div>
+    </section>
+
+  </main>
+</div>
+
+<script type="module" src="/app.js"></script>
+</body>
+</html>

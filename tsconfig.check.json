@@ -1,0 +1,10 @@
+{
+  // Typecheck covers more than the build does. tsconfig.json is scoped to src/
+  // because that is what compiles into dist/, but scripts/ is real TypeScript
+  // too — and while it sat outside the project, `npm run typecheck` could pass
+  // with the smoke test broken.
+  "extends": "./tsconfig.json",
+  // rootDir is unset here: it exists to shape dist/, and this config emits nothing.
+  "compilerOptions": { "noEmit": true, "rootDir": "." },
+  "include": ["src/**/*.ts", "scripts/**/*.ts"]
+}
