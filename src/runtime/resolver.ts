@@ -1,6 +1,8 @@
 import type { LocatorCandidate, Platform } from '../core/types.js';
 import type { Registry } from '../core/registry.js';
 import type { UiDriver, UiHandle } from '../drivers/driver.js';
+import type { ElementDiscovery } from '../discovery/ElementDiscovery.js';
+import { buildElementIntent, mapDiscoveryStrategy } from '../discovery/DriverObservationAdapter.js';
 
 export interface ResolveOptions {
   /** Total budget for finding the element. */
@@ -60,14 +62,25 @@ export class Resolver {
     private readonly driver: UiDriver,
     private readonly registry: Registry,
     private readonly opts: ResolveOptions = DEFAULT_RESOLVE,
+    /**
+     * Optional discovery engine.  When present, the resolver tries it once
+     * after all known candidates fail on the first tick — effectively adding a
+     * self-healing observation pass before giving up.
+     *
+     * Kept optional so callers that haven't wired a RuntimeRegistry yet
+     * (scripts, CLI commands) continue to work without changes.
+     */
+    private readonly elementDiscovery?: ElementDiscovery,
   ) {}
 
   async resolve(elementId: string, override: Partial<ResolveOptions> = {}): Promise<Resolution> {
     const o = { ...this.opts, ...override };
-    const candidates = this.registry.candidates(elementId, this.driver.platform);
+    // Copy so unshift() below doesn't mutate the registry's internal array.
+    const candidates = [...this.registry.candidates(elementId, this.driver.platform)];
     const primary = candidates[0]!;
     const deadline = Date.now() + o.timeoutMs;
     let attempts = 0;
+    let discoveryAttempted = false;
 
     do {
       for (const candidate of candidates) {
@@ -89,6 +102,17 @@ export class Resolver {
           attempts,
         };
       }
+
+      // After the first tick where all known candidates fail, try the discovery
+      // pipeline once.  It observes the live UI, runs DeterministicMatcher, and
+      // — when confident enough — returns a freshly observed locator.  That
+      // locator is prepended so the next tick tries it before the stale ones.
+      if (this.elementDiscovery && !discoveryAttempted) {
+        discoveryAttempted = true;
+        const discovered = await this.tryDiscovery(elementId);
+        if (discovered) candidates.unshift(discovered);
+      }
+
       // Nothing matched this tick. If the UI is still moving, that is a reason to
       // keep waiting rather than to fail.
       await this.driver.isIdle().catch(() => false);
@@ -96,6 +120,37 @@ export class Resolver {
     } while (Date.now() < deadline);
 
     throw new ElementNotFoundError(elementId, this.driver.platform, candidates, attempts);
+  }
+
+  /**
+   * Runs the discovery pipeline for one element.  Returns a LocatorCandidate
+   * suitable for prepending to the active candidate list, or null on any failure.
+   *
+   * Errors from discovery (observation timeout, driver offline, etc.) are
+   * swallowed: discovery is a best-effort enhancement, not a hard dependency.
+   */
+  private async tryDiscovery(elementId: string): Promise<LocatorCandidate | null> {
+    try {
+      const elementDef = this.registry.element(elementId);
+      const intent = buildElementIntent(elementId, elementDef);
+      // Lower threshold than the standard 60: this is a fallback after all known
+      // locators have already failed.  The resolver's own plausible() guard still
+      // catches completely unrelated matches when verifyHealedMatch is on.
+      const result = await this.elementDiscovery!.discover(intent, { minConfidence: 40 });
+      if (result.method === 'failed' || !result.locator) return null;
+      return {
+        strategy: mapDiscoveryStrategy(result.locator.strategy),
+        value: result.locator.value,
+        // Clamp weight at 0.95 — a runtime-observed locator is never as certain
+        // as one explicitly authored, but ranks above unverified fallbacks.
+        weight: Math.min(0.95, (result.match?.confidence ?? 80) / 100),
+        origin: 'healed',
+      };
+    } catch (err) {
+      // Discovery is non-critical; warn but do not propagate.
+      console.warn(`[discovery] "${elementId}": ${(err as Error).message}`);
+      return null;
+    }
   }
 
   /** Waits until the element is gone. Used by assertNotVisible. */

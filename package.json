@@ -22,7 +22,8 @@
     "crawl": "tsx src/cli/crawl.ts",
     "farm:pull": "tsx src/cli/farm-pull.ts",
     "rerender": "tsx scripts/rerender.ts",
-    "backfill:device": "tsx scripts/backfill-device.ts"
+    "backfill:device": "tsx scripts/backfill-device.ts",
+    "test": "node --import tsx/esm --test src/discovery/__tests__/ConfidenceScorer.test.ts src/discovery/__tests__/ElementMatcher.test.ts src/discovery/__tests__/ElementVerifier.test.ts src/discovery/__tests__/RuntimeRegistry.test.ts src/agent/__tests__/AgentStateMachine.test.ts src/discovery/__tests__/NativeObservationAdapter.test.ts src/discovery/__tests__/ElementDiscovery.test.ts src/runtime/__tests__/Resolver.discovery.test.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.68.0",

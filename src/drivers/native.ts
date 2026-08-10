@@ -544,6 +544,17 @@ export class NativeUiDriver implements UiDriver {
   }
 
   /**
+   * Exposes the raw UiAutomator2 / XCUITest XML page source.
+   *
+   * Used by NativeObservationAdapter.createNativeObservationProvider() for
+   * richer observation (bounds, enabled, parent/child hierarchy) than the
+   * existing observe() method provides.
+   */
+  async getPageSource(): Promise<string> {
+    return this.asNative(() => this.b.getPageSource());
+  }
+
+  /**
    * Harvests the accessibility tree into observations.
    *
    * Parsed from the XML page source rather than by querying element by element:
@@ -553,7 +564,7 @@ export class NativeUiDriver implements UiDriver {
    * before it offers a text locator.
    */
   async observe(): Promise<Observed[]> {
-    const xml = await this.asNative(() => this.b.getPageSource());
+    const xml = await this.getPageSource();
     return parseUiAutomatorXml(xml);
   }
 
