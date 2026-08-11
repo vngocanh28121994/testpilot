@@ -46,10 +46,10 @@
         ]
       },
       "health": {
-        "resolutions": 63,
+        "resolutions": 66,
         "heals": 0,
         "winners": {
-          "placeholder:Email / Số tài khoản / Điện thoại": 63
+          "placeholder:Email / Số tài khoản / Điện thoại": 66
         }
       }
     },
@@ -82,10 +82,10 @@
         ]
       },
       "health": {
-        "resolutions": 30,
+        "resolutions": 33,
         "heals": 0,
         "winners": {
-          "placeholder:Mật khẩu": 30
+          "placeholder:Mật khẩu": 33
         }
       }
     },
@@ -125,10 +125,10 @@
         ]
       },
       "health": {
-        "resolutions": 30,
+        "resolutions": 33,
         "heals": 0,
         "winners": {
-          "role:button": 30
+          "role:button": 33
         }
       }
     },
@@ -192,6 +192,60 @@
         }
       }
     },
+    "login.errorMessage": {
+      "id": "login.errorMessage",
+      "label": "Thông báo lỗi đăng nhập",
+      "screen": "login",
+      "candidates": {
+        "web": [
+          {
+            "strategy": "css",
+            "value": ".subtitle-dialog-common",
+            "weight": 0.95,
+            "origin": "authored"
+          },
+          {
+            "strategy": "role",
+            "value": "dialog",
+            "weight": 0.8,
+            "origin": "authored"
+          },
+          {
+            "strategy": "css",
+            "value": "mat-dialog-container",
+            "weight": 0.7,
+            "origin": "authored"
+          }
+        ],
+        "android": [
+          {
+            "strategy": "predicate",
+            "value": "new UiSelector().textContains(\"không khớp\")",
+            "weight": 0.9,
+            "origin": "authored"
+          },
+          {
+            "strategy": "predicate",
+            "value": "new UiSelector().resourceId(\"android:id/message\")",
+            "weight": 0.75,
+            "origin": "authored"
+          },
+          {
+            "strategy": "predicate",
+            "value": "new UiSelector().className(\"android.widget.TextView\").textContains(\"203004\")",
+            "weight": 0.85,
+            "origin": "authored"
+          }
+        ]
+      },
+      "health": {
+        "resolutions": 1,
+        "heals": 0,
+        "winners": {
+          "css:.subtitle-dialog-common": 1
+        }
+      }
+    },
     "login.missingOnPurpose": {
       "id": "login.missingOnPurpose",
       "label": "Không Tồn Tại Trên Màn Hình",
@@ -244,10 +298,10 @@
         ]
       },
       "health": {
-        "resolutions": 18,
+        "resolutions": 20,
         "heals": 0,
         "winners": {
-          "label:Tổng tài sản": 18
+          "label:Tổng tài sản": 20
         }
       }
     }
