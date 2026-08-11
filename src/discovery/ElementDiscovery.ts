@@ -35,6 +35,7 @@ import { ConfidenceScorer } from './ConfidenceScorer.js';
 import { checkKnownLocator } from './KnownLocatorLookup.js';
 import { checkAmbiguity, type AmbiguityCheckResult, type AmbiguityPolicy, DEFAULT_AMBIGUITY_POLICY } from './AmbiguityPolicy.js';
 import { checkInteractionSafety, type SafetyCheckResult } from './InteractionSafety.js';
+import { verifyRuntime, type RuntimeVerificationResult } from './RuntimeVerification.js';
 
 // ── result types ──────────────────────────────────────────────────────────────
 
@@ -58,6 +59,8 @@ export interface DiscoveryResult {
   ambiguity?: AmbiguityCheckResult;
   /** Interaction safety result — present when G06 check ran. */
   safety?: SafetyCheckResult;
+  /** G01 runtime verification result — present when a known locator was checked. */
+  runtimeVerification?: RuntimeVerificationResult;
   /** The raw observation used for matching (absent for successful 'known-locator'). */
   observation?: UiObservation;
   /** Audit trail — each step appends one or more lines. */
@@ -139,24 +142,37 @@ export class ElementDiscovery {
 
       const el = findElementByLocator(obs, strategy, value);
       if (el) {
-        const verif = this.verifier.verify(intent, el, obs.elements);
-        evidence.push(`G01 semantic check: ${verif.passed ? 'PASS' : 'FAIL'} score=${verif.score}`);
-        for (const e of verif.evidence) evidence.push(`  · ${e}`);
+        // G01: cheap runtime verification (PASS / FAIL / UNKNOWN)
+        const runtimeVerif = verifyRuntime(intent, el);
+        evidence.push(`G01 runtime check: ${runtimeVerif.status} (risk=${runtimeVerif.actionRisk})`);
+        if (runtimeVerif.reason) evidence.push(`  · ${runtimeVerif.reason}`);
 
-        if (verif.passed) {
+        if (runtimeVerif.status === 'PASS') {
           return {
             intent,
             method: 'known-locator',
             locator: { strategy, value },
-            verification: verif,
+            runtimeVerification: runtimeVerif,
             observation: obs,
             evidence,
           };
         }
 
-        // Verification failed → known locator points to the wrong element
-        evidence.push(`known locator ${strategy}="${value}" points to wrong element — rejected, starting discovery`);
+        if (runtimeVerif.status === 'UNKNOWN') {
+          // HIGH-risk action + missing metadata: never auto-PASS, reject locator.
+          // Fall through to full observation-based discovery (already have obs).
+          evidence.push(
+            `G01 UNKNOWN: ${runtimeVerif.reason ?? 'missing metadata for HIGH-risk action'} — ` +
+            `rejecting known locator, starting full discovery`,
+          );
+        } else {
+          // FAIL: locator points to the wrong element
+          evidence.push(`G01 FAIL: known locator ${strategy}="${value}" points to wrong element — rejected`);
+        }
+
         this.runtimeRegistry.markRejected(intent.id, strategy, value);
+        // Fall through using the already-obtained observation (no second observe())
+        return this.discoverFromObservation(intent, obs, opts, minConf, ambiguityPolicy, evidence);
       } else {
         evidence.push(`known locator ${strategy}="${value}" not found in observation — rejected, starting discovery`);
         this.runtimeRegistry.markRejected(intent.id, strategy, value);

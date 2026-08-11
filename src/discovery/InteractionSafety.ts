@@ -1,5 +1,5 @@
 /**
- * Interaction safety gate — G06 (review v5).
+ * Interaction safety gate — G06 (review v5 + v6 §13-16).
  *
  * Separates two distinct questions:
  *   1. MatchConfidence  — "Is this likely the intended element?"  (0..100 score)
@@ -12,24 +12,28 @@
  *
  * Safety checks (deterministic — no AI):
  *   SAFE     — visible, enabled, interactive, not covered, correct context
- *   UNSAFE   — one or more hard safety checks fail
+ *   UNSAFE   — one or more hard safety checks fail (value is known-bad)
  *   AMBIGUOUS— element cannot be uniquely identified on the current screen
+ *   UNKNOWN  — critical metadata is missing for a HIGH-risk action.
+ *              Per review v6 §15: missing evidence is NOT a silent PASS.
+ *              Caller must re-observe or stop — never execute under UNKNOWN.
  */
 
 import type { ActionKind, ElementIntent } from './ElementIntent.js';
 import type { ObservedElement } from './UiObservation.js';
+import { classifyActionRisk } from './ActionRisk.js';
 
-export type InteractionSafety = 'SAFE' | 'UNSAFE' | 'AMBIGUOUS';
+export type InteractionSafety = 'SAFE' | 'UNSAFE' | 'AMBIGUOUS' | 'UNKNOWN';
 
 export interface SafetyChecks {
   /** Element exists in the current observation. */
   exists: boolean;
   /** Element is visible on screen. */
   visible: boolean;
-  /** Element is not disabled. */
-  enabled: boolean;
-  /** Element is interactive (accepts user input). */
-  interactive: boolean;
+  /** Element is not disabled (undefined when metadata is missing). */
+  enabled: boolean | undefined;
+  /** Element is interactive (undefined when metadata is missing). */
+  interactive: boolean | undefined;
   /** No other element on screen shares the same semantic signature. */
   unique: boolean;
 }
@@ -61,45 +65,69 @@ export function checkInteractionSafety(
   allElements: ObservedElement[],
 ): SafetyCheckResult {
   const evidence: string[] = [];
+  const elementText = candidate.text ?? candidate.accessibilityLabel;
+  const actionRisk = classifyActionRisk(intent.action, elementText);
 
-  const visible    = candidate.visible;
-  const enabled    = candidate.enabled !== false;
-  const interactive = candidate.interactive !== false;
-  const unique     = isUnique(candidate, allElements);
+  const visible     = candidate.visible;
+  const enabledRaw  = candidate.enabled;
+  const interactRaw = candidate.interactive;
+  const unique      = isUnique(candidate, allElements);
 
-  if (!visible) evidence.push('element is not visible on screen');
-  if (!enabled  && actionRequiresEnabled(intent.action)) evidence.push(`element is disabled but action "${intent.action}" requires enabled`);
-  if (!interactive && actionRequiresInteractive(intent.action)) evidence.push(`element is not interactive but action "${intent.action}" requires it`);
-  if (!unique)  evidence.push('element shares the same text/role signature with another element on screen (AMBIGUOUS)');
-
-  const checks: SafetyChecks = { exists: true, visible, enabled, interactive, unique };
-
-  // Ambiguity is a special case — do not click either element
+  // AMBIGUOUS: element cannot be uniquely identified — do not click either element
   if (!unique) {
+    const msg = 'element shares the same text/role signature with another element on screen (AMBIGUOUS)';
+    evidence.push(msg);
     return {
       safety: 'AMBIGUOUS',
-      reason: evidence[evidence.length - 1]!,
-      checks,
+      reason: msg,
+      checks: { exists: true, visible, enabled: enabledRaw, interactive: interactRaw, unique: false },
       evidence,
     };
   }
 
-  const unsafe = evidence.length > 0;
-  if (unsafe) {
-    return {
-      safety: 'UNSAFE',
-      reason: evidence[0]!,
-      checks,
-      evidence,
-    };
+  // UNKNOWN: HIGH-risk action with missing critical metadata (v6 §15)
+  // Never silently treat missing evidence as PASS for destructive actions.
+  if (actionRisk === 'HIGH') {
+    const missing: string[] = [];
+    if (actionRequiresEnabled(intent.action) && enabledRaw == null) missing.push('enabled');
+    if (actionRequiresInteractive(intent.action) && interactRaw == null) missing.push('interactive');
+
+    if (missing.length > 0) {
+      const msg =
+        `HIGH-risk action "${intent.action}" with missing metadata: ${missing.join(', ')} — ` +
+        `cannot confirm element is safe to interact with`;
+      evidence.push(msg);
+      return {
+        safety: 'UNKNOWN',
+        reason: msg,
+        checks: { exists: true, visible, enabled: enabledRaw, interactive: interactRaw, unique: true },
+        evidence,
+      };
+    }
   }
 
-  return {
-    safety: 'SAFE',
-    reason: 'All safety checks passed',
-    checks,
-    evidence: [],
+  // Hard failures (definitive bad state)
+  if (!visible) evidence.push('element is not visible on screen');
+  if (enabledRaw === false && actionRequiresEnabled(intent.action)) {
+    evidence.push(`element is disabled but action "${intent.action}" requires enabled`);
+  }
+  if (interactRaw === false && actionRequiresInteractive(intent.action)) {
+    evidence.push(`element is not interactive but action "${intent.action}" requires it`);
+  }
+
+  const checks: SafetyChecks = {
+    exists: true,
+    visible,
+    enabled: enabledRaw,
+    interactive: interactRaw,
+    unique: true,
   };
+
+  if (evidence.length > 0) {
+    return { safety: 'UNSAFE', reason: evidence[0]!, checks, evidence };
+  }
+
+  return { safety: 'SAFE', reason: 'All safety checks passed', checks, evidence: [] };
 }
 
 /**

@@ -1,5 +1,5 @@
 /**
- * Session identity — G03 (review v5).
+ * Session identity — G03 (review v5 + v6 §25-27).
  *
  * Proves that the MCP observation and the driver interaction belong to the
  * SAME device/Appium session. Without this, the system could observe one
@@ -12,6 +12,8 @@
  *
  * Identity is captured at session start and attached to UiObservation.context.
  */
+
+import { randomUUID } from 'node:crypto';
 
 // ── identity types ────────────────────────────────────────────────────────────
 
@@ -112,4 +114,48 @@ export function makeSessionIdentity(
   opts: Omit<SessionIdentity, 'capturedAt'>,
 ): SessionIdentity {
   return { ...opts, capturedAt: new Date().toISOString() };
+}
+
+// ── RuntimeSessionIdentity (review v6 §26) ────────────────────────────────────
+
+/**
+ * Full runtime session identity — extends SessionIdentity with a TestPilot-
+ * generated session id that is always present, even when the provider does not
+ * expose its own session id.
+ *
+ * Every observation and action should reference this session.
+ * Enforces the invariant:
+ *   observation.sessionId == action.sessionId
+ *   observation.deviceId  == action.deviceId
+ *
+ * If these do not match → RUNTIME_SESSION_MISMATCH → stop execution.
+ */
+export interface RuntimeSessionIdentity extends Omit<SessionIdentity, never> {
+  /**
+   * TestPilot-generated session UUID — always present.
+   * Created at session start and bound to the MCP client / driver instance.
+   */
+  testPilotSessionId: string;
+}
+
+/**
+ * Create a RuntimeSessionIdentity. Generates testPilotSessionId automatically.
+ * Call once at test-session start; pass to every observation and executor.
+ */
+export function makeRuntimeSessionIdentity(
+  opts: Omit<RuntimeSessionIdentity, 'testPilotSessionId' | 'capturedAt'>,
+): RuntimeSessionIdentity {
+  return {
+    testPilotSessionId: generateSessionId(),
+    ...opts,
+    capturedAt: new Date().toISOString(),
+  };
+}
+
+function generateSessionId(): string {
+  try {
+    return randomUUID();
+  } catch {
+    return `tp-session-${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
+  }
 }

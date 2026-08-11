@@ -1,14 +1,20 @@
 /**
- * Ambiguity detection — G05 (review v5).
+ * Ambiguity detection and candidate ranking — G05 (review v5 + v6 §17-20).
  *
  * A high match confidence does NOT imply uniqueness.
  * Two "Confirm" buttons at scores 82 and 80 are ambiguous — choosing the first
  * one automatically is a correctness bug, not a feature.
  *
  * Rules:
- *   confidence < minimumConfidence  → INSUFFICIENT (reject outright)
+ *   confidence < minimumConfidence  → INSUFFICIENT / LOW_CONFIDENCE
  *   top - second < minimumMargin    → AMBIGUOUS (stop, surface to human)
- *   otherwise                       → CLEAR (safe to act autonomously)
+ *   otherwise                       → CLEAR / SELECTED (safe to act autonomously)
+ *
+ * CandidateRanking exposes the margin explicitly so downstream components can
+ * inspect the decision without re-running the ambiguity check.
+ *
+ * CandidateDecision is a typed discriminated union replacing the raw
+ * Candidate | undefined pattern.
  */
 
 export interface AmbiguityPolicy {
@@ -39,6 +45,61 @@ export interface AmbiguityCheckResult {
   candidatesAboveThreshold: number;
   reason: string;
 }
+
+// ── candidate ranking ─────────────────────────────────────────────────────────
+
+/**
+ * Ranking metadata for the top candidates — exposed so callers can log the
+ * margin without having to reconstruct it from the raw scores array.
+ */
+export interface CandidateRanking {
+  topScore: number;
+  secondScore?: number;
+  /** topScore − secondScore. Undefined when there is only one candidate. */
+  margin?: number;
+}
+
+// ── candidate decision ────────────────────────────────────────────────────────
+
+/** Typed result of the candidate selection step — replaces `Candidate | undefined`. */
+export type CandidateDecision =
+  | { status: 'SELECTED'; topScore: number; secondScore?: number; margin?: number; reason: string }
+  | { status: 'AMBIGUOUS'; topScore: number; secondScore: number; margin: number; reason: string }
+  | { status: 'LOW_CONFIDENCE'; topScore: number; reason: string }
+  | { status: 'NO_MATCH'; reason: string };
+
+/**
+ * Convert an AmbiguityCheckResult into the structured CandidateDecision type.
+ * Useful for components that need a discriminated union rather than the raw
+ * outcome + score fields.
+ */
+export function toCandidateDecision(result: AmbiguityCheckResult): CandidateDecision {
+  switch (result.outcome) {
+    case 'CLEAR':
+      return {
+        status: 'SELECTED',
+        topScore: result.topScore,
+        secondScore: result.secondScore,
+        margin: result.margin,
+        reason: result.reason,
+      };
+    case 'AMBIGUOUS':
+      return {
+        status: 'AMBIGUOUS',
+        topScore: result.topScore,
+        secondScore: result.secondScore!,
+        margin: result.margin!,
+        reason: result.reason,
+      };
+    case 'INSUFFICIENT':
+      if (result.topScore === 0) {
+        return { status: 'NO_MATCH', reason: result.reason };
+      }
+      return { status: 'LOW_CONFIDENCE', topScore: result.topScore, reason: result.reason };
+  }
+}
+
+// ── ambiguity gate ────────────────────────────────────────────────────────────
 
 /**
  * Run the ambiguity gate on a sorted list of match scores.
