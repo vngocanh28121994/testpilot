@@ -142,6 +142,20 @@ export class RuntimeRegistry {
     this.touch(elementId);
   }
 
+  /**
+   * Mark a locator as healed — it was found during a failure-recovery scenario
+   * and passed all anti-regression checks.  Distinct from 'verified' (which
+   * means the locator worked in a normal, non-failure run).  Both statuses are
+   * accepted by KnownLocatorLookup; 'verified' has higher selection priority.
+   */
+  markHealed(elementId: string, strategy: string, value: string): void {
+    const loc = this.findLocator(elementId, strategy, value);
+    if (!loc) return;
+    loc.status = 'healed';
+    loc.verifiedAt = new Date().toISOString();
+    this.touch(elementId);
+  }
+
   /** Mark a locator as rejected — will be excluded from future lookups. */
   markRejected(elementId: string, strategy: string, value: string): void {
     const loc = this.findLocator(elementId, strategy, value);
