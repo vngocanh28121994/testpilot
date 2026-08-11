@@ -242,7 +242,9 @@ describe('ElementDiscovery — deterministic match', () => {
 // ── verification failure ──────────────────────────────────────────────────────
 
 describe('ElementDiscovery — verification failure', () => {
-  it('returns unverified match when element is disabled for tap', async () => {
+  it('returns method=failed for disabled element on tap (G06 interaction safety)', async () => {
+    // G06: UNSAFE elements must return method='failed' — the interaction safety gate
+    // fires BEFORE verification so a disabled element can never be accidentally tapped.
     const reg = await emptyRegistry();
     const obs = makeObservation({
       elements: [
@@ -253,7 +255,7 @@ describe('ElementDiscovery — verification failure', () => {
           accessibilityLabel: 'Login',
           testId: 'login',
           visible: true,
-          enabled: false, // disabled!
+          enabled: false, // disabled — UNSAFE for tap
           interactive: true,
           index: 0,
         },
@@ -263,11 +265,14 @@ describe('ElementDiscovery — verification failure', () => {
     const discovery = new ElementDiscovery(makeProvider(obs), reg);
     const result = await discovery.discover(makeIntent({ action: 'tap' }));
 
-    // Match should be found but verification should fail
-    assert.equal(result.method, 'deterministic');
-    assert.ok(result.verification);
-    assert.ok(!result.verification.passed, 'verification must fail for disabled element');
-    assert.ok(!result.match?.verified, 'match must not be verified');
+    // G06: disabled element for 'tap' → UNSAFE → method='failed' (not 'deterministic')
+    assert.equal(result.method, 'failed');
+    assert.ok(result.safety, 'safety result must be present');
+    assert.equal(result.safety?.safety, 'UNSAFE');
+    assert.ok(
+      result.safety?.evidence.some((e) => e.includes('disabled')),
+      'safety evidence must mention disabled',
+    );
   });
 
   it('does not store unverified locator in registry', async () => {

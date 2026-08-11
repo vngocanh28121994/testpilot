@@ -12,6 +12,17 @@ export type ObservationSource = 'native' | 'webview' | 'browser' | 'appium-mcp';
 export interface ObservedElement {
   /** Unique id assigned during this observation session — not a locator. */
   id: string;
+  /**
+   * The driver/provider that originated this element (G02).
+   * Allows downstream code to distinguish 'appium-mcp' ids from 'appium' ids.
+   */
+  provider?: string;
+  /**
+   * The original element id as assigned by the provider BEFORE TestPilot
+   * renaming (G02). Used to resolve MCP findElement() results back to
+   * TestPilot's observation id (tp-el-N).
+   */
+  providerElementId?: string;
   /** ARIA role (web) / widget class (native). */
   role?: string;
   /** Visible trimmed text. */
@@ -58,6 +69,12 @@ export interface UiObservation {
     activity?: string;
     bundleId?: string;
     webContext?: string;
+    /** Appium session id — for G03 same-session verification. */
+    appiumSessionId?: string;
+    /** Device identifier (UDID / serial). */
+    deviceId?: string;
+    /** MCP client/session id if this observation came from Appium MCP. */
+    mcpSessionId?: string;
   };
   screen?: { name?: string; confidence?: number };
   elements: ObservedElement[];

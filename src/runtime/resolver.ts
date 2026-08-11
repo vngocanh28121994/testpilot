@@ -2,7 +2,9 @@ import type { LocatorCandidate, Platform } from '../core/types.js';
 import type { Registry } from '../core/registry.js';
 import type { UiDriver, UiHandle } from '../drivers/driver.js';
 import type { ElementDiscovery } from '../discovery/ElementDiscovery.js';
+import type { ObservedElement } from '../discovery/UiObservation.js';
 import { buildElementIntent, mapDiscoveryStrategy } from '../discovery/DriverObservationAdapter.js';
+import { StandardElementVerifier } from '../discovery/ElementVerifier.js';
 
 export interface ResolveOptions {
   /** Total budget for finding the element. */
@@ -58,6 +60,9 @@ export class ElementNotFoundError extends Error {
  * waiting, not the selector.
  */
 export class Resolver {
+  // G04: single authoritative verification engine — shared with ElementDiscovery
+  private readonly verifier = new StandardElementVerifier();
+
   constructor(
     private readonly driver: UiDriver,
     private readonly registry: Registry,
@@ -89,7 +94,7 @@ export class Resolver {
         if (!handle) continue;
 
         const isFallback = candidate !== primary;
-        if (isFallback && o.verifyHealedMatch && !(await this.plausible(elementId, handle))) {
+        if (isFallback && o.verifyHealedMatch && !(await this.verifySemantically(elementId, handle))) {
           continue;
         }
 
@@ -191,25 +196,48 @@ export class Resolver {
   }
 
   /**
-   * Loose sanity check for a healed match. Deliberately permissive — it only has
-   * to catch "we found something completely unrelated", not enforce exact copy.
+   * Semantic verification for healed matches — G04.
+   *
+   * Replaces the old `plausible()` text-only heuristic with a call to the
+   * authoritative StandardElementVerifier so there is ONE verification engine
+   * across the entire discovery + resolver stack.
+   *
+   * Builds a minimal ObservedElement from the live UiHandle properties and
+   * delegates to StandardElementVerifier.verify(). Permissive on unreadable
+   * text (icon buttons) — if text() throws, we cannot disprove the match, so
+   * we allow it (same as before, but now explicit and documented).
    */
-  private async plausible(elementId: string, handle: UiHandle): Promise<boolean> {
-    const label = this.registry.element(elementId).label;
-    if (!label) return true;
-    let text = '';
-    try {
-      text = await handle.text();
-    } catch {
-      return true; // No readable text (icon button) — cannot disprove, so allow.
-    }
-    if (!text) return true;
-    return norm(text).includes(norm(label)) || norm(label).includes(norm(text));
-  }
-}
+  private async verifySemantically(elementId: string, handle: UiHandle): Promise<boolean> {
+    const elementDef = this.registry.element(elementId);
+    const intent = buildElementIntent(elementId, elementDef);
 
-function norm(s: string): string {
-  return s.toLowerCase().replace(/\s+/g, ' ').trim();
+    // Build a minimal ObservedElement from the runtime handle (G04)
+    const el: ObservedElement = {
+      id: handle.candidate.value,
+      visible: true, // already verified by tryCandidate via requireVisible
+      enabled: undefined,
+      interactive: undefined,
+    };
+
+    try {
+      el.text = await handle.text();
+    } catch {
+      // Cannot read text (icon button, SVG, etc.) — cannot disprove match, allow
+      return true;
+    }
+
+    if (!el.text) {
+      // Empty text — cannot verify label, allow (same historical behaviour)
+      return true;
+    }
+
+    // G04: delegate to StandardElementVerifier — single authoritative engine
+    const result = this.verifier.verify(intent, el, []);
+    // labelMatch=undefined means intent has no label → allow
+    // labelMatch=true → element text matches → allow
+    // labelMatch=false → wrong element — reject
+    return result.checks.labelMatch !== false;
+  }
 }
 
 function sleep(ms: number): Promise<void> {

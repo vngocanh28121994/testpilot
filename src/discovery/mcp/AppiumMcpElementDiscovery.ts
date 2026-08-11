@@ -68,19 +68,34 @@ interface McpFindResult {
 // ── adapter ───────────────────────────────────────────────────────────────────
 
 export class AppiumMcpElementDiscovery implements AiElementDiscovery, ObservationProvider {
+  /**
+   * Reverse-lookup map maintained across an inspect()+findElement() call pair.
+   * Maps provider element id → TestPilot observation id (tp-el-N / mcp-el-N).
+   * Rebuilt on every inspect() call (G02).
+   */
+  private providerIdMap = new Map<string, string>();
+
   constructor(private readonly client: McpClient) {}
 
   // ── AiElementDiscovery ────────────────────────────────────────────────────
 
   async inspect(): Promise<UiObservation> {
     const raw = await this.client.inspect();
-    return convertInspection(raw as McpInspectionResult);
+    const result = convertInspection(raw as McpInspectionResult);
+    // Rebuild the reverse lookup map every time we inspect (G02)
+    this.providerIdMap = new Map<string, string>();
+    for (const el of result.elements) {
+      if (el.providerElementId != null) {
+        this.providerIdMap.set(el.providerElementId, el.id);
+      }
+    }
+    return result;
   }
 
   async findElement(intent: ElementIntent): Promise<AiElementCandidate | undefined> {
     const description = buildDescription(intent);
     const raw = await this.client.findElement(description);
-    return convertFindResult(raw as McpFindResult, intent);
+    return convertFindResult(raw as McpFindResult, intent, this.providerIdMap);
   }
 
   async screenshot(): Promise<string> {
@@ -113,6 +128,9 @@ function convertInspection(raw: McpInspectionResult): UiObservation {
 
     elements.push({
       id,
+      // G02: preserve the provider's original id so findElement() can resolve back
+      provider: 'appium-mcp',
+      providerElementId: el.id,
       role: el.type,
       text: el.text ?? el.value,
       accessibilityLabel: el.label ?? el.name,
@@ -158,14 +176,38 @@ function convertInspection(raw: McpInspectionResult): UiObservation {
   };
 }
 
+/**
+ * Convert an MCP findElement() result to an AiElementCandidate.
+ *
+ * G02: The MCP provider returns its own element id (providerElementId).
+ * We must resolve this back to the TestPilot observation id (mcp-el-N)
+ * using the reverse-lookup map built during the last inspect() call.
+ *
+ * If the provider id is not in the map (inspect was not called first, or
+ * the provider returned an id from a different observation), we fall back
+ * to using the raw provider id and log a warning. Callers should ensure
+ * inspect() is always called before findElement() on the same session.
+ */
 function convertFindResult(
   raw: McpFindResult,
   intent: ElementIntent,
+  providerIdMap: ReadonlyMap<string, string>,
 ): AiElementCandidate | undefined {
   if (!raw.elementId) return undefined;
 
+  // Resolve provider element id → TestPilot observation id (G02)
+  const testPilotId = providerIdMap.get(raw.elementId) ?? raw.elementId;
+
+  if (!providerIdMap.has(raw.elementId)) {
+    console.warn(
+      `[AppiumMcpElementDiscovery] provider element id "${raw.elementId}" not found in ` +
+      `providerIdMap (${providerIdMap.size} entries). ` +
+      `Call inspect() before findElement() to ensure identity mapping is current.`,
+    );
+  }
+
   return {
-    observedElementId: raw.elementId,
+    observedElementId: testPilotId,
     confidence: raw.confidence ?? 70,
     reasoning: raw.reasoning ?? `Appium MCP identified element for intent "${intent.id}"`,
     suggestedLocator: raw.locator,
