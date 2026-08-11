@@ -277,6 +277,95 @@ describe('Resolver — with ElementDiscovery', () => {
   });
 });
 
+// ── G06 safety in discovery path ─────────────────────────────────────────────
+
+describe('Resolver — G06 safety gate in discovery path', () => {
+  it('blocks action when discovery finds only invisible elements', async () => {
+    // Primary locator is stale — driver returns null.
+    // Discovery observes an invisible element → G06 (not visible) → method=failed
+    // → tryDiscovery() returns null → ElementNotFoundError.
+    const stale: LocatorCandidate = {
+      strategy: 'testId', value: 'old-id', weight: 0.95, origin: 'authored',
+    };
+    const driver = makeDriver(async () => null);
+    const reg = await makeRegistry('login-btn', stale);
+
+    const invisibleObs: UiObservation = {
+      id: 'obs-invisible',
+      timestamp: new Date().toISOString(),
+      platform: 'android',
+      source: 'native',
+      context: {},
+      elements: [
+        {
+          id: 'el-0',
+          role: 'android.widget.Button',
+          text: 'Login',
+          accessibilityLabel: 'Login',
+          testId: 'btn-login',
+          visible: false, // G06: not visible → UNSAFE → discovery returns method=failed
+          enabled: true,
+          interactive: true,
+          index: 0,
+        },
+      ],
+    };
+
+    const discovery = await makeDiscovery(makeProvider(invisibleObs));
+    const resolver = new Resolver(driver, reg, {
+      timeoutMs: 300, pollMs: 50, requireVisible: true, verifyHealedMatch: false,
+    }, discovery);
+
+    // G06 blocks the discovered element → tryDiscovery returns null → ElementNotFoundError
+    await assert.rejects(
+      () => resolver.resolve('login-btn'),
+      (err: Error) => err instanceof ElementNotFoundError,
+    );
+  });
+
+  it('allows action when discovery finds a safe (visible, enabled) element', async () => {
+    // Primary locator is stale. Discovery finds a safe element.
+    // G05/G06 pass → locator prepended → driver resolves on next tick.
+    const stale: LocatorCandidate = {
+      strategy: 'testId', value: 'old-id', weight: 0.95, origin: 'authored',
+    };
+    const driver = makeDriver(async (c) =>
+      c.value === 'btn-login-new' ? makeHandle(c) : null,
+    );
+    const reg = await makeRegistry('login-btn', stale);
+
+    const safeObs: UiObservation = {
+      id: 'obs-safe',
+      timestamp: new Date().toISOString(),
+      platform: 'android',
+      source: 'native',
+      context: {},
+      elements: [
+        {
+          id: 'el-0',
+          role: 'android.widget.Button',
+          text: 'Login',
+          accessibilityLabel: 'Login',
+          testId: 'btn-login-new',
+          visible: true,
+          enabled: true,
+          interactive: true,
+          index: 0,
+        },
+      ],
+    };
+
+    const discovery = await makeDiscovery(makeProvider(safeObs));
+    const resolver = new Resolver(driver, reg, {
+      timeoutMs: 1000, pollMs: 50, requireVisible: true, verifyHealedMatch: false,
+    }, discovery);
+
+    const result = await resolver.resolve('login-btn');
+    assert.equal(result.healed, true, 'resolved via healed locator');
+    assert.equal(result.candidate.value, 'btn-login-new');
+  });
+});
+
 // ── DriverObservationAdapter ──────────────────────────────────────────────────
 
 describe('observedToUiObservation', () => {

@@ -1,7 +1,8 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { ElementDiscovery } from '../ElementDiscovery.js';
+import { ElementDiscovery, findElementByLocator } from '../ElementDiscovery.js';
 import { RuntimeRegistry } from '../RuntimeRegistry.js';
+import { McpElementIdentityResolver } from '../mcp/ElementIdentityResolver.js';
 import type { UiObservation } from '../UiObservation.js';
 import type { ElementIntent } from '../ElementIntent.js';
 import type { ObservationProvider } from '../ElementDiscovery.js';
@@ -299,6 +300,124 @@ describe('ElementDiscovery — verification failure', () => {
     // Should NOT be stored since verification failed
     const stored = reg.bestLocator('login-btn');
     assert.equal(stored, undefined, 'failed verification must not store in registry');
+  });
+});
+
+// ── G05 ambiguity policy ──────────────────────────────────────────────────────
+
+describe('ElementDiscovery — G05 ambiguity policy', () => {
+  it('blocks action when two candidates share the same text and role (AMBIGUOUS)', async () => {
+    const reg = await emptyRegistry();
+    // Two identical "Confirm" buttons — text alone gives score ~20 (below threshold 60),
+    // so we add accessibilityLabel to push both above threshold (score=55→87 with testId).
+    // With identical text+accessibilityLabel+role, margin between scores is 0 → G05 AMBIGUOUS.
+    // G06 also catches them: same role|text|accessibilityLabel signature → not unique → AMBIGUOUS.
+    const obs = makeObservation({
+      elements: [
+        {
+          id: 'el-0',
+          role: 'android.widget.Button',
+          text: 'Confirm',
+          accessibilityLabel: 'Confirm',
+          testId: 'btn-confirm-a',
+          visible: true,
+          enabled: true,
+          interactive: true,
+          index: 0,
+        },
+        {
+          id: 'el-1',
+          role: 'android.widget.Button',
+          text: 'Confirm',
+          accessibilityLabel: 'Confirm',
+          testId: 'btn-confirm-b',
+          visible: true,
+          enabled: true,
+          interactive: true,
+          index: 1,
+        },
+      ],
+    });
+
+    const discovery = new ElementDiscovery(makeProvider(obs), reg);
+    const result = await discovery.discover(
+      makeIntent({ label: 'Confirm', semanticRole: 'button', action: 'tap' }),
+    );
+
+    assert.equal(result.method, 'failed');
+    // G05 catches it (margin too small) OR G06 catches it (duplicate signature)
+    const blockedByAmbiguity =
+      result.ambiguity?.outcome === 'AMBIGUOUS' ||
+      result.safety?.safety === 'AMBIGUOUS';
+    assert.ok(blockedByAmbiguity, `expected AMBIGUOUS block, got ambiguity=${result.ambiguity?.outcome} safety=${result.safety?.safety}`);
+  });
+});
+
+// ── G02 MCP identity mapping ──────────────────────────────────────────────────
+
+describe('ElementDiscovery — G02 MCP identity', () => {
+  it('findElementByLocator resolves element via providerElementId (not TestPilot id)', () => {
+    const obs = makeObservation({
+      elements: [
+        {
+          id: 'tp-el-7',
+          provider: 'appium-mcp',
+          providerElementId: 'abc123',
+          role: 'XCUITypeButton',
+          text: 'Login',
+          visible: true,
+        },
+      ],
+    });
+
+    // Provider ID lookup must succeed
+    const found = findElementByLocator(obs, 'id', 'abc123');
+    assert.ok(found, 'must find element by providerElementId');
+    assert.equal(found?.id, 'tp-el-7', 'must return TestPilot id, not provider id');
+    assert.equal(found?.providerElementId, 'abc123');
+
+    // TestPilot observation id is NOT a locator value — must not match
+    const notFound = findElementByLocator(obs, 'id', 'tp-el-7');
+    assert.equal(
+      notFound,
+      undefined,
+      '"tp-el-7" is an observation-scoped id, not a locator value — must not be found by findElementByLocator',
+    );
+  });
+
+  it('McpElementIdentityResolver returns undefined for stale/missing provider id (G02 stale)', () => {
+    const obs = makeObservation({
+      elements: [
+        {
+          id: 'tp-el-7',
+          provider: 'appium-mcp',
+          providerElementId: 'abc123',
+          role: 'XCUITypeButton',
+          text: 'Login',
+          visible: true,
+        },
+      ],
+    });
+
+    const resolver = new McpElementIdentityResolver();
+
+    // Valid lookup
+    const valid = resolver.resolveTestPilotId(obs, 'abc123');
+    assert.equal(valid, 'tp-el-7', 'valid provider id must resolve to TestPilot id');
+
+    // Stale provider id — element no longer in the observation (UI changed)
+    const stale = resolver.resolveTestPilotId(obs, 'xyz-stale-999');
+    assert.equal(
+      stale,
+      undefined,
+      'stale provider id must return undefined, signalling re-observe is needed',
+    );
+
+    // Reverse: TestPilot id → provider reference
+    const ref = resolver.resolveProviderElement(obs, 'tp-el-7');
+    assert.ok(ref, 'must resolve TestPilot id → provider reference');
+    assert.equal(ref?.provider, 'appium-mcp');
+    assert.equal(ref?.providerElementId, 'abc123');
   });
 });
 
