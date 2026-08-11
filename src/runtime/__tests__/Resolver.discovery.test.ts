@@ -12,6 +12,8 @@ import { Resolver, ElementNotFoundError } from '../resolver.js';
 import { Registry } from '../../core/registry.js';
 import { RuntimeRegistry } from '../../discovery/RuntimeRegistry.js';
 import { ElementDiscovery } from '../../discovery/ElementDiscovery.js';
+import { AppiumMcpElementDiscovery } from '../../discovery/mcp/AppiumMcpElementDiscovery.js';
+import type { McpClient } from '../../discovery/ai/AiDiscoveryTypes.js';
 import type { UiDriver, UiHandle } from '../../drivers/driver.js';
 import type { LocatorCandidate } from '../../core/types.js';
 import type { UiObservation } from '../../discovery/UiObservation.js';
@@ -442,6 +444,70 @@ describe('mapDiscoveryStrategy', () => {
   it('falls back to xpath for unknown strategies', async () => {
     const { mapDiscoveryStrategy } = await import('../../discovery/DriverObservationAdapter.js');
     assert.equal(mapDiscoveryStrategy('unknown-strategy'), 'xpath');
+  });
+});
+
+// ── AppiumMcpElementDiscovery integration ─────────────────────────────────────
+//
+// Proves the actual runtime path:
+//   Resolver → ElementDiscovery → AppiumMcpElementDiscovery → McpClient.inspect()
+//
+// This is the integration gap that was identified: run.ts previously created
+// Resolver without elementDiscovery, so McpClient.inspect() was never called.
+
+describe('Resolver — AppiumMcpElementDiscovery as ObservationProvider', () => {
+  it('calls McpClient.inspect() exactly once when registry candidates fail', async () => {
+    let inspectCallCount = 0;
+
+    const mockMcpClient: McpClient = {
+      async inspect() {
+        inspectCallCount++;
+        return {
+          platform: 'android',
+          elements: [
+            {
+              type: 'android.widget.Button',
+              text: 'Login',
+              testId: 'btn-login-discovered',
+              visible: true,
+              enabled: true,
+              interactable: true,
+            },
+          ],
+        };
+      },
+      async findElement(_desc: string) { return {}; },
+      async screenshot() { return ''; },
+    };
+
+    // AppiumMcpElementDiscovery implements ObservationProvider:
+    //   observe() → inspect() → mockMcpClient.inspect()
+    const appiumMcp = new AppiumMcpElementDiscovery(mockMcpClient);
+    const runtimeReg = await RuntimeRegistry.load('/dev/null/nonexistent.json');
+    const discovery = new ElementDiscovery(appiumMcp, runtimeReg);
+
+    const staleCandidate: LocatorCandidate = {
+      strategy: 'testId', value: 'old-id', weight: 0.95, origin: 'authored',
+    };
+    // Driver knows the discovered testId but not the stale one.
+    const driver = makeDriver(async (c) =>
+      c.value === 'btn-login-discovered' ? makeHandle(c) : null,
+    );
+    const reg = await makeRegistry('login-btn', staleCandidate);
+    const resolver = new Resolver(driver, reg, {
+      timeoutMs: 1000, pollMs: 50, requireVisible: true, verifyHealedMatch: false,
+    }, discovery);
+
+    const result = await resolver.resolve('login-btn');
+
+    // Primary assertion: McpClient.inspect() was called through the chain.
+    assert.equal(inspectCallCount, 1,
+      'McpClient.inspect() must be called once via AppiumMcpElementDiscovery.observe()');
+    // Secondary: resolver found the element via the discovered locator.
+    assert.equal(result.healed, true, 'resolved via healed (discovered) locator');
+    assert.equal(result.candidate.value, 'btn-login-discovered',
+      'discovered locator value must match testId returned by McpClient');
+    assert.equal(result.candidate.origin, 'healed');
   });
 });
 

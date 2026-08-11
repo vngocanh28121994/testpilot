@@ -91,6 +91,17 @@ export interface DiscoveryOptions {
    * be justified and the locator source is 'human-approved'.
    */
   skipKnownLocatorVerification?: boolean;
+  /**
+   * 'healing': bypass the G01 known-locator fast path and force a fresh
+   * observation.  Used by HealingOrchestrator and Resolver.tryDiscovery() so
+   * that healing never re-uses a stale locator from the registry.
+   *
+   * Default (undefined / 'initial'): G01 runs normally.
+   *
+   * This is ONLY a G01 bypass.  The full G02/G03/G05/G06/G04 pipeline is
+   * unchanged — healing goes through exactly the same discovery path.
+   */
+  context?: 'initial' | 'healing';
 }
 
 const DEFAULT_MIN_CONFIDENCE = 60;
@@ -118,7 +129,22 @@ export class ElementDiscovery {
     const minConf = opts.minConfidence ?? DEFAULT_MIN_CONFIDENCE;
     const ambiguityPolicy = opts.ambiguityPolicy ?? DEFAULT_AMBIGUITY_POLICY;
 
-    // ── 1. Known verified locator (G01: now includes semantic verification) ────
+    // ── 1. Known verified locator (G01) ──────────────────────────────────────
+    // Bypassed when context='healing': healing must observe the live UI rather
+    // than re-using a potentially stale registry locator.
+    if (opts.context === 'healing') {
+      evidence.push('context=healing: G01 bypassed — forcing fresh observation');
+      let obs: UiObservation;
+      try {
+        obs = await this.observationProvider.observe();
+        evidence.push(`observed ${obs.elements.length} element(s) via ${obs.source}`);
+      } catch (err) {
+        evidence.push(`observation failed: ${(err as Error).message}`);
+        return { intent, method: 'failed', evidence };
+      }
+      return this.discoverFromObservation(intent, obs, opts, minConf, ambiguityPolicy, evidence);
+    }
+
     const known = checkKnownLocator(intent, this.runtimeRegistry, opts.platform);
     if (known.found) {
       const { strategy, value, status } = known.locator;

@@ -30,6 +30,14 @@ export interface NetworkPolicy {
   fallback?: 'block' | 'allow';
 }
 
+/** A popup/dialog that should be auto-dismissed whenever it appears. */
+export interface PopupRule {
+  /** CSS selector used to DETECT the popup — handler fires when this is visible. */
+  detect: string;
+  /** CSS selector of the button to CLICK to dismiss the popup. */
+  dismiss: string;
+}
+
 export interface WebDriverOptions {
   baseUrl: string;
   headless?: boolean;
@@ -44,6 +52,12 @@ export interface WebDriverOptions {
    * speed a headed run is a blur, which defeats the point of watching it.
    */
   slowMoMs?: number;
+  /**
+   * Popups that can appear at any time and should be silently dismissed before
+   * each Playwright action, without needing explicit steps in the feature file.
+   * Uses page.addLocatorHandler() under the hood.
+   */
+  popups?: PopupRule[];
 }
 
 class WebHandle implements UiHandle {
@@ -99,6 +113,19 @@ export class WebUiDriver implements UiDriver {
     });
     if (this.opts.network) await this.installNetworkPolicy(this.context, this.opts.network);
     this.page = await this.context.newPage();
+    await this.registerPopupHandlers(this.page);
+  }
+
+  private async registerPopupHandlers(page: Page): Promise<void> {
+    for (const rule of this.opts.popups ?? []) {
+      await page.addLocatorHandler(
+        page.locator(rule.detect),
+        async () => {
+          await page.locator(rule.dismiss).click({ timeout: 3000 }).catch(() => {});
+        },
+        { noWaitAfter: true },
+      );
+    }
   }
 
   /**
@@ -156,6 +183,7 @@ export class WebUiDriver implements UiDriver {
       await orphan?.delete().catch(() => {});
     }
     this.page = await this.context.newPage();
+    await this.registerPopupHandlers(this.page);
   }
 
   /** Closes the page so the video is flushed, then names it after the scenario. */
@@ -186,7 +214,14 @@ export class WebUiDriver implements UiDriver {
     // .first() keeps a duplicated match from becoming a strict-mode crash; the
     // ambiguity is instead reported as a low-quality locator in the heal report.
     const first = locator.first();
-    if ((await first.count()) === 0) return null;
+    // waitFor() (unlike count()) triggers page.addLocatorHandler() — so any
+    // registered popup-dismissal handler fires here before we check visibility.
+    // timeout:0 means "check once right now, throw if not attached".
+    try {
+      await first.waitFor({ state: 'attached', timeout: 0 });
+    } catch {
+      return null;
+    }
     return new WebHandle(c, first);
   }
 
@@ -221,7 +256,13 @@ export class WebUiDriver implements UiDriver {
   }
 
   async input(h: UiHandle, text: string): Promise<void> {
-    await (h as WebHandle).locator.fill(text);
+    const loc = (h as WebHandle).locator;
+    await loc.fill(text);
+    // Some Angular reactive-form fields (e.g. search inputs) only update their
+    // model on `keyup`.  After fill(), the value is set but the component has
+    // not triggered a search yet.  Dispatching a keyup event from within the
+    // page context is the minimal fix that doesn't break normal fields.
+    await loc.dispatchEvent('keyup', { key: 'Process', bubbles: true }).catch(() => {});
   }
 
   async clear(h: UiHandle): Promise<void> {

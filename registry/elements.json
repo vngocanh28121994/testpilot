@@ -14,6 +14,11 @@
       "id": "home",
       "title": "Trang chủ sau đăng nhập",
       "description": "Màn hình sau khi đăng nhập thành công."
+    },
+    "priceBoard": {
+      "id": "priceBoard",
+      "title": "Bảng giá cổ phiếu",
+      "description": "Màn hình bảng giá chứng khoán cơ sở."
     }
   },
   "elements": {
@@ -46,10 +51,10 @@
         ]
       },
       "health": {
-        "resolutions": 66,
+        "resolutions": 70,
         "heals": 0,
         "winners": {
-          "placeholder:Email / Số tài khoản / Điện thoại": 66
+          "placeholder:Email / Số tài khoản / Điện thoại": 70
         }
       }
     },
@@ -82,10 +87,10 @@
         ]
       },
       "health": {
-        "resolutions": 33,
+        "resolutions": 37,
         "heals": 0,
         "winners": {
-          "placeholder:Mật khẩu": 33
+          "placeholder:Mật khẩu": 37
         }
       }
     },
@@ -125,10 +130,10 @@
         ]
       },
       "health": {
-        "resolutions": 33,
+        "resolutions": 37,
         "heals": 0,
         "winners": {
-          "role:button": 33
+          "role:button": 37
         }
       }
     },
@@ -226,14 +231,14 @@
           },
           {
             "strategy": "predicate",
-            "value": "new UiSelector().resourceId(\"android:id/message\")",
-            "weight": 0.75,
+            "value": "new UiSelector().className(\"android.widget.TextView\").textContains(\"203004\")",
+            "weight": 0.85,
             "origin": "authored"
           },
           {
             "strategy": "predicate",
-            "value": "new UiSelector().className(\"android.widget.TextView\").textContains(\"203004\")",
-            "weight": 0.85,
+            "value": "new UiSelector().resourceId(\"android:id/message\")",
+            "weight": 0.75,
             "origin": "authored"
           }
         ]
@@ -244,6 +249,269 @@
         "winners": {
           "css:.subtitle-dialog-common": 1
         }
+      }
+    },
+    "home.notificationDismiss": {
+      "id": "home.notificationDismiss",
+      "label": "Từ chối thông báo",
+      "screen": "home",
+      "candidates": {
+        "web": [
+          {
+            "strategy": "role",
+            "value": "button",
+            "name": "TỪ CHỐI",
+            "weight": 0.9,
+            "origin": "authored"
+          },
+          {
+            "strategy": "label",
+            "value": "TỪ CHỐI",
+            "weight": 0.8,
+            "origin": "authored"
+          }
+        ],
+        "android": [
+          {
+            "strategy": "predicate",
+            "value": "new UiSelector().text(\"TỪ CHỐI\")",
+            "weight": 0.9,
+            "origin": "authored"
+          },
+          {
+            "strategy": "predicate",
+            "value": "new UiSelector().textContains(\"TỪ CHỐI\")",
+            "weight": 0.7,
+            "origin": "authored"
+          }
+        ]
+      },
+      "health": {
+        "resolutions": 2,
+        "heals": 0,
+        "winners": {
+          "role:button": 2
+        }
+      }
+    },
+    "home.memoryOptimizeClose": {
+      "id": "home.memoryOptimizeClose",
+      "label": "Đóng tối ưu bộ nhớ",
+      "screen": "home",
+      "candidates": {
+        "web": [
+          {
+            "strategy": "css",
+            "value": "mat-dialog-container button.mat-stroked-button",
+            "weight": 0.85,
+            "origin": "authored"
+          },
+          {
+            "strategy": "role",
+            "value": "button",
+            "name": "Đóng",
+            "weight": 0.75,
+            "origin": "authored"
+          }
+        ],
+        "android": [
+          {
+            "strategy": "predicate",
+            "value": "new UiSelector().text(\"Đóng\")",
+            "weight": 0.85,
+            "origin": "authored"
+          },
+          {
+            "strategy": "predicate",
+            "value": "new UiSelector().textContains(\"Đóng\").className(\"android.widget.Button\")",
+            "weight": 0.7,
+            "origin": "authored"
+          }
+        ]
+      }
+    },
+    "home.searchBox": {
+      "id": "home.searchBox",
+      "label": "Nút tìm kiếm",
+      "screen": "home",
+      "candidates": {
+        "web": [
+          {
+            "strategy": "css",
+            "value": "div.search-box",
+            "weight": 0.9,
+            "origin": "authored"
+          },
+          {
+            "strategy": "placeholder",
+            "value": "Tìm kiếm",
+            "weight": 0.75,
+            "origin": "authored"
+          }
+        ],
+        "android": [
+          {
+            "strategy": "predicate",
+            "value": "new UiSelector().description(\"Tìm tính năng, mã CK\")",
+            "weight": 0.7,
+            "origin": "authored"
+          },
+          {
+            "strategy": "predicate",
+            "value": "new UiSelector().className(\"android.widget.EditText\").instance(0)",
+            "weight": 0.5,
+            "origin": "authored"
+          }
+        ]
+      },
+      "health": {
+        "resolutions": 3,
+        "heals": 0,
+        "winners": {
+          "css:div.search-box": 3
+        }
+      }
+    },
+    "home.searchInput": {
+      "id": "home.searchInput",
+      "label": "Ô tìm kiếm",
+      "screen": "home",
+      "candidates": {
+        "web": [
+          {
+            "strategy": "placeholder",
+            "value": "Tìm tính năng, mã CK...",
+            "weight": 0.95,
+            "origin": "authored"
+          },
+          {
+            "strategy": "css",
+            "value": "input.searching-input",
+            "weight": 0.85,
+            "origin": "authored"
+          }
+        ],
+        "android": [
+          {
+            "strategy": "predicate",
+            "value": "new UiSelector().className(\"android.widget.EditText\").textContains(\"Tìm\")",
+            "weight": 0.8,
+            "origin": "authored"
+          }
+        ]
+      },
+      "health": {
+        "resolutions": 3,
+        "heals": 0,
+        "winners": {
+          "placeholder:Tìm tính năng, mã CK...": 3
+        }
+      }
+    },
+    "home.searchFirstResult": {
+      "id": "home.searchFirstResult",
+      "label": "Kết quả tìm kiếm đầu tiên",
+      "screen": "home",
+      "candidates": {
+        "web": [
+          {
+            "strategy": "css",
+            "value": ".searched-feature-block .feature-item:first-child .title",
+            "weight": 0.9,
+            "origin": "authored"
+          },
+          {
+            "strategy": "css",
+            "value": ".searched-feature-block .feature-item",
+            "weight": 0.75,
+            "origin": "authored"
+          }
+        ],
+        "android": [
+          {
+            "strategy": "predicate",
+            "value": "new UiSelector().textContains(\"Bảng giá\").className(\"android.widget.TextView\")",
+            "weight": 0.8,
+            "origin": "authored"
+          }
+        ]
+      },
+      "health": {
+        "resolutions": 6,
+        "heals": 0,
+        "winners": {
+          "css:.searched-feature-block .feature-item:first-child .title": 6
+        }
+      }
+    },
+    "priceBoard.stockGuideClose": {
+      "id": "priceBoard.stockGuideClose",
+      "label": "Đóng hướng dẫn giao dịch",
+      "screen": "priceBoard",
+      "candidates": {
+        "web": [
+          {
+            "strategy": "css",
+            "value": "mat-dialog-container button.mat-icon-button",
+            "weight": 0.9,
+            "origin": "authored"
+          }
+        ],
+        "android": [
+          {
+            "strategy": "predicate",
+            "value": "new UiSelector().className(\"android.widget.ImageButton\").instance(0)",
+            "weight": 0.6,
+            "origin": "authored"
+          }
+        ]
+      }
+    },
+    "priceBoard.tab": {
+      "id": "priceBoard.tab",
+      "label": "Tab Bảng giá",
+      "screen": "priceBoard",
+      "candidates": {
+        "web": [
+          {
+            "strategy": "css",
+            "value": "button:has-text('THÊM MÃ')",
+            "weight": 0.95,
+            "origin": "authored"
+          },
+          {
+            "strategy": "css",
+            "value": ":text('Cơ sở')",
+            "weight": 0.85,
+            "origin": "authored"
+          },
+          {
+            "strategy": "css",
+            "value": ":text('Phái sinh')",
+            "weight": 0.75,
+            "origin": "authored"
+          },
+          {
+            "strategy": "label",
+            "value": "Cơ sở",
+            "weight": 0.65,
+            "origin": "authored"
+          }
+        ],
+        "android": [
+          {
+            "strategy": "predicate",
+            "value": "new UiSelector().textContains(\"Bảng giá\").className(\"android.widget.TextView\")",
+            "weight": 0.85,
+            "origin": "authored"
+          },
+          {
+            "strategy": "predicate",
+            "value": "new UiSelector().text(\"Cơ sở\")",
+            "weight": 0.7,
+            "origin": "authored"
+          }
+        ]
       }
     },
     "login.missingOnPurpose": {
@@ -298,10 +566,10 @@
         ]
       },
       "health": {
-        "resolutions": 20,
+        "resolutions": 24,
         "heals": 0,
         "winners": {
-          "label:Tổng tài sản": 20
+          "label:Tổng tài sản": 24
         }
       }
     }

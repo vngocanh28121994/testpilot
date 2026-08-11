@@ -11,13 +11,16 @@
  */
 
 import type { ElementIntent } from '../ElementIntent.js';
-import type { UiObservation, ObservedElement } from '../UiObservation.js';
+import type { UiObservation, ObservedElement, ObservationPlatform } from '../UiObservation.js';
 import type { ObservationProvider } from '../ElementDiscovery.js';
 import type {
   McpClient,
   AiElementDiscovery,
   AiElementCandidate,
 } from '../ai/AiDiscoveryTypes.js';
+import { parseNativeObservation } from '../NativeObservationAdapter.js';
+import type { AppiumMcpContextManager } from './AppiumMcpContextManager.js';
+import { NotImplementedError } from './AppiumMcpErrors.js';
 
 // ── raw MCP inspection types ──────────────────────────────────────────────────
 
@@ -69,19 +72,27 @@ interface McpFindResult {
 
 export class AppiumMcpElementDiscovery implements AiElementDiscovery, ObservationProvider {
   /**
-   * Reverse-lookup map maintained across an inspect()+findElement() call pair.
-   * Maps provider element id → TestPilot observation id (tp-el-N / mcp-el-N).
+   * Reverse-lookup map maintained across an inspect() call.
+   * Maps provider element id → TestPilot observation id.
    * Rebuilt on every inspect() call (G02).
    */
   private providerIdMap = new Map<string, string>();
 
-  constructor(private readonly client: McpClient) {}
+  constructor(
+    private readonly client: McpClient,
+    /**
+     * When provided, observe() delegates to contextManager.observeWithFallback()
+     * which implements the NATIVE_APP → WEBVIEW fallback policy for hybrid apps.
+     * When absent, observe() falls back to client.inspect() (DriverMcpClient path).
+     */
+    private readonly contextManager?: AppiumMcpContextManager,
+  ) {}
 
   // ── AiElementDiscovery ────────────────────────────────────────────────────
 
   async inspect(): Promise<UiObservation> {
     const raw = await this.client.inspect();
-    const result = convertInspection(raw as McpInspectionResult);
+    const result = convertInspection(raw);
     // Rebuild the reverse lookup map every time we inspect (G02)
     this.providerIdMap = new Map<string, string>();
     for (const el of result.elements) {
@@ -92,10 +103,13 @@ export class AppiumMcpElementDiscovery implements AiElementDiscovery, Observatio
     return result;
   }
 
-  async findElement(intent: ElementIntent): Promise<AiElementCandidate | undefined> {
-    const description = buildDescription(intent);
-    const raw = await this.client.findElement(description);
-    return convertFindResult(raw as McpFindResult, intent, this.providerIdMap);
+  /**
+   * NOT IMPLEMENTED — AI/semantic findElement is disabled for appium-mcp.
+   * Throws NotImplementedError synchronously.
+   * Discovery must go through observe() → DeterministicMatcher pipeline.
+   */
+  findElement(_intent: ElementIntent): never {
+    throw new NotImplementedError('AppiumMcpElementDiscovery.findElement');
   }
 
   async screenshot(): Promise<string> {
@@ -104,15 +118,47 @@ export class AppiumMcpElementDiscovery implements AiElementDiscovery, Observatio
 
   // ── ObservationProvider ───────────────────────────────────────────────────
 
-  /** Allows this adapter to be used directly as an ObservationProvider. */
+  /**
+   * Observe the UI.
+   *
+   * When contextManager is present (appium-mcp path): delegates to
+   * AppiumMcpContextManager.observeWithFallback() which enforces the
+   * NATIVE_APP → WEBVIEW fallback policy for hybrid apps.
+   *
+   * When contextManager is absent (DriverMcpClient path): falls back to
+   * client.inspect() as before.
+   */
   async observe(): Promise<UiObservation> {
+    if (this.contextManager) {
+      const { observation } = await this.contextManager.observeWithFallback();
+      return observation;
+    }
     return this.inspect();
   }
 }
 
 // ── conversion helpers ────────────────────────────────────────────────────────
 
-function convertInspection(raw: McpInspectionResult): UiObservation {
+/**
+ * Convert a raw McpClient.inspect() result to UiObservation.
+ *
+ * Two branches:
+ *  - string input: raw XML (or HTML) from AppiumMcpClient → NativeObservationAdapter
+ *  - object input: McpInspectionResult JSON from DriverMcpClient → legacy converter
+ */
+function convertInspection(raw: unknown): UiObservation {
+  if (typeof raw === 'string') {
+    // AppiumMcpClient path: raw page source XML from appium_get_page_source.
+    // Platform detection: HTML strings begin with '<!DOCTYPE' or '<html'.
+    // For native XML we default to 'android' (iOS sessions use dedicated impls).
+    const isHtml = /^\s*<!DOCTYPE\s|^\s*<html[\s>]/i.test(raw);
+    const platform: ObservationPlatform = isHtml ? 'web' : 'android';
+    return parseNativeObservation(raw, platform);
+  }
+  return convertMcpJson(raw as McpInspectionResult);
+}
+
+function convertMcpJson(raw: McpInspectionResult): UiObservation {
   const elements: ObservedElement[] = [];
   let idCounter = 0;
 

@@ -29,6 +29,10 @@ const Web = z.object({
       fallback: z.enum(['block', 'allow']).default('block'),
     })
     .optional(),
+  /** Popups auto-dismissed via page.addLocatorHandler() before each Playwright action. */
+  popups: z
+    .array(z.object({ detect: z.string(), dismiss: z.string() }))
+    .optional(),
 });
 
 /**

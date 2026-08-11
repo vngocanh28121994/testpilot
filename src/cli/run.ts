@@ -8,6 +8,10 @@ import type { FeatureSpec, Platform, RunReport, ScenarioResult } from '../core/t
 import type { UiDriver } from '../drivers/driver.js';
 import { Executor } from '../runtime/executor.js';
 import { Resolver, DEFAULT_RESOLVE } from '../runtime/resolver.js';
+import { ElementDiscovery } from '../discovery/ElementDiscovery.js';
+import { RuntimeRegistry } from '../discovery/RuntimeRegistry.js';
+import { AppiumMcpElementDiscovery } from '../discovery/mcp/AppiumMcpElementDiscovery.js';
+import { DriverMcpClient } from '../discovery/mcp/DriverMcpClient.js';
 import { parseFeature } from '../steps/binding.js';
 import { FlakeDetector, collectHealSuggestions } from '../flaky/detector.js';
 import { writeHtmlReport } from '../report/html.js';
@@ -48,12 +52,25 @@ async function main(): Promise<void> {
 
   const driver = await makeDriver(platform, cfg, args.onFarm, args.headed, artifactsDir);
 
+  // Wire the discovery pipeline:
+  //   DriverMcpClient → AppiumMcpElementDiscovery → ElementDiscovery → Resolver
+  // DriverMcpClient bridges UiDriver.observe() into the McpClient interface so
+  // AppiumMcpElementDiscovery can serve as the ObservationProvider for
+  // ElementDiscovery.  When all registry candidates fail, Resolver calls
+  // elementDiscovery.discover(), which observes the live UI via the driver and
+  // runs DeterministicMatcher — closing the integration gap identified in the
+  // audit (elementDiscovery was undefined in prior runs).
+  const mcpClient = new DriverMcpClient(driver);
+  const appiumMcp = new AppiumMcpElementDiscovery(mcpClient);
+  const runtimeRegistry = await RuntimeRegistry.load('registry/runtime-registry.json');
+  const elementDiscovery = new ElementDiscovery(appiumMcp, runtimeRegistry);
+
   const resolver = new Resolver(driver, registry, {
     ...DEFAULT_RESOLVE,
     timeoutMs: cfg.resolve.timeoutMs,
     pollMs: cfg.resolve.pollMs,
     verifyHealedMatch: cfg.resolve.verifyHealedMatch,
-  });
+  }, elementDiscovery);
   const executor = new Executor(driver, resolver, {
     retries: cfg.executor.retries,
     verifyInput: cfg.executor.verifyInput,
@@ -188,6 +205,7 @@ async function makeDriver(
       device: cfg.web.device,
       record: cfg.web.record,
       ...(cfg.web.network ? { network: cfg.web.network } : {}),
+      ...(cfg.web.popups ? { popups: cfg.web.popups } : {}),
       artifactsDir,
     });
   }

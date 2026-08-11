@@ -85,6 +85,7 @@ export class HealingOrchestrator {
       discoveryResult = await this.discovery.discover(discoveryIntent, {
         platform: opts.platform,
         minConfidence: minConf,
+        context: 'healing',
       });
     } catch (err) {
       evidence.push(`[discovery] threw: ${(err as Error).message}`);

@@ -141,7 +141,12 @@ export class Resolver {
       // Lower threshold than the standard 60: this is a fallback after all known
       // locators have already failed.  The resolver's own plausible() guard still
       // catches completely unrelated matches when verifyHealedMatch is on.
-      const result = await this.elementDiscovery!.discover(intent, { minConfidence: 40 });
+      // context:'healing' bypasses G01 so the fallback never re-uses a stale
+      // registry locator — it must observe the live UI fresh.
+      const result = await this.elementDiscovery!.discover(intent, {
+        minConfidence: 40,
+        context: 'healing',
+      });
       if (result.method === 'failed' || !result.locator) return null;
       return {
         strategy: mapDiscoveryStrategy(result.locator.strategy),

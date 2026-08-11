@@ -18,3 +18,15 @@ Feature: Đăng nhập TCInvest
     And I tap "Nút đăng nhập"
     And I wait for "Tổng tài sản"
     Then "Tổng tài sản" is visible
+
+  @search
+  Scenario: Tìm kiếm Bảng giá cổ phiếu sau đăng nhập
+    When I enter "{{account.tcbs.username}}" into "Ô tên đăng nhập"
+    And I enter "{{account.tcbs.password}}" into "Ô mật khẩu"
+    And I tap "Nút đăng nhập"
+    And I wait for "Tổng tài sản"
+    And I tap "Nút tìm kiếm"
+    And I enter "Bảng giá cổ phiếu" into "Ô tìm kiếm"
+    And I wait for "Kết quả tìm kiếm đầu tiên"
+    And I tap "Kết quả tìm kiếm đầu tiên"
+    Then "Tab Bảng giá" is visible
