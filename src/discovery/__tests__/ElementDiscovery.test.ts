@@ -421,6 +421,156 @@ describe('ElementDiscovery — G02 MCP identity', () => {
   });
 });
 
+// ── context:'healing' — G01 bypass ───────────────────────────────────────────
+
+describe('ElementDiscovery — context:healing bypasses G01', () => {
+  // TEST A: observe() is forced even when registry has a known locator.
+  it('TEST A: calls observe() even when registry has a known verified locator', async () => {
+    let observeCallCount = 0;
+    const provider: ObservationProvider = {
+      observe: async () => {
+        observeCallCount++;
+        return makeObservation({
+          elements: [
+            {
+              id: 'el-new',
+              role: 'android.widget.Button',
+              text: 'Login',
+              accessibilityLabel: 'Login',
+              testId: 'btn-login',
+              visible: true,
+              enabled: true,
+              interactive: true,
+              index: 0,
+            },
+          ],
+        });
+      },
+    };
+
+    const reg = await emptyRegistry();
+    // Seed a verified locator — G01 would normally return this without observing.
+    reg.upsertLocator('login-btn', {
+      strategy: 'testId',
+      value: 'btn-old',
+      source: 'human-approved',
+      status: 'verified',
+      confidence: 1,
+    });
+
+    const discovery = new ElementDiscovery(provider, reg);
+    // skipKnownLocatorVerification=true: without healing bypass, G01 returns immediately
+    // and never calls observe(). With healing, observe() MUST be called.
+    await discovery.discover(makeIntent(), {
+      context: 'healing',
+      minConfidence: 40,
+      skipKnownLocatorVerification: true,
+    });
+
+    assert.ok(observeCallCount > 0, 'observe() MUST be called when context=healing, even with a registry hit');
+  });
+
+  it('TEST A (evidence): G01 bypass is recorded in the evidence trail', async () => {
+    const reg = await emptyRegistry();
+    const discovery = new ElementDiscovery(makeProvider(makeObservation()), reg);
+    const result = await discovery.discover(makeIntent(), { context: 'healing' });
+
+    assert.ok(
+      result.evidence.some((e) => e.includes('healing') && e.includes('G01')),
+      `evidence must include healing/G01 bypass message, got: ${JSON.stringify(result.evidence)}`,
+    );
+  });
+
+  // TEST D: stale registry locator is NOT returned with context='healing'.
+  it('TEST D: does not return the stale registry locator when context=healing', async () => {
+    const provider: ObservationProvider = {
+      observe: async () =>
+        makeObservation({
+          elements: [
+            {
+              id: 'el-fresh',
+              role: 'android.widget.Button',
+              text: 'Login',
+              accessibilityLabel: 'Login',
+              testId: 'btn-fresh',
+              visible: true,
+              enabled: true,
+              interactive: true,
+              index: 0,
+            },
+          ],
+        }),
+    };
+
+    const reg = await emptyRegistry();
+    reg.upsertLocator('login-btn', {
+      strategy: 'testId',
+      value: 'btn-stale',
+      source: 'runtime-observed',
+      status: 'verified',
+      confidence: 0.95,
+    });
+
+    const discovery = new ElementDiscovery(provider, reg);
+    const result = await discovery.discover(makeIntent(), {
+      context: 'healing',
+      minConfidence: 40,
+    });
+
+    // 'btn-stale' must NOT be returned — healing forces fresh discovery.
+    assert.notEqual(result.locator?.value, 'btn-stale', 'G01 must be bypassed — stale locator must not be returned directly');
+  });
+});
+
+// ── context:'initial' and omitted context → G01 runs normally ────────────────
+
+describe('ElementDiscovery — G01 runs when context is initial or omitted', () => {
+  // TEST B: context='initial' preserves G01.
+  it('TEST B: context=initial returns known-locator without calling observe()', async () => {
+    // failingProvider ensures observe() is never called.
+    // If G01 runs, it returns the known locator without needing an observation
+    // (because skipKnownLocatorVerification=true).
+    const reg = await emptyRegistry();
+    reg.upsertLocator('login-btn', {
+      strategy: 'testId',
+      value: 'btn-known',
+      source: 'human-approved',
+      status: 'verified',
+      confidence: 1,
+    });
+
+    const discovery = new ElementDiscovery(failingProvider('must not be called'), reg);
+    const result = await discovery.discover(makeIntent(), {
+      context: 'initial',
+      skipKnownLocatorVerification: true,
+    });
+
+    assert.equal(result.method, 'known-locator', 'G01 must run and return known locator for context=initial');
+    assert.equal(result.locator?.value, 'btn-known');
+  });
+
+  // TEST C: omitted context preserves G01 (default behaviour).
+  it('TEST C: omitting context returns known-locator without calling observe()', async () => {
+    const reg = await emptyRegistry();
+    reg.upsertLocator('login-btn', {
+      strategy: 'testId',
+      value: 'btn-default',
+      source: 'human-approved',
+      status: 'verified',
+      confidence: 1,
+    });
+
+    const discovery = new ElementDiscovery(failingProvider('must not be called'), reg);
+    const result = await discovery.discover(makeIntent(), {
+      skipKnownLocatorVerification: true,
+      // no context field
+    });
+
+    assert.equal(result.method, 'known-locator', 'G01 must run when context is omitted');
+    assert.equal(result.locator?.value, 'btn-default');
+  });
+});
+
 // ── screen bonus ──────────────────────────────────────────────────────────────
 
 describe('ElementDiscovery — options', () => {

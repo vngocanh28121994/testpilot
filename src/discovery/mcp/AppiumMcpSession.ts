@@ -118,9 +118,8 @@ export class AppiumMcpClientSession implements AppiumMcpSession {
     await client.connect(
       new StdioClientTransport({
         command: opts.command,
-        env: opts.env
-          ? { ...(process.env as Record<string, string>), ...opts.env }
-          : undefined,
+        // Always inherit process.env so the subprocess sees PATH, ANDROID_HOME, etc.
+        env: { ...(process.env as Record<string, string>), ...opts.env },
         stderr: 'pipe',
       }),
     );
@@ -130,11 +129,18 @@ export class AppiumMcpClientSession implements AppiumMcpSession {
   // ── lifecycle ───────────────────────────────────────────────────────────────
 
   async create(caps: Record<string, unknown>): Promise<void> {
+    // appium-mcp requires `platform` as a top-level argument alongside capabilities.
+    // Derive it from platformName (caps may use the bare key or the appium: prefix).
+    const platformName =
+      (caps['platformName'] ?? caps['appium:platformName'] ?? 'android') as string;
+    const platform = platformName.toLowerCase() === 'ios' ? 'ios' : 'android';
+
     const res = await this.client.callTool(
       {
         name: 'appium_session_management',
         arguments: {
           action: 'create',
+          platform,
           capabilities: JSON.stringify(caps),
         },
       },
@@ -178,7 +184,7 @@ export class AppiumMcpClientSession implements AppiumMcpSession {
     const isWebView = name !== 'NATIVE_APP';
     const timeout = isWebView ? 90_000 : 30_000;
     const res = await this.client.callTool(
-      { name: 'appium_context', arguments: { action: 'switch', name } },
+      { name: 'appium_context', arguments: { action: 'switch', context: name } },
       undefined,
       { timeout },
     );
@@ -210,9 +216,10 @@ export class AppiumMcpClientSession implements AppiumMcpSession {
   async findByLocator(strategy: string, value: string): Promise<string> {
     let res: Awaited<ReturnType<Client['callTool']>>;
     try {
+      // appium-mcp's appium_find_element uses "selector" (not "value") for the locator string.
       res = await this.client.callTool({
         name: 'appium_find_element',
-        arguments: { strategy, value },
+        arguments: { strategy, selector: value },
       });
     } catch (err) {
       throw new TestPilotError(
@@ -247,10 +254,11 @@ export class AppiumMcpClientSession implements AppiumMcpSession {
   async tap(elementUUID: string): Promise<void> {
     const res = await this.client.callTool({
       name: 'appium_gesture',
-      arguments: { elementUUID, gesture: 'click' },
+      // appium-mcp uses "action" (not "gesture") and "tap" (not "click").
+      arguments: { elementUUID, action: 'tap' },
     });
     this.checkStale(res, elementUUID);
-    this.assertNotError(res, 'appium_gesture click');
+    this.assertNotError(res, 'appium_gesture tap');
   }
 
   async setValue(elementUUID: string, text: string): Promise<void> {

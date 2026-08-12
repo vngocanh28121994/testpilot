@@ -66,7 +66,7 @@ describe('AppiumMcpClientSession.create', () => {
 // ── findByLocator ─────────────────────────────────────────────────────────────
 
 describe('AppiumMcpClientSession.findByLocator', () => {
-  it('calls appium_find_element with exact strategy and value', async () => {
+  it('calls appium_find_element with exact strategy and selector', async () => {
     let capturedArgs: Record<string, unknown> = {};
     const client = makeClient((call) => {
       capturedArgs = call.arguments;
@@ -75,7 +75,8 @@ describe('AppiumMcpClientSession.findByLocator', () => {
     const session = new AppiumMcpClientSession(client);
     const uuid = await session.findByLocator('accessibility id', 'login-button');
     assert.equal(capturedArgs['strategy'], 'accessibility id');
-    assert.equal(capturedArgs['value'], 'login-button');
+    // appium-mcp uses "selector" (not "value") for the locator string
+    assert.equal(capturedArgs['selector'], 'login-button');
     assert.equal(uuid, 'uuid-abc');
   });
 
@@ -131,6 +132,17 @@ describe('AppiumMcpClientSession.findByLocator', () => {
 // ── tap — stale element ───────────────────────────────────────────────────────
 
 describe('AppiumMcpClientSession.tap', () => {
+  it('sends action=tap and elementUUID (not gesture=click)', async () => {
+    let args: Record<string, unknown> = {};
+    const client = makeClient((call) => { args = call.arguments; return textContent('Gesture performed'); });
+    const session = new AppiumMcpClientSession(client);
+    await session.tap('my-uuid');
+    // appium-mcp requires action="tap" (not gesture="click")
+    assert.equal(args['action'], 'tap');
+    assert.equal(args['elementUUID'], 'my-uuid');
+    assert.equal(args['gesture'], undefined, 'must NOT send "gesture" key');
+  });
+
   it('succeeds on normal response', async () => {
     const client = makeClient(() => textContent('Gesture performed'));
     const session = new AppiumMcpClientSession(client);
@@ -211,7 +223,16 @@ describe('AppiumMcpClientSession.setValue', () => {
 // ── getText ───────────────────────────────────────────────────────────────────
 
 describe('AppiumMcpClientSession.getText', () => {
-  it('returns text value', async () => {
+  it('extracts text from real appium-mcp response format', async () => {
+    // Real appium-mcp format: "elementId '<uuid>'\nSuccessfully got text <VALUE> from element <uuid>."
+    const client = makeClient(() =>
+      textContent("elementId 'uuid-1'\nSuccessfully got text Hello from element uuid-1."),
+    );
+    const session = new AppiumMcpClientSession(client);
+    assert.equal(await session.getText('uuid-1'), 'Hello');
+  });
+
+  it('returns text value from plain text response (mock/fallback)', async () => {
     const client = makeClient(() => textContent('Hello'));
     const session = new AppiumMcpClientSession(client);
     assert.equal(await session.getText('uuid-1'), 'Hello');

@@ -232,17 +232,26 @@ async function main(): Promise<void> {
     // Navigate đến trang đăng nhập web của app (WEBVIEW_chrome là Chrome browser
     // đang chạy background trên thiết bị — app native này hybrid: false)
     log('Navigating đến trang đăng nhập...');
-    await browser.url('https://tcinvest.tcbs.com.vn');
-    // Poll cho đến khi Angular/SPA render ra ít nhất 1 input (tối đa 15s)
+    // Dùng JS để navigate thay vì browser.url() — tránh block vô thời hạn
+    // khi Chrome đang ở chrome-native:// internal page.
+    await browser.execute('window.location.href = "https://tcinvest.tcbs.com.vn"');
+
+    // Poll cho đến khi Angular/SPA render ra ít nhất 1 input (tối đa 20s)
     let waitedMs = 0;
-    while (waitedMs < 15_000) {
+    while (waitedMs < 20_000) {
       await sleep(1_000);
       waitedMs += 1_000;
-      const count = await browser.execute<number>('return document.querySelectorAll("input").length');
+      let count = 0;
+      try {
+        count = await browser.execute<number>('return document.querySelectorAll("input").length');
+      } catch {
+        // page đang navigate, chưa ready — thử lại
+      }
       log(`  [${waitedMs / 1000}s] inputs trên DOM: ${count}`);
       if ((count as unknown as number) > 0) break;
     }
-    log(`URL sau navigate: ${await browser.getUrl()}`);
+    const urlAfterNav = await browser.execute<string>('return location.href');
+    log(`URL sau navigate: ${urlAfterNav}`);
 
     // ── bước 3: Lấy DOM ─────────────────────────────────────────────────────
     section('Bước 3: Lấy DOM (OBSERVE_DOM_FULL)');

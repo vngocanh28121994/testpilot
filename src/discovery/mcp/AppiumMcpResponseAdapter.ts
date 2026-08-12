@@ -20,14 +20,34 @@ export class AppiumMcpResponseAdapter {
    */
   static extractPageSource(raw: unknown): string {
     const text = firstTextContent(raw);
-    const match = /```(?:xml|html|XML|HTML)\r?\n([\s\S]*?)\r?\n?```/.exec(text);
-    if (!match || match[1] == null) {
+
+    // appium-mcp wraps the content in a markdown code fence:
+    //   "```xml\ncontent\n```"                       (next-line format)
+    //   "```xml first-node\nrest\n```"               (same-line format — real appium-mcp)
+    //   "```html\ncontent\n```"                      (HTML variant)
+    //
+    // Group 1: optional same-line content after the language tag
+    // Group 2: content on subsequent lines
+    const match = /```(?:xml|html|XML|HTML)([ \t]+[^\n]*)?\r?\n?([\s\S]*?)\r?\n?```/.exec(text);
+    if (!match) {
       throw new Error(
         `extractPageSource: no code fence found in appium_get_page_source response. ` +
           `First 300 chars: ${text.slice(0, 300)}`,
       );
     }
-    return match[1].trim();
+
+    const sameLine = (match[1] ?? '').trim();
+    const body = (match[2] ?? '').trim();
+    const combined = sameLine ? (body ? `${sameLine}\n${body}` : sameLine) : body;
+
+    if (!combined) {
+      throw new Error(
+        `extractPageSource: code fence found but content is empty. ` +
+          `First 300 chars: ${text.slice(0, 300)}`,
+      );
+    }
+
+    return combined;
   }
 
   /**
@@ -76,6 +96,9 @@ export class AppiumMcpResponseAdapter {
   /**
    * Extract text value from an appium_get_text plain-text response.
    *
+   * appium-mcp response format (real server):
+   *   "elementId '<uuid>'\nSuccessfully got text <VALUE> from element <uuid>."
+   *
    * Returns null for empty or missing text.
    * On Capacitor hybrid apps, native get_text on WebView-managed fields returns
    * an empty string — null is the correct representation (not a failure).
@@ -83,7 +106,19 @@ export class AppiumMcpResponseAdapter {
   static extractTextValue(raw: unknown): string | null {
     try {
       const text = firstTextContent(raw).trim();
-      return text.length > 0 ? text : null;
+      if (!text) return null;
+      // Parse "Successfully got text <VALUE> from element <uuid>."
+      const match = /successfully got text (.+?) from element/i.exec(text);
+      if (match) {
+        const value = match[1]!.trim();
+        return value.length > 0 ? value : null;
+      }
+      // Fallback: if response is just the plain text value (e.g. from a mock),
+      // return it directly unless it looks like a UUID line.
+      if (!text.startsWith('elementId ')) {
+        return text.length > 0 ? text : null;
+      }
+      return null;
     } catch {
       return null;
     }
@@ -95,10 +130,23 @@ export class AppiumMcpResponseAdapter {
    * Returns an array of context name strings (e.g. ['NATIVE_APP', 'WEBVIEW_com.example']).
    */
   static extractContextList(raw: unknown): string[] {
-    const text = firstTextContent(raw);
+    const text = firstTextContent(raw).trim();
+
+    // appium-mcp returns a JSON array; try that first (with trailing-comma fix).
+    try {
+      const cleaned = text.replace(/,(\s*[}\]])/g, '$1');
+      const parsed: unknown = JSON.parse(cleaned);
+      if (Array.isArray(parsed)) {
+        return parsed.filter((s): s is string => typeof s === 'string' && s.length > 0);
+      }
+    } catch {
+      // fall through to line-by-line
+    }
+
+    // Fallback: strip leading/trailing quotes, commas, brackets from each line.
     return text
       .split('\n')
-      .map((l) => l.trim())
+      .map((l) => l.trim().replace(/^["'[,]+|["',\]]+$/g, '').trim())
       .filter(
         (l) =>
           l.length > 0 &&
