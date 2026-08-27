@@ -10,12 +10,18 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as HealingRouteImport } from './routes/healing'
 import { Route as ProbeStreamRouteImport } from './routes/probe.stream'
 import { Route as TodoSlugRouteImport } from './routes/todo.$slug'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const HealingRoute = HealingRouteImport.update({
+  id: '/healing',
+  path: '/healing',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ProbeStreamRoute = ProbeStreamRouteImport.update({
@@ -31,30 +37,34 @@ const TodoSlugRoute = TodoSlugRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/healing': typeof HealingRoute
   '/probe/stream': typeof ProbeStreamRoute
   '/todo/$slug': typeof TodoSlugRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/healing': typeof HealingRoute
   '/probe/stream': typeof ProbeStreamRoute
   '/todo/$slug': typeof TodoSlugRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/healing': typeof HealingRoute
   '/probe/stream': typeof ProbeStreamRoute
   '/todo/$slug': typeof TodoSlugRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/probe/stream' | '/todo/$slug'
+  fullPaths: '/' | '/healing' | '/probe/stream' | '/todo/$slug'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/probe/stream' | '/todo/$slug'
-  id: '__root__' | '/' | '/probe/stream' | '/todo/$slug'
+  to: '/' | '/healing' | '/probe/stream' | '/todo/$slug'
+  id: '__root__' | '/' | '/healing' | '/probe/stream' | '/todo/$slug'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  HealingRoute: typeof HealingRoute
   ProbeStreamRoute: typeof ProbeStreamRoute
   TodoSlugRoute: typeof TodoSlugRoute
 }
@@ -66,6 +76,13 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/healing': {
+      id: '/healing'
+      path: '/healing'
+      fullPath: '/healing'
+      preLoaderRoute: typeof HealingRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/probe/stream': {
@@ -87,6 +104,7 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  HealingRoute: HealingRoute,
   ProbeStreamRoute: ProbeStreamRoute,
   TodoSlugRoute: TodoSlugRoute,
 }
