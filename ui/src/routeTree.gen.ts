@@ -11,6 +11,7 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as HealingRouteImport } from './routes/healing'
+import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as ProbeStreamRouteImport } from './routes/probe.stream'
 import { Route as TodoSlugRouteImport } from './routes/todo.$slug'
 
@@ -22,6 +23,11 @@ const IndexRoute = IndexRouteImport.update({
 const HealingRoute = HealingRouteImport.update({
   id: '/healing',
   path: '/healing',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SettingsRoute = SettingsRouteImport.update({
+  id: '/settings',
+  path: '/settings',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ProbeStreamRoute = ProbeStreamRouteImport.update({
@@ -38,12 +44,14 @@ const TodoSlugRoute = TodoSlugRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/healing': typeof HealingRoute
+  '/settings': typeof SettingsRoute
   '/probe/stream': typeof ProbeStreamRoute
   '/todo/$slug': typeof TodoSlugRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/healing': typeof HealingRoute
+  '/settings': typeof SettingsRoute
   '/probe/stream': typeof ProbeStreamRoute
   '/todo/$slug': typeof TodoSlugRoute
 }
@@ -51,20 +59,28 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/healing': typeof HealingRoute
+  '/settings': typeof SettingsRoute
   '/probe/stream': typeof ProbeStreamRoute
   '/todo/$slug': typeof TodoSlugRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/healing' | '/probe/stream' | '/todo/$slug'
+  fullPaths: '/' | '/healing' | '/settings' | '/probe/stream' | '/todo/$slug'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/healing' | '/probe/stream' | '/todo/$slug'
-  id: '__root__' | '/' | '/healing' | '/probe/stream' | '/todo/$slug'
+  to: '/' | '/healing' | '/settings' | '/probe/stream' | '/todo/$slug'
+  id:
+    | '__root__'
+    | '/'
+    | '/healing'
+    | '/settings'
+    | '/probe/stream'
+    | '/todo/$slug'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   HealingRoute: typeof HealingRoute
+  SettingsRoute: typeof SettingsRoute
   ProbeStreamRoute: typeof ProbeStreamRoute
   TodoSlugRoute: typeof TodoSlugRoute
 }
@@ -83,6 +99,13 @@ declare module '@tanstack/react-router' {
       path: '/healing'
       fullPath: '/healing'
       preLoaderRoute: typeof HealingRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/settings': {
+      id: '/settings'
+      path: '/settings'
+      fullPath: '/settings'
+      preLoaderRoute: typeof SettingsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/probe/stream': {
@@ -105,6 +128,7 @@ declare module '@tanstack/react-router' {
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   HealingRoute: HealingRoute,
+  SettingsRoute: SettingsRoute,
   ProbeStreamRoute: ProbeStreamRoute,
   TodoSlugRoute: TodoSlugRoute,
 }

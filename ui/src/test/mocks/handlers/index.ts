@@ -2,6 +2,7 @@ import { stateHandlers } from './state';
 import { healingHandlers } from './healing';
 import { configHandlers } from './config';
 import { prereqHandlers } from './prereq';
+import { settingsHandlers } from './settings';
 
 /**
  * Handler mặc định cho các route mà test thường chạm tới.
@@ -17,4 +18,5 @@ export const handlers = [
   ...healingHandlers,
   ...configHandlers,
   ...prereqHandlers,
+  ...settingsHandlers,
 ];

@@ -10,6 +10,7 @@ import {
   RouterProvider,
 } from '@tanstack/react-router';
 import { ThemeProvider } from '@/components/ThemeProvider';
+import { Toaster } from '@/components/ui/sonner';
 
 /**
  * QueryClient riêng cho mỗi test: `retry: false` để một lỗi mong đợi không mất
@@ -74,6 +75,10 @@ export async function renderWithRouter(
       <ThemeProvider>
         {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
         <RouterProvider router={router as any} />
+        {/* Toaster có mặt vì route gốc thật cũng có nó: rất nhiều phản hồi của
+            app (lưu config hỏng, duyệt healing xong) chỉ tồn tại dưới dạng
+            toast, và không mount nó ở đây thì những nhánh đó không test được. */}
+        <Toaster />
       </ThemeProvider>
     </QueryClientProvider>,
   );

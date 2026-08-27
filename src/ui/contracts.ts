@@ -226,6 +226,45 @@ export interface ModelKeyRequest {
 }
 
 /* ------------------------------------------------------------------ */
+/* Confluence auth · MCP — cả hai đều chạm bí mật                       */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Token ĐÃ LƯU không bao giờ được gửi ngược về trình duyệt (server.ts:198) —
+ * chỉ có `hasToken`. Nên ô nhập token luôn bắt đầu rỗng kể cả khi đã cấu hình,
+ * và dòng trạng thái là thứ duy nhất nói ra điều đó. Xem R9.
+ */
+export interface ConfluenceAuthResponse {
+  email: string;
+  hasToken: boolean;
+}
+
+export interface ConfluenceAuthRequest {
+  email: string;
+  token: string;
+}
+
+export interface McpTool {
+  name: string;
+  description?: string;
+}
+
+export interface McpToolsResponse {
+  tools: McpTool[];
+  /** Tên tool server đoán được, dùng để điền hộ các ô còn trống. */
+  guess: {
+    confluencePage?: string;
+    figmaFile?: string;
+    confluenceAttachments?: string;
+    figmaImage?: string;
+  };
+}
+
+export interface OkResponse {
+  ok: true;
+}
+
+/* ------------------------------------------------------------------ */
 /* GET /api/preflight                                                  */
 /* ------------------------------------------------------------------ */
 

@@ -7,9 +7,30 @@ import type { StateResponse, HealingResponse } from '@core/ui/contracts.js';
  * `tsc -b ui` chứ không phải ở một assertion khó hiểu trong test.
  */
 export const stateFixture: StateResponse = {
+  // Bám sát config thật (11 khoá trong `paths`). Fixture mỏng hơn sẽ để lọt
+  // đúng loại lỗi mà màn hình Settings hay gặp: đọc một nhánh config không có.
   config: {
-    web: { baseUrl: 'https://example.com' },
+    web: { baseUrl: 'https://example.com', headless: true, device: 'chromium-desktop' },
+    android: {},
+    ios: {},
+    paths: {
+      registry: 'registry/elements.json',
+      features: 'features',
+      artifacts: 'artifacts',
+      reports: 'reports',
+      runs: 'runs',
+      flakeDb: 'registry/flake.json',
+      healingDb: 'registry/healing.json',
+      actionsDb: 'registry/actions.json',
+      scenarioReviewDb: 'registry/scenario-review.json',
+      deviceEnvDb: 'registry/device-env.json',
+      docs: 'docs',
+    },
     accounts: [{ label: 'khach-hang', username: 'user@example.com' }],
+    environments: {},
+    defaultEnv: '',
+    farm: {},
+    llm: {},
   } as unknown as StateResponse['config'],
   configError: null,
   configFile: '/tmp/testpilot.config.json',
