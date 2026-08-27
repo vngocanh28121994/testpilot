@@ -1,37 +1,52 @@
 import { AppShell } from '@/components/layout/AppShell';
-import { useElementCount, useRecentRuns } from '@/hooks/useAppState';
+import { DataTable } from '@/components/data-table';
+import { useAppState } from '@/hooks/useAppState';
+import { featureColumns } from './columns';
 
-/**
- * Giữ chỗ của Phase 2 — đủ để chứng minh tầng API + layout chạy thật với dữ
- * liệu thật. Phase 4 (trang #2) thay bằng Dashboard đầy đủ.
- */
+/** Năm ô số của bản cũ, giữ nguyên thứ tự và nhãn (app.js:1569). */
+function useTiles() {
+  return useAppState((s) => {
+    const scenarios = s.features.reduce((n, f) => n + f.scenarios.length, 0);
+    return [
+      { value: s.features.length, label: 'feature file' },
+      { value: scenarios, label: 'scenario' },
+      { value: s.elements, label: 'element' },
+      { value: s.runs.length, label: 'lần chạy' },
+      { value: s.runs.filter((r) => r.status === 'failed').length, label: 'lần thất bại' },
+    ];
+  });
+}
+
 export default function DashboardPanel() {
-  const runs = useRecentRuns();
-  const elements = useElementCount();
+  const tiles = useTiles();
+  const features = useAppState((s) => s.features);
 
   return (
     <AppShell title="Dashboard">
-      <div className="grid max-w-3xl grid-cols-2 gap-4">
-        <div className="border-border rounded-lg border p-4">
-          <div className="text-muted-foreground text-xs">Element trong registry</div>
-          <div className="mt-1 text-2xl font-semibold">
-            {elements.isPending ? '…' : (elements.data ?? 0)}
+      <div role="group" aria-label="Tổng quan" className="flex flex-wrap gap-3">
+        {(tiles.data ?? []).map((t) => (
+          <div key={t.label} className="border-border min-w-32 rounded-lg border px-4 py-3">
+            <div className="text-2xl font-semibold tabular-nums">{t.value}</div>
+            <div className="text-muted-foreground text-xs">{t.label}</div>
           </div>
-        </div>
-        <div className="border-border rounded-lg border p-4">
-          <div className="text-muted-foreground text-xs">Lần chạy gần đây</div>
-          <div className="mt-1 text-2xl font-semibold">
-            {runs.isPending ? '…' : (runs.data?.length ?? 0)}
-          </div>
-        </div>
+        ))}
       </div>
-      {runs.isError && (
-        <p className="text-destructive mt-4 text-sm">{(runs.error as Error).message}</p>
+
+      {tiles.isError && (
+        <p role="alert" className="text-destructive mt-4 text-sm">
+          {(tiles.error as Error).message}
+        </p>
       )}
-      <p className="text-muted-foreground mt-6 text-sm">
-        Khung Phase 2 đã chạy: sidebar 14 mục, tầng API có type, dark mode. Các trang thật đến ở
-        Phase 4.
-      </p>
+
+      <h2 className="mt-8 mb-3 text-sm font-medium">Feature đã sinh</h2>
+      <DataTable
+        data={features.data ?? []}
+        columns={featureColumns}
+        loading={features.isPending}
+        empty="Chưa sinh feature nào."
+        caption="Danh sách feature đã sinh"
+        initialSorting={[{ id: 'name', desc: false }]}
+      />
     </AppShell>
   );
 }

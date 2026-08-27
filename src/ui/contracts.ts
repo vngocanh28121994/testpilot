@@ -31,6 +31,7 @@ import type { HealingRecord } from '../healing/HealingStore.js';
 import type { LocatorQuality } from '../core/locatorQuality.js';
 import type { PreflightResult } from '../core/preflight.js';
 import type { TagTaxonomyView } from '../core/tagTaxonomy.js';
+import type { ScenarioReviewEntry } from '../core/scenarioReview.js';
 
 export type {
   TestPilotConfig,
@@ -43,6 +44,7 @@ export type {
   LocatorQuality,
   PreflightResult,
   TagTaxonomyView,
+  ScenarioReviewEntry,
 };
 
 /* ------------------------------------------------------------------ */
@@ -82,6 +84,52 @@ export type Build = { path: string; exists: boolean; sizeMb?: number; own?: bool
 export type RunHistoryEntry = WorkflowRun & { stagesDone: number };
 
 /* ------------------------------------------------------------------ */
+/* Feature đã sinh — dùng ở Dashboard và Scenario Review               */
+/* ------------------------------------------------------------------ */
+
+export interface CoverageMissing {
+  id: string;
+  rule: string;
+  sourceQuote: string;
+}
+
+export interface CoverageView {
+  decision: string;
+  total: number;
+  covered: number;
+  missing: CoverageMissing[];
+  auditedAt: string;
+}
+
+export interface ScenarioSummary {
+  name: string;
+  tags: string[];
+  platforms: Platform[];
+  steps: number;
+  stepTexts: string[];
+  review: ScenarioReviewEntry | null;
+}
+
+/**
+ * Một file .feature như server nhìn thấy nó (server.ts:1031).
+ *
+ * `error` khác null khi file không parse được. Server VẪN trả file đó về thay
+ * vì bỏ qua — lỗi binding chính là thứ cần được sửa, giấu đi thì không ai biết
+ * nó tồn tại. Khi ấy `scenarios` rỗng và `background` không có mặt, nên hai
+ * trường đó phải chịu được nhánh lỗi.
+ */
+export interface FeatureSummary {
+  name: string;
+  content: string;
+  revision: string;
+  feature: string;
+  background?: string[];
+  scenarios: ScenarioSummary[];
+  coverage: CoverageView | null;
+  error: string | null;
+}
+
+/* ------------------------------------------------------------------ */
 /* GET /api/state                                                      */
 /* ------------------------------------------------------------------ */
 
@@ -101,7 +149,7 @@ export interface StateResponse {
   /** Khác null khi file config hỏng — UI vẫn render được với giá trị mặc định. */
   configError: string | null;
   configFile: string;
-  features: unknown[];
+  features: FeatureSummary[];
   elements: number;
   reports: unknown[];
   runs: RunHistoryEntry[];

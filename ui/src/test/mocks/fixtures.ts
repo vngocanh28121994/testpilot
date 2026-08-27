@@ -13,10 +13,38 @@ export const stateFixture: StateResponse = {
   } as unknown as StateResponse['config'],
   configError: null,
   configFile: '/tmp/testpilot.config.json',
-  features: [],
+  features: [
+    {
+      name: 'dang-nhap.feature',
+      content: '',
+      revision: 'r1',
+      feature: 'Đăng nhập',
+      background: [],
+      scenarios: [
+        { name: 'Đăng nhập thành công', tags: ['@web'], platforms: ['web'], steps: 4, stepTexts: [], review: null },
+        { name: 'Sai mật khẩu', tags: ['@web'], platforms: ['web'], steps: 3, stepTexts: [], review: null },
+      ],
+      coverage: null,
+      error: null,
+    },
+    // File hỏng vẫn phải hiện — lỗi binding là thứ cần sửa (server.ts:1067).
+    {
+      name: 'chuyen-tien.feature',
+      content: '',
+      revision: 'r2',
+      feature: 'chuyen-tien.feature',
+      scenarios: [],
+      coverage: null,
+      error: 'Không bind được element: transfer.amount',
+    },
+  ],
   elements: 106,
   reports: [],
-  runs: [],
+  runs: [
+    { id: 'run-1', status: 'passed', stagesDone: 4 },
+    { id: 'run-2', status: 'failed', stagesDone: 2 },
+    { id: 'run-3', status: 'failed', stagesDone: 1 },
+  ] as unknown as StateResponse['runs'],
   // KHÔNG có trường `password` — xem R9 và test ở api/__tests__/secrets.test.ts.
   accounts: [{ label: 'khach-hang', username: 'user@example.com', hasPassword: true }],
   hasApiKey: true,
