@@ -4,14 +4,42 @@
     {
       "name": "testpilot-ui",
       "runtimeExecutable": "npm",
-      "runtimeArgs": ["run", "ui"],
+      "runtimeArgs": [
+        "run",
+        "ui"
+      ],
       "port": 4300
+    },
+    {
+      "name": "testpilot-ui-next",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": [
+        "run",
+        "ui:dev"
+      ],
+      "port": 5173
     },
     {
       "name": "test-runner",
       "runtimeExecutable": "npm",
-      "runtimeArgs": ["run", "test:ui"],
+      "runtimeArgs": [
+        "run",
+        "test:ui"
+      ],
       "port": 4301
+    },
+    {
+      "name": "testpilot-ui-preview",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": [
+        "run",
+        "ui:preview",
+        "--",
+        "--port",
+        "4174",
+        "--strictPort"
+      ],
+      "port": 4174
     }
   ]
 }

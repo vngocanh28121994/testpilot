@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+  <!-- background -->
+  <rect width="100" height="100" rx="18" fill="#1a0d00"/>
+
+  <!-- outer eye outline -->
+  <path d="M 6 38 Q 50 4 94 38 Q 50 72 6 38 Z" fill="#8a6010"/>
+
+  <!-- eye white -->
+  <path d="M 15 38 Q 50 11 85 38 Q 50 65 15 38 Z" fill="#f2e4b8"/>
+
+  <!-- iris -->
+  <circle cx="50" cy="38" r="15" fill="#c8921a"/>
+
+  <!-- pupil -->
+  <circle cx="50" cy="38" r="7.5" fill="#120800"/>
+
+  <!-- pupil highlight -->
+  <circle cx="55" cy="33" r="2.8" fill="rgba(255,255,220,0.55)"/>
+
+  <!-- lower eyelid teardrop mark (classic Wdjat detail) -->
+  <path d="M 50 65 L 42 76 Q 50 72 58 76 Z" fill="#c8921a"/>
+
+  <!-- connector -->
+  <rect x="47.5" y="64" width="5" height="6" fill="#c8921a"/>
+
+  <!-- inverted triangle (Millennium symbol) -->
+  <path d="M 50 97 L 18 70 L 82 70 Z" fill="#c8921a"/>
+
+  <!-- cross inside triangle -->
+  <line x1="50" y1="70" x2="50" y2="97" stroke="#1a0d00" stroke-width="3.2" stroke-linecap="round"/>
+  <line x1="31" y1="80" x2="69" y2="80" stroke="#1a0d00" stroke-width="3.2" stroke-linecap="round"/>
+</svg>

@@ -1,0 +1,13 @@
+{
+  // Tồn tại vì sen KHÔNG có nó: tsconfig.app.json của sen exclude src/test/** và
+  // src/**/__tests__/**, nên `tsc -b` ở đó không bao giờ typecheck file test.
+  // Một DoD "không còn any" mà bỏ qua đúng chỗ hay có `any` nhất thì không gác
+  // được gì. Xem UI-MIGRATION-PLAN §3.2.
+  "extends": "./tsconfig.app.json",
+  "compilerOptions": {
+    "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.test.tsbuildinfo",
+    "types": ["vite/client", "node", "vitest/globals", "@testing-library/jest-dom"]
+  },
+  "include": ["src", "e2e"],
+  "exclude": []
+}

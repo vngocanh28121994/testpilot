@@ -21,3 +21,6 @@ registry/history.json
 # Baseline snapshot for the parallel-devices refactor (local only).
 .baseline-parallel/
 registry/device-env.json
+
+# Bản build của app UI mới (Phase 1+).
+dist/ui/

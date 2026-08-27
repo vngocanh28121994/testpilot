@@ -1,0 +1,129 @@
+@import 'tailwindcss';
+@import 'tw-animate-css';
+
+@custom-variant dark (&:is(.dark *));
+
+/*
+ * Token của TestPilot, ánh xạ từ src/ui/public/style.css sang biến shadcn.
+ * Xem UI-MIGRATION-PLAN §Phase 2.8.
+ *
+ * Khác bản cũ ở một điểm lớn: bản cũ CHỈ có light theme. Khối .dark bên dưới
+ * là mới, và bốn màu trạng thái phải đọc được trên cả hai nền — console log
+ * dùng chúng dày đặc, và một màu "flaky" chìm vào nền tối thì cả trang log
+ * mất nghĩa.
+ */
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+
+  /* Trạng thái một lần chạy. Không có trong shadcn — token riêng của TestPilot. */
+  --color-status-pass: var(--status-pass);
+  --color-status-fail: var(--status-fail);
+  --color-status-flaky: var(--status-flaky);
+  --color-status-skip: var(--status-skip);
+  --color-status-running: var(--status-running);
+
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+}
+
+:root {
+  --radius: 0.5rem;
+
+  --background: oklch(1 0 0);
+  --foreground: oklch(0.208 0.042 265.755);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.208 0.042 265.755);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.208 0.042 265.755);
+  --primary: oklch(0.208 0.042 265.755);
+  --primary-foreground: oklch(0.984 0.003 247.858);
+  --secondary: oklch(0.968 0.007 247.896);
+  --secondary-foreground: oklch(0.208 0.042 265.755);
+  --muted: oklch(0.968 0.007 247.896);
+  --muted-foreground: oklch(0.554 0.046 257.417);
+  --accent: oklch(0.968 0.007 247.896);
+  --accent-foreground: oklch(0.208 0.042 265.755);
+  --destructive: oklch(0.577 0.245 27.325);
+  --border: oklch(0.929 0.013 255.508);
+  --input: oklch(0.929 0.013 255.508);
+  --ring: oklch(0.704 0.04 256.788);
+
+  --sidebar: oklch(0.984 0.003 247.858);
+  --sidebar-foreground: oklch(0.208 0.042 265.755);
+  --sidebar-border: oklch(0.929 0.013 255.508);
+  --sidebar-accent: oklch(0.968 0.007 247.896);
+  --sidebar-accent-foreground: oklch(0.208 0.042 265.755);
+
+  --status-pass: oklch(0.52 0.145 155);
+  --status-fail: oklch(0.55 0.222 27);
+  --status-flaky: oklch(0.55 0.13 75);
+  --status-skip: oklch(0.554 0.046 257.417);
+  --status-running: oklch(0.55 0.14 250);
+}
+
+.dark {
+  --background: oklch(0.208 0.042 265.755);
+  --foreground: oklch(0.984 0.003 247.858);
+  --card: oklch(0.279 0.041 260.031);
+  --card-foreground: oklch(0.984 0.003 247.858);
+  --popover: oklch(0.279 0.041 260.031);
+  --popover-foreground: oklch(0.984 0.003 247.858);
+  --primary: oklch(0.929 0.013 255.508);
+  --primary-foreground: oklch(0.208 0.042 265.755);
+  --secondary: oklch(0.279 0.041 260.031);
+  --secondary-foreground: oklch(0.984 0.003 247.858);
+  --muted: oklch(0.279 0.041 260.031);
+  --muted-foreground: oklch(0.704 0.04 256.788);
+  --accent: oklch(0.279 0.041 260.031);
+  --accent-foreground: oklch(0.984 0.003 247.858);
+  --destructive: oklch(0.704 0.191 22.216);
+  --border: oklch(1 0 0 / 10%);
+  --input: oklch(1 0 0 / 15%);
+  --ring: oklch(0.551 0.027 264.364);
+
+  --sidebar: oklch(0.279 0.041 260.031);
+  --sidebar-foreground: oklch(0.984 0.003 247.858);
+  --sidebar-border: oklch(1 0 0 / 10%);
+  --sidebar-accent: oklch(0.279 0.041 260.031);
+  --sidebar-accent-foreground: oklch(0.984 0.003 247.858);
+
+  /* Sáng hơn bản light: trên nền tối, cùng một sắc độ sẽ chìm. */
+  --status-pass: oklch(0.75 0.17 155);
+  --status-fail: oklch(0.72 0.19 25);
+  --status-flaky: oklch(0.8 0.15 80);
+  --status-skip: oklch(0.65 0.03 257);
+  --status-running: oklch(0.75 0.14 250);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+}

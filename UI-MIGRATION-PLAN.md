@@ -643,7 +643,18 @@ khớp `ui/**`, nên phép thử đó **luôn pass một cách rỗng**. Phép t
 
 ---
 
-### Phase 1 — Dựng khung app mới · 2,5–3,5 ngày
+### Phase 1 — Dựng khung app mới · 2,5–3,5 ngày · ✅ **ĐÃ XONG**
+
+> **Trạng thái thực tế.** Khung chạy được ở cả ba chế độ: dev (`:5173`, HMR, proxy sang `:4300`),
+> build (`dist/ui/app`, 327 kB / 103 kB gzip), và một-origin (`:4300/next/`). Bốn điều chỉnh so với
+> bản viết trước, tất cả đều do chạy thật mới lộ ra — chi tiết ở §13.
+>
+> | # | Phát hiện | Sửa |
+> |---|---|---|
+> | 1 | **`composite: true` phá vỡ §6.1a.** Bật composite thì `import type` xuyên biên báo `TS6307: File 'src/config.ts' is not listed within the file list of project` — composite bắt mọi file phải nằm trong `include`, mà backend thì không. | Bỏ `composite`. `tsc -b` vẫn chạy (sen cũng không có composite). |
+> | 2 | **Rule `no-restricted-imports` của ESLint gốc chặn nhầm `import type`.** `importNamePattern` khớp trên *tên* được import (`TestPilotConfig`), không phân biệt được type import. | Dùng `@typescript-eslint/no-restricted-imports` với `allowTypeImports: true`. |
+> | 3 | **TypeScript KHÔNG gác được import giá trị xuyên biên.** `import { ConfigSchema } from '@core/config.js'` compile sạch, `tsc -b` thoát 0 — với tsc thì đó là một import hợp lệ từ một file `.ts`. Nó chỉ sai lúc bundle. | ESLint là hàng rào **duy nhất** của R2, không phải lớp thứ hai. Đã ghi lại trong `eslint.config.js`. |
+> | 4 | **Vite 8 cảnh báo `__dirname`** — `configLoader: 'native'` sắp thành mặc định và không hỗ trợ nó. | Dùng `import.meta.dirname` ở `vite.config.ts` và `vitest.config.ts`. |
 
 **Mục tiêu:** `/next/` mở lên được, có 1 route trắng, HMR chạy, build ra file, CI xanh.
 
@@ -1181,8 +1192,43 @@ Mọi con số trong tài liệu này đã được đối chiếu với mã ngu
 **Chưa làm, cố ý:** bộ ảnh baseline của §10.4 (`ui/baseline/`). Nó cần chạy app cũ với dữ liệu thật —
 việc 0,5 ngày, làm bất cứ lúc nào **trước khi bắt đầu Phase 4**, không chặn Phase 1–3.
 
-### Việc đầu tiên của Phase 1
+### Phase 1 — ✅ xong
 
-Theo §11.1, file số 5: `ui/vite.config.ts`. Nhưng **trước đó** là bước dọn của §Phase 1.1 —
-`npm create vite@latest ui` sẽ từ chối ghi vào `ui/` đang có `README.md`; scaffold ra thư mục tạm rồi
-chuyển vào, hoặc dùng cờ ghi đè. Giữ lại `ui/README.md` đã viết.
+| File | Trạng thái |
+|---|---|
+| `ui/vite.config.ts` | `root: import.meta.dirname` (config gọi từ gốc repo, `root` mặc định là cwd — không set là Vite đi tìm index.html nhầm chỗ); `base` `/` dev, `/next/` build; proxy 4 tiền tố sang `TESTPILOT_UI_PORT` |
+| `ui/tsconfig.{json,app,node,test}.json` | project references, **không** `composite`; `types: ["vite/client","node"]`; `@core/*` → `../src/*` |
+| `ui/eslint.config.js` | `@typescript-eslint/no-restricted-imports` + `allowTypeImports` |
+| `ui/vitest.config.ts`, `ui/playwright.config.ts`, `ui/components.json` | theo `sen`, chỉnh path |
+| `ui/src/index.css` | Tailwind 4 `@theme` + token shadcn light/dark + 5 token `--status-*` |
+| `ui/src/main.tsx` | `basepath: import.meta.env.BASE_URL` |
+| `ui/src/routes/{__root,index}.tsx`, `ui/src/components/ui/sonner.tsx`, `ui/src/lib/{utils,queryClient}.ts` | khung tối thiểu |
+| `ui/src/routeTree.gen.ts` | sinh tự động, **có commit** |
+| `src/ui/server.ts` | +41 dòng: `NEXT_DIR` + nhánh `/next/` + SPA fallback. **Thay đổi backend duy nhất tới giờ.** |
+| `package.json` | 8 script `ui:*`; `typecheck` đã gồm `tsc -b ui` |
+| `.github/workflows/ci.yml` | gỡ `continue-on-error` |
+| `.prettierrc` | bật `prettier-plugin-tailwindcss` (hoãn từ Phase 0) |
+
+**Nghiệm thu — chạy thật:**
+
+| Phép thử | Kết quả |
+|---|---|
+| `ui:lint` / `ui:typecheck` / `ui:build` / `typecheck` (cả repo) | ✅ exit 0 |
+| `npm test` backend sau khi vá `server.ts` | ✅ 835/835 |
+| Dev `:5173` render, 0 lỗi console | ✅ |
+| `fetch('/api/state')` qua Vite proxy | ✅ 200, trả đúng khoá `config/features/reports/…` |
+| Light ↔ dark, 5 token `--status-*` đổi giá trị theo theme | ✅ |
+| **`/next/` deep link 1 và 2 cấp trên bản build thật (Playwright)** | ✅ cả hai render `notFoundComponent`, asset resolve `/next/assets/…` ở mọi độ sâu, 0 lỗi console — đây là phép thử của §6.5 |
+| `/next/assets/khong-co.js` | ✅ 404 JSON, **không** trả index.html |
+| `GET /` (app cũ) | ✅ 200, nguyên vẹn |
+| ESLint chặn `import { ConfigSchema }` từ `@core/`, cho qua `import type` | ✅ |
+| devtools lọt vào bundle production | ✅ không (đã tree-shake) |
+
+**Nợ kỹ thuật ghi nhận:** job `ui` của CI chạy `ui:build` thay cho `ui:test` — chưa có test nào thì
+`vitest run` thoát 1. Phase 3 thêm lại `ui:test`.
+
+### Việc đầu tiên của Phase 2
+
+`src/ui/contracts.ts` (§6.1b) — phần rủi ro nhất còn lại, và Phase 1 vừa chứng minh nền cho nó đã
+đứng được: `import type` xuyên biên compile sạch, và ESLint chặn đúng chiều còn lại.
+

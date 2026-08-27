@@ -25,11 +25,8 @@ jobs:
       - run: npm test
 
   ui:
-    name: ui (lint + typecheck + test)
+    name: ui (lint + typecheck + build)
     runs-on: ubuntu-latest
-    # Các script ui:* ra đời ở Phase 1. Gỡ dòng này ở cuối Phase 1 — kể từ đó
-    # một PR làm đỏ job này là một PR không được merge.
-    continue-on-error: true
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -37,9 +34,12 @@ jobs:
           node-version: '22'
           cache: npm
       - run: npm ci
-      - run: npm run ui:lint --if-present
-      - run: npm run ui:typecheck --if-present
-      - run: npm run ui:test --if-present
+      - run: npm run ui:lint
+      - run: npm run ui:typecheck
+      - run: npm run ui:build
+      # `ui:test` chưa có mặt ở đây: Phase 3 mới dựng hạ tầng test, và
+      # `vitest run` không tìm thấy file test nào thì thoát 1. Thêm dòng
+      # `- run: npm run ui:test` ngay khi Phase 3 có test đầu tiên.
 
   format:
     name: format (ui/ only)

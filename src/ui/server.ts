@@ -3,7 +3,7 @@ import net from 'node:net';
 import os from 'node:os';
 import { execFile, spawn } from 'node:child_process';
 import { promisify } from 'node:util';
-import { closeSync, createWriteStream, existsSync, openSync, readdirSync } from 'node:fs';
+import { closeSync, createWriteStream, existsSync, openSync, readdirSync, statSync } from 'node:fs';
 import { mkdir, readdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { Transform } from 'node:stream';
@@ -81,6 +81,25 @@ import {
  */
 
 const PUBLIC_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), 'public');
+
+/**
+ * Bản build của bảng điều khiển mới, phục vụ dưới /next/ trong lúc migrate.
+ *
+ * Hai app chạy song song trên cùng một origin để đối chiếu được cạnh nhau, và
+ * để cả hai dùng chung đúng tầng /api/* này — xem UI-MIGRATION-PLAN.md §5.2.
+ * Cutover ở Phase 6 là trỏ PUBLIC_DIR vào đây và bỏ nhánh /next/.
+ *
+ * Đường dẫn giống nhau ở cả hai chế độ chạy: từ src/ui/ (tsx watch) và từ
+ * dist/ui/ (đã build) thì '../../dist/ui/app' đều ra cùng một chỗ.
+ */
+const NEXT_DIR = path.resolve(
+  path.dirname(fileURLToPath(import.meta.url)),
+  '..',
+  '..',
+  'dist',
+  'ui',
+  'app',
+);
 const execFileAsync = promisify(execFile);
 
 const PORT = Number(process.env.TESTPILOT_UI_PORT ?? 4300);
@@ -765,6 +784,27 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
       const { driver } = await readJson<{ driver: string }>(req);
       return stream(res, (log) => prereqInstallDriver(driver, log));
     }
+  }
+
+  // Bảng điều khiển mới. Đặt trước vòng lặp static bên dưới vì nhánh cuối cùng
+  // của hàm này phục vụ MỌI đường dẫn GET từ PUBLIC_DIR — /next/* sẽ bị nó
+  // nuốt và trả 404 của app cũ.
+  if (req.method === 'GET' && (url.pathname === '/next' || url.pathname.startsWith('/next/'))) {
+    if (!existsSync(NEXT_DIR)) {
+      return json(res, 503, { error: 'Chưa build UI mới. Chạy `npm run ui:build`.' });
+    }
+    const rel = url.pathname.replace(/^\/next\/?/, '');
+    const file = path.resolve(NEXT_DIR, rel);
+    if (file !== NEXT_DIR && !file.startsWith(NEXT_DIR + path.sep)) {
+      return json(res, 403, { error: 'forbidden' });
+    }
+    if (rel && existsSync(file) && statSync(file).isFile()) return serveFile(res, file, req.headers.range);
+    // SPA fallback — nhưng chỉ cho đường dẫn KHÔNG có phần mở rộng. Trả
+    // index.html cho một /next/assets/index-a1b2.js bị thiếu là cách biến một
+    // asset 404 đọc được thành "Unexpected token '<'" ở console, và người đọc
+    // phải tự đoán ngược lại.
+    if (path.extname(rel)) return json(res, 404, { error: `Not found: ${rel}` });
+    return serveFile(res, path.join(NEXT_DIR, 'index.html'));
   }
 
   // A run directory holds its own screenshots and videos, so serving `runs`
