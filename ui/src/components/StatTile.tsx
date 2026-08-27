@@ -36,14 +36,9 @@ export function StatTile({
             <span className="text-2xl leading-none font-semibold tabular-nums">{value}</span>
           )}
         </div>
-        <span
-          className={cn(
-            'inline-flex size-8 shrink-0 items-center justify-center rounded-full',
-            tint,
-          )}
-        >
-          <Icon className="size-3.5" />
-        </span>
+        {/* Không bọc vòng tròn: icon đứng trần và cao xấp xỉ cả cột nhãn +
+            số bên trái, nên nó chiếm trọn phần phải của ô. */}
+        <Icon className={cn('size-11 shrink-0 stroke-[1.5]', tint)} />
       </div>
     </div>
   );
