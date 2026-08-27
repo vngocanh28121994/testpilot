@@ -61,18 +61,20 @@
       "filename": "fundmart.feature",
       "scenarioName": "Kiểm tra tooltip table",
       "contentHash": "1c64cb22558f0fae2c49c9d6d4e22c027af49309876d621a2516c1d6743cf053",
-      "status": "approved",
+      "status": "rejected",
       "source": "legacy",
-      "updatedAt": "2026-08-24T01:16:24.219Z"
+      "updatedAt": "2026-08-27T15:34:58.552Z",
+      "reviewedAt": "2026-08-27T15:34:58.552Z"
     },
     "kiem-tra-hieu-qua-dau-tu-phai-sinh.feature::Kiểm tra hiệu quả đầu tư phái sinh": {
       "id": "kiem-tra-hieu-qua-dau-tu-phai-sinh.feature::Kiểm tra hiệu quả đầu tư phái sinh",
       "filename": "kiem-tra-hieu-qua-dau-tu-phai-sinh.feature",
       "scenarioName": "Kiểm tra hiệu quả đầu tư phái sinh",
       "contentHash": "1111d4f4b0750ed90665bf58c7a968454dd088152c9af5aec9b795763472666b",
-      "status": "approved",
+      "status": "rejected",
       "source": "legacy",
-      "updatedAt": "2026-08-24T01:16:24.220Z"
+      "updatedAt": "2026-08-27T15:34:56.551Z",
+      "reviewedAt": "2026-08-27T15:34:56.551Z"
     },
     "chuc-nang-them-ma-co-phieu.feature::Thêm mã cổ phiếu mới vào danh mục": {
       "id": "chuc-nang-them-ma-co-phieu.feature::Thêm mã cổ phiếu mới vào danh mục",

@@ -14,12 +14,19 @@ test.describe('bảng điều khiển', () => {
   test('mở app, thấy sidebar 14 mục', async ({ page }) => {
     await page.goto('/');
     const nav = page.getByRole('navigation', { name: 'Điều hướng chính' });
-    await expect(nav.getByRole('link')).toHaveCount(14);
+    // 8 mục có trang thật nằm ngoài; 6 mục chưa nối nằm dưới mục cha
+    // "Inprogress" và chỉ hiện khi mở ra. Tổng vẫn phải là 14 — gom nhóm
+    // không được phép âm thầm trở thành xoá mục.
+    await expect(nav.getByRole('link')).toHaveCount(8);
     await expect(nav.getByRole('link', { name: 'Dashboard' })).toBeVisible();
+
+    await nav.getByRole('button', { name: /Inprogress/ }).click();
+    await expect(nav.getByRole('link')).toHaveCount(14);
   });
 
   test('điều hướng sang một mục chưa nối thì thấy lời giải thích', async ({ page }) => {
     await page.goto('/');
+    await page.getByRole('button', { name: /Inprogress/ }).click();
     await page.getByRole('link', { name: 'Zephyr' }).click();
     await expect(page.getByText('Đồng bộ kết quả sang Zephyr/Jira. Chưa nối.')).toBeVisible();
     await expect(page).toHaveURL(/\/todo\/zephyr$/);

@@ -9,7 +9,10 @@ import DashboardPanel from '@/panels/Dashboard';
 describe('DashboardPanel', () => {
   it('hiện 5 ô số đúng như bản cũ', async () => {
     await renderWithRouter(<DashboardPanel />);
-    await screen.findByText('feature file');
+    // Chờ một GIÁ TRỊ, không phải một nhãn. Ô số theo khuôn sen hiện nhãn ngay
+    // từ lúc đang tải (chỉ con số là skeleton) để khung không nhảy, nên nhãn
+    // xuất hiện trước khi /api/state trả về và không dùng làm mốc chờ được nữa.
+    await screen.findByText('106');
     const tiles = within(screen.getByRole('group', { name: 'Tổng quan' }));
 
     const expected: [label: string, value: string][] = [
@@ -19,8 +22,13 @@ describe('DashboardPanel', () => {
       ['lần chạy', '3'],
       ['lần thất bại', '2'],
     ];
+    // Soi trong từng ô chứ không dùng previousSibling: khuôn ô số theo
+    // sen/frontend đặt NHÃN lên trên và SỐ xuống dưới, nên quan hệ anh-em đảo
+    // chiều. Thứ cần khoá là "nhãn nào đi với số nào", không phải thứ tự DOM.
     for (const [label, value] of expected) {
-      expect(tiles.getByText(label).previousSibling).toHaveTextContent(value);
+      const tile = tiles.getByText(label).closest<HTMLElement>('[data-slot="stat-tile"]');
+      expect(tile).not.toBeNull();
+      expect(within(tile!).getByText(value)).toBeInTheDocument();
     }
   });
 

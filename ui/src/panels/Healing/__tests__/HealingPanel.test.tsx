@@ -25,8 +25,12 @@ describe('HealingPanel', () => {
       ['Đã áp dụng', '1'],
       ['Đã từ chối', '0'],
     ];
+    // Soi trong từng ô thay vì previousSibling: ô số theo khuôn sen đặt NHÃN
+    // lên trên và SỐ xuống dưới. Xem chú thích cùng nội dung ở DashboardPanel.
     for (const [label, value] of expected) {
-      expect(stats.getByText(label).previousSibling).toHaveTextContent(value);
+      const tile = stats.getByText(label).closest<HTMLElement>('[data-slot="stat-tile"]');
+      expect(tile).not.toBeNull();
+      expect(within(tile!).getByText(value)).toBeInTheDocument();
     }
   });
 

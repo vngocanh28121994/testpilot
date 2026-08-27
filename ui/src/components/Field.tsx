@@ -29,12 +29,3 @@ export function Field({
     </div>
   );
 }
-
-export function Section({ title, children }: { title: string; children: ReactNode }) {
-  return (
-    <section className="bg-card text-card-foreground max-w-2xl rounded-xl border p-6 shadow-sm">
-      <h2 className="mb-4 font-medium">{title}</h2>
-      <div className="flex flex-col gap-4">{children}</div>
-    </section>
-  );
-}
