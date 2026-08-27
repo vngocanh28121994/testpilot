@@ -220,6 +220,24 @@ export type Intent =
   | { kind: 'assertVisible'; element: string; locatorParams?: Record<string, string> }
   | { kind: 'assertNotVisible'; element: string; locatorParams?: Record<string, string> }
   | { kind: 'assertText'; element: string; text: string; mode?: 'equals' | 'contains' | 'notContains'; locatorParams?: Record<string, string> }
+  /**
+   * Whether a dropdown offers a choice, asked of that dropdown rather than of
+   * the whole screen.
+   *
+   * `assertNotVisible` cannot express this. "The account chosen as the source
+   * must not appear in the destination list" was written as `"TK Thường" is not
+   * visible`, and that assertion can never pass while the source field displays
+   * the very account it names — the app was correct and the scenario could not
+   * be satisfied. Scope is the whole difference.
+   */
+  | {
+      kind: 'assertOption';
+      element: string;
+      option: string;
+      /** `absent` is the case that had no vocabulary; `present` is its mirror. */
+      expect: 'present' | 'absent';
+      locatorParams?: Record<string, string>;
+    }
   | {
       kind: 'assertNumber';
       element: string;

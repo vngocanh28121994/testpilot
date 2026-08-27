@@ -2,7 +2,7 @@ import { ROW_CLASS_TOKENS, ROW_SELECTOR } from '../core/rows.js';
 import { chmod, mkdir, readFile, rename, unlink, writeFile } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
 import path from 'node:path';
-import { labelContainsXPath, labelXPathsBySpelling } from '../core/labelXPath.js';
+import { labelContainsXPath, labelSplitAcrossChildrenXPath, labelXPathsBySpelling } from '../core/labelXPath.js';
 import {
   chromium,
   devices,
@@ -30,6 +30,7 @@ import { selectDateWithPlaywright } from './datePicker.js';
 import { inspectPlaywrightControl } from './controlClassifier.js';
 import { accessibleNameOf } from './accessibleName.js';
 import { valueBesideCaption } from './captionValue.js';
+import { openOptionLabels } from './options.js';
 
 /**
  * Where a non-native dropdown puts its options.
@@ -569,6 +570,15 @@ export class WebUiDriver implements UiDriver {
     // — but costs a walk of the document, so it does not run while a cheap
     // exact match is still possible.
     ordered.push(root.locator(`visibletext=${c.value}`));
+    // The same reading as `visibletext`, expressed as an xpath.
+    //
+    // Redundant here and deliberately so: the selector engine does not reach a
+    // context Playwright merely attached to over CDP, so the WebView driver has
+    // only this arm. Keeping both drivers on the same rule is what stops the
+    // desktop build resolving a caption the phone cannot find — which is
+    // exactly how three scenarios failed on Android and nowhere else.
+    const split = labelSplitAcrossChildrenXPath(c.value);
+    if (split) ordered.push(root.locator(`xpath=${split}`));
     // Last, and only when nothing exact was found: a message carrying data.
     const loose = labelContainsXPath(c.value);
     if (loose) ordered.push(root.locator(`xpath=${loose}`));
@@ -774,6 +784,38 @@ export class WebUiDriver implements UiDriver {
    * The native path stays first because when it applies it is atomic and
    * cannot half-happen.
    */
+  async listOptions(h: UiHandle): Promise<string[] | undefined> {
+    const handle = h as WebHandle;
+    const expanded = await handle.locator
+      .evaluate((node) => (node as Element).getAttribute('aria-expanded'))
+      .catch(() => null);
+    if (expanded !== 'true') {
+      // See the driver interface: opening is part of the contract, because a
+      // closed dropdown reads as zero choices and would make "not among the
+      // choices" pass without checking anything.
+      await this.clearOverlays(protectedSelectors([handle.candidate]));
+      await handle.locator.click();
+    }
+    // Waited until the list stops growing, not until it first has anything in
+    // it. A Material panel renders its options progressively, so the first
+    // non-empty reading can be a partial list — and a partial list is exactly
+    // how "this value is not among the choices" passes while the value is in
+    // fact there, further down. That false pass has already happened once: the
+    // same assertion went green on one run and red on the next, against an app
+    // that behaved identically both times.
+    const deadline = Date.now() + 5_000;
+    let seen: string[] = [];
+    let previous = -1;
+    while (Date.now() < deadline) {
+      const now = await this.p.evaluate(openOptionLabels).catch(() => []);
+      if (now.length > 0 && now.length === previous) return now;
+      previous = now.length;
+      seen = now;
+      await this.p.waitForTimeout(200);
+    }
+    return seen;
+  }
+
   async selectOption(h: UiHandle, option: string): Promise<void> {
     const handle = h as WebHandle;
     await this.clearOverlays(protectedSelectors([handle.candidate]));

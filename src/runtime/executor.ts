@@ -659,6 +659,39 @@ export class Executor {
         });
         return undefined;
 
+      case 'assertOption': {
+        const { r, heal, confirm } = await withElement(intent.element, 'assert-visible', {
+          locatorParams: intent.locatorParams,
+        });
+        if (!this.driver.listOptions) {
+          throw new Error(
+            `Driver ${this.driver.platform} không đọc được danh sách lựa chọn, `
+            + `nên không kiểm tra được "${intent.option}" trong "${intent.element}".`,
+          );
+        }
+        const options = await this.driver.listOptions(r.handle);
+        // `undefined` is "cannot tell", and it must never be read as "no
+        // options" — that would make an `absent` assertion pass having checked
+        // nothing at all.
+        if (options === undefined) {
+          throw new Error(
+            `Không mở/đọc được danh sách lựa chọn của "${intent.element}" trên ${this.driver.platform}.`,
+          );
+        }
+        const wanted = normalizeHumanText(intent.option);
+        const found = options.some((label) => normalizeHumanText(label) === wanted);
+        if (found !== (intent.expect === 'present')) {
+          const list = options.length > 0 ? options.join(' | ') : '(danh sách trống)';
+          throw new Error(
+            intent.expect === 'absent'
+              ? `"${intent.option}" vẫn nằm trong danh sách của "${intent.element}": ${list}`
+              : `"${intent.option}" không có trong danh sách của "${intent.element}": ${list}`,
+          );
+        }
+        confirm();
+        return heal;
+      }
+
       case 'assertText': {
         if (intent.mode === 'notContains') {
           // "Does not show" is satisfied by an element that is not there at

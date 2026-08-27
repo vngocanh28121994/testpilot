@@ -396,12 +396,24 @@ export class NativeUiDriver implements UiDriver {
         this.opts.deviceSerial,
         this.opts.popupRules,
       );
-      await this.cdpDriver.connect().catch((err) => {
-        // Non-fatal: CDP is optional. Continue with chromedriver path.
-        console.warn(
-          `[native] CDP connect failed (continuing without Playwright): ${(err as Error).message}`,
+      await this.cdpDriver.connect().catch((err: Error) => {
+        // Expected here, and deliberately not fatal.
+        //
+        // start() runs when the app has just been attached and no screen is
+        // guaranteed to have a WebView yet — see the comment above. The socket
+        // appears only once the app renders one, so a failure at this moment
+        // says nothing about whether the run can work.
+        //
+        // The object is kept rather than discarded. launch() reconnects at the
+        // start of every scenario, and that path is guarded by `if
+        // (this.cdpDriver)`: throwing the driver away here silently disabled
+        // the one mechanism built for exactly this situation, and a run then
+        // spent half an hour failing natively while the WebView sat there,
+        // reachable, the whole time.
+        console.log(
+          `[native] WebView chưa sẵn sàng lúc khởi động (${err.message.split('\n')[0]}); `
+          + 'sẽ thử nối lại ở kịch bản đầu tiên.',
         );
-        this.cdpDriver = undefined;
       });
     }
   }
@@ -452,6 +464,26 @@ export class NativeUiDriver implements UiDriver {
               console.warn(`[native] CDP reconnect failed: ${(err as Error).message}`);
               this.cdpDriver = undefined;
             });
+          }
+          // Here, and not at start(), is where a missing WebView is fatal.
+          //
+          // The app has been brought to the front and its dialogs cleared, so a
+          // WebView that is going to exist exists by now. `hybrid: true` states
+          // that this app is driven through it, and the registry is built that
+          // way — on this project 67 of 106 elements have web locators and no
+          // native ones. Continuing does not degrade the run, it removes its
+          // ability to find anything, and it did so quietly: half an hour of
+          // red scenarios whose errors all read like locator problems, while
+          // the one line explaining why scrolled past in the log.
+          if (!this.cdpConnected && !this.inWebview) {
+            throw new Error(
+              `Không nối được WebView của ${this.opts.appPackage ?? 'app'} sau khi mở app.\n`
+              + 'Bộ testcase này bám vào DOM bên trong WebView, nên chạy ở chế độ native '
+              + 'sẽ fail gần như toàn bộ bước.\n'
+              + 'Kiểm tra app đã bật WebView debugging chưa '
+              + '(WebView.setWebContentsDebuggingEnabled), hoặc chạy lại.\n'
+              + 'Nếu thực sự muốn chạy native, đặt android.hybrid = false trong config.',
+            );
           }
           return;
         }
@@ -1210,6 +1242,20 @@ export class NativeUiDriver implements UiDriver {
    * caption", so there is no native branch to fall back to: outside a WebView
    * this reports nothing and the executor keeps the text it already had.
    */
+  /**
+   * Routed to the WebView, like every other DOM-shaped operation.
+   *
+   * A native picker has no equivalent notion, so outside a WebView this reports
+   * `undefined` — "cannot tell" — which the executor must surface as a failure
+   * rather than read as an empty list of choices.
+   */
+  async listOptions(h: UiHandle): Promise<string[] | undefined> {
+    if ((this.inWebview || this.cdpConnected) && this.cdpDriver && h instanceof WebViewCdpHandle) {
+      return this.cdpDriver.listOptions(h);
+    }
+    return undefined;
+  }
+
   async captionValue(h: UiHandle): Promise<string | undefined> {
     if ((this.inWebview || this.cdpConnected) && this.cdpDriver && h instanceof WebViewCdpHandle) {
       return this.cdpDriver.captionValue(h);

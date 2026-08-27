@@ -268,6 +268,42 @@ export const STEP_RULES: StepRule[] = [
     group: 'Kiểm tra',
   },
   {
+    id: 'assertOptionAbsent',
+    patterns: [
+      new RegExp(`^${Q} is not an option in ${Q}$`, 'i'),
+      new RegExp(`^${Q} không có trong ${Q}$`, 'i'),
+    ],
+    build: (m, ref) => ({
+      kind: 'assertOption',
+      element: ref(m[2]!),
+      option: m[1]!,
+      expect: 'absent',
+    }),
+    doc: '"<giá trị>" is not an option in "<dropdown>"',
+    hint:
+      'Khẳng định một lựa chọn KHÔNG có trong dropdown. Dùng cái này thay cho '
+      + '"không hiển thị" khi ý là "không có trong danh sách": một giá trị vắng mặt '
+      + 'trong dropdown vẫn có thể đang hiện ở chỗ khác trên màn hình, và lúc đó '
+      + '"không hiển thị" không bao giờ đúng được. Bước tự mở dropdown nếu nó đang đóng.',
+    group: 'Kiểm tra',
+  },
+  {
+    id: 'assertOptionPresent',
+    patterns: [
+      new RegExp(`^${Q} is an option in ${Q}$`, 'i'),
+      new RegExp(`^${Q} có trong ${Q}$`, 'i'),
+    ],
+    build: (m, ref) => ({
+      kind: 'assertOption',
+      element: ref(m[2]!),
+      option: m[1]!,
+      expect: 'present',
+    }),
+    doc: '"<giá trị>" is an option in "<dropdown>"',
+    hint: 'Khẳng định một lựa chọn CÓ trong dropdown. Bước tự mở dropdown nếu nó đang đóng.',
+    group: 'Kiểm tra',
+  },
+  {
     id: 'assertTextContains',
     patterns: [
       new RegExp(`^${Q} (?:shows|contains) ${Q}$`, 'i'),

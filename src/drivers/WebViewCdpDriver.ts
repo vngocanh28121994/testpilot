@@ -32,6 +32,7 @@ import { selectDateWithPlaywright } from './datePicker.js';
 import { inspectPlaywrightControl } from './controlClassifier.js';
 import { accessibleNameOf } from './accessibleName.js';
 import { valueBesideCaption } from './captionValue.js';
+import { openOptionLabels } from './options.js';
 
 const exec = promisify(execCb);
 
@@ -43,8 +44,32 @@ const exec = promisify(execCb);
  * interceptor would press that dialog's "ĐÓNG" on the way to pressing its
  * "Xác nhận". XPath handles protect nothing: the guard is a CSS query.
  */
-function keep(handle: WebViewCdpHandle): string[] {
-  return handle.selector.startsWith('/') ? [] : [handle.selector];
+/**
+ * What the popup interceptor must not dismiss while acting on this element.
+ *
+ * The selector alone is not enough, and used to be all there was: an xpath has
+ * no in-page CSS equivalent, so this returned an empty list and the interceptor
+ * was told to protect nothing. Most locators here resolve to xpath, so most
+ * elements were unprotected — and the interceptor duly clicked the ĐÓNG button
+ * of the app's own validation dialog, the exact button the step was about to
+ * click, then reported that the click had failed for want of a target.
+ *
+ * So the layer containing the element is protected too. Overlay panes and
+ * Material dialogs carry ids (`#mat-dialog-1` is what the log named), which is
+ * exactly the kind of selector the interceptor already understands.
+ */
+async function keep(handle: WebViewCdpHandle): Promise<string[]> {
+  const own = handle.selector.startsWith('/') ? [] : [handle.selector];
+  const layer = await handle
+    .locator()
+    .evaluate((node) => {
+      const root = (node as Element).closest(
+        '.cdk-overlay-pane, mat-dialog-container, [role="dialog"], [aria-modal="true"]',
+      );
+      return root && root.id ? `#${root.id}` : null;
+    })
+    .catch(() => null);
+  return layer ? [...own, layer] : own;
 }
 
 /**
@@ -520,25 +545,21 @@ export class WebViewCdpDriver {
         // phrase a scenario writes is only part of a message that states its
         // data inside itself — see labelContainsXPath for why that is a
         // separate, later pass rather than one more arm in the union.
-        const arms =
-          candidate.strategy === 'label'
-            ? ([
-                ['find-split', labelSplitAcrossChildrenXPath(candidate.value)],
-                ['find-loose', labelContainsXPath(candidate.value)],
-              ] as const).filter((arm): arm is readonly [string, string] => Boolean(arm[1]))
-            : [];
+        // The exact arm is index 0 and has just been tried, so the fallbacks
+        // are the rest of the same list `inspectMatches` reads.
+        const arms = this.selectorsFor(candidate).slice(1);
         if (arms.length === 0) return null;
 
         let matched = false;
-        for (const [stage, xpath] of arms) {
+        for (const xpath of arms) {
           // The handle re-derives its own locator from `selector` every time it
           // is asked anything, so the switch has to be recorded here too.
           // Changing only the local locator returned a handle that looked up the
           // *exact* selector again: find() reported success while isVisible()
           // went back to the hidden node and answered false, forever.
-          selector = `xpath=${xpath}`;
+          selector = xpath;
           locator = root.locator(selector);
-          count = await this.guarded(stage, locator.count(), 5000);
+          count = await this.guarded('find-fallback', locator.count(), 5000);
           if (count > 0) { matched = true; break; }
         }
         if (!matched) return null;
@@ -580,13 +601,46 @@ export class WebViewCdpDriver {
     }
   }
 
+  /**
+   * Every selector this driver would try for a candidate, cheapest first.
+   *
+   * Shared by `find` and `inspectMatches` because they disagreed: `find`
+   * located "Tiền chuyển (Phí = 0)" through the split-caption arm while
+   * `inspectMatches` rebuilt the plain exact selector, which matches nothing —
+   * so the element resolved, the step ran, and the assertion compared against
+   * an empty string. A resolution read back through a different locator is not
+   * the same resolution. The Playwright driver learned this first; keeping the
+   * order in one method is what stops the two drivers relearning it separately.
+   */
+  private selectorsFor(candidate: LocatorCandidate): string[] {
+    const exact = candidate.strategy === 'relative' ? candidate.value : domSelector(candidate);
+    if (candidate.strategy !== 'label') return [exact];
+    // A caption the template split across children stays exact — the phrase
+    // must appear in full — so it comes before the loose reading, where the
+    // phrase is only part of a longer message.
+    const fallbacks = [
+      labelSplitAcrossChildrenXPath(candidate.value),
+      labelContainsXPath(candidate.value),
+    ].filter((xpath): xpath is string => Boolean(xpath));
+    return [exact, ...fallbacks.map((xpath) => `xpath=${xpath}`)];
+  }
+
   async inspectMatches(candidate: LocatorCandidate): Promise<UiMatchSnapshot> {
     if (!this.page) return { count: 0, texts: [], focused: [] };
     await this.popupInterceptor.clear(this.page, protectedSelectors([candidate])).catch(() => {});
     const root = candidate.runtimeScope ? this.page.locator(candidate.runtimeScope) : this.page;
-    const locator = candidate.strategy === 'relative'
+    // Same order as `find`, and the first arm that sees a visible node wins —
+    // an earlier arm matching nothing must not be reported as "no text".
+    let locator = candidate.strategy === 'relative'
       ? toRelativePlaywrightLocator(root, candidate)
-      : root.locator(domSelector(candidate));
+      : root.locator(this.selectorsFor(candidate)[0]!);
+    if (candidate.strategy !== 'relative') {
+      for (const selector of this.selectorsFor(candidate)) {
+        const arm = root.locator(selector);
+        const count = await arm.count().catch(() => 0);
+        if (count > 0 && (await this.anyVisible(arm, count))) { locator = arm; break; }
+      }
+    }
     return this.guarded('inspectMatches', locator.evaluateAll((nodes) => {
       const visible = nodes.filter((node) => {
         const el = node as HTMLElement;
@@ -634,6 +688,43 @@ export class WebViewCdpDriver {
     });
   }
 
+  async listOptions(handle: WebViewCdpHandle): Promise<string[] | undefined> {
+    const page = handle.page;
+    const expanded = await handle
+      .locator()
+      .evaluate((node) => (node as Element).getAttribute('aria-expanded'))
+      .catch(() => null);
+    if (expanded !== 'true') {
+      // Opened here rather than left to the scenario: a closed dropdown reads
+      // as zero choices, and "not among the choices" would then pass having
+      // checked nothing.
+      await this.popupInterceptor.clear(page, await keep(handle)).catch(() => {});
+      await handle.locator().click({ timeout: 5000 });
+    }
+    // The list animates in, so the first look is too early. Poll rather than
+    // sleep: a fast device should not pay for a slow one.
+    // Waited until the list stops growing, not until it first has anything in
+    // it. A Material panel renders its options progressively, so the first
+    // non-empty reading can be a partial list — and a partial list is exactly
+    // how "this value is not among the choices" passes while the value is in
+    // fact there, further down. That false pass has already happened once: the
+    // same assertion went green on one run and red on the next, against an app
+    // that behaved identically both times.
+    const deadline = Date.now() + 5_000;
+    let seen: string[] = [];
+    let previous = -1;
+    while (Date.now() < deadline) {
+      const now = await page.evaluate(openOptionLabels).catch(() => []);
+      if (now.length > 0 && now.length === previous) return now;
+      previous = now.length;
+      seen = now;
+      await sleep(200);
+    }
+    // Empty after opening and waiting is a real answer for a dropdown with no
+    // choices; `undefined` is reserved for "this driver cannot tell".
+    return seen;
+  }
+
   async selectOption(handle: WebViewCdpHandle, option: string): Promise<void> {
     const locator = handle.locator();
     const tag = await locator
@@ -645,7 +736,7 @@ export class WebViewCdpDriver {
       return;
     }
 
-    await this.popupInterceptor.clear(handle.page, keep(handle)).catch(() => {});
+    await this.popupInterceptor.clear(handle.page, await keep(handle)).catch(() => {});
     await locator.click({ timeout: 5000 });
 
     // The list animates in, so the option is not there on the first look. Poll
@@ -714,7 +805,7 @@ export class WebViewCdpDriver {
 
   /** Click/tap an element. */
   async tap(handle: WebViewCdpHandle): Promise<void> {
-    await this.popupInterceptor.clear(handle.page, keep(handle)).catch(() => {});
+    await this.popupInterceptor.clear(handle.page, await keep(handle)).catch(() => {});
     const root = handle.locator();
     const tooltipTrigger = root.locator('[apppopuphover],[tcbstooltip]').first();
     const locator = await tooltipTrigger.isVisible({ timeout: 200 }).catch(() => false)
@@ -723,7 +814,7 @@ export class WebViewCdpDriver {
     try {
       await locator.click({ timeout: 5000 });
     } catch (err) {
-      const dismissed = await this.popupInterceptor.clear(handle.page, keep(handle)).catch(() => 0);
+      const dismissed = await this.popupInterceptor.clear(handle.page, await keep(handle)).catch(() => 0);
       if (dismissed > 0) {
         await locator.click({ timeout: 5000 });
         return;
@@ -799,7 +890,7 @@ export class WebViewCdpDriver {
    * node does not have.
    */
   async longPress(handle: WebViewCdpHandle, ms: number): Promise<void> {
-    await this.popupInterceptor.clear(handle.page, keep(handle)).catch(() => {});
+    await this.popupInterceptor.clear(handle.page, await keep(handle)).catch(() => {});
     const locator = handle.locator();
     await locator.scrollIntoViewIfNeeded({ timeout: 5000 }).catch(() => {});
     const box = await locator.boundingBox({ timeout: 5000 });
@@ -824,12 +915,12 @@ export class WebViewCdpDriver {
   }
 
   async hover(handle: WebViewCdpHandle): Promise<void> {
-    await this.popupInterceptor.clear(handle.page, keep(handle)).catch(() => {});
+    await this.popupInterceptor.clear(handle.page, await keep(handle)).catch(() => {});
     await handle.locator().hover({ timeout: 5_000 });
   }
 
   async dragDrop(source: WebViewCdpHandle, target: WebViewCdpHandle): Promise<void> {
-    await this.popupInterceptor.clear(source.page, keep(source)).catch(() => {});
+    await this.popupInterceptor.clear(source.page, await keep(source)).catch(() => {});
     await source.locator().dragTo(target.locator(), { timeout: 8_000 });
   }
 
@@ -840,7 +931,7 @@ export class WebViewCdpDriver {
    * for those events and ignore value assignments that go through the DOM directly.
    */
   async fill(handle: WebViewCdpHandle, text: string, typeDelay?: number): Promise<void> {
-    await this.popupInterceptor.clear(handle.page, keep(handle)).catch(() => {});
+    await this.popupInterceptor.clear(handle.page, await keep(handle)).catch(() => {});
     const locator = handle.locator();
 
     // When typeDelay is set, type character-by-character so autocomplete/search
@@ -916,13 +1007,13 @@ export class WebViewCdpDriver {
   }
 
   async selectDate(handle: WebViewCdpHandle, date: string): Promise<void> {
-    await this.popupInterceptor.clear(handle.page, keep(handle)).catch(() => {});
+    await this.popupInterceptor.clear(handle.page, await keep(handle)).catch(() => {});
     await selectDateWithPlaywright(handle.locator(), date);
   }
 
   /** Clear a field. */
   async clear(handle: WebViewCdpHandle): Promise<void> {
-    await this.popupInterceptor.clear(handle.page, keep(handle)).catch(() => {});
+    await this.popupInterceptor.clear(handle.page, await keep(handle)).catch(() => {});
     const locator = handle.locator();
     try {
       await locator.fill('', { timeout: 3000 });

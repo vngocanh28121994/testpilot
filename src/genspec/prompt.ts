@@ -64,12 +64,32 @@ VIẾT KỊCH BẢN
   runtime bắt buộc trước mọi điều kiện dùng chung như đăng nhập.
 - Mỗi scenario phải kết thúc bằng assertion nghiệp vụ quan sát được. Click, wait hoặc
   screenshot thành công chưa chứng minh expected result đúng.
+- DỪNG ngay khi quy tắc mà scenario mang tên đã được chứng minh. Đừng thêm bước
+  dọn dẹp UI sau assertion: đóng dialog, tắt toast, quay lại màn trước. Những
+  bước đó kiểm hành vi khác, không thuộc quy tắc này, và mỗi bước thừa là một
+  cách nữa để scenario đỏ vì lý do chẳng liên quan tới điều đang kiểm. Ví dụ có
+  thật: "nhập số tiền vượt hạn mức" được chứng minh xong ngay khi thông báo lỗi
+  hiện ra — thêm "bấm ĐÓNG" rồi "thông báo không hiển thị" là kiểm nút đóng của
+  dialog, một hành vi dùng chung, và chính hai bước đó làm scenario đỏ vĩnh viễn.
+  App tự khởi động lại giữa các scenario nên không cần dọn dẹp gì.
 - Dùng I am logged in as "<role>" cho điều kiện đăng nhập dùng chung, trừ khi chính
   đăng nhập là hành vi cần kiểm thử.
 - Dùng I open feature "<business feature>" from search cho điều hướng dùng chung,
   trừ khi chính tìm kiếm là hành vi cần kiểm thử.
 - Dùng I inspect section "<business region>" khi label có thể xuất hiện ở nhiều vùng.
 - Không thêm wait nếu assertion tiếp theo đã tự chờ.
+- I remember phải đứng TRƯỚC bước rời khỏi màn hình chứa giá trị đó. Ghi nhớ một
+  giá trị nền (số dư, tổng, số lượng) chỉ đọc được ở màn hình đang có nó; đặt
+  bước remember sau một bước điều hướng là đọc trên màn hình không hề có ô đó và
+  kịch bản chết ngay tại chỗ. Ví dụ có thật: "Được chuyển" nằm ở màn Chuyển tiền,
+  không có ở màn xác nhận — remember phải nằm trước "Nút CHUYỂN", không phải sau.
+- Khi yêu cầu nói một giá trị KHÔNG có trong một danh sách/dropdown, dùng
+  "<giá trị>" is not an option in "<dropdown>". TUYỆT ĐỐI không viết thành
+  "<giá trị>" is not visible: "không hiển thị" quét cả màn hình, nên nó sai
+  ngay cả khi app đúng — giá trị vắng mặt trong dropdown vẫn thường đang hiện ở
+  chỗ khác. Ví dụ có thật: "tiểu khoản đã chọn ở nguồn không xuất hiện ở dropdown
+  đích" — tiểu khoản đó vẫn hiển thị ở chính ô nguồn, nên "không hiển thị" không
+  bao giờ đúng được và kịch bản vĩnh viễn đỏ dù sản phẩm chạy chuẩn.
 - KHÔNG ghi cứng một con số mà chính kịch bản làm thay đổi — số dư, tổng, số lượng,
   điểm tích luỹ. Tài liệu ghi "Được chuyển: 8,829" là ảnh chụp tại thời điểm viết,
   không phải quy tắc sản phẩm phải tuân theo: chuyển 1,000 xong thì số đó sai vĩnh

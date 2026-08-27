@@ -103,6 +103,18 @@ export interface UiDriver {
    * assertion that has already found the caption unhelpful may ask for this.
    */
   captionValue?(handle: UiHandle): Promise<string | undefined>;
+  /**
+   * The choices a dropdown is offering, opening it first when it is closed.
+   *
+   * Opening is part of the contract, not the caller's job. A reader that simply
+   * looked at whatever was on screen would return an empty list for a closed
+   * dropdown, and "this value is not among the choices" would then pass without
+   * anything having been checked — the worst kind of green.
+   *
+   * Undefined when the driver cannot answer at all, which callers must report
+   * as a failure rather than read as "no options".
+   */
+  listOptions?(handle: UiHandle): Promise<string[] | undefined>;
   clear(handle: UiHandle): Promise<void>;
   selectOption(handle: UiHandle, option: string): Promise<void>;
   scrollIntoView(handle: UiHandle): Promise<void>;

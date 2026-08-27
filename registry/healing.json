@@ -309,7 +309,13 @@
     "2026-08-26T10-31-35Z-web": "2026-08-26T10:35:02.969Z",
     "2026-08-26T16-21-41Z-android-khong-co-tag-nao-sm-s938b": "2026-08-26T16:22:13.091Z",
     "2026-08-27T03-19-48Z-android-sm-s938b": "2026-08-27T03:25:37.779Z",
-    "2026-08-27T03-27-17Z-android-sm-s938b": "2026-08-27T03:36:48.654Z"
+    "2026-08-27T03-27-17Z-android-sm-s938b": "2026-08-27T03:36:48.654Z",
+    "2026-08-27T05-58-51Z-android-sm-s938b": "2026-08-27T06:05:37.862Z",
+    "2026-08-27T06-31-18Z-android-sm-s938b": "2026-08-27T06:37:53.431Z",
+    "2026-08-27T06-47-07Z-android-sm-s938b": "2026-08-27T06:51:11.163Z",
+    "2026-08-27T06-53-25Z-android-sm-s938b": "2026-08-27T06:59:01.687Z",
+    "2026-08-27T07-51-34Z-android-sm-s938b": "2026-08-27T07:58:26.272Z",
+    "2026-08-27T08-19-02Z-android-sm-s938b": "2026-08-27T08:23:29.562Z"
   },
   "entries": {
     "home.totalAssets::android::6dbfe0a6bf0ea4c4": {
@@ -564,15 +570,21 @@
         "weight": 0.8,
         "origin": "llm"
       },
-      "successes": 26,
+      "successes": 91,
       "runIds": [
         "2026-08-27T03-19-48Z-android-sm-s938b",
-        "2026-08-27T03-27-17Z-android-sm-s938b"
+        "2026-08-27T03-27-17Z-android-sm-s938b",
+        "2026-08-27T05-58-51Z-android-sm-s938b",
+        "2026-08-27T06-31-18Z-android-sm-s938b",
+        "2026-08-27T06-47-07Z-android-sm-s938b",
+        "2026-08-27T06-53-25Z-android-sm-s938b",
+        "2026-08-27T07-51-34Z-android-sm-s938b",
+        "2026-08-27T08-19-02Z-android-sm-s938b"
       ],
       "firstSeen": "2026-08-27T03:25:37.779Z",
-      "lastSeen": "2026-08-27T03:36:48.654Z",
+      "lastSeen": "2026-08-27T08:23:29.562Z",
       "devices": {
-        "SM_S938B": 26
+        "SM_S938B": 91
       }
     },
     "transfer.submitButton::android::242f72750d7e5084": {
@@ -591,15 +603,108 @@
         "weight": 0.8,
         "origin": "llm"
       },
-      "successes": 13,
+      "successes": 44,
       "runIds": [
         "2026-08-27T03-19-48Z-android-sm-s938b",
-        "2026-08-27T03-27-17Z-android-sm-s938b"
+        "2026-08-27T03-27-17Z-android-sm-s938b",
+        "2026-08-27T05-58-51Z-android-sm-s938b",
+        "2026-08-27T06-31-18Z-android-sm-s938b",
+        "2026-08-27T06-47-07Z-android-sm-s938b",
+        "2026-08-27T06-53-25Z-android-sm-s938b",
+        "2026-08-27T07-51-34Z-android-sm-s938b",
+        "2026-08-27T08-19-02Z-android-sm-s938b"
       ],
       "firstSeen": "2026-08-27T03:25:37.779Z",
-      "lastSeen": "2026-08-27T03:36:48.654Z",
+      "lastSeen": "2026-08-27T08:23:29.562Z",
       "devices": {
-        "SM_S938B": 13
+        "SM_S938B": 44
+      }
+    },
+    "transferConfirm.confirmButton::android::27f0ee8803c93757": {
+      "elementId": "transferConfirm.confirmButton",
+      "platform": "android",
+      "from": {
+        "strategy": "role",
+        "value": "button",
+        "name": "XÁC NHẬN",
+        "weight": 0.9,
+        "origin": "llm"
+      },
+      "to": {
+        "strategy": "label",
+        "value": "XÁC NHẬN",
+        "weight": 0.8,
+        "origin": "llm"
+      },
+      "successes": 10,
+      "runIds": [
+        "2026-08-27T06-31-18Z-android-sm-s938b",
+        "2026-08-27T06-47-07Z-android-sm-s938b",
+        "2026-08-27T06-53-25Z-android-sm-s938b",
+        "2026-08-27T07-51-34Z-android-sm-s938b",
+        "2026-08-27T08-19-02Z-android-sm-s938b"
+      ],
+      "firstSeen": "2026-08-27T06:37:53.431Z",
+      "lastSeen": "2026-08-27T08:23:29.562Z",
+      "devices": {
+        "SM_S938B": 10
+      }
+    },
+    "transfer.thongBao::android::d902c01a3180a982": {
+      "elementId": "transfer.thongBao",
+      "platform": "android",
+      "from": {
+        "strategy": "css",
+        "value": ".subtitle-dialog-common",
+        "weight": 0.95,
+        "noScope": true,
+        "origin": "crawler"
+      },
+      "to": {
+        "strategy": "css",
+        "value": ".msg-row-wraper .label-content",
+        "weight": 0.8,
+        "origin": "crawler"
+      },
+      "successes": 9,
+      "runIds": [
+        "2026-08-27T06-31-18Z-android-sm-s938b",
+        "2026-08-27T06-47-07Z-android-sm-s938b",
+        "2026-08-27T06-53-25Z-android-sm-s938b",
+        "2026-08-27T07-51-34Z-android-sm-s938b",
+        "2026-08-27T08-19-02Z-android-sm-s938b"
+      ],
+      "firstSeen": "2026-08-27T06:37:53.431Z",
+      "lastSeen": "2026-08-27T08:23:29.562Z",
+      "devices": {
+        "SM_S938B": 9
+      }
+    },
+    "transferConfirm.backButton::android::24518db0f6df5d7d": {
+      "elementId": "transferConfirm.backButton",
+      "platform": "android",
+      "from": {
+        "strategy": "role",
+        "value": "button",
+        "name": "QUAY LẠI",
+        "weight": 0.9,
+        "origin": "llm"
+      },
+      "to": {
+        "strategy": "label",
+        "value": "QUAY LẠI",
+        "weight": 0.8,
+        "origin": "llm"
+      },
+      "successes": 2,
+      "runIds": [
+        "2026-08-27T06-53-25Z-android-sm-s938b",
+        "2026-08-27T08-19-02Z-android-sm-s938b"
+      ],
+      "firstSeen": "2026-08-27T06:59:01.687Z",
+      "lastSeen": "2026-08-27T08:23:29.562Z",
+      "devices": {
+        "SM_S938B": 2
       }
     }
   }

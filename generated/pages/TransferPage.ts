@@ -157,4 +157,18 @@ export class TransferPage {
   async assertTkKyQuyNotVisible(): Promise<void> {
     await this.page.assertNotVisible('transfer.tkKyQuy');
   }
+
+  /** Chọn TK nhận tiền
+   * @testpilot-element transfer.chonTkNhanTien action=assertOption
+   */
+  async doChonTkNhanTien(): Promise<void> {
+    await this.page.tap('transfer.chonTkNhanTien');
+  }
+
+  /** Chuyển từ
+   * @testpilot-element transfer.sourceAccount action=assertOption
+   */
+  async doSourceAccount(): Promise<void> {
+    await this.page.tap('transfer.sourceAccount');
+  }
 }

@@ -32,6 +32,7 @@ describe('WebView delegation in the native driver', () => {
     ['selectOption', 'selectOption'],
     ['scrollIntoView', 'scrollIntoView'],
     ['captionValue', 'captionValue'],
+    ['listOptions', 'listOptions'],
   ];
 
   for (const [method, target] of DELEGATES) {
