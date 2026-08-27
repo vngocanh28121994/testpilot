@@ -880,7 +880,23 @@ http.post('/api/prereq/appium', () => {
 
 ---
 
-### Phase 4 — Migrate trang · 12–17 ngày
+### Phase 4 — Migrate trang · 12–17 ngày · 🚧 **3/11 trang xong**
+
+> | # | Trang | Trạng thái |
+> |---|---|---|
+> | 1 | Healing Center | ✅ `396184b` |
+> | 2 | Dashboard + `components/data-table/` | ✅ `9c77eb4` |
+> | 3 | Personal Settings | ✅ `169ac48` |
+> | 4–11 | Scenario/E2E History · Farm Run Detail · Bản build · E2E Runner · AWS Device Farm · Scenario Studio · Scenario Review · trang `todo` | ⏳ còn lại |
+>
+> Ba phát hiện chung, áp cho mọi trang còn lại:
+>
+> | # | Phát hiện | Áp dụng từ giờ |
+> |---|---|---|
+> | 1 | **Không `useEffect` để đồng bộ server-state vào form state.** Rule `react-hooks` bắt đúng, và lý do thực tế nặng hơn: mỗi lần refetch sẽ ghi đè thứ người dùng đang gõ dở | Tách `<Panel>` (tải) khỏi `<Form>` (chỉ mount khi đã có dữ liệu, `useState` khởi tạo từ prop) |
+> | 2 | **Route file BẮT BUỘC export hằng `Route`** ⇒ component phải nằm ở `panels/` | Đã cấu hình `allowExportNames`, nhưng kỷ luật vẫn là route file ba dòng |
+> | 3 | **Fixture mỏng không bắt được gì.** `stateFixture.config` từng là cast không có `paths` và để lọt đúng loại lỗi Settings hay gặp | Fixture phải bám sát response thật, và khai kiểu tường minh để `tsc` gác |
+
 
 Nguyên tắc mỗi trang: **1 PR = 1 trang**, gồm panel + hook + `__tests__/` + route + phần contract của
 riêng nó, và trang tương ứng ở app cũ **không bị xoá**.
