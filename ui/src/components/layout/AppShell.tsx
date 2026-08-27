@@ -10,9 +10,9 @@ import { ThemeSwitch } from '@/components/ThemeSwitch';
  */
 export function AppShell({ title, actions, children }: { title: string; actions?: ReactNode; children: ReactNode }) {
   return (
-    <div className="flex h-svh">
+    <div className="flex h-svh overflow-hidden">
       <Sidebar />
-      <div className="flex min-w-0 flex-1 flex-col">
+      <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
         <Header>
           <h1 className="text-sm font-medium">{title}</h1>
           <div className="ms-auto flex items-center gap-2">

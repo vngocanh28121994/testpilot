@@ -9,10 +9,8 @@ import './index.css';
 
 const router = createRouter({
   routeTree,
-  // Nguồn sự thật duy nhất cho tiền tố đường dẫn, và là lý do cutover ở Phase 6
-  // chỉ phải sửa `base` trong vite.config.ts. Vite bơm giá trị `base` vào đây.
-  // Thiếu dòng này thì bản build dưới /next/ sẽ rơi vào notFoundComponent ở mọi
-  // đường dẫn trừ gốc — xem UI-MIGRATION-PLAN §6.5.
+  // Router và asset cùng đọc Vite `base`; deep link luôn được resolve từ cùng
+  // một gốc với bundle production.
   basepath: import.meta.env.BASE_URL,
   context: { queryClient },
   defaultPreload: 'intent',

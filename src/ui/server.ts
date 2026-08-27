@@ -85,24 +85,13 @@ import {
 
 /**
  * Local control panel. Single user, single machine — so it is a plain node:http
- * server with no framework and no bundler. It edits the same
+ * server phục vụ bundle React đã build. Nó đọc và ghi cùng
  * `testpilot.config.json` the CLI reads, which keeps the UI a convenience
  * rather than a second source of truth.
  */
 
-const PUBLIC_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), 'public');
-
-/**
- * Bản build của bảng điều khiển mới, phục vụ dưới /next/ trong lúc migrate.
- *
- * Hai app chạy song song trên cùng một origin để đối chiếu được cạnh nhau, và
- * để cả hai dùng chung đúng tầng /api/* này — xem UI-MIGRATION-PLAN.md §5.2.
- * Cutover ở Phase 6 là trỏ PUBLIC_DIR vào đây và bỏ nhánh /next/.
- *
- * Đường dẫn giống nhau ở cả hai chế độ chạy: từ src/ui/ (tsx watch) và từ
- * dist/ui/ (đã build) thì '../../dist/ui/app' đều ra cùng một chỗ.
- */
-const NEXT_DIR = path.resolve(
+/** Vite bundle duy nhất sau cutover. `/api` và artifact paths vẫn do server này sở hữu. */
+const PUBLIC_DIR = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
   '..',
   '..',
@@ -798,27 +787,6 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
     }
   }
 
-  // Bảng điều khiển mới. Đặt trước vòng lặp static bên dưới vì nhánh cuối cùng
-  // của hàm này phục vụ MỌI đường dẫn GET từ PUBLIC_DIR — /next/* sẽ bị nó
-  // nuốt và trả 404 của app cũ.
-  if (req.method === 'GET' && (url.pathname === '/next' || url.pathname.startsWith('/next/'))) {
-    if (!existsSync(NEXT_DIR)) {
-      return json(res, 503, { error: 'Chưa build UI mới. Chạy `npm run ui:build`.' });
-    }
-    const rel = url.pathname.replace(/^\/next\/?/, '');
-    const file = path.resolve(NEXT_DIR, rel);
-    if (file !== NEXT_DIR && !file.startsWith(NEXT_DIR + path.sep)) {
-      return json(res, 403, { error: 'forbidden' });
-    }
-    if (rel && existsSync(file) && statSync(file).isFile()) return serveFile(res, file, req.headers.range);
-    // SPA fallback — nhưng chỉ cho đường dẫn KHÔNG có phần mở rộng. Trả
-    // index.html cho một /next/assets/index-a1b2.js bị thiếu là cách biến một
-    // asset 404 đọc được thành "Unexpected token '<'" ở console, và người đọc
-    // phải tự đoán ngược lại.
-    if (path.extname(rel)) return json(res, 404, { error: `Not found: ${rel}` });
-    return serveFile(res, path.join(NEXT_DIR, 'index.html'));
-  }
-
   // A run directory holds its own screenshots and videos, so serving `runs`
   // is enough for a current report. `reports` and `artifacts` stay reachable
   // for runs recorded under the old per-platform layout.
@@ -832,11 +800,19 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
   }
 
   if (req.method === 'GET') {
-    const name = url.pathname === '/' ? 'index.html' : url.pathname.replace(/^\/+/, '');
-    const file = path.join(PUBLIC_DIR, name);
-    // Never let a crafted path escape the public directory.
-    if (!file.startsWith(PUBLIC_DIR)) return json(res, 403, { error: 'forbidden' });
-    return serveFile(res, file);
+    if (!existsSync(PUBLIC_DIR)) {
+      return json(res, 503, { error: 'Chưa build UI. Chạy `npm run ui:build`.' });
+    }
+    const rel = url.pathname.replace(/^\/+/, '');
+    const file = path.resolve(PUBLIC_DIR, rel || 'index.html');
+    if (file !== PUBLIC_DIR && !file.startsWith(PUBLIC_DIR + path.sep)) {
+      return json(res, 403, { error: 'forbidden' });
+    }
+    if (rel && existsSync(file) && statSync(file).isFile()) return serveFile(res, file, req.headers.range);
+    // SPA fallback cho route React. Asset thiếu vẫn trả 404 JSON để browser
+    // không cố parse index.html thành JavaScript.
+    if (path.extname(rel)) return json(res, 404, { error: `Not found: ${rel}` });
+    return serveFile(res, path.join(PUBLIC_DIR, 'index.html'));
   }
   json(res, 404, { error: `No route for ${route}` });
 }
@@ -2757,11 +2733,13 @@ async function serveFile(res: ServerResponse, file: string, range?: string): Pro
   const headers: Record<string, string> = {
     'content-type': MIME[path.extname(file)] ?? 'application/octet-stream',
     'accept-ranges': 'bytes',
-    // The panel is edited while it is running and has no cache-busting build
-    // step, so a cached index.html or app.js means staring at a stale UI and
-    // wondering why a change did nothing. Correctness beats a warm cache on a
-    // single-user local tool.
-    'cache-control': 'no-store',
+    // Vite hash tên asset. Cache dài cho asset là an toàn; index.html luôn
+    // no-store để lần mở sau nhận được manifest asset mới nhất.
+    'cache-control': path.basename(file) === 'index.html'
+      ? 'no-store'
+      : file.includes(`${path.sep}assets${path.sep}`)
+        ? 'public, max-age=31536000, immutable'
+        : 'no-store',
   };
 
   const match = /^bytes=(\d*)-(\d*)$/.exec(range ?? '');

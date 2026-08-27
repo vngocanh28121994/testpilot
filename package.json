@@ -9,9 +9,9 @@
   },
   "scripts": {
     "prepare": "husky",
-    "build": "tsc -p tsconfig.json && mkdir -p dist/ui/public && cp -R src/ui/public/. dist/ui/public/",
-    "typecheck": "tsc -p tsconfig.check.json && node --check src/ui/public/app.js && tsc -b ui",
-    "ui": "tsx watch src/ui/server.ts",
+    "build": "tsc -p tsconfig.json && npm run ui:build",
+    "typecheck": "tsc -p tsconfig.check.json && tsc -b ui",
+    "ui": "npm run ui:build && tsx watch src/ui/server.ts",
     "ui:dev": "vite --config ui/vite.config.ts",
     "ui:build": "tsc -b ui && vite build --config ui/vite.config.ts",
     "ui:preview": "vite preview --config ui/vite.config.ts",

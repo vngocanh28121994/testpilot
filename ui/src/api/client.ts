@@ -63,6 +63,11 @@ export const api = {
   get: <T>(path: string) => request<T>('GET', path),
   post: <T>(path: string, body?: unknown) => request<T>('POST', path, body ?? {}),
   put: <T>(path: string, body: unknown) => request<T>('PUT', path, body),
+  getText: async (path: string) => {
+    const res = await fetch(path);
+    if (!res.ok) throw new ApiRequestError(res.statusText, path, res.status);
+    return res.text();
+  },
 };
 
 /** Ghép query string, bỏ qua các khoá undefined. */

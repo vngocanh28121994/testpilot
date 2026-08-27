@@ -4,7 +4,7 @@
 @custom-variant dark (&:is(.dark *));
 
 /*
- * Token của TestPilot, ánh xạ từ src/ui/public/style.css sang biến shadcn.
+ * Token của TestPilot, ánh xạ từ stylesheet legacy sang biến shadcn.
  * Xem UI-MIGRATION-PLAN §Phase 2.8.
  *
  * Khác bản cũ ở một điểm lớn: bản cũ CHỈ có light theme. Khối .dark bên dưới
@@ -125,5 +125,17 @@
   }
   body {
     @apply bg-background text-foreground;
+  }
+}
+
+@layer components {
+  .input {
+    @apply border-border bg-background mt-1 block w-full rounded border p-2 text-sm;
+  }
+  .button {
+    @apply border-border rounded border px-2 py-1 text-sm disabled:opacity-50;
+  }
+  .console {
+    @apply bg-muted mt-3 max-h-96 overflow-auto rounded p-3 text-xs whitespace-pre-wrap;
   }
 }

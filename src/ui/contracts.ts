@@ -151,7 +151,7 @@ export interface StateResponse {
   configFile: string;
   features: FeatureSummary[];
   elements: number;
-  reports: unknown[];
+  reports: ReportView[];
   runs: RunHistoryEntry[];
   accounts: AccountView[];
   hasApiKey: boolean;
@@ -170,6 +170,130 @@ export interface StateResponse {
 export interface HistoryResponse {
   runs: RunHistoryEntry[];
 }
+
+/* ------------------------------------------------------------------ */
+/* Reports, builds, Studio and Device Farm                             */
+/* ------------------------------------------------------------------ */
+
+/** One report directory rendered by the local runner or Device Farm. */
+export interface ReportView {
+  id: string;
+  /** Bản ghi cũ có thể mang platform do runner bên ngoài đặt, nên không ép literal ở boundary. */
+  platform: string;
+  status: string;
+  kind: string;
+  startedAt: string;
+  finishedAt?: string;
+  device?: string;
+  tag?: string;
+  counters?: { passed: number; failed: number; total: number };
+  url: string;
+  log?: string;
+  networkLogUrl: string | null;
+  videoUrls?: string[];
+  shotUrls?: Array<{ name: string; url: string; onFailure: boolean }>;
+}
+
+export interface BuildInventoryRow {
+  env: string;
+  isDefault: boolean;
+  android: Build;
+  ios: Build;
+  missing: Array<{ platform: 'android' | 'ios'; path: string }>;
+}
+
+export interface BuildsResponse {
+  root: string;
+  environments: BuildInventoryRow[];
+}
+
+export interface StudioAccountInput {
+  label: string;
+  username: string;
+  password?: string;
+  previousLabel?: string;
+}
+
+export interface StudioForm {
+  sources?: string[];
+  baseUrl?: string;
+  targetFeature?: string;
+  accounts?: StudioAccountInput[];
+  model?: string;
+  note?: string;
+  defaultEnv?: string;
+  environments?: Record<string, {
+    accounts?: Record<string, string>;
+    ios?: { app?: string };
+    android?: { app?: string };
+    web?: { baseUrl?: string };
+  }>;
+  workflowPlatforms?: Array<'web' | 'android' | 'ios'>;
+  workflowEnv?: string;
+  workflowHeaded?: boolean;
+  workflowDeviceFarm?: { platform: 'android' | 'ios' } | null;
+  workflowDevices?: { android?: string; ios?: string } | null;
+}
+
+export interface StudioSaveResponse {
+  ok: true;
+  accounts: AccountView[];
+}
+
+export interface FeatureSaveRequest {
+  filename: string;
+  content: string;
+  create?: boolean;
+  baseRevision?: string;
+}
+
+export interface FeatureReviewRequest {
+  filename: string;
+  scenarioName: string;
+  decision: 'approve' | 'reject';
+}
+
+export interface FeatureReviewBulkRequest {
+  items: Array<Pick<FeatureReviewRequest, 'filename' | 'scenarioName'>>;
+  decision: 'approve' | 'reject';
+}
+
+export interface FeatureMutationResponse {
+  ok: true;
+  revision?: string;
+  content?: string;
+  review?: ScenarioReviewEntry;
+  reviewed?: number;
+  pomWarning?: string;
+}
+
+export interface FarmForm {
+  region?: string;
+  projectArn?: string;
+  devicePoolArn?: string;
+  platform?: 'android' | 'ios';
+  testPackagePath?: string;
+  testSpecPath?: string;
+  runName?: string;
+  jobTimeoutMinutes?: number;
+  videoCapture?: boolean;
+  sendSecrets?: boolean;
+  env?: Record<string, string>;
+  bundle?: boolean;
+}
+
+export interface FarmApiResponse<T> { ok: boolean; data?: T; error?: string; hint?: string }
+export interface FarmProject { arn: string; name: string }
+export interface FarmPool { arn: string; name: string; type: string; platforms?: Array<'android' | 'ios'> }
+export interface FarmDevice {
+  arn: string;
+  name: string;
+  manufacturer: string;
+  os: string;
+  formFactor: string;
+  availability: string;
+}
+export interface AwsStatus { ok: boolean; source: string; reason?: string; keyHint?: string; expiresInMinutes?: number; canLogin?: boolean }
 
 /* ------------------------------------------------------------------ */
 /* GET /api/healing · POST /api/healing/review                         */

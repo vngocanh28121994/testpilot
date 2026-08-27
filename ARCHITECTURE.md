@@ -165,9 +165,10 @@ npm run ui         # bảng điều khiển ở http://localhost:4300
 
 ## 8. Bảng điều khiển (Horus / Scenario Studio)
 
-`npm run ui` mở một `node:http` server không framework, không bundler. Nó ghi
-đúng cái `testpilot.config.json` mà CLI đọc, nên mọi thứ cấu hình trong trình
-duyệt đều chạy lại được từ terminal và review được trong diff.
+`npm run ui` mở server API `node:http`; giao diện là bundle React/Vite trong
+`dist/ui/app`. Nó ghi đúng cái `testpilot.config.json` mà CLI đọc, nên mọi thứ
+cấu hình trong trình duyệt đều chạy lại được từ terminal và review được trong
+diff. Dùng `npm run ui:dev` khi phát triển giao diện với HMR.
 
 Điểm đáng nói:
 

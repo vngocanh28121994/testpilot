@@ -12,17 +12,17 @@ const BACKEND = `http://localhost:${process.env.TESTPILOT_UI_PORT ?? 4300}`;
 // tĩnh có HTTP Range — video của một lần chạy phải tua được (server.ts:773).
 const PROXIED = ['/api', '/runs', '/reports', '/artifacts'];
 
-export default defineConfig(({ command }) => ({
+export default defineConfig(() => ({
   // Config này được gọi từ thư mục gốc (`vite --config ui/vite.config.ts`), mà
   // `root` của Vite mặc định là cwd chứ không phải chỗ đặt file config. Không
   // set tường minh thì Vite đi tìm index.html ở gốc repo và không thấy gì.
   root: import.meta.dirname,
 
   // base tuyệt đối, không phải './' như sen. Xem UI-MIGRATION-PLAN §6.5: base
-  // tương đối vỡ khi deep-link nhiều cấp — /next/farm/abc sẽ đi tìm asset ở
-  // /next/farm/assets/. Đổi '/next/' → '/' ở Phase 6 là toàn bộ việc cutover;
-  // main.tsx đọc import.meta.env.BASE_URL nên không phải sửa theo.
-  base: command === 'build' ? '/next/' : '/',
+  // tương đối vỡ khi deep-link nhiều cấp. Sau cutover cả dev và production
+  // đều phục vụ từ gốc; main.tsx tự đọc BASE_URL nên không cần cấu hình router
+  // thứ hai.
+  base: '/',
 
   plugins: [
     // Phải đứng trước react(): nó sinh routeTree.gen.ts mà react() sẽ transform.

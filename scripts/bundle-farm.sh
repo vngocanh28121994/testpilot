@@ -102,6 +102,7 @@ rm -rf "$STAGE" "$OUT"
 mkdir -p "$STAGE" build
 
 cp -R dist "$STAGE/dist"
+rm -rf "$STAGE/dist/ui"
 cp -R features "$STAGE/features"
 cp -R registry "$STAGE/registry"
 

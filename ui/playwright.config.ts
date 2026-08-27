@@ -14,8 +14,7 @@ export default defineConfig({
   outputDir: './test-results',
   reporter: [['html', { open: 'never', outputFolder: './ui/playwright-report' }], ['line']],
   use: {
-    // Dev server nên base là '/' (§6.5). Sau cutover cũng vẫn '/'; chỉ bản
-    // build trước cutover mới nằm dưới /next/.
+    // Dev và production đều phục vụ từ gốc sau cutover.
     baseURL: 'http://localhost:4173',
     screenshot: 'only-on-failure',
     trace: 'on-first-retry',

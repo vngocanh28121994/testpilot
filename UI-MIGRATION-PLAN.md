@@ -880,14 +880,14 @@ http.post('/api/prereq/appium', () => {
 
 ---
 
-### Phase 4 — Migrate trang · 12–17 ngày · 🚧 **3/11 trang xong**
+### Phase 4 — Migrate trang · 12–17 ngày · 🚧 **11/11 route đã migrate; còn hardening test**
 
 > | # | Trang | Trạng thái |
 > |---|---|---|
 > | 1 | Healing Center | ✅ `396184b` |
 > | 2 | Dashboard + `components/data-table/` | ✅ `9c77eb4` |
 > | 3 | Personal Settings | ✅ `169ac48` |
-> | 4–11 | Scenario/E2E History · Farm Run Detail · Bản build · E2E Runner · AWS Device Farm · Scenario Studio · Scenario Review · trang `todo` | ⏳ còn lại |
+> | 4–11 | Scenario/E2E History · Farm Run Detail · Bản build · E2E Runner · AWS Device Farm · Scenario Studio · Scenario Review · trang `todo` | ✅ route/panel đã có; phần parity và test còn ghi rõ dưới đây |
 >
 > Ba phát hiện chung, áp cho mọi trang còn lại:
 >
@@ -917,34 +917,38 @@ Thứ tự đi từ mỏng → dày, để lát cắt dọc đầu tiên chạm 
 | 10 | **Scenario Review** | 1.939 | 4 | Lớn nhất: TanStack Table + filter tag + inline editor + bulk + phân trang. **Bắt buộc tách 3 PR.** Bộ lọc để ở **URL search param** của TanStack Router (`validateSearch`), không phải `useState` — chia sẻ link được, và back/forward chạy đúng. |
 | 11 | Trang `todo` dùng chung | ~40 | 0,5 | Một component nhận `{label, why}`, phục vụ cả 6 mục NAV placeholder. |
 
-**Definition of Done cho mỗi trang:**
-- [ ] Tương đương tính năng với trang cũ (đối chiếu tay hai tab cạnh nhau, ghi vào PR).
-- [ ] Contract của mọi route trang đó gọi đã có trong `src/ui/contracts.ts`, handler backend đã gắn
-      kiểu trả về tường minh, `npm run typecheck` xanh.
-- [ ] Có `__tests__/` cho panel và cho **từng** hook trong `hooks/`.
-- [ ] MSW handler cho mọi route trang đó gọi (SSE thì phải là ReadableStream thật).
-- [ ] `npm run ui:lint`, `npm run ui:typecheck`, `npm run ui:test` xanh; CI xanh.
-- [ ] Không còn `any` (dùng `unknown` + thu hẹp); không `fetch` trực tiếp ngoài `api/`.
-- [ ] Route file chỉ ghép layout + panel, không chứa logic (§3.1 điểm 3).
-- [ ] Kiểm mắt ở **cả light và dark**.
+**Trạng thái Definition of Done sau audit 2026-08-27:**
+- [x] 11 trang/route đã có panel và đi qua tầng API/contract; `npm run ui:typecheck` xanh.
+- [x] Bề mặt parity còn thiếu đã được hoàn tất: History có lọc khoảng ngày/phân trang; Scenario Review
+      có UI lọc tag/phân trang giữ trong URL; Local Runner chạy preflight; Farm lộ `env`,
+      `videoCapture`, `sendSecrets`.
+- [ ] Có `__tests__/` cho từng panel/hook mới. Hiện mới có test cho Dashboard, Healing, Settings và
+      primitive dùng chung.
+- [ ] MSW handler cho mọi route trang gọi. Còn workflow, scenario, builds, farm và secrets; E2E hiện
+      mock bằng Playwright route không thay thế cho unit/component mock.
+- [x] `npm run ui:lint`, `npm run ui:typecheck`, `npm run ui:test` xanh; CI đã gác lint/typecheck/test/build.
+- [ ] Xoá toàn bộ `any` còn lại và rà lại ranh giới API; `renderWithRouter` còn một cast `as any`.
+- [x] Route file giữ mỏng; panel giữ phần giao diện/nghiệp vụ.
+- [x] Safe check light/dark và viewport 390 px đã chạy; không còn horizontal overflow toàn trang.
 
 ---
 
-### Phase 5 — E2E + đối chiếu · 2–2,5 ngày
+### Phase 5 — E2E + đối chiếu · 2–2,5 ngày · 🚧 **Safe checks xong; R10 farm thật và hardening test còn lại**
 
-1. Playwright e2e phủ 5 luồng chính: mở Studio → lưu config; chạy workflow (mock); duyệt scenario;
-   xem healing; mở tab Device Farm.
-2. **Đối chiếu song song:** mở `/` và `/next/` cạnh nhau, đi hết 12 trang, ghi lại lệch lạc vào một
-   bảng checklist có tick từng mục (không phải "đã xem qua").
-3. Kiểm tra dark mode và responsive trên toàn bộ trang.
-4. Đo bundle size; `autoCodeSplitting` của TanStack Router đã bật sẵn — kiểm tra Scenario Review
-   thực sự nằm ở chunk riêng.
-5. **Chạy lại phép thử R10 trên một farm run thật** (không mock): bắt đầu run, đi qua 3 trang khác,
-   quay lại — log phải liền mạch.
+1. ✅ Playwright E2E phủ Studio/lưu config + workflow mock, Scenario Review, Healing, Device Farm và
+   Local Runner preflight; hiện có 10 browser test.
+2. ✅ Đối chiếu trước cutover đã ghi vào `ui/PHASE-5-COMPARISON.md`. Bản cũ và `/next/` đã bị xoá sau
+   cutover nên không thể lặp lại phép so sánh hai tab; các chênh lệch feature còn lại được theo dõi ở
+   checklist Phase 4 thay vì coi là hoàn tất.
+3. ✅ Dark mode và responsive: browser check xác nhận theme switch và viewport 390 px không tràn ngang.
+4. ✅ Production build đã kiểm tra route chunk riêng cho History, Builds, Runner, Farm, Studio và
+   Scenarios.
+5. [ ] **Chạy lại phép thử R10 trên một farm run thật** (không mock): bắt đầu run, đi qua 3 trang khác,
+   quay lại — log phải liền mạch. Cần AWS credential và chấp nhận chi phí Device Farm.
 
 ---
 
-### Phase 6 — Cutover + dọn dẹp · 1,5–2 ngày
+### Phase 6 — Cutover + dọn dẹp · 1,5–2 ngày · ✅ **ĐÃ XONG**
 
 1. `vite.config.ts`: `base` `/next/` → `/`. `main.tsx` **không phải sửa** (đọc `BASE_URL`, §6.5).
    `playwright.config.ts#baseURL` bỏ hậu tố `/next/`.
@@ -955,8 +959,8 @@ Thứ tự đi từ mỏng → dày, để lát cắt dọc đầu tiên chạm 
    cache-busting" — sau cutover thì Vite đã băm tên file, nên `no-store` chỉ còn nghĩa là tải lại
    toàn bộ bundle mỗi lần F5. Sửa thành: `index.html` → `no-store`; `/assets/*` (tên có hash) →
    `public, max-age=31536000, immutable`.
-4. **Xoá** `src/ui/public/{app.js,index.html,style.css,flatpickr.min.js,flatpickr.min.css}` — chỉ sau
-   khi Phase 5 đối chiếu xong. **Gắn tag `pre-ui-migration` trước khi xoá** để còn đường quay lại;
+4. ✅ Đã **xoá** `src/ui/public/{app.js,index.html,style.css,flatpickr.min.js,flatpickr.min.css}` sau
+   safe comparison. Đã gắn tag `pre-ui-migration` trước khi xoá để còn đường quay lại;
    `git revert` một commit xoá 8.900 dòng thì được, nhưng tag là thứ tìm lại được sau sáu tháng.
    Giữ `favicon.png`, `favicon.svg` (chuyển sang `ui/public/`).
 5. `package.json`:
@@ -1207,9 +1211,10 @@ thông thường, và là lý do R10 không xảy ra.
    `zod` + `node:fs` vào bundle trình duyệt và build gãy ở chỗ khó đọc.
 2. **Không bọc upload build vào `FormData`** (§6.6).
 3. **Không `abort()` stream trong `useEffect` cleanup** (§6.2 / R10).
-4. **Không sửa logic trong `server.ts`.** Hai thay đổi được phép và chỉ hai: nhánh static `/next/`
-   (§5.2) và kiểu trả về tường minh cho handler (§6.1b). Cả hai đều được `npm run typecheck` +
-   `npm test` của backend gác.
+4. **Trong giai đoạn strangler, không sửa logic nghiệp vụ trong `server.ts`.** Chỉ thêm static
+   `/next/` và contract type cho handler. Sau cutover, static server được đổi có chủ đích để phục vụ
+   bundle React tại `/`, SPA fallback và cache policy cho asset băm tên; tất cả vẫn qua
+   `npm run typecheck` + `npm test` của backend.
 
 ---
 
@@ -1327,8 +1332,9 @@ việc 0,5 ngày, làm bất cứ lúc nào **trước khi bắt đầu Phase 4*
 
 **Nợ kỹ thuật ghi nhận:**
 
-1. `ui/src/panels/StreamProbe/` + `routes/probe.stream.tsx` là **bàn thử dev-only**, dựng để nghiệm
-   thu R3/R10 trước khi có Local Runner. **Xoá cả hai khi Phase 4 #7 xong.**
+1. [ ] `ui/src/panels/StreamProbe/` + `routes/probe.stream.tsx` là **bàn thử dev-only**, dựng để nghiệm
+   thu R3/R10 trước khi có Local Runner. Phase 4 #7 đã xong nhưng hai file vẫn còn; xoá chúng cùng
+   route sinh trong đợt hardening kế tiếp.
 2. Contract mới phủ nhóm route ưu tiên. Các route còn lại bổ sung theo từng PR trang, đúng như §6.1b
    dự kiến — DoD của mỗi trang đã có ô này.
 3. `StateResponse.features` / `reports` / `deviceEnv` còn là `unknown[]` / `Record<string, unknown>`.
@@ -1383,3 +1389,38 @@ có sẵn từ Phase 2–3, nên PR đầu tiên chỉ còn phần panel + hook 
 
 Nhớ: `components/data-table/` (TanStack Table dùng chung) sinh ra ở trang #2 Dashboard, nên trang #1
 cứ dựng bảng đơn giản rồi thay sau — đừng dựng abstraction cho một chỗ dùng.
+
+### Phase 4 — 🚧 11/11 route đã migrate, còn hardening test
+
+Đã thêm các route/panel: `scenarios.history`, `runner.history`, `farm.$runId`, `builds`, `runner`,
+`farm`, `studio`, `scenarios` và `todo.$slug`; đồng thời bổ sung `StatusPill`, contract cho build/farm/
+studio/scenario và các luồng upload/SSE cần thiết.
+
+Các khả năng đã hoạt động: xem lịch sử workflow/report, xem video Farm qua HTTP Range, upload APK/IPA
+có tiến trình, chạy/dừng Local Runner, chọn/tạo Device Farm pool và chạy stream, lưu/chạy Studio, duyệt
+bulk/sửa feature, và trang giải thích cho 6 NAV placeholder.
+
+Parity đã hoàn tất: History dùng `react-day-picker` để lọc khoảng ngày và phân trang; Scenario Review
+lọc tag/phân trang bằng URL search param; Local Runner hiển thị/chặn theo preflight; Farm gửi
+`env`/`videoCapture`/`sendSecrets`. Backlog còn lại chỉ là xoá StreamProbe, cùng unit test và MSW
+handler riêng cho các panel mới — không có route bị thiếu.
+
+### Phase 5 — 🚧 safe checks xong
+
+- `ui/e2e/workflows.spec.ts` bổ sung các luồng Studio/save + workflow stream, Scenario Review, Healing,
+  Device Farm option/env và Local Runner preflight; tổng 10 E2E test.
+- Đối chiếu trước cutover, dark mode, viewport 390 px, deep link và code splitting được ghi tại
+  `ui/PHASE-5-COMPARISON.md`.
+- Còn duy nhất phép thử runtime có chi phí: R10 trên một Device Farm run thật. Không chạy khi chưa có
+  authorization vì sẽ dùng AWS device minutes.
+
+### Phase 6 — ✅ xong
+
+- Tag rollback `pre-ui-migration` trỏ tới commit trước migration (`0592985`).
+- React build được phục vụ tại `/` từ `dist/ui/app`; `/next/` và static UI cũ đã được bỏ, nhưng SPA
+  fallback, Range cho artifact và cache dài hạn cho `/assets/` được giữ.
+- `npm run ui` build rồi chạy server; `build`/`typecheck` gồm UI; gói Device Farm bỏ `dist/ui`.
+- README, ARCHITECTURE và `ui/README.md` đã chuyển sang mô tả React/Vite production.
+
+**Kiểm lại sau cập nhật plan (2026-08-27):** `npm run ui:typecheck` xanh; `npm run ui:test` xanh
+(71 test); `npm run ui:lint` không lỗi và còn một warning đã biết của TanStack Table/React Compiler.

@@ -50,8 +50,14 @@ export ANTHROPIC_API_KEY=...
 ```
 
 ```bash
-npm run ui        # bảng điều khiển: http://localhost:4300  (khuyến nghị dùng đường này)
+npm run ui        # build React rồi mở bảng điều khiển: http://localhost:4300
+npm run ui:dev    # Vite + HMR cho phát triển giao diện: http://localhost:5173
 ```
+
+`npm run ui` phục vụ đúng bundle production đã build ở `dist/ui/app`; dùng lệnh này khi
+kiểm tra luồng gần với môi trường sử dụng thực tế. `ui:dev` chạy Vite, tự proxy API và
+artifact về server cổng 4300 nên chỉ cần mở thêm một terminal chạy `npm run ui` (hoặc
+`tsx src/ui/server.ts`) khi cần backend cục bộ.
 
 Hoặc chạy từ terminal:
 
@@ -82,6 +88,8 @@ Yêu cầu: **Node >= 20**. Native cần Appium 2 + `adb` / Xcode tuỳ platform
 | `npm run flake` | Xoá lịch sử flaky của một scenario. |
 | `npm run show:run` / `rerender` | Xem lại / render lại report của một run đã có. |
 | `npm run typecheck` · `npm test` | Typecheck và bộ test đơn vị (`node --test`). |
+| `npm run ui:lint` · `npm run ui:typecheck` · `npm run ui:build` | Lint, typecheck, hoặc build riêng giao diện React/Vite. |
+| `npm run ui:test` · `npm run ui:test:e2e` | Unit/component test (Vitest) và browser test (Playwright) của **bảng điều khiển**, tách khỏi test sản phẩm chạy bằng `run:web`. |
 
 Cờ hay dùng của `run`: `--tag @login`, `--feature <file>`, `--env sit`, `--device <id>`,
 `--headed`, `--include-quarantined`, `--reinstall`, `--on-farm`.
@@ -105,7 +113,7 @@ Cờ hay dùng của `run`: `--tag @login`, `--feature <file>`, `--env sit`, `--
 | `src/aws/`, `src/farm/` | Device Farm: chọn device, policy, ngân sách chi phí, lifecycle, resume run. |
 | `src/pom/` | Sinh Page Object Model có kiểu (deterministic, không LLM). |
 | `src/agent/`, `src/automation/` | State machine điều phối agent (analysis → test-design → gherkin → implementation → discovery → execution → diagnosis) và agent sinh automation artifact. |
-| `src/ui/` | Bảng điều khiển: `node:http` thuần, không framework, không bundler. |
+| `src/ui/` + `ui/` | Server API `node:http` và bảng điều khiển React 19/Vite. `ui/src/` chứa router, panel, hook và test; bundle production ở `dist/ui/app`. |
 | `src/cli/` | Front-end terminal cho từng luồng ở trên. |
 | `features/` | File `.feature` (commit được — dùng placeholder cho secret). |
 | `registry/` | `elements.json` (106 element / 8 screen), `flake.json`, `healing.json`, `runtime-registry.json`, `scenario-review.json`, `coverage/`. |
@@ -161,17 +169,64 @@ Gộp flaky với failed là cách nhanh nhất khiến cả team bỏ qua toàn
 - **Nhiều environment.** Khối `environments` khai báo prod/sit/…; `--env <tên>` chọn một, `applyEnv()`
   áp baseUrl / app / account tương ứng vào lúc chạy.
 
-## 8. Bảng điều khiển (`npm run ui`)
+## 8. Bảng điều khiển React (`npm run ui`)
 
-`node:http` thuần trên cổng `4300` (`TESTPILOT_UI_PORT` để đổi). Điểm đáng nói:
+Bảng điều khiển là một React 19 SPA (TanStack Router/Query, Tailwind) do server `node:http`
+cùng repo phục vụ trên cổng `4300` (`TESTPILOT_UI_PORT` để đổi). API `/api/*`, report và
+artifact vẫn ở cùng origin; deep link như `/scenarios` hoặc `/farm/<run-id>` được server trả
+lại `index.html` để React định tuyến. `index.html` không cache, còn bundle đã hash trong
+`/assets/` được cache dài hạn.
+
+Các trang đã có thể dùng:
+
+| Đường dẫn | Chức năng |
+|---|---|
+| `/` | Dashboard: tổng quan workflow, run và trạng thái cấu hình. |
+| `/studio` | App Automation Studio: nguồn tài liệu, environment, account (mật khẩu không đọc lại), model và chạy workflow sinh testcase. |
+| `/scenarios` · `/scenarios/history` | Duyệt/sửa `.feature`, lọc bằng URL, duyệt hàng loạt và xem lịch sử testcase. |
+| `/healing` | Xem và duyệt đề xuất locator healing. |
+| `/builds` | Kiểm tra, tải lên hoặc thay thế `.apk`/`.ipa` theo environment. |
+| `/runner` · `/runner/history` | Chạy web/Android/iOS ở local, theo dõi log, dừng run và mở report lịch sử. |
+| `/farm` · `/farm/<run-id>` | Kiểm tra AWS credential, chọn/tạo device pool, cấu hình và theo dõi AWS Device Farm. |
+| `/settings` | Cấu hình cá nhân, model key và kết nối nguồn. |
+
+Sidebar vẫn hiển thị các mục sản phẩm chưa được TestPilot hỗ trợ (DB Sources, Repositories,
+Team Configs, Zephyr, Job Management và Gen History gộp). Chúng dẫn đến trang giải thích rõ
+phạm vi thay vì tạo cảm giác đã có tích hợp.
+
+Điểm vận hành cần biết:
 
 - **Stage thay cho một trạng thái.** Mỗi workflow lưu 7 stage. Sau một lần fail, câu hỏi có ích không
   phải "fail hay không" mà là "đi được tới đâu": 3/7 = chưa kịp sinh Gherkin, 6/7 = sinh xong và chết ở
   bước bind.
+- **Log streaming không mất khi đổi trang.** Các job `POST` stream (workflow, local runner, Device
+  Farm, AWS login) được giữ trong store dùng chung; panel chỉ subscribe nên điều hướng không abort job.
+  Log có giới hạn bộ đệm để một farm run dài không làm trình duyệt chậm dần.
+- **Cùng một nguồn dữ liệu.** React gọi chính các route `/api/*` mà CLI dùng, và ghi lại
+  `testpilot.config.json`/secret store qua server. UI không tạo một config hoặc credential store thứ hai.
 - **Tab Device Farm.** Chọn region → project → OS → device pool, hoặc tự lọc thiết bị rồi tạo pool mới
   (ghim đúng ARN đã chọn — pool theo rule sẽ âm thầm đổi thành viên khi AWS thanh lý phần cứng). Upload
   `.apk`/`.ipa` thẳng từ trình duyệt, đặt biến môi trường, giới hạn phút mỗi job, xem log stream.
   **Không có ô nhập AWS key** — server dùng credential chain mặc định của SDK.
+
+### Phát triển giao diện
+
+```bash
+# terminal 1: API + bundle production, cổng 4300
+npm run ui
+
+# terminal 2: Vite HMR, cổng 5173; /api, /runs, /reports và /artifacts proxy về 4300
+npm run ui:dev
+
+npm run ui:lint
+npm run ui:test
+npm run ui:test:e2e
+npm run ui:build
+```
+
+`ui:test:e2e` kiểm tra bảng điều khiển bằng Playwright với API giả lập, không phải lệnh chạy testcase
+của sản phẩm và không tiêu tốn phút AWS Device Farm. Một farm run thật chỉ nên khởi động khi đã có
+AWS credential và được chấp nhận chi phí.
 
 ## 9. App hybrid (Capacitor / Cordova / Ionic)
 
@@ -200,8 +255,10 @@ tầng `Intent`.
 
 ```bash
 npm run typecheck
-npm test           # 72 file test đơn vị qua node --test
-npm run test:ui    # dev server chạy test có giao diện, cổng 4301
+npm test                # test đơn vị backend qua node --test
+npm run ui:test         # unit/component test React (Vitest)
+npm run ui:test:e2e     # browser test React (Playwright)
+npm run ui:lint         # lint giao diện
 ```
 
 ## 12. Còn thiếu (cố ý)
