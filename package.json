@@ -5,9 +5,10 @@
   "type": "module",
   "description": "Doc -> Gherkin -> cross-platform (web + native) test execution with self-healing locators and flake detection.",
   "engines": {
-    "node": ">=20"
+    "node": "^20.19.0 || >=22.12.0"
   },
   "scripts": {
+    "prepare": "husky",
     "build": "tsc -p tsconfig.json && mkdir -p dist/ui/public && cp -R src/ui/public/. dist/ui/public/",
     "typecheck": "tsc -p tsconfig.check.json && node --check src/ui/public/app.js",
     "ui": "tsx watch src/ui/server.ts",
@@ -48,7 +49,15 @@
   },
   "devDependencies": {
     "@types/node": "^22.10.0",
+    "husky": "^9.1.7",
+    "lint-staged": "^15.4.3",
+    "prettier": "^3.5.3",
     "tsx": "^4.19.0",
     "typescript": "^5.7.0"
+  },
+  "lint-staged": {
+    "ui/**/*.{ts,tsx,css,json,md}": [
+      "prettier --write"
+    ]
   }
 }

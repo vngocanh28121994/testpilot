@@ -557,9 +557,25 @@ export const useAppBuilds = () => useAppState((s) => s.appBuilds);
 
 ## 7. Các phase
 
-### Phase 0 — Nền móng chất lượng (không đụng UI cũ) · 1,5–2 ngày
+### Phase 0 — Nền móng chất lượng (không đụng UI cũ) · 1,5–2 ngày · ✅ **ĐÃ XONG**
 
 **Mục tiêu:** dựng lint/format/hook/CI trước, để mọi dòng code mới sinh ra đã đúng chuẩn ngay từ đầu.
+
+> **Trạng thái thực tế** — file đã tạo: `.prettierrc`, `.prettierignore`, `.husky/pre-commit`,
+> `.github/workflows/ci.yml`, `ui/README.md`; `package.json` đã có `engines`, `prepare`, `lint-staged`.
+> Dep đã cài: `prettier@^3.5.3`, `husky@^9.1.7`, `lint-staged@^15.4.3`.
+> Nghiệm thu đã chạy và xanh (xem cuối mục này). Hai điểm lệch có chủ đích so với bản viết trước:
+>
+> 1. **`prettier-plugin-tailwindcss` hoãn sang Phase 1.** `.prettierrc` của `sen` khai báo plugin này,
+>    nhưng việc của nó là sắp xếp class Tailwind — mà ở Phase 0 chưa có Tailwind và chưa có class nào.
+>    Thêm plugin vào `.prettierrc` cùng lúc cài `tailwindcss` ở Phase 1, **trước khi** viết component
+>    đầu tiên, để không phải reformat lại về sau.
+> 2. **`.husky/pre-commit` KHÔNG dùng mặc định của `husky init`.** `husky init` ghi sẵn `npm test` —
+>    mà `npm test` ở repo này chạy 835 test backend qua `node --test`. Đó là việc của CI, không phải
+>    của một commit sửa một dòng CSS. Hook chỉ chạy `npx lint-staged`.
+>
+> Thêm một job so với bản viết trước: **`format`** — `prettier --check "ui/**"`. Không có nó thì
+> `lint-staged` chỉ gác máy của người đã cài hook; ai commit từ máy chưa chạy `npm install` sẽ lọt.
 
 | Việc | File |
 |---|---|
@@ -611,6 +627,19 @@ khớp `ui/**`, nên phép thử đó **luôn pass một cách rỗng**. Phép t
    commit.
 2. `git commit` → file trong `ui/` được format lại; `src/config.ts` **không đổi một byte**.
 3. `git diff HEAD~1 --stat -- src/` phải rỗng.
+
+**Kết quả chạy thật:**
+
+| Phép thử | Kết quả |
+|---|---|
+| `lint-staged` với 2 file staged ở hai bờ ranh giới | ✅ khớp **1** file (`ui/README.md`), bỏ qua `src/config.ts` |
+| `ui/README.md` sau khi chạy | ✅ khoảng trắng thừa bị gom, dòng trống cuối bị cắt |
+| `src/config.ts` sau khi chạy | ✅ khoảng trắng thừa **còn nguyên từng byte** — Prettier không hề đụng vào |
+| `npx prettier --check "src/**/*.ts"` với `const    x   =    1` cố ý nhét vào `src/config.ts` | ✅ vẫn exit 0 → `.prettierignore` che thật, không phải may |
+| `npx prettier --check "ui/**/*.{ts,tsx,css,json,md}"` | ✅ pass |
+| `npm run typecheck` (backend) | ✅ exit 0 |
+| `npm test` (backend) | ✅ **835 test / 218 suite / 0 fail** trong 6,8 s → job `backend` của CI xanh ngay từ ngày đầu |
+| `git config core.hooksPath` | ✅ `.husky/_`, shim `pre-commit` có mặt |
 
 ---
 
@@ -934,7 +963,8 @@ Bản đầu để mở bốn câu. Đây là quyết định — không cần h
 4. **Người đối chiếu ở Phase 5.** Nếu không có người thuộc lòng UI cũ:
    → Dùng chính TestPilot làm công cụ đối chiếu, hoặc dựng bộ ảnh chụp màn hình tham chiếu **trước
    khi** bắt đầu Phase 4: chụp cả 12 trang của app cũ ở trạng thái có dữ liệu, lưu vào
-   `docs/ui-baseline/`. Đây là 0,5 ngày ở Phase 0 và nó biến "đối chiếu" từ trí nhớ thành so ảnh.
+   **`ui/baseline/`**. Đây là 0,5 ngày và nó biến "đối chiếu" từ trí nhớ thành so ảnh.
+   → **Không dùng `docs/`** — `.gitignore:8` đang loại cả thư mục đó, bộ ảnh sẽ không bao giờ vào git.
    → Nếu bỏ qua, cộng ~2 ngày vào Phase 5 và làm dày e2e ở Phase 3.
 
 ---
@@ -1132,3 +1162,27 @@ Mọi con số trong tài liệu này đã được đối chiếu với mã ngu
 | `flatpickr` "độ khó trung bình" | ⚠️ chỉ 3 chỗ dùng → hạ xuống Thấp |
 | Nghiệm thu Phase 0 "commit một file `.md`" | ⚠️ pass rỗng — `lint-staged` chỉ khớp `ui/**`. Đã viết lại |
 | Ước lượng 22–31 (§1) vs 22–30 (§9) | ⚠️ lệch nhau. Đã thống nhất **25–34** sau khi cộng contract + CI |
+
+---
+
+## 13. Nhật ký thực thi
+
+### Phase 0 — ✅ xong
+
+| File | Trạng thái |
+|---|---|
+| `.prettierrc` | mới — copy `sen`, **chưa có** `prettier-plugin-tailwindcss` (Phase 1 thêm) |
+| `.prettierignore` | mới — che `src/ scripts/ generated/ registry/ features/ locators/ farm/ skills/ artifact_work/ outputs/` + `ui/src/routeTree.gen.ts` |
+| `.husky/pre-commit` | mới — chỉ `npx lint-staged` (**không** `npm test` như mặc định của `husky init`) |
+| `.github/workflows/ci.yml` | mới — 3 job: `backend`, `ui` (`continue-on-error` tới hết Phase 1), `format` |
+| `ui/README.md` | mới — chỗ giữ chỗ, Phase 1 scaffold Vite vào đây |
+| `package.json` | `engines.node = ^20.19.0 \|\| >=22.12.0`; `scripts.prepare = husky`; khối `lint-staged` khớp `ui/**` |
+
+**Chưa làm, cố ý:** bộ ảnh baseline của §10.4 (`ui/baseline/`). Nó cần chạy app cũ với dữ liệu thật —
+việc 0,5 ngày, làm bất cứ lúc nào **trước khi bắt đầu Phase 4**, không chặn Phase 1–3.
+
+### Việc đầu tiên của Phase 1
+
+Theo §11.1, file số 5: `ui/vite.config.ts`. Nhưng **trước đó** là bước dọn của §Phase 1.1 —
+`npm create vite@latest ui` sẽ từ chối ghi vào `ui/` đang có `README.md`; scaffold ra thư mục tạm rồi
+chuyển vào, hoặc dùng cờ ghi đè. Giữ lại `ui/README.md` đã viết.

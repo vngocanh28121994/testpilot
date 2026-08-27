@@ -1,0 +1,32 @@
+# ---------------------------------------------------------------------------
+# Backend và toolchain hiện có — CỐ Ý không format.
+#
+# Xem UI-MIGRATION-PLAN.md §6.3. `sen/frontend` chạy `prettier --write ..` cho
+# cả monorepo; làm vậy ở đây sẽ viết lại 200+ file backend đang chạy tốt trong
+# một commit, xoá sạch `git blame` mà không đổi một hành vi nào.
+#
+# Format backend là một quyết định riêng, làm sau, trong một commit chỉ-format.
+# ---------------------------------------------------------------------------
+src/
+scripts/
+generated/
+registry/
+features/
+locators/
+farm/
+skills/
+artifact_work/
+outputs/
+
+# Sinh tự động — format nó là tạo diff rác mỗi lần thêm route (§R15).
+ui/src/routeTree.gen.ts
+
+# Không phải mã nguồn
+dist/
+build/
+node_modules/
+package-lock.json
+docs/
+.probe/
+*.min.js
+*.min.css

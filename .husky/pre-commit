@@ -1,0 +1,6 @@
+# Chỉ chạy lint-staged. Xem UI-MIGRATION-PLAN.md §6.3.
+#
+# `husky init` mặc định đặt `npm test` ở đây — không dùng được: `npm test` của
+# repo này chạy hơn 70 file test backend qua `node --test`, mất hàng chục giây
+# cho một commit sửa một dòng CSS. Bộ test đó là việc của CI (.github/workflows/ci.yml).
+npx lint-staged

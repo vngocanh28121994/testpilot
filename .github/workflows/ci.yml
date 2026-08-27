@@ -1,0 +1,55 @@
+# Cổng chất lượng tự động. Xem UI-MIGRATION-PLAN.md §Phase 0 / R13.
+#
+# Hai job tách rời có chủ đích: `backend` chứng minh việc nâng UI không làm gãy
+# phần đang chạy tốt, `ui` gác phần mới. Job `backend` phải xanh ở MỌI PR của
+# đợt migrate — đó là bằng chứng duy nhất cho lời hứa "không đụng src/".
+name: ci
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+
+jobs:
+  backend:
+    name: backend (typecheck + test)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
+
+  ui:
+    name: ui (lint + typecheck + test)
+    runs-on: ubuntu-latest
+    # Các script ui:* ra đời ở Phase 1. Gỡ dòng này ở cuối Phase 1 — kể từ đó
+    # một PR làm đỏ job này là một PR không được merge.
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - run: npm run ui:lint --if-present
+      - run: npm run ui:typecheck --if-present
+      - run: npm run ui:test --if-present
+
+  format:
+    name: format (ui/ only)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      # Chỉ ui/ — soi cả repo sẽ đỏ vì backend cố ý không format (§6.3).
+      - run: npx prettier --check "ui/**/*.{ts,tsx,css,json,md}"
