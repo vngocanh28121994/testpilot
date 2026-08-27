@@ -25,7 +25,7 @@ jobs:
       - run: npm test
 
   ui:
-    name: ui (lint + typecheck + build)
+    name: ui (lint + typecheck + test + build)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -36,10 +36,8 @@ jobs:
       - run: npm ci
       - run: npm run ui:lint
       - run: npm run ui:typecheck
+      - run: npm run ui:test
       - run: npm run ui:build
-      # `ui:test` chưa có mặt ở đây: Phase 3 mới dựng hạ tầng test, và
-      # `vitest run` không tìm thấy file test nào thì thoát 1. Thêm dòng
-      # `- run: npm run ui:test` ngay khi Phase 3 có test đầu tiên.
 
   format:
     name: format (ui/ only)

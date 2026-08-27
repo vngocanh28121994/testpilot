@@ -1,0 +1,67 @@
+import '@testing-library/jest-dom';
+import { cleanup } from '@testing-library/react';
+import { afterAll, afterEach, beforeAll } from 'vitest';
+import { server } from './mocks/server';
+import { useJobStore } from '@/stores/jobStore';
+
+/**
+ * localStorage trong bộ nhớ.
+ *
+ * jsdom có sẵn localStorage, nhưng nó dùng chung giữa các test trong cùng một
+ * file — mà ThemeProvider ghi lựa chọn theme vào đó. Một bản cài lại sạch sau
+ * mỗi test là cách duy nhất để thứ tự chạy không đổi kết quả.
+ */
+function createMemoryStorage(): Storage {
+  const store = new Map<string, string>();
+  return {
+    get length() {
+      return store.size;
+    },
+    clear: () => store.clear(),
+    getItem: (key) => store.get(key) ?? null,
+    key: (index) => Array.from(store.keys())[index] ?? null,
+    removeItem: (key) => store.delete(key),
+    setItem: (key, value) => store.set(key, value),
+  };
+}
+
+const testLocalStorage = createMemoryStorage();
+Object.defineProperty(window, 'localStorage', { configurable: true, value: testLocalStorage });
+Object.defineProperty(globalThis, 'localStorage', { configurable: true, value: testLocalStorage });
+
+// ThemeProvider gọi matchMedia; jsdom không cài đặt nó.
+if (!window.matchMedia) {
+  Object.defineProperty(window, 'matchMedia', {
+    configurable: true,
+    value: (query: string) => ({
+      matches: false,
+      media: query,
+      onchange: null,
+      addEventListener: () => {},
+      removeEventListener: () => {},
+      dispatchEvent: () => false,
+    }),
+  });
+}
+
+// TanStack Router khôi phục vị trí cuộn khi điều hướng; jsdom không cài đặt
+// scrollTo và in một dòng "Not implemented" cho mỗi lần. Không phải lỗi, chỉ
+// là nhiễu che mất output thật.
+Object.defineProperty(window, 'scrollTo', { configurable: true, value: () => {} });
+
+// 'error' chứ không phải 'warn' như sen. Một request không có handler nghĩa là
+// test đang lặng lẽ gọi ra mạng thật — ở đây thì nó fail và không ai thấy,
+// còn ở CI thì nó treo. Cứ để nó đỏ ngay.
+beforeAll(() => server.listen({ onUnhandledRequest: 'error' }));
+
+afterEach(() => {
+  cleanup();
+  server.resetHandlers();
+  // jobStore CỐ Ý sống ở module scope để job không chết khi đổi trang (R10).
+  // Chính vì thế nó rò trạng thái giữa các test nếu không dọn — đây là cái giá
+  // của thiết kế đó, và đây là chỗ trả.
+  useJobStore.getState().resetAll();
+  testLocalStorage.clear();
+});
+
+afterAll(() => server.close());

@@ -21,6 +21,11 @@ outputs/
 # Sinh tự động — format nó là tạo diff rác mỗi lần thêm route (§R15).
 ui/src/routeTree.gen.ts
 
+# Sinh ra khi chạy test — không phải mã nguồn
+ui/coverage/
+ui/playwright-report/
+ui/test-results/
+
 # Không phải mã nguồn
 dist/
 build/

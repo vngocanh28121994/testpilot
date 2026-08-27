@@ -18,6 +18,7 @@
     "ui:typecheck": "tsc -b ui",
     "ui:lint": "eslint ui",
     "ui:test": "vitest run --config ui/vitest.config.ts",
+    "ui:test:coverage": "vitest run --coverage --config ui/vitest.config.ts",
     "ui:test:watch": "vitest --config ui/vitest.config.ts",
     "ui:test:e2e": "playwright test --config ui/playwright.config.ts",
     "smoke": "tsx scripts/smoke.ts",

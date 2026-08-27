@@ -24,3 +24,10 @@ registry/device-env.json
 
 # Bản build của app UI mới (Phase 1+).
 dist/ui/
+
+# Kết quả chạy test của bảng điều khiển (Phase 3).
+ui/coverage/
+ui/playwright-report/
+ui/test-results/
+playwright-report/
+test-results/

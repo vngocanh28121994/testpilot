@@ -815,7 +815,16 @@ async function unwrap<T>(res: Response): Promise<T> {
 
 ---
 
-### Phase 3 — Hạ tầng test · 2–2,5 ngày
+### Phase 3 — Hạ tầng test · 2–2,5 ngày · ✅ **ĐÃ XONG**
+
+> **Trạng thái thực tế.** 32 unit test + 5 e2e, tất cả xanh. Bốn điều chỉnh so với bản viết trước:
+>
+> | # | Phát hiện | Sửa |
+> |---|---|---|
+> | 1 | **`renderWithRouter` render ra `<div />` trống.** `RouterProvider` không render gì cho tới khi route đầu tiên resolve xong | Helper thành `async` + `await router.load()` + `createMemoryHistory` (history thật rò giữa các test trong jsdom) |
+> | 2 | `onUnhandledRequest: 'warn'` của sen quá nhẹ | Đổi thành `'error'`: một request không handler nghĩa là test đang gọi ra mạng thật, cứ để đỏ ngay |
+> | 3 | **Playwright rải `playwright-report/` và `test-results/` ra gốc repo**, lẫn với thư mục backend | `outputDir` + `reporter.outputFolder` trỏ vào `ui/`; thêm vào `.gitignore` và `.prettierignore` |
+> | 4 | `ui/coverage/` bị ESLint và Prettier soi → 6 warning + 4 lỗi format từ code sinh tự động | Thêm vào `globalIgnores` và `.prettierignore` |
 
 **Mục tiêu:** viết được test *trước khi* migrate trang, không phải sau.
 
@@ -1310,13 +1319,51 @@ việc 0,5 ngày, làm bất cứ lúc nào **trước khi bắt đầu Phase 4*
    Cố ý: ba nhánh đó chỉ Phase 4 #4/#9/#10 mới dùng, và siết type mò trong khi chưa có màn hình dùng
    nó là đoán. **Dùng `unknown` chứ không `any`** — nơi dùng buộc phải thu hẹp.
 
-### Việc đầu tiên của Phase 3
+### Phase 3 — ✅ xong
 
-`ui/src/test/setup.ts`. Hai điều phải nhớ ngay, cả hai đều do Phase 2 tạo ra:
+| File | Vai trò |
+|---|---|
+| `ui/src/test/setup.ts` | jest-dom, cleanup, localStorage trong bộ nhớ, stub `matchMedia`/`scrollTo`, MSW `onUnhandledRequest: 'error'`, **`useJobStore.resetAll()` mỗi `afterEach`** |
+| `ui/src/test/utils.tsx` | `createTestQueryClient`, `createQueryWrapper`, `renderWithProviders`, **`renderWithRouter` (async)** |
+| `ui/src/test/mocks/sse.ts` | Dựng `ReadableStream` khung SSE thật, có `chunkSize` và `delayMs` |
+| `ui/src/test/mocks/fixtures.ts` | Fixture khai kiểu `StateResponse`/`HealingResponse` — contract đổi thì fixture đỏ ở `tsc`, không phải ở một assertion khó hiểu |
+| `ui/src/test/mocks/handlers/{state,healing,config,prereq,index}.ts` | Handler mặc định; Phase 4 bổ sung theo từng PR trang |
+| `ui/e2e/smoke.spec.ts` | 5 e2e |
 
-1. `useJobStore.getState().resetAll()` trong `afterEach` — store nằm ở module scope (đó là cả điểm
-   của nó), nên nó sẽ rò trạng thái giữa các test nếu không dọn.
-2. Handler MSW cho 8 route STREAM phải trả `ReadableStream` khung `event:`/`data:` thật. Trả JSON là
-   `streamJob` không bao giờ được test — mà nó vừa là thứ đỡ toàn bộ R3/R10.
+**32 unit test, 7 file:**
 
-Và thêm lại `- run: npm run ui:test` vào job `ui` của `.github/workflows/ci.yml`.
+| File | Phủ gì |
+|---|---|
+| `api/__tests__/client.test.ts` | **Nhánh `issues`** (dễ mất nhất), `error`, lùi về `statusText` khi body không phải JSON, `qs()` |
+| `api/__tests__/secrets.test.ts` | **R9** — `/api/state` không chứa `password`/`token`/`apiKey`, chỉ có cờ boolean |
+| `lib/__tests__/streamJob.test.ts` | Phân tích khung, **cắt 1 byte/chunk**, tiếng Việt + JSON lồng, `printed`, lỗi trước khi stream mở, khung hỏng, abort |
+| `lib/__tests__/queryClient.test.ts` | Policy retry: route AWS/prereq/farm không thử lại; route thường tối đa 2 |
+| `stores/__tests__/jobStore.test.tsx` | **R10**, mount lại thấy log cũ, chống chạy chồng, trần buffer, khung error |
+| `hooks/__tests__/useAppState.test.tsx` | §6.7 — một request cho nhiều lát cắt, select không tính lại thừa, lỗi nổi lên |
+| `components/layout/__tests__/Sidebar.test.tsx` | 14 mục đúng thứ tự, 6 placeholder, `why` nguyên văn |
+
+**Nghiệm thu — chạy thật:**
+
+| Phép thử | Kết quả |
+|---|---|
+| `ui:test` · `ui:test:e2e` | ✅ 32 unit (1,3 s) · 5 e2e (3,6 s) |
+| `ui:lint` / `ui:typecheck` / `ui:build` / `typecheck` / `format` | ✅ exit 0 |
+| **`tsconfig.test.json` có gác file test không** — nhét `const x: number = 'chuỗi'` vào một test | ✅ `streamJob.test.ts(117,7): error TS2322` ⇒ lỗ hổng của `sen` (§3.2) đã bịt |
+| **Test R10 có bắt được hồi quy không** — nhét `useEffect(() => () => abort(), [abort])` vào `useStreamJob` | ✅ đúng **1** test đỏ, đúng test cần đỏ, 18 test kia vẫn xanh |
+| Coverage | 85,2% stmt · 93,9% line trên các module đã có test |
+
+> Hai phép thử in đậm ở trên là kiểu quan trọng nhất trong phase này: **kiểm rằng chính bộ gác có
+> hoạt động**. Một test không bao giờ đỏ thì không phải là test.
+
+**Nợ kỹ thuật ghi nhận:** handler MSW mới phủ nhóm route ưu tiên (state, history, healing, config,
+prereq). Còn farm / builds / scenario / workflow / secrets — bổ sung theo từng PR trang ở Phase 4,
+đúng như DoD đã ghi.
+
+### Việc đầu tiên của Phase 4
+
+Trang #1 — **Healing Center** (187 dòng, `app.js:1074–1261`). Là lát cắt dọc mẫu: Query + Mutation +
+Table + toast, đọc-nhiều-ghi-ít. Contract `HealingResponse`/`HealingReviewRequest` và handler MSW đã
+có sẵn từ Phase 2–3, nên PR đầu tiên chỉ còn phần panel + hook + test.
+
+Nhớ: `components/data-table/` (TanStack Table dùng chung) sinh ra ở trang #2 Dashboard, nên trang #1
+cứ dựng bảng đơn giản rồi thay sau — đừng dựng abstraction cho một chỗ dùng.

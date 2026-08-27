@@ -8,7 +8,11 @@ export default defineConfig({
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,
-  reporter: [['html', { open: 'never' }], ['line']],
+  // Ghi vào ui/, không phải gốc repo: chạy `npm run ui:test:e2e` từ gốc thì
+  // Playwright mặc định rải playwright-report/ và test-results/ ra ngay cạnh
+  // package.json, lẫn với thư mục của backend.
+  outputDir: './test-results',
+  reporter: [['html', { open: 'never', outputFolder: './ui/playwright-report' }], ['line']],
   use: {
     // Dev server nên base là '/' (§6.5). Sau cutover cũng vẫn '/'; chỉ bản
     // build trước cutover mới nằm dưới /next/.

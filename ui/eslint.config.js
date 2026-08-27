@@ -8,7 +8,7 @@ import { defineConfig, globalIgnores } from 'eslint/config';
 export default defineConfig([
   // routeTree.gen.ts do TanStack Router sinh ra. Lint nó là báo lỗi về code
   // không ai viết, và diff rác mỗi lần thêm một route (R15).
-  globalIgnores(['dist', 'src/routeTree.gen.ts']),
+  globalIgnores(['dist', 'coverage', 'playwright-report', 'test-results', 'src/routeTree.gen.ts']),
   {
     files: ['**/*.{ts,tsx}'],
     extends: [
@@ -82,6 +82,13 @@ export default defineConfig([
     rules: {
       'react-refresh/only-export-components': ['error', { allowExportNames: ['Route'] }],
     },
+  },
+  {
+    // Helper của test không phải component và không bao giờ được fast-refresh;
+    // `export * from '@testing-library/react'` là cách dùng chuẩn của
+    // renderWithProviders, không phải mùi code.
+    files: ['src/test/**/*.{ts,tsx}', 'src/**/__tests__/**/*.{ts,tsx}'],
+    rules: { 'react-refresh/only-export-components': 'off' },
   },
   {
     // File config chạy bằng Node, nên các rule trên không áp dụng.
