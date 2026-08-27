@@ -102,9 +102,27 @@ export interface DiscoveryOptions {
    * unchanged — healing goes through exactly the same discovery path.
    */
   context?: 'initial' | 'healing';
+  /**
+   * Persist the locator as soon as semantic discovery succeeds.
+   *
+   * Runtime execution sets this to false: finding the right-looking node is
+   * only a proposal until the requested action produces its expected state.
+   * Audit/crawl callers retain the historical default (true).
+   */
+  persistVerifiedLocator?: boolean;
 }
 
-const DEFAULT_MIN_CONFIDENCE = 60;
+/**
+ * The floor for considering a discovered match at all.
+ *
+ * Was 60, which the evidence this app actually exposes could not reach: with no
+ * testId and no accessibility label, a correct input field tops out around 50.
+ * Discovery therefore never fired, and every new element failed as if it did
+ * not exist. 40 matches the healing orchestrator's own floor, and what sits
+ * above it is still verified (StandardElementVerifier) and still proposed for
+ * review rather than written into the registry.
+ */
+const DEFAULT_MIN_CONFIDENCE = 40;
 
 // ── main class ────────────────────────────────────────────────────────────────
 
@@ -307,7 +325,7 @@ export class ElementDiscovery {
     }
 
     // ── 7. Store in RuntimeRegistry ───────────────────────────────────────────
-    if (best.locator) {
+    if (best.locator && opts.persistVerifiedLocator !== false) {
       const locatorToStore: RuntimeLocator = {
         strategy: best.locator.strategy,
         value: best.locator.value,
@@ -332,6 +350,29 @@ export class ElementDiscovery {
       observation,
       evidence,
     };
+  }
+
+  /** Commit a locator only after the executor has verified the action outcome. */
+  confirmLocator(
+    elementId: string,
+    locator: { strategy: string; value: string },
+    platform?: string,
+    confidence = 0.8,
+  ): void {
+    this.runtimeRegistry.upsertLocator(elementId, {
+      strategy: locator.strategy,
+      value: locator.value,
+      source: 'runtime-observed',
+      status: 'healed',
+      confidence,
+      verifiedAt: new Date().toISOString(),
+      ...(platform ? { platform } : {}),
+    });
+  }
+
+  /** Prevent a locator that failed its action postcondition from winning again. */
+  rejectLocator(elementId: string, locator: { strategy: string; value: string }): void {
+    this.runtimeRegistry.markRejected(elementId, locator.strategy, locator.value);
   }
 }
 

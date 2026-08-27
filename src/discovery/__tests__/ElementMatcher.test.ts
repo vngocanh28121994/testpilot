@@ -135,6 +135,52 @@ describe('DeterministicMatcher — locator inference', () => {
     // text-only element — no testId/resourceId/accessibility/css/xpath
     assert.equal(first?.locator, undefined);
   });
+
+  it('uses exact leaf-text XPath for a text-only web element', () => {
+    const webObservation: UiObservation = {
+      ...obs([]),
+      platform: 'web',
+      source: 'browser',
+      elements: [{ id: 'ads-row', visible: true, text: 'ADS', childIds: [] }],
+    };
+    const [first] = matcher.match(
+      intent({ action: 'assert-visible', label: 'ADS', screen: 'priceBoard' }),
+      webObservation,
+      { screen: 'priceBoard' },
+    );
+    assert.deepEqual(first?.locator, {
+      strategy: 'xpath',
+      value: "//*[not(*) and normalize-space(.)='ADS']",
+    });
+  });
+
+  it('maps a business-qualified period to the compact runtime tab', () => {
+    const webObservation: UiObservation = {
+      ...obs([]),
+      platform: 'web',
+      source: 'browser',
+      elements: [{
+        id: 'period-1m',
+        visible: true,
+        enabled: true,
+        interactive: true,
+        role: 'tab',
+        text: '1M',
+        childIds: [],
+      }],
+    };
+    const [first] = matcher.match(
+      intent({ action: 'tap', label: 'Giá 1M', screen: 'fundDetail' }),
+      webObservation,
+      { screen: 'fundDetail' },
+    );
+    assert.equal(first?.observedElementId, 'period-1m');
+    assert.ok((first?.confidence ?? 0) >= 40);
+    assert.deepEqual(first?.locator, {
+      strategy: 'xpath',
+      value: "//*[not(*) and normalize-space(.)='1M']",
+    });
+  });
 });
 
 describe('DeterministicMatcher — method label', () => {

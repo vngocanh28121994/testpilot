@@ -19,6 +19,56 @@
       "id": "priceBoard",
       "title": "Bảng giá cổ phiếu",
       "description": "Màn hình bảng giá chứng khoán cơ sở."
+    },
+    "addStockModal": {
+      "id": "addStockModal",
+      "title": "Thêm mã cổ phiếu",
+      "description": "Modal hoặc popup cho phép tìm kiếm và thêm mã cổ phiếu vào danh mục.",
+      "notes": [
+        "Nút \"Thêm mã\" (icon ⊕) được dùng HAI lần trong một luồng thêm mã: lần đầu để mở thanh nhập, lần thứ hai để ghi mã vào danh mục. Bấm chọn gợi ý chỉ điền mã vào ô nhập dưới dạng token (ví dụ \"VIC,\"), KHÔNG thêm vào danh mục.",
+        "Vì vậy mọi kịch bản thêm mã phải có bước bấm \"Thêm mã\" lần thứ hai sau khi chọn kết quả gợi ý, trước khi khẳng định mã đã có trong danh mục.",
+        "Ô nhập nhận nhiều mã ngăn cách bằng dấu phẩy, nên nội dung ô nhập không phải bằng chứng cho việc mã đã được thêm."
+      ],
+      "source": {
+        "kind": "confluence",
+        "ref": "https://digital-horus.atlassian.net/wiki/spaces/SD/pages/196994/Ch+c+n+ng+Th+m+m+c+phi+u"
+      }
+    },
+    "stockOptions": {
+      "id": "stockOptions",
+      "title": "Tùy chọn mã cổ phiếu",
+      "description": "Popup menu hiển thị các tùy chọn cho một mã cổ phiếu, bao gồm các hành động như đặt lệnh, thêm vào danh mục, xóa khỏi danh mục.",
+      "source": {
+        "kind": "confluence",
+        "ref": "https://digital-horus.atlassian.net/wiki/spaces/SD/pages/196994/Ch+c+n+ng+Th+m+m+c+phi+u"
+      }
+    },
+    "stockOptionsMenu": {
+      "id": "stockOptionsMenu",
+      "title": "Menu tùy chọn mã cổ phiếu",
+      "description": "Popup menu hiển thị khi nhấn vào icon 3 chấm của một mã cổ phiếu, chứa các tùy chọn như Đặt lệnh, Thêm vào danh mục, Xóa khỏi danh mục, v.v.",
+      "source": {
+        "kind": "confluence",
+        "ref": "https://digital-horus.atlassian.net/wiki/spaces/SD/pages/196994/Ch+c+n+ng+Th+m+m+c+phi+u"
+      }
+    },
+    "transfer": {
+      "id": "transfer",
+      "title": "Chuyển tiền",
+      "description": "Màn hình chuyển tiền giữa các tài khoản và ký quỹ phái sinh",
+      "source": {
+        "kind": "confluence",
+        "ref": "https://digital-horus.atlassian.net/wiki/spaces/SD/pages/983041/Ch+c+n+ng+Chuy+n+ti+n+n+i+b"
+      }
+    },
+    "transferConfirm": {
+      "id": "transferConfirm",
+      "title": "Xác nhận chuyển tiền",
+      "description": "Màn hình xác nhận thông tin giao dịch chuyển tiền",
+      "source": {
+        "kind": "confluence",
+        "ref": "https://digital-horus.atlassian.net/wiki/spaces/SD/pages/983041/Ch+c+n+ng+Chuy+n+ti+n+n+i+b"
+      }
     }
   },
   "elements": {
@@ -51,11 +101,14 @@
         ]
       },
       "health": {
-        "resolutions": 70,
-        "heals": 0,
+        "resolutions": 365,
+        "heals": 24,
         "winners": {
-          "placeholder:Email / Số tài khoản / Điện thoại": 70
-        }
+          "placeholder:Email / Số tài khoản / Điện thoại": 331,
+          "predicate:new UiSelector().className(\"android.widget.EditText\").instance(0)": 10,
+          "css:input[type='text']": 24
+        },
+        "lastHealedAt": "2026-08-23T16:11:29.264Z"
       }
     },
     "login.passwordField": {
@@ -87,10 +140,11 @@
         ]
       },
       "health": {
-        "resolutions": 37,
+        "resolutions": 329,
         "heals": 0,
         "winners": {
-          "placeholder:Mật khẩu": 37
+          "placeholder:Mật khẩu": 321,
+          "predicate:new UiSelector().className(\"android.widget.EditText\").instance(1)": 8
         }
       }
     },
@@ -101,15 +155,21 @@
       "candidates": {
         "web": [
           {
+            "strategy": "css",
+            "value": "button.btn-login",
+            "weight": 0.95,
+            "origin": "authored"
+          },
+          {
             "strategy": "role",
             "value": "button",
-            "name": "ĐĂNG NHẬP",
-            "weight": 0.9,
+            "name": "Đăng nhập",
+            "weight": 0.85,
             "origin": "authored"
           },
           {
             "strategy": "label",
-            "value": "ĐĂNG NHẬP",
+            "value": "Đăng nhập",
             "weight": 0.75,
             "origin": "authored"
           }
@@ -130,11 +190,15 @@
         ]
       },
       "health": {
-        "resolutions": 37,
-        "heals": 0,
+        "resolutions": 313,
+        "heals": 1,
         "winners": {
-          "role:button": 37
-        }
+          "role:button": 50,
+          "predicate:new UiSelector().className(\"android.widget.Button\").text(\"ĐĂNG NHẬP\")": 8,
+          "css:button.btn-login": 254,
+          "css:section.header-content button.btn-login": 1
+        },
+        "lastHealedAt": "2026-08-14T07:18:24.612Z"
       }
     },
     "login.openAccountLink": {
@@ -207,6 +271,7 @@
             "strategy": "css",
             "value": ".subtitle-dialog-common",
             "weight": 0.95,
+            "noScope": true,
             "origin": "authored"
           },
           {
@@ -219,6 +284,7 @@
             "strategy": "css",
             "value": "mat-dialog-container",
             "weight": 0.7,
+            "noScope": true,
             "origin": "authored"
           }
         ],
@@ -244,10 +310,11 @@
         ]
       },
       "health": {
-        "resolutions": 1,
+        "resolutions": 46,
         "heals": 0,
         "winners": {
-          "css:.subtitle-dialog-common": 1
+          "css:.subtitle-dialog-common": 42,
+          "predicate:new UiSelector().textContains(\"không khớp\")": 4
         }
       }
     },
@@ -304,7 +371,8 @@
             "strategy": "css",
             "value": "mat-dialog-container button.mat-stroked-button",
             "weight": 0.85,
-            "origin": "authored"
+            "origin": "authored",
+            "noScope": true
           },
           {
             "strategy": "role",
@@ -365,11 +433,13 @@
         ]
       },
       "health": {
-        "resolutions": 3,
-        "heals": 0,
+        "resolutions": 581,
+        "heals": 1,
         "winners": {
-          "css:div.search-box": 3
-        }
+          "css:div.search-box": 580,
+          "placeholder:Tìm kiếm": 1
+        },
+        "lastHealedAt": "2026-08-14T07:18:31.972Z"
       }
     },
     "home.searchInput": {
@@ -401,12 +471,13 @@
         ]
       },
       "health": {
-        "resolutions": 3,
+        "resolutions": 614,
         "heals": 0,
         "winners": {
-          "placeholder:Tìm tính năng, mã CK...": 3
+          "placeholder:Tìm tính năng, mã CK...": 614
         }
-      }
+      },
+      "typeDelay": 100
     },
     "home.searchFirstResult": {
       "id": "home.searchFirstResult",
@@ -437,11 +508,13 @@
         ]
       },
       "health": {
-        "resolutions": 6,
-        "heals": 0,
+        "resolutions": 680,
+        "heals": 2,
         "winners": {
-          "css:.searched-feature-block .feature-item:first-child .title": 6
-        }
+          "css:.searched-feature-block .feature-item:first-child .title": 678,
+          "placeholder:Tìm kiếm": 2
+        },
+        "lastHealedAt": "2026-08-20T17:10:07.141Z"
       }
     },
     "priceBoard.stockGuideClose": {
@@ -454,7 +527,8 @@
             "strategy": "css",
             "value": "mat-dialog-container button.mat-icon-button",
             "weight": 0.9,
-            "origin": "authored"
+            "origin": "authored",
+            "noScope": true
           }
         ],
         "android": [
@@ -514,6 +588,124 @@
         ]
       }
     },
+    "priceBoard.coSoTab": {
+      "id": "priceBoard.coSoTab",
+      "label": "Cơ sở",
+      "screen": "priceBoard",
+      "candidates": {
+        "web": [
+          {
+            "strategy": "css",
+            "value": ":text('Cơ sở')",
+            "weight": 0.9,
+            "origin": "authored"
+          },
+          {
+            "strategy": "css",
+            "value": "[data-walkthrough=\"mb-header-segment\"] :text-is(\"Cơ sở\")",
+            "weight": 0.9,
+            "origin": "llm",
+            "approved": false
+          },
+          {
+            "strategy": "label",
+            "value": "Cơ sở",
+            "weight": 0.75,
+            "origin": "authored"
+          }
+        ],
+        "android": [
+          {
+            "strategy": "predicate",
+            "value": "new UiSelector().text(\"Cơ sở\")",
+            "weight": 0.9,
+            "origin": "authored"
+          },
+          {
+            "strategy": "predicate",
+            "value": "new UiSelector().textContains(\"Cơ sở\").className(\"android.widget.TextView\")",
+            "weight": 0.7,
+            "origin": "authored"
+          }
+        ]
+      },
+      "health": {
+        "resolutions": 49,
+        "heals": 0,
+        "winners": {
+          "css::text('Cơ sở')": 49
+        }
+      },
+      "provenance": "imported"
+    },
+    "priceBoard.addStockButton": {
+      "id": "priceBoard.addStockButton",
+      "label": "Thêm mã",
+      "aliases": [
+        "Nút thêm mã cổ phiếu"
+      ],
+      "screen": "priceBoard",
+      "candidates": {
+        "web": [
+          {
+            "strategy": "css",
+            "value": "#wt-filter-tcprice-el-mb tcbs-icon[name='Circle add']",
+            "weight": 0.98,
+            "origin": "authored"
+          },
+          {
+            "strategy": "css",
+            "value": "button:has-text('THÊM MÃ')",
+            "weight": 0.95,
+            "origin": "authored"
+          },
+          {
+            "strategy": "css",
+            "value": "[data-walkthrough=\"mb-search-filter\"] tcbs-icon[name=\"Circle add\"]",
+            "weight": 0.92,
+            "origin": "llm",
+            "approved": false
+          },
+          {
+            "strategy": "css",
+            "value": "tcbs-icon[name='Circle add']",
+            "weight": 0.79,
+            "origin": "healed",
+            "approved": false
+          },
+          {
+            "strategy": "label",
+            "value": "THÊM MÃ",
+            "weight": 0.75,
+            "origin": "authored"
+          }
+        ],
+        "android": [
+          {
+            "strategy": "predicate",
+            "value": "new UiSelector().text(\"THÊM MÃ\")",
+            "weight": 0.9,
+            "origin": "authored"
+          },
+          {
+            "strategy": "predicate",
+            "value": "new UiSelector().textContains(\"THÊM MÃ\").className(\"android.widget.TextView\")",
+            "weight": 0.7,
+            "origin": "authored"
+          }
+        ]
+      },
+      "health": {
+        "resolutions": 232,
+        "heals": 54,
+        "winners": {
+          "css:#wt-filter-tcprice-el-mb tcbs-icon[name='Circle add']": 178,
+          "css:tcbs-icon[name='Circle add']": 54
+        },
+        "lastHealedAt": "2026-08-26T10:32:10.540Z"
+      },
+      "provenance": "imported"
+    },
     "login.missingOnPurpose": {
       "id": "login.missingOnPurpose",
       "label": "Không Tồn Tại Trên Màn Hình",
@@ -522,7 +714,7 @@
         "web": [
           {
             "strategy": "css",
-            "value": "#khong-bao-gio-co-phan-tu-nay",
+            "value": ".ion-page-active #khong-bao-gio-co-phan-tu-nay",
             "weight": 0.9,
             "origin": "authored"
           }
@@ -566,12 +758,2078 @@
         ]
       },
       "health": {
-        "resolutions": 24,
+        "resolutions": 662,
+        "heals": 1,
+        "winners": {
+          "label:Tổng tài sản": 654,
+          "predicate:new UiSelector().textContains(\"Tổng tài sản\").className(\"android.widget.TextView\")": 7,
+          "predicate:new UiSelector().textContains(\"Tổng tài sản\")": 1
+        },
+        "lastHealedAt": "2026-08-12T16:01:20.164Z"
+      }
+    },
+    "priceBoard.oMaCoPhieu": {
+      "id": "priceBoard.oMaCoPhieu",
+      "label": "Ô mã cổ phiếu",
+      "screen": "addStockModal",
+      "typeDelay": 80,
+      "candidates": {
+        "web": [
+          {
+            "strategy": "placeholder",
+            "value": "Mã cổ phiếu",
+            "weight": 0.44,
+            "origin": "healed",
+            "approved": false
+          }
+        ]
+      },
+      "health": {
+        "resolutions": 30,
         "heals": 0,
         "winners": {
-          "label:Tổng tài sản": 24
+          "placeholder:Mã cổ phiếu": 30
         }
       }
+    },
+    "priceBoard.stockSearchFirstResult": {
+      "id": "priceBoard.stockSearchFirstResult",
+      "label": "Kết quả tìm kiếm đầu tiên",
+      "screen": "addStockModal",
+      "candidates": {
+        "web": [
+          {
+            "strategy": "css",
+            "value": ".mat-autocomplete-panel mat-option[role='option']",
+            "weight": 0.6,
+            "origin": "healed",
+            "approved": false
+          }
+        ]
+      },
+      "health": {
+        "resolutions": 119,
+        "heals": 0,
+        "winners": {
+          "css:.mat-autocomplete-panel mat-option[role='option']": 119
+        }
+      },
+      "provenance": "generated"
+    },
+    "priceBoard.dynamicText": {
+      "id": "priceBoard.dynamicText",
+      "label": "{{text}}",
+      "screen": "priceBoard",
+      "template": {
+        "kind": "text"
+      },
+      "candidates": {
+        "web": [
+          {
+            "strategy": "label",
+            "value": "{{text}}",
+            "weight": 0.9,
+            "origin": "authored"
+          }
+        ],
+        "android": [
+          {
+            "strategy": "label",
+            "value": "{{text}}",
+            "weight": 0.9,
+            "origin": "authored"
+          }
+        ],
+        "ios": [
+          {
+            "strategy": "label",
+            "value": "{{text}}",
+            "weight": 0.9,
+            "origin": "authored"
+          }
+        ]
+      },
+      "health": {
+        "resolutions": 7,
+        "heals": 0,
+        "winners": {
+          "label:{{text}}": 7
+        }
+      }
+    },
+    "priceBoard.ads": {
+      "id": "priceBoard.ads",
+      "label": "ADS",
+      "screen": "priceBoard",
+      "candidates": {
+        "web": [
+          {
+            "strategy": "xpath",
+            "value": "//*[not(*) and normalize-space(.)='ADS']",
+            "weight": 0.4,
+            "origin": "healed",
+            "approved": false
+          }
+        ]
+      },
+      "health": {
+        "resolutions": 12,
+        "heals": 0,
+        "winners": {
+          "xpath://*[not(*) and normalize-space(.)='ADS']": 12
+        }
+      }
+    },
+    "priceBoard.xoaKhoiDanhMuc": {
+      "id": "priceBoard.xoaKhoiDanhMuc",
+      "label": "Xoá khỏi danh mục",
+      "screen": "priceBoard",
+      "candidates": {
+        "web": [
+          {
+            "strategy": "label",
+            "value": "Xoá khỏi danh mục",
+            "weight": 0.6,
+            "origin": "healed",
+            "approved": false
+          }
+        ]
+      },
+      "health": {
+        "resolutions": 26,
+        "heals": 0,
+        "winners": {
+          "label:Xoá khỏi danh mục": 26
+        }
+      }
+    },
+    "priceBoard.rowActionMenu": {
+      "id": "priceBoard.rowActionMenu",
+      "label": "Icon ... tại dòng {{rowText}}",
+      "screen": "priceBoard",
+      "template": {
+        "kind": "rowAction",
+        "action": "..."
+      },
+      "candidates": {
+        "web": [
+          {
+            "strategy": "relative",
+            "value": "row(\"{{rowText}}\") >> \"...\":metadata",
+            "weight": 0.95,
+            "origin": "authored"
+          },
+          {
+            "strategy": "relative",
+            "value": "row(\"{{rowText}}\") >> \"...\":accessible",
+            "weight": 0.85,
+            "origin": "authored"
+          },
+          {
+            "strategy": "relative",
+            "value": "row(\"{{rowText}}\") >> \"...\":actions",
+            "weight": 0.75,
+            "origin": "authored"
+          },
+          {
+            "strategy": "relative",
+            "value": "row(\"{{rowText}}\") >> \"...\":last",
+            "weight": 0.65,
+            "origin": "authored"
+          }
+        ]
+      },
+      "health": {
+        "resolutions": 20,
+        "heals": 0,
+        "winners": {
+          "relative:row(\"{{rowText}}\") >> \"...\":metadata": 20
+        }
+      }
+    },
+    "priceBoard.iconTaiDongAds": {
+      "id": "priceBoard.iconTaiDongAds",
+      "label": "Icon ... tại dòng ADS",
+      "screen": "priceBoard",
+      "candidates": {
+        "web": [
+          {
+            "strategy": "label",
+            "value": "Icon ... tại dòng ADS",
+            "weight": 0.8,
+            "origin": "authored"
+          },
+          {
+            "strategy": "relative",
+            "value": "row(\"ADS\") >> \"...\":metadata",
+            "weight": 0.79,
+            "origin": "healed",
+            "approved": false
+          }
+        ]
+      },
+      "health": {
+        "resolutions": 5,
+        "heals": 3,
+        "winners": {
+          "label:Icon ... tại dòng ADS": 2,
+          "xpath:(((//*[not(*) and normalize-space(.)='ADS'])[1]/ancestor::*[self::tr or @role='row' or contains(concat(' ', normalize-space(@class), ' '), ' content-row ') or contains(concat(' ', normalize-space(@class), ' '), ' table-row ') or contains(concat(' ', normalize-space(@class), ' '), ' list-row ') or contains(concat(' ', normalize-space(@class), ' '), ' item-row ')][1])//*[@data-walkthrough and (contains(translate(concat(@data-walkthrough,' ',@data-testid,' ',@aria-label,' ',@title,' ',@name,' ',@class),'ABCDEFGHIJKLMNOPQRSTUVWXYZ','abcdefghijklmnopqrstuvwxyz'),'more') or contains(translate(concat(@data-walkthrough,' ',@data-testid,' ',@aria-label,' ',@title,' ',@name,' ',@class),'ABCDEFGHIJKLMNOPQRSTUVWXYZ','abcdefghijklmnopqrstuvwxyz'),'menu') or contains(translate(concat(@data-walkthrough,' ',@data-testid,' ',@aria-label,' ',@title,' ',@name,' ',@class),'ABCDEFGHIJKLMNOPQRSTUVWXYZ','abcdefghijklmnopqrstuvwxyz'),'overflow') or contains(translate(concat(@data-walkthrough,' ',@data-testid,' ',@aria-label,' ',@title,' ',@name,' ',@class),'ABCDEFGHIJKLMNOPQRSTUVWXYZ','abcdefghijklmnopqrstuvwxyz'),'ellipsis'))])[1]": 1,
+          "relative:row(\"ADS\") >> \"...\":metadata": 2
+        },
+        "lastHealedAt": "2026-08-17T10:21:12.870Z"
+      }
+    },
+    "home.traiPhieu": {
+      "id": "home.traiPhieu",
+      "label": "Trái phiếu",
+      "screen": "home",
+      "candidates": {
+        "web": [
+          {
+            "strategy": "label",
+            "value": "Trái phiếu",
+            "weight": 0.6,
+            "origin": "healed",
+            "approved": false
+          }
+        ]
+      },
+      "health": {
+        "resolutions": 31,
+        "heals": 0,
+        "winners": {
+          "label:Trái phiếu": 31
+        }
+      }
+    },
+    "home.gocDauTu": {
+      "id": "home.gocDauTu",
+      "label": "Gốc đầu tư",
+      "screen": "home",
+      "candidates": {
+        "web": [
+          {
+            "strategy": "label",
+            "value": "Gốc đầu tư",
+            "weight": 0.6,
+            "origin": "healed",
+            "approved": false
+          }
+        ]
+      },
+      "health": {
+        "resolutions": 60,
+        "heals": 0,
+        "winners": {
+          "label:Gốc đầu tư": 60
+        }
+      }
+    },
+    "home.tien": {
+      "id": "home.tien",
+      "label": "Tiền",
+      "screen": "home",
+      "candidates": {
+        "web": [
+          {
+            "strategy": "label",
+            "value": "Tiền",
+            "weight": 0.6,
+            "origin": "healed",
+            "approved": false
+          }
+        ]
+      },
+      "health": {
+        "resolutions": 21,
+        "heals": 0,
+        "winners": {
+          "label:Tiền": 21
+        }
+      },
+      "provenance": "generated"
+    },
+    "home.coPhieu": {
+      "id": "home.coPhieu",
+      "label": "Cổ phiếu",
+      "screen": "home",
+      "candidates": {
+        "web": [
+          {
+            "strategy": "label",
+            "value": "Cổ phiếu",
+            "weight": 0.6,
+            "origin": "healed",
+            "approved": false
+          }
+        ]
+      },
+      "health": {
+        "resolutions": 20,
+        "heals": 0,
+        "winners": {
+          "label:Cổ phiếu": 20
+        }
+      }
+    },
+    "home.tongTien": {
+      "id": "home.tongTien",
+      "label": "Tổng tiền",
+      "screen": "home",
+      "candidates": {
+        "web": [
+          {
+            "strategy": "label",
+            "value": "Tổng tiền",
+            "weight": 0.6,
+            "origin": "healed",
+            "approved": false
+          }
+        ]
+      },
+      "health": {
+        "resolutions": 40,
+        "heals": 0,
+        "winners": {
+          "label:Tổng tiền": 40
+        }
+      }
+    },
+    "home.tieuKhoan": {
+      "id": "home.tieuKhoan",
+      "label": "Tiểu khoản",
+      "screen": "home",
+      "candidates": {
+        "web": [
+          {
+            "strategy": "css",
+            "value": "mat-select[name='sub_account']",
+            "weight": 0.95,
+            "origin": "authored"
+          },
+          {
+            "strategy": "css",
+            "value": "app-stock-assets mat-select",
+            "weight": 0.7,
+            "origin": "authored"
+          }
+        ]
+      },
+      "health": {
+        "resolutions": 35,
+        "heals": 0,
+        "winners": {
+          "css:mat-select[name='sub_account']": 35
+        }
+      }
+    },
+    "home.giaTriVon": {
+      "id": "home.giaTriVon",
+      "label": "Giá trị vốn",
+      "screen": "home",
+      "candidates": {
+        "web": [
+          {
+            "strategy": "label",
+            "value": "Giá trị vốn",
+            "weight": 0.6,
+            "origin": "healed",
+            "approved": false
+          }
+        ]
+      },
+      "health": {
+        "resolutions": 17,
+        "heals": 0,
+        "winners": {
+          "label:Giá trị vốn": 17
+        }
+      }
+    },
+    "home.menu": {
+      "id": "home.menu",
+      "label": "Menu",
+      "screen": "home",
+      "candidates": {
+        "web": [
+          {
+            "strategy": "label",
+            "value": "Menu",
+            "weight": 0.6,
+            "origin": "healed",
+            "approved": false
+          }
+        ]
+      },
+      "health": {
+        "resolutions": 5,
+        "heals": 0,
+        "winners": {
+          "label:Menu": 5
+        }
+      }
+    },
+    "home.datLenhCoPhieu": {
+      "id": "home.datLenhCoPhieu",
+      "label": "Đặt lệnh cổ phiếu",
+      "screen": "home",
+      "candidates": {
+        "web": [
+          {
+            "strategy": "label",
+            "value": "Đặt lệnh cổ phiếu",
+            "weight": 0.6,
+            "origin": "healed",
+            "approved": false
+          }
+        ]
+      },
+      "health": {
+        "resolutions": 1,
+        "heals": 0,
+        "winners": {
+          "label:Đặt lệnh cổ phiếu": 1
+        }
+      }
+    },
+    "home.datLenh": {
+      "id": "home.datLenh",
+      "label": "Đặt lệnh",
+      "screen": "home",
+      "candidates": {
+        "web": [
+          {
+            "strategy": "label",
+            "value": "Đặt lệnh",
+            "weight": 0.6,
+            "origin": "healed",
+            "approved": false
+          }
+        ]
+      },
+      "health": {
+        "resolutions": 70,
+        "heals": 0,
+        "winners": {
+          "label:Đặt lệnh": 70
+        }
+      }
+    },
+    "home.kiemThu": {
+      "id": "home.kiemThu",
+      "label": "Kiểm thử",
+      "screen": "home",
+      "candidates": {
+        "web": [
+          {
+            "strategy": "label",
+            "value": "Kiểm thử",
+            "weight": 0.6,
+            "origin": "healed",
+            "approved": false
+          }
+        ]
+      },
+      "health": {
+        "resolutions": 9,
+        "heals": 0,
+        "winners": {
+          "label:Kiểm thử": 9
+        }
+      }
+    },
+    "home.kiemThuFundmart": {
+      "id": "home.kiemThuFundmart",
+      "label": "Kiểm thử Fundmart",
+      "screen": "home",
+      "candidates": {
+        "web": [
+          {
+            "strategy": "label",
+            "value": "Kiểm thử Fundmart",
+            "weight": 0.6,
+            "origin": "healed",
+            "approved": false
+          }
+        ]
+      },
+      "health": {
+        "resolutions": 5,
+        "heals": 0,
+        "winners": {
+          "label:Kiểm thử Fundmart": 5
+        }
+      }
+    },
+    "home.lenhThuong": {
+      "id": "home.lenhThuong",
+      "label": "Lệnh thường",
+      "screen": "home",
+      "candidates": {
+        "web": [
+          {
+            "strategy": "label",
+            "value": "Lệnh thường",
+            "weight": 0.6,
+            "origin": "healed",
+            "approved": false
+          }
+        ]
+      },
+      "health": {
+        "resolutions": 34,
+        "heals": 0,
+        "winners": {
+          "label:Lệnh thường": 34
+        }
+      }
+    },
+    "home.luuLenh": {
+      "id": "home.luuLenh",
+      "label": "Lưu lệnh",
+      "screen": "home",
+      "candidates": {
+        "web": [
+          {
+            "strategy": "label",
+            "value": "Lưu lệnh",
+            "weight": 0.6,
+            "origin": "healed",
+            "approved": false
+          }
+        ]
+      },
+      "health": {
+        "resolutions": 103,
+        "heals": 0,
+        "winners": {
+          "label:Lưu lệnh": 103
+        }
+      }
+    },
+    "home.oNhapMaCoPhieu": {
+      "id": "home.oNhapMaCoPhieu",
+      "label": "Ô nhập mã cổ phiếu",
+      "screen": "home",
+      "candidates": {}
+    },
+    "home.klDat": {
+      "id": "home.klDat",
+      "label": "KL đặt",
+      "screen": "home",
+      "candidates": {
+        "web": [
+          {
+            "strategy": "label",
+            "value": "KL đặt",
+            "weight": 0.6,
+            "origin": "healed",
+            "approved": false
+          }
+        ]
+      },
+      "health": {
+        "resolutions": 18,
+        "heals": 0,
+        "winners": {
+          "label:KL đặt": 18
+        }
+      }
+    },
+    "home.giaDat": {
+      "id": "home.giaDat",
+      "label": "Giá đặt",
+      "screen": "home",
+      "candidates": {
+        "web": [
+          {
+            "strategy": "label",
+            "value": "Giá đặt",
+            "weight": 0.6,
+            "origin": "healed",
+            "approved": false
+          }
+        ]
+      },
+      "health": {
+        "resolutions": 18,
+        "heals": 0,
+        "winners": {
+          "label:Giá đặt": 18
+        }
+      }
+    },
+    "home.luuMua": {
+      "id": "home.luuMua",
+      "label": "Lưu mua",
+      "screen": "home",
+      "candidates": {
+        "web": [
+          {
+            "strategy": "label",
+            "value": "Lưu mua",
+            "weight": 0.6,
+            "origin": "healed",
+            "approved": false
+          }
+        ]
+      },
+      "health": {
+        "resolutions": 13,
+        "heals": 0,
+        "winners": {
+          "label:Lưu mua": 13
+        }
+      }
+    },
+    "home.daLuuLenhMua": {
+      "id": "home.daLuuLenhMua",
+      "label": "Đã lưu lệnh mua",
+      "screen": "home",
+      "candidates": {
+        "web": [
+          {
+            "strategy": "label",
+            "value": "Đã lưu lệnh mua",
+            "weight": 0.6,
+            "origin": "healed",
+            "approved": false
+          }
+        ]
+      },
+      "health": {
+        "resolutions": 13,
+        "heals": 0,
+        "winners": {
+          "label:Đã lưu lệnh mua": 13
+        }
+      }
+    },
+    "home.nhapMa": {
+      "id": "home.nhapMa",
+      "label": "Nhập mã",
+      "screen": "home",
+      "candidates": {
+        "web": [
+          {
+            "strategy": "placeholder",
+            "value": "Nhập mã",
+            "weight": 0.65,
+            "origin": "healed",
+            "approved": false
+          },
+          {
+            "strategy": "testId",
+            "value": "ticker",
+            "weight": 0.5,
+            "origin": "healed",
+            "approved": false
+          }
+        ]
+      },
+      "health": {
+        "resolutions": 26,
+        "heals": 1,
+        "winners": {
+          "testId:ticker": 6,
+          "placeholder:Nhập mã": 20
+        },
+        "lastHealedAt": "2026-08-21T01:37:13.492Z"
+      }
+    },
+    "home.dynamicText": {
+      "id": "home.dynamicText",
+      "label": "{{text}}",
+      "screen": "home",
+      "template": {
+        "kind": "text"
+      },
+      "candidates": {
+        "web": [
+          {
+            "strategy": "label",
+            "value": "{{text}}",
+            "weight": 0.9,
+            "origin": "authored"
+          }
+        ],
+        "android": [
+          {
+            "strategy": "label",
+            "value": "{{text}}",
+            "weight": 0.9,
+            "origin": "authored"
+          }
+        ],
+        "ios": [
+          {
+            "strategy": "label",
+            "value": "{{text}}",
+            "weight": 0.9,
+            "origin": "authored"
+          }
+        ]
+      },
+      "health": {
+        "resolutions": 441,
+        "heals": 0,
+        "winners": {
+          "label:{{text}}": 441
+        }
+      }
+    },
+    "login.phaiSinh": {
+      "id": "login.phaiSinh",
+      "label": "Phái sinh",
+      "screen": "login",
+      "candidates": {
+        "web": [
+          {
+            "strategy": "label",
+            "value": "Phái sinh",
+            "weight": 0.6,
+            "origin": "healed",
+            "approved": false
+          }
+        ]
+      },
+      "health": {
+        "resolutions": 6,
+        "heals": 0,
+        "winners": {
+          "label:Phái sinh": 6
+        }
+      },
+      "provenance": "generated"
+    },
+    "home.thongKeChungGiaoDichPs": {
+      "id": "home.thongKeChungGiaoDichPs",
+      "label": "Thống kê chung giao dịch PS",
+      "screen": "home",
+      "candidates": {
+        "web": [
+          {
+            "strategy": "label",
+            "value": "Thống kê chung giao dịch PS",
+            "weight": 0.6,
+            "origin": "healed",
+            "approved": false
+          }
+        ]
+      },
+      "health": {
+        "resolutions": 6,
+        "heals": 0,
+        "winners": {
+          "label:Thống kê chung giao dịch PS": 6
+        }
+      }
+    },
+    "home.ngayTu": {
+      "id": "home.ngayTu",
+      "label": "Ngày Từ",
+      "screen": "home",
+      "candidates": {
+        "web": [
+          {
+            "strategy": "xpath",
+            "value": "(//*[normalize-space(text())='Từ']/following-sibling::*[1]//input[@data-mat-calendar or @type='date'])[1]",
+            "weight": 0.88,
+            "origin": "authored"
+          }
+        ]
+      },
+      "health": {
+        "resolutions": 5,
+        "heals": 0,
+        "winners": {
+          "xpath:(//*[normalize-space(text())='Từ']/following-sibling::*[1]//input[@data-mat-calendar or @type='date'])[1]": 5
+        }
+      },
+      "controlType": "date",
+      "controlEvidence": [
+        "playwright-dom: <input>",
+        "playwright-dom: type=text",
+        "playwright-dom: readonly",
+        "playwright-dom: data-mat-calendar",
+        "playwright-dom: calendar toggle",
+        "playwright-mcp: textbox exposed",
+        "playwright-mcp: calendar button \"Open calendar\""
+      ]
+    },
+    "home.soLuongGiaoDich": {
+      "id": "home.soLuongGiaoDich",
+      "label": "số lượng giao dịch",
+      "screen": "home",
+      "candidates": {
+        "web": [
+          {
+            "strategy": "xpath",
+            "value": "(//*[not(*) and normalize-space(.)='Giao dịch']/preceding-sibling::*[1][normalize-space(.)!=''])[1]",
+            "weight": 0.86,
+            "origin": "authored"
+          }
+        ]
+      },
+      "health": {
+        "resolutions": 3,
+        "heals": 0,
+        "winners": {
+          "xpath:(//*[not(*) and normalize-space(.)='Giao dịch']/preceding-sibling::*[1][normalize-space(.)!=''])[1]": 3
+        }
+      }
+    },
+    "auto.tcbf": {
+      "id": "auto.tcbf",
+      "label": "TCBF",
+      "screen": "auto",
+      "candidates": {
+        "web": [
+          {
+            "strategy": "label",
+            "value": "TCBF",
+            "weight": 0.6,
+            "origin": "healed",
+            "approved": false
+          }
+        ]
+      },
+      "health": {
+        "resolutions": 9,
+        "heals": 0,
+        "winners": {
+          "label:TCBF": 9
+        }
+      }
+    },
+    "auto.cacQuyCoTheBanQuanTam": {
+      "id": "auto.cacQuyCoTheBanQuanTam",
+      "label": "Các quỹ có thể bạn quan tâm",
+      "screen": "auto",
+      "candidates": {
+        "web": [
+          {
+            "strategy": "label",
+            "value": "Các quỹ có thể bạn quan tâm",
+            "weight": 0.6,
+            "origin": "healed",
+            "approved": false
+          }
+        ]
+      },
+      "health": {
+        "resolutions": 9,
+        "heals": 0,
+        "winners": {
+          "label:Các quỹ có thể bạn quan tâm": 9
+        }
+      }
+    },
+    "auto.gia1m": {
+      "id": "auto.gia1m",
+      "label": "Giá 1M",
+      "screen": "auto",
+      "candidates": {},
+      "health": {
+        "resolutions": 2,
+        "heals": 0,
+        "winners": {
+          "xpath:((//*[normalize-space(text())='Các quỹ có thể bạn quan tâm' or normalize-space(string(.))='Các quỹ có thể bạn quan tâm'])[1]/ancestor::*[self::section or self::article or self::fieldset or starts-with(local-name(),'app-') or contains(translate(@class,'ABCDEFGHIJKLMNOPQRSTUVWXYZ','abcdefghijklmnopqrstuvwxyz'),'table') or contains(translate(@class,'ABCDEFGHIJKLMNOPQRSTUVWXYZ','abcdefghijklmnopqrstuvwxyz'),'card') or contains(translate(@class,'ABCDEFGHIJKLMNOPQRSTUVWXYZ','abcdefghijklmnopqrstuvwxyz'),'panel') or contains(translate(@class,'ABCDEFGHIJKLMNOPQRSTUVWXYZ','abcdefghijklmnopqrstuvwxyz'),'section')][1]//*[not(*) and normalize-space(.)='1M']/parent::*)[1]": 2
+        }
+      }
+    },
+    "auto.dienBienGiaTrongVong1Thang": {
+      "id": "auto.dienBienGiaTrongVong1Thang",
+      "label": "Diễn biến giá trong vòng 1 tháng",
+      "screen": "auto",
+      "candidates": {
+        "web": [
+          {
+            "strategy": "label",
+            "value": "Diễn biến giá trong vòng 1 tháng",
+            "weight": 0.6,
+            "origin": "healed",
+            "approved": false
+          }
+        ]
+      },
+      "health": {
+        "resolutions": 2,
+        "heals": 0,
+        "winners": {
+          "label:Diễn biến giá trong vòng 1 tháng": 2
+        }
+      }
+    },
+    "auto.sanPhamNoiBat": {
+      "id": "auto.sanPhamNoiBat",
+      "label": "Sản phẩm nổi bật",
+      "screen": "auto",
+      "candidates": {}
+    },
+    "auto.xemThem": {
+      "id": "auto.xemThem",
+      "label": "Xem thêm",
+      "screen": "auto",
+      "candidates": {}
+    },
+    "auto.danhSachSanPham": {
+      "id": "auto.danhSachSanPham",
+      "label": "Danh sách sản phẩm",
+      "screen": "auto",
+      "candidates": {}
+    },
+    "priceBoard.ketQuaTimKiem": {
+      "id": "priceBoard.ketQuaTimKiem",
+      "label": "Kết quả tìm kiếm",
+      "screen": "priceBoard",
+      "candidates": {}
+    },
+    "priceBoard.stockRow": {
+      "id": "priceBoard.stockRow",
+      "label": "Dòng cổ phiếu trong danh mục",
+      "screen": "priceBoard",
+      "candidates": {
+        "web": [
+          {
+            "strategy": "css",
+            "value": ".content-row",
+            "weight": 0.75,
+            "origin": "crawler",
+            "approved": false
+          }
+        ],
+        "android": [],
+        "ios": []
+      },
+      "health": {
+        "resolutions": 115,
+        "heals": 0,
+        "winners": {
+          "css:.content-row": 115
+        }
+      },
+      "provenance": "generated"
+    },
+    "priceBoard.rowMenuButton": {
+      "id": "priceBoard.rowMenuButton",
+      "label": "Nút ... của dòng cổ phiếu",
+      "screen": "priceBoard",
+      "candidates": {
+        "web": [],
+        "android": [],
+        "ios": []
+      }
+    },
+    "auto.bangGia": {
+      "id": "auto.bangGia",
+      "label": "Bảng giá",
+      "screen": "auto",
+      "candidates": {}
+    },
+    "addStockModal.searchInput": {
+      "id": "addStockModal.searchInput",
+      "label": "Ô tìm kiếm mã cổ phiếu",
+      "screen": "addStockModal",
+      "candidates": {
+        "web": [
+          {
+            "strategy": "placeholder",
+            "value": "Mã cổ phiếu",
+            "weight": 0.79,
+            "origin": "healed",
+            "approved": false
+          }
+        ],
+        "android": [],
+        "ios": []
+      },
+      "health": {
+        "resolutions": 175,
+        "heals": 0,
+        "winners": {
+          "placeholder:Mã cổ phiếu": 175
+        }
+      },
+      "typeDelay": 80,
+      "provenance": "generated"
+    },
+    "priceBoard.searchButton": {
+      "id": "priceBoard.searchButton",
+      "label": "Tìm kiếm",
+      "screen": "priceBoard",
+      "candidates": {
+        "web": [
+          {
+            "strategy": "css",
+            "value": "[data-walkthrough=\"mb-search-filter\"] tcbs-icon[name=\"Search\"]",
+            "weight": 0.92,
+            "origin": "llm",
+            "approved": false
+          },
+          {
+            "strategy": "role",
+            "value": "button",
+            "name": "Tìm kiếm",
+            "weight": 0.8,
+            "origin": "llm"
+          }
+        ],
+        "android": [],
+        "ios": []
+      },
+      "provenance": "imported"
+    },
+    "priceBoard.filterButton": {
+      "id": "priceBoard.filterButton",
+      "label": "Lọc",
+      "screen": "priceBoard",
+      "candidates": {
+        "web": [
+          {
+            "strategy": "css",
+            "value": "[data-walkthrough=\"mb-search-filter\"] tcbs-icon[name=\"Filter\"]",
+            "weight": 0.92,
+            "origin": "llm",
+            "approved": false
+          },
+          {
+            "strategy": "role",
+            "value": "button",
+            "name": "Lọc",
+            "weight": 0.8,
+            "origin": "llm"
+          }
+        ],
+        "android": [],
+        "ios": []
+      },
+      "provenance": "imported"
+    },
+    "priceBoard.rowOptionsButton": {
+      "id": "priceBoard.rowOptionsButton",
+      "label": "Nút tùy chọn dòng",
+      "screen": "priceBoard",
+      "candidates": {
+        "web": [
+          {
+            "strategy": "css",
+            "value": "[data-walkthrough=\"mb-item-more\"]",
+            "weight": 0.9,
+            "origin": "llm",
+            "approved": false
+          },
+          {
+            "strategy": "role",
+            "value": "button",
+            "name": "…",
+            "weight": 0.7,
+            "origin": "llm"
+          }
+        ],
+        "android": [],
+        "ios": []
+      },
+      "provenance": "imported"
+    },
+    "addStockModal.clearButton": {
+      "id": "addStockModal.clearButton",
+      "label": "Xóa từ khóa",
+      "screen": "addStockModal",
+      "candidates": {
+        "web": [
+          {
+            "strategy": "role",
+            "value": "button",
+            "name": "X",
+            "weight": 0.7,
+            "origin": "llm"
+          },
+          {
+            "strategy": "role",
+            "value": "button",
+            "name": "Xóa",
+            "weight": 0.7,
+            "origin": "llm"
+          }
+        ],
+        "android": [
+          {
+            "strategy": "label",
+            "value": "Xóa",
+            "weight": 0.7,
+            "origin": "llm"
+          }
+        ],
+        "ios": [
+          {
+            "strategy": "label",
+            "value": "Xóa",
+            "weight": 0.7,
+            "origin": "llm"
+          }
+        ]
+      },
+      "provenance": "generated"
+    },
+    "stockOptions.closeButton": {
+      "id": "stockOptions.closeButton",
+      "label": "Đóng popup",
+      "screen": "stockOptions",
+      "candidates": {
+        "web": [
+          {
+            "strategy": "role",
+            "value": "button",
+            "name": "X",
+            "weight": 0.7,
+            "origin": "llm"
+          }
+        ],
+        "android": [],
+        "ios": []
+      }
+    },
+    "stockOptions.addToPortfolio": {
+      "id": "stockOptions.addToPortfolio",
+      "label": "Thêm vào danh mục",
+      "screen": "stockOptions",
+      "candidates": {
+        "web": [
+          {
+            "strategy": "role",
+            "value": "menuitem",
+            "name": "Thêm vào danh mục",
+            "weight": 0.8,
+            "origin": "llm"
+          }
+        ],
+        "android": [],
+        "ios": []
+      }
+    },
+    "priceBoard.categoryDropdown": {
+      "id": "priceBoard.categoryDropdown",
+      "label": "Danh mục theo dõi",
+      "screen": "priceBoard",
+      "candidates": {
+        "web": [
+          {
+            "strategy": "role",
+            "value": "combobox",
+            "name": "Following Cate",
+            "weight": 0.8,
+            "origin": "llm"
+          }
+        ],
+        "android": [],
+        "ios": []
+      }
+    },
+    "priceBoard.stockOptionsButton": {
+      "id": "priceBoard.stockOptionsButton",
+      "label": "Tùy chọn mã cổ phiếu",
+      "screen": "priceBoard",
+      "candidates": {
+        "web": [
+          {
+            "strategy": "role",
+            "value": "button",
+            "name": "…",
+            "weight": 0.7,
+            "origin": "llm"
+          }
+        ],
+        "android": [],
+        "ios": []
+      }
+    },
+    "stockOptions.conditionalOrderButton": {
+      "id": "stockOptions.conditionalOrderButton",
+      "label": "Lệnh ĐK",
+      "screen": "stockOptions",
+      "candidates": {
+        "web": [
+          {
+            "strategy": "role",
+            "value": "button",
+            "name": "Lệnh ĐK",
+            "weight": 0.8,
+            "origin": "llm"
+          }
+        ],
+        "android": [],
+        "ios": []
+      }
+    },
+    "stockOptions.quickOrderButton": {
+      "id": "stockOptions.quickOrderButton",
+      "label": "Lệnh nhanh",
+      "screen": "stockOptions",
+      "candidates": {
+        "web": [
+          {
+            "strategy": "role",
+            "value": "button",
+            "name": "Lệnh nhanh",
+            "weight": 0.8,
+            "origin": "llm"
+          }
+        ],
+        "android": [],
+        "ios": []
+      }
+    },
+    "priceBoard.melHnx": {
+      "id": "priceBoard.melHnx",
+      "label": "MEL-HNX",
+      "screen": "priceBoard",
+      "candidates": {}
+    },
+    "addStockSearch.suggestionList": {
+      "id": "addStockSearch.suggestionList",
+      "label": "Danh sách gợi ý mã cổ phiếu",
+      "aliases": [
+        "Danh sách gợi ý"
+      ],
+      "screen": "addStockModal",
+      "candidates": {
+        "web": [
+          {
+            "strategy": "css",
+            "value": ".mat-autocomplete-panel mat-option[role='option']",
+            "weight": 0.75,
+            "origin": "crawler",
+            "approved": false
+          }
+        ],
+        "android": [],
+        "ios": []
+      },
+      "health": {
+        "resolutions": 72,
+        "heals": 0,
+        "winners": {
+          "css:.mat-autocomplete-panel mat-option[role='option']": 72
+        }
+      }
+    },
+    "stockOptionsMenu.addToCategory": {
+      "id": "stockOptionsMenu.addToCategory",
+      "label": "Tùy chọn Thêm vào danh mục",
+      "screen": "stockOptionsMenu",
+      "candidates": {
+        "web": [
+          {
+            "strategy": "role",
+            "value": "menuitem",
+            "name": "Thêm vào danh mục",
+            "weight": 0.8,
+            "origin": "llm"
+          }
+        ],
+        "android": [],
+        "ios": []
+      },
+      "provenance": "generated"
+    },
+    "stockOptionsMenu.removeFromCategory": {
+      "id": "stockOptionsMenu.removeFromCategory",
+      "label": "Tùy chọn Xóa khỏi danh mục",
+      "screen": "stockOptionsMenu",
+      "candidates": {
+        "web": [
+          {
+            "strategy": "role",
+            "value": "menuitem",
+            "name": "Xóa khỏi danh mục",
+            "weight": 0.8,
+            "origin": "llm"
+          }
+        ],
+        "android": [],
+        "ios": []
+      },
+      "provenance": "generated"
+    },
+    "priceBoard.vicHose": {
+      "id": "priceBoard.vicHose",
+      "label": "VIC-HOSE",
+      "screen": "priceBoard",
+      "candidates": {
+        "web": [
+          {
+            "strategy": "label",
+            "value": "VIC-HOSE",
+            "weight": 0.6,
+            "origin": "healed",
+            "approved": false
+          }
+        ]
+      },
+      "health": {
+        "resolutions": 2,
+        "heals": 0,
+        "winners": {
+          "label:VIC-HOSE": 2
+        }
+      }
+    },
+    "priceBoard.marketTypeSelector": {
+      "id": "priceBoard.marketTypeSelector",
+      "label": "Chọn loại bảng giá",
+      "screen": "priceBoard",
+      "candidates": {
+        "web": [
+          {
+            "strategy": "css",
+            "value": "[data-walkthrough=\"mb-header-segment\"]",
+            "weight": 0.95,
+            "origin": "llm",
+            "approved": false
+          }
+        ]
+      },
+      "provenance": "imported"
+    },
+    "priceBoard.coveredWarrantMarket": {
+      "id": "priceBoard.coveredWarrantMarket",
+      "label": "Chứng quyền",
+      "screen": "priceBoard",
+      "candidates": {
+        "web": [
+          {
+            "strategy": "css",
+            "value": "[data-walkthrough=\"mb-segment-cw\"]",
+            "weight": 0.95,
+            "origin": "llm",
+            "approved": false
+          }
+        ]
+      },
+      "provenance": "imported"
+    },
+    "priceBoard.openHeaderMenu": {
+      "id": "priceBoard.openHeaderMenu",
+      "label": "Mở menu bảng giá",
+      "screen": "priceBoard",
+      "candidates": {
+        "web": [
+          {
+            "strategy": "css",
+            "value": "[data-walkthrough=\"mb-header-menu\"]",
+            "weight": 0.95,
+            "origin": "llm",
+            "approved": false
+          }
+        ]
+      },
+      "provenance": "imported"
+    },
+    "priceBoard.close": {
+      "id": "priceBoard.close",
+      "label": "Đóng bảng giá",
+      "screen": "priceBoard",
+      "candidates": {
+        "web": [
+          {
+            "strategy": "css",
+            "value": "[data-walkthrough=\"mb-header-close\"]",
+            "weight": 0.95,
+            "origin": "llm",
+            "approved": false
+          }
+        ]
+      },
+      "provenance": "imported"
+    },
+    "priceBoard.floorTabs": {
+      "id": "priceBoard.floorTabs",
+      "label": "Danh sách sàn và nhóm bảng giá",
+      "screen": "priceBoard",
+      "candidates": {
+        "web": [
+          {
+            "strategy": "css",
+            "value": "[data-walkthrough=\"mb-floor-tabs\"]",
+            "weight": 0.95,
+            "origin": "llm",
+            "approved": false
+          }
+        ]
+      },
+      "provenance": "imported"
+    },
+    "priceBoard.personalTab": {
+      "id": "priceBoard.personalTab",
+      "label": "Cá nhân",
+      "screen": "priceBoard",
+      "candidates": {
+        "web": [
+          {
+            "strategy": "css",
+            "value": "[data-walkthrough=\"mb-floor-tabs\"] :text-is(\"Cá nhân\")",
+            "weight": 0.9,
+            "origin": "llm",
+            "approved": false
+          }
+        ]
+      },
+      "provenance": "imported"
+    },
+    "priceBoard.hoseTab": {
+      "id": "priceBoard.hoseTab",
+      "label": "HOSE",
+      "screen": "priceBoard",
+      "candidates": {
+        "web": [
+          {
+            "strategy": "css",
+            "value": "[data-walkthrough=\"mb-floor-tab-hose\"]",
+            "weight": 0.95,
+            "origin": "llm",
+            "approved": false
+          }
+        ]
+      },
+      "provenance": "imported"
+    },
+    "priceBoard.hnxTab": {
+      "id": "priceBoard.hnxTab",
+      "label": "HNX",
+      "screen": "priceBoard",
+      "candidates": {
+        "web": [
+          {
+            "strategy": "css",
+            "value": "[data-walkthrough=\"mb-floor-tabs\"] :text-is(\"HNX\")",
+            "weight": 0.9,
+            "origin": "llm",
+            "approved": false
+          }
+        ]
+      },
+      "provenance": "imported"
+    },
+    "priceBoard.upcomTab": {
+      "id": "priceBoard.upcomTab",
+      "label": "UPCOM",
+      "screen": "priceBoard",
+      "candidates": {
+        "web": [
+          {
+            "strategy": "css",
+            "value": "[data-walkthrough=\"mb-floor-tabs\"] :text-is(\"UPCOM\")",
+            "weight": 0.9,
+            "origin": "llm",
+            "approved": false
+          }
+        ]
+      },
+      "provenance": "imported"
+    },
+    "priceBoard.industryTab": {
+      "id": "priceBoard.industryTab",
+      "label": "Ngành",
+      "screen": "priceBoard",
+      "candidates": {
+        "web": [
+          {
+            "strategy": "css",
+            "value": "[data-walkthrough=\"mb-floor-tabs\"] :text-is(\"Ngành\")",
+            "weight": 0.9,
+            "origin": "llm",
+            "approved": false
+          }
+        ]
+      },
+      "provenance": "imported"
+    },
+    "priceBoard.table": {
+      "id": "priceBoard.table",
+      "label": "Bảng giá cổ phiếu mobile",
+      "screen": "priceBoard",
+      "candidates": {
+        "web": [
+          {
+            "strategy": "css",
+            "value": "app-tc-price .table-floor-container.mobile-view:not(.landscape)",
+            "weight": 0.9,
+            "origin": "llm",
+            "approved": false
+          }
+        ]
+      },
+      "provenance": "imported"
+    },
+    "priceBoard.footerOrderBook": {
+      "id": "priceBoard.footerOrderBook",
+      "label": "Sổ lệnh",
+      "screen": "priceBoard",
+      "candidates": {
+        "web": [
+          {
+            "strategy": "css",
+            "value": "app-tc-price .mobile-footer app-footer-bar .title:text-is(\"Sổ lệnh\")",
+            "weight": 0.88,
+            "origin": "llm",
+            "approved": false
+          }
+        ]
+      },
+      "provenance": "imported"
+    },
+    "priceBoard.categoryDialog": {
+      "id": "priceBoard.categoryDialog",
+      "label": "Danh mục",
+      "screen": "priceBoard",
+      "candidates": {
+        "web": [
+          {
+            "strategy": "css",
+            "value": ".cat-menu-mb-popup",
+            "weight": 0.9,
+            "origin": "llm",
+            "approved": false
+          }
+        ]
+      },
+      "provenance": "imported"
+    },
+    "priceBoard.saveCategory": {
+      "id": "priceBoard.saveCategory",
+      "label": "Lưu",
+      "screen": "priceBoard",
+      "candidates": {
+        "web": [
+          {
+            "strategy": "role",
+            "value": "button",
+            "name": "LƯU",
+            "weight": 0.9,
+            "origin": "llm",
+            "approved": false
+          }
+        ]
+      },
+      "provenance": "imported"
+    },
+    "priceBoard.categoryNameInput": {
+      "id": "priceBoard.categoryNameInput",
+      "label": "Tên danh mục",
+      "screen": "priceBoard",
+      "candidates": {
+        "web": [
+          {
+            "strategy": "label",
+            "value": "Tên danh mục",
+            "weight": 0.9,
+            "origin": "llm",
+            "approved": false
+          }
+        ]
+      },
+      "provenance": "imported"
+    },
+    "transfer.tabBetweenAccounts": {
+      "id": "transfer.tabBetweenAccounts",
+      "label": "Tab Giữa các tài khoản",
+      "screen": "transfer",
+      "candidates": {
+        "web": [
+          {
+            "strategy": "role",
+            "value": "tab",
+            "name": "Giữa các tài khoản",
+            "weight": 0.9,
+            "origin": "llm"
+          },
+          {
+            "strategy": "label",
+            "value": "Giữa các tài khoản",
+            "weight": 0.8,
+            "origin": "llm"
+          }
+        ],
+        "android": [
+          {
+            "strategy": "label",
+            "value": "Giữa các tài khoản",
+            "weight": 0.8,
+            "origin": "llm"
+          }
+        ],
+        "ios": [
+          {
+            "strategy": "label",
+            "value": "Giữa các tài khoản",
+            "weight": 0.8,
+            "origin": "llm"
+          }
+        ]
+      },
+      "provenance": "generated"
+    },
+    "transfer.sourceAccount": {
+      "id": "transfer.sourceAccount",
+      "label": "Chuyển từ",
+      "screen": "transfer",
+      "candidates": {
+        "web": [
+          {
+            "strategy": "role",
+            "value": "combobox",
+            "name": "Chuyển từ",
+            "weight": 0.9,
+            "origin": "llm"
+          },
+          {
+            "strategy": "label",
+            "value": "Chuyển từ",
+            "weight": 0.8,
+            "origin": "llm"
+          }
+        ],
+        "android": [
+          {
+            "strategy": "label",
+            "value": "Chuyển từ",
+            "weight": 0.8,
+            "origin": "llm"
+          }
+        ],
+        "ios": [
+          {
+            "strategy": "label",
+            "value": "Chuyển từ",
+            "weight": 0.8,
+            "origin": "llm"
+          }
+        ]
+      },
+      "provenance": "generated",
+      "health": {
+        "resolutions": 163,
+        "heals": 31,
+        "winners": {
+          "role:combobox": 132,
+          "label:Chuyển từ": 31
+        },
+        "lastHealedAt": "2026-08-27T03:42:44.336Z"
+      }
+    },
+    "transfer.availableAmount": {
+      "id": "transfer.availableAmount",
+      "label": "Được chuyển",
+      "screen": "transfer",
+      "candidates": {
+        "web": [
+          {
+            "strategy": "label",
+            "value": "Được chuyển",
+            "weight": 0.8,
+            "origin": "llm"
+          }
+        ],
+        "android": [
+          {
+            "strategy": "label",
+            "value": "Được chuyển",
+            "weight": 0.8,
+            "origin": "llm"
+          }
+        ],
+        "ios": [
+          {
+            "strategy": "label",
+            "value": "Được chuyển",
+            "weight": 0.8,
+            "origin": "llm"
+          }
+        ]
+      },
+      "provenance": "generated",
+      "health": {
+        "resolutions": 51,
+        "heals": 0,
+        "winners": {
+          "label:Được chuyển": 51
+        }
+      }
+    },
+    "transfer.submitButton": {
+      "id": "transfer.submitButton",
+      "label": "Nút CHUYỂN",
+      "screen": "transfer",
+      "candidates": {
+        "web": [
+          {
+            "strategy": "role",
+            "value": "button",
+            "name": "CHUYỂN",
+            "weight": 0.9,
+            "origin": "llm"
+          },
+          {
+            "strategy": "label",
+            "value": "CHUYỂN",
+            "weight": 0.8,
+            "origin": "llm"
+          }
+        ],
+        "android": [
+          {
+            "strategy": "label",
+            "value": "CHUYỂN",
+            "weight": 0.8,
+            "origin": "llm"
+          }
+        ],
+        "ios": [
+          {
+            "strategy": "label",
+            "value": "CHUYỂN",
+            "weight": 0.8,
+            "origin": "llm"
+          }
+        ]
+      },
+      "provenance": "generated",
+      "health": {
+        "resolutions": 76,
+        "heals": 16,
+        "winners": {
+          "role:button": 60,
+          "label:CHUYỂN": 16
+        },
+        "lastHealedAt": "2026-08-27T03:42:48.460Z"
+      }
+    },
+    "transferConfirm.orderInfo": {
+      "id": "transferConfirm.orderInfo",
+      "label": "Lệnh",
+      "screen": "transferConfirm",
+      "candidates": {
+        "web": [
+          {
+            "strategy": "label",
+            "value": "Lệnh",
+            "weight": 0.8,
+            "origin": "llm"
+          }
+        ],
+        "android": [
+          {
+            "strategy": "label",
+            "value": "Lệnh",
+            "weight": 0.8,
+            "origin": "llm"
+          }
+        ],
+        "ios": [
+          {
+            "strategy": "label",
+            "value": "Lệnh",
+            "weight": 0.8,
+            "origin": "llm"
+          }
+        ]
+      },
+      "provenance": "generated",
+      "health": {
+        "resolutions": 70,
+        "heals": 0,
+        "winners": {
+          "label:Lệnh": 70
+        }
+      }
+    },
+    "transferConfirm.sourceAccount": {
+      "id": "transferConfirm.sourceAccount",
+      "label": "Chuyển từ",
+      "screen": "transferConfirm",
+      "candidates": {
+        "web": [
+          {
+            "strategy": "label",
+            "value": "Chuyển từ",
+            "weight": 0.8,
+            "origin": "llm"
+          }
+        ],
+        "android": [
+          {
+            "strategy": "label",
+            "value": "Chuyển từ",
+            "weight": 0.8,
+            "origin": "llm"
+          }
+        ],
+        "ios": [
+          {
+            "strategy": "label",
+            "value": "Chuyển từ",
+            "weight": 0.8,
+            "origin": "llm"
+          }
+        ]
+      },
+      "provenance": "generated",
+      "health": {
+        "resolutions": 40,
+        "heals": 0,
+        "winners": {
+          "label:Chuyển từ": 40
+        }
+      }
+    },
+    "transferConfirm.backButton": {
+      "id": "transferConfirm.backButton",
+      "label": "Nút QUAY LẠI",
+      "screen": "transferConfirm",
+      "candidates": {
+        "web": [
+          {
+            "strategy": "role",
+            "value": "button",
+            "name": "QUAY LẠI",
+            "weight": 0.9,
+            "origin": "llm"
+          },
+          {
+            "strategy": "label",
+            "value": "QUAY LẠI",
+            "weight": 0.8,
+            "origin": "llm"
+          }
+        ],
+        "android": [
+          {
+            "strategy": "label",
+            "value": "QUAY LẠI",
+            "weight": 0.8,
+            "origin": "llm"
+          }
+        ],
+        "ios": [
+          {
+            "strategy": "label",
+            "value": "QUAY LẠI",
+            "weight": 0.8,
+            "origin": "llm"
+          }
+        ]
+      },
+      "provenance": "generated",
+      "health": {
+        "resolutions": 15,
+        "heals": 0,
+        "winners": {
+          "role:button": 15
+        }
+      }
+    },
+    "transferConfirm.confirmButton": {
+      "id": "transferConfirm.confirmButton",
+      "label": "Nút XÁC NHẬN",
+      "screen": "transferConfirm",
+      "candidates": {
+        "web": [
+          {
+            "strategy": "role",
+            "value": "button",
+            "name": "XÁC NHẬN",
+            "weight": 0.9,
+            "origin": "llm"
+          },
+          {
+            "strategy": "label",
+            "value": "XÁC NHẬN",
+            "weight": 0.8,
+            "origin": "llm"
+          }
+        ],
+        "android": [
+          {
+            "strategy": "label",
+            "value": "XÁC NHẬN",
+            "weight": 0.8,
+            "origin": "llm"
+          }
+        ],
+        "ios": [
+          {
+            "strategy": "label",
+            "value": "XÁC NHẬN",
+            "weight": 0.8,
+            "origin": "llm"
+          }
+        ]
+      },
+      "provenance": "generated",
+      "health": {
+        "resolutions": 13,
+        "heals": 0,
+        "winners": {
+          "role:button": 13
+        }
+      }
+    },
+    "transfer.chonTkNhanTien": {
+      "id": "transfer.chonTkNhanTien",
+      "label": "Chọn TK nhận tiền",
+      "screen": "transfer",
+      "candidates": {
+        "web": [
+          {
+            "strategy": "label",
+            "value": "Chọn TK nhận tiền",
+            "weight": 0.6,
+            "origin": "healed",
+            "approved": false
+          }
+        ]
+      },
+      "provenance": "generated",
+      "health": {
+        "resolutions": 173,
+        "heals": 0,
+        "winners": {
+          "label:Chọn TK nhận tiền": 173
+        }
+      }
+    },
+    "transfer.soTien": {
+      "id": "transfer.soTien",
+      "label": "Số tiền",
+      "screen": "transfer",
+      "candidates": {
+        "web": [
+          {
+            "strategy": "label",
+            "value": "Số tiền",
+            "weight": 0.6,
+            "origin": "healed",
+            "approved": false
+          }
+        ]
+      },
+      "provenance": "generated",
+      "health": {
+        "resolutions": 101,
+        "heals": 0,
+        "winners": {
+          "label:Số tiền": 101
+        }
+      }
+    },
+    "transfer.tienChuyenPhi0": {
+      "id": "transfer.tienChuyenPhi0",
+      "label": "Tiền chuyển (Phí = 0)",
+      "screen": "transfer",
+      "candidates": {
+        "web": [
+          {
+            "strategy": "label",
+            "value": "Tiền chuyển (Phí = 0)",
+            "weight": 0.6,
+            "origin": "healed",
+            "approved": false
+          }
+        ]
+      },
+      "provenance": "generated",
+      "health": {
+        "resolutions": 15,
+        "heals": 0,
+        "winners": {
+          "label:Tiền chuyển (Phí = 0)": 15
+        }
+      }
+    },
+    "transfer.thongBao": {
+      "id": "transfer.thongBao",
+      "label": "Thông báo",
+      "screen": "transfer",
+      "candidates": {
+        "web": [
+          {
+            "strategy": "css",
+            "value": ".subtitle-dialog-common",
+            "weight": 0.95,
+            "noScope": true,
+            "origin": "crawler"
+          },
+          {
+            "strategy": "role",
+            "value": "dialog",
+            "weight": 0.85,
+            "noScope": true,
+            "origin": "crawler"
+          },
+          {
+            "strategy": "css",
+            "value": ".msg-row-wraper .label-content",
+            "weight": 0.8,
+            "origin": "crawler"
+          }
+        ]
+      },
+      "provenance": "discovered",
+      "health": {
+        "resolutions": 18,
+        "heals": 0,
+        "winners": {
+          "css:.msg-row-wraper .label-content": 9,
+          "css:.subtitle-dialog-common": 9
+        }
+      }
+    },
+    "transfer.nutDong": {
+      "id": "transfer.nutDong",
+      "label": "Nút ĐÓNG",
+      "screen": "transfer",
+      "candidates": {
+        "web": [
+          {
+            "strategy": "role",
+            "value": "button",
+            "name": "ĐÓNG",
+            "weight": 0.9,
+            "noScope": true,
+            "origin": "crawler"
+          },
+          {
+            "strategy": "label",
+            "value": "ĐÓNG",
+            "weight": 0.8,
+            "noScope": true,
+            "origin": "crawler"
+          }
+        ]
+      },
+      "provenance": "discovered",
+      "health": {
+        "resolutions": 1,
+        "heals": 0,
+        "winners": {
+          "role:button": 1
+        }
+      }
+    },
+    "transfer.tkThuong": {
+      "id": "transfer.tkThuong",
+      "label": "TK Thường",
+      "screen": "transfer",
+      "candidates": {},
+      "provenance": "byproduct"
+    },
+    "transfer.tkKyQuy": {
+      "id": "transfer.tkKyQuy",
+      "label": "TK Ký Quỹ",
+      "screen": "transfer",
+      "candidates": {},
+      "provenance": "byproduct"
     }
   }
 }

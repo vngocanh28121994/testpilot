@@ -1,0 +1,67 @@
+{
+  "version": 1,
+  "featureFile": "chuc-nang-them-ma-co-phieu.feature",
+  "generatedAt": "2026-08-25T03:01:11.643Z",
+  "repaired": false,
+  "sourceUnits": 2,
+  "classifiedSources": 2,
+  "requirements": [
+    {
+      "id": "REQ-001",
+      "sourceId": "SRC-001",
+      "priority": "P0",
+      "rule": "Thêm mã cổ phiếu vào danh mục",
+      "sourceQuote": "Mục tiêu: Thêm được mã cổ phiếu trên Bảng giá cổ phiếu Đường dẫn: Login thành công--&gt; mở usecase “Bảng giá cổ phiếu” Click vào button :plus: để mở chức năng Thêm mã cổ phiếu Nhập số liệu để tìm kiếm mã cổ phiếu Tìm kiếm được theo mã (ưu tiên hơn) Tìm kiếm được theo tên doanh nghiệp Tối đa hiển thị 5 kết quả Tự động lọc trùng khi kết quả tìm kiếm từ mã trùng với kết quả tìm được theo tên doanh nghiệp Nếu chọn mã cổ phiếu chưa có trong danh mục hiện có → Thêm mới vào dòng đầu tiên trên table Nếu chọn mã cổ phiếu đã có trong danh mục → Không thêm mới, tự động scroll tới vị trí của mã đó trên table và focus vào dòng đó Có thể xoá mã khỏi danh mục bằng cách bấm vào … của dòng tương ứng.",
+      "expectedResult": "Mã cổ phiếu được thêm vào dòng đầu tiên của bảng giá",
+      "sourceRef": "https://digital-horus.atlassian.net/wiki/spaces/SD/pages/196994/Ch+c+n+ng+Th+m+m+c+phi+u"
+    },
+    {
+      "id": "REQ-002",
+      "sourceId": "SRC-002",
+      "priority": "P1",
+      "rule": "Xóa mã cổ phiếu khỏi danh mục",
+      "sourceQuote": "Chọn Xoá khỏi danh mục Sau khi xoá, mã bị xoá khỏi danh mục hiện tại, không ảnh hưởng tới các danh mục khác",
+      "expectedResult": "Mã cổ phiếu bị xóa khỏi danh mục hiện tại, không ảnh hưởng đến danh mục khác",
+      "sourceRef": "https://digital-horus.atlassian.net/wiki/spaces/SD/pages/196994/Ch+c+n+ng+Th+m+m+c+phi+u"
+    }
+  ],
+  "audit": {
+    "decision": "ready",
+    "mappings": [
+      {
+        "requirementId": "REQ-001",
+        "status": "covered",
+        "scenarios": [
+          "Thêm mã cổ phiếu mới vào danh mục",
+          "Thêm mã cổ phiếu đã có trong danh mục",
+          "Tìm kiếm mã cổ phiếu theo tên doanh nghiệp",
+          "Tìm kiếm mã cổ phiếu hiển thị tối đa 5 kết quả",
+          "Tìm kiếm theo mã ưu tiên hơn tìm kiếm theo tên doanh nghiệp",
+          "Tự động lọc trùng kết quả tìm kiếm từ mã và tên doanh nghiệp"
+        ],
+        "evidence": [
+          "Then first \"Dòng cổ phiếu trong danh mục\" shows \"VIC-HOSE\"",
+          "Then \"Dòng cổ phiếu trong danh mục\" count is equal to \"1\"",
+          "And \"Dòng cổ phiếu trong danh mục\" is focused",
+          "Then \"Danh sách gợi ý\" shows \"VIC-HOSE\"",
+          "Then \"Danh sách gợi ý\" count is at most \"5\"",
+          "Then \"Kết quả tìm kiếm đầu tiên\" shows \"VIC-HOSE\"",
+          "Then \"Danh sách gợi ý\" shows \"VIC-HOSE\" exactly \"1\" times"
+        ],
+        "reason": "Các scenario bao phủ các quy tắc chính: thêm mới, thêm trùng (không thêm, scroll/focus), tìm theo tên, tối đa 5 kết quả, ưu tiên mã, lọc trùng. Có assertion rõ ràng cho từng quy tắc."
+      },
+      {
+        "requirementId": "REQ-002",
+        "status": "covered",
+        "scenarios": [
+          "Xóa mã cổ phiếu khỏi danh mục"
+        ],
+        "evidence": [
+          "Then \"Dòng cổ phiếu trong danh mục\" does not show \"VIC-HOSE\""
+        ],
+        "reason": "Scenario xóa mã và assert mã không còn trong danh mục. Tuy nhiên không kiểm tra ảnh hưởng đến danh mục khác, nhưng yêu cầu chính là xóa khỏi danh mục hiện tại, đã được chứng minh."
+      }
+    ],
+    "missingRequirementIds": []
+  }
+}

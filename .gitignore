@@ -12,5 +12,12 @@ docs/
 # Test-account passwords. Never commit (see src/core/secrets.ts).
 .testpilot.secrets.json
 
+# Browser auth state is equivalent to a credential. Local fixture only.
+.testpilot/sessions/
+
 # Workflow history written by the UI.
 registry/history.json
+
+# Baseline snapshot for the parallel-devices refactor (local only).
+.baseline-parallel/
+registry/device-env.json

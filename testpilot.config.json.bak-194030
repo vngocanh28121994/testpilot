@@ -1,0 +1,118 @@
+{
+  "web": {
+    "baseUrl": "https://tcinvest.tcbs.com.vn",
+    "headless": true,
+    "device": "Pixel 7",
+    "record": true,
+    "slowMoMs": 300,
+    "network": {
+      "rewrite": [],
+      "allow": [
+        "apiext.tcbs.com.vn",
+        "apipub.tcbs.com.vn",
+        "apiextaws.tcbs.com.vn",
+        "static.tcbs.com.vn",
+        "statics.tcbs.com.vn",
+        "www.google.com",
+        "www.gstatic.com",
+        "apis.google.com",
+        "firebaseinstallations.googleapis.com",
+        "firestore.googleapis.com"
+      ],
+      "fallback": "block"
+    },
+    "popups": [
+      {
+        "detect": "app-notification-outbox .bottom-notification",
+        "dismiss": "app-notification-outbox button.button-close"
+      },
+      {
+        "detect": "button:has-text('TỪ CHỐI')",
+        "dismiss": "button:has-text('TỪ CHỐI')"
+      },
+      {
+        "detect": "mat-dialog-container:has-text('Tối ưu bộ nhớ')",
+        "dismiss": "mat-dialog-container button:has-text('Đóng')"
+      },
+      {
+        "detect": "mat-dialog-container:has-text('Hướng dẫn giao dịch')",
+        "dismiss": "mat-dialog-container button.mat-icon-button"
+      }
+    ]
+  },
+  "android": {
+    "deviceName": "Android Device",
+    "app": "build/app1.apk",
+    "appPackage": "com.fss.tcbs.mobiletrading",
+    "appActivity": "com.fss.tcbs.mobiletrading.MainActivity",
+    "hybrid": true,
+    "isolation": "restart"
+  },
+  "ios": {
+    "deviceName": "iPhone",
+    "hybrid": false
+  },
+  "paths": {
+    "registry": "registry/elements.json",
+    "features": "features",
+    "artifacts": "artifacts",
+    "reports": "reports",
+    "runs": "runs",
+    "flakeDb": "registry/flake.json",
+    "healingDb": "registry/healing.json",
+    "actionsDb": "registry/actions.json",
+    "docs": "docs"
+  },
+  "resolve": {
+    "timeoutMs": 10000,
+    "pollMs": 250,
+    "verifyHealedMatch": true
+  },
+  "executor": {
+    "retries": 0,
+    "verifyInput": true
+  },
+  "retention": {
+    "keepFailedDays": 30,
+    "keepPassedPerPlatform": 3
+  },
+  "flake": {
+    "window": 30,
+    "minRuns": 5,
+    "quarantineAt": 0.15,
+    "brokenAt": 0.95
+  },
+  "sources": [],
+  "targetFeature": "dang-nhap",
+  "accounts": [
+    {
+      "label": "tcbs",
+      "username": "105C611245"
+    }
+  ],
+  "llm": {
+    "model": "auto",
+    "effort": "high",
+    "note": ""
+  },
+  "farm": {
+    "region": "us-west-2",
+    "projectArn": "arn:aws:devicefarm:us-west-2:789465433238:project:74c8476a-ccf2-494f-982e-703bd1a27225",
+    "devicePoolArn": "arn:aws:devicefarm:us-west-2:789465433238:devicepool:74c8476a-ccf2-494f-982e-703bd1a27225/302051f1-e216-4a89-a153-05a3d7a1f954",
+    "platform": "android",
+    "appPath": "build/app1.apk",
+    "appVersionName": "6.4.11",
+    "appVersionCode": "60411",
+    "appLabel": "TCInvest",
+    "testPackagePath": "build/testpilot-appium.zip",
+    "testSpecPath": "farm/testspec.yml",
+    "runName": "testpilot-tcinvest",
+    "jobTimeoutMinutes": 20,
+    "videoCapture": true,
+    "timeoutMs": 3600000,
+    "env": {
+      "TESTPILOT_TAG": "@my-asset-bond"
+    },
+    "sendSecrets": true
+  }
+}

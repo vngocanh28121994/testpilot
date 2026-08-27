@@ -25,10 +25,15 @@ export interface RunMeta {
   /** Directory name — also the id, and sorts chronologically. */
   id: string;
   platform: string;
+  /**
+   * Environment the run targeted. Absent on runs recorded before environments
+   * existed, and on configs that define none.
+   */
+  env?: string;
   kind: 'run' | 'farm';
   tag?: string;
   device?: string;
-  status: 'running' | 'passed' | 'failed';
+  status: 'running' | 'passed' | 'failed' | 'interrupted';
   startedAt: string;
   finishedAt?: string;
   counters?: { total: number; passed: number; failed: number; quarantined: number };
@@ -46,21 +51,64 @@ export interface RetentionPolicy {
 export const DEFAULT_RETENTION: RetentionPolicy = { keepFailedDays: 30, keepPassedPerPlatform: 3 };
 
 /**
- * `2026-08-07T18-45-46Z-android-login`.
+ * `Google Pixel 7` -> `google-pixel-7`, for a directory name.
+ *
+ * The d-with-stroke used in Vietnamese is folded by hand because NFD cannot
+ * help with it: unlike an accented vowel it is a letter with a stroke, not a
+ * letter plus a combining mark, so it survives decomposition intact and is then
+ * deleted whole by the a-z filter. "Dien thoai" came out as "ien-thoai".
+ * Harmless while every name here came from AWS and was ASCII; not harmless now
+ * that a device id is something you type.
+ */
+export function deviceSlug(name: string): string {
+  return (
+    name
+      .replace(/\u0111/g, 'd')
+      .replace(/\u0110/g, 'D')
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-|-$/g, '') || 'device'
+  );
+}
+
+/**
+ * `2026-08-07T18-45-46Z-android-login`, or `…-login-pixel` for a targeted device.
  *
  * The timestamp leads so that a plain lexicographic sort — of `readdir`, of
  * `ls`, of the UI's list — is chronological order with no date parsing
  * anywhere. The platform and tag follow so the directory is identifiable at a
  * glance in a terminal.
+ *
+ * `device` is appended only when a run was aimed at a named device. Two devices
+ * running the same tag start within the same second, so without it they agree
+ * on a directory name and the second one overwrites the first. That is not only
+ * lost artifacts: the directory name is the run id, and HealingStore skips a
+ * run id it has already ingested — so the duplicate's healing evidence is
+ * dropped in silence. A suite that never names a device keeps the old,
+ * unsuffixed name, because it cannot collide with anything.
  */
-export function runDirName(startedAt: string, platform: string, tag?: string): string {
+export function runDirName(
+  startedAt: string,
+  platform: string,
+  tag?: string,
+  device?: string,
+): string {
   const stamp = new Date(startedAt).toISOString().replace(/[:.]/g, '-').replace(/-\d{3}Z$/, 'Z');
   const slug = tag ? `-${tag.replace(/^@/, '').replace(/[^a-zA-Z0-9]+/g, '-')}` : '';
-  return `${stamp}-${platform}${slug}`;
+  const dev = device ? `-${deviceSlug(device)}` : '';
+  return `${stamp}-${platform}${slug}${dev}`;
 }
 
-export function runDirFor(root: string, startedAt: string, platform: string, tag?: string): string {
-  return path.join(root, runDirName(startedAt, platform, tag));
+export function runDirFor(
+  root: string,
+  startedAt: string,
+  platform: string,
+  tag?: string,
+  device?: string,
+): string {
+  return path.join(root, runDirName(startedAt, platform, tag, device));
 }
 
 export async function writeRunMeta(dir: string, meta: RunMeta): Promise<void> {
@@ -83,7 +131,12 @@ export async function reindex(root: string): Promise<RunMeta[]> {
     const file = path.join(root, entry.name, 'meta.json');
     if (!existsSync(file)) continue;
     try {
-      metas.push(JSON.parse(await readFile(file, 'utf8')) as RunMeta);
+      const meta = JSON.parse(await readFile(file, 'utf8')) as RunMeta;
+      if (meta.status === 'running') {
+        meta.status = 'interrupted';
+        await writeFile(file, JSON.stringify(meta, null, 2) + '\n', 'utf8');
+      }
+      metas.push(meta);
     } catch {
       // A half-written meta.json means the process died mid-run. Skipping it
       // loses one row; throwing would lose the whole history page.

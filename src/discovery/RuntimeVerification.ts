@@ -22,6 +22,7 @@
 import type { ElementIntent } from './ElementIntent.js';
 import type { ObservedElement } from './UiObservation.js';
 import { classifyActionRisk, type ActionRisk } from './ActionRisk.js';
+import { normalizeHumanText } from '../core/text.js';
 
 // ── result types ──────────────────────────────────────────────────────────────
 
@@ -75,8 +76,8 @@ export function verifyRuntime(
       };
       unknowns.push('label');
     } else {
-      const expected = intent.label.toLowerCase();
-      const actual = elementText.toLowerCase();
+      const expected = normalizeHumanText(intent.label);
+      const actual = normalizeHumanText(elementText);
       const match = actual.includes(expected) || expected.includes(actual);
       checks.label = {
         status: match ? 'PASS' : 'FAIL',

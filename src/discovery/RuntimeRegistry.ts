@@ -173,6 +173,23 @@ export class RuntimeRegistry {
     this.touch(elementId);
   }
 
+  /**
+   * Folds another runtime registry into this one, for parallel runs.
+   *
+   * A whole snapshot is safe to merge here, unlike in the element registry:
+   * nothing in an entry accumulates, so applying the same locator twice lands
+   * on the same result. `upsertLocator` replaces by strategy+value, which makes
+   * the newest observation of a locator win and leaves locators only the other
+   * device saw untouched.
+   */
+  mergeFrom(other: RuntimeRegistryData): void {
+    for (const entry of Object.values(other.entries)) {
+      for (const locator of entry.locators) {
+        this.upsertLocator(entry.element, locator);
+      }
+    }
+  }
+
   async save(): Promise<void> {
     await mkdir(path.dirname(this.filePath), { recursive: true });
     await writeFile(

@@ -148,21 +148,38 @@ export function unsafeNotFound(locator: string): SafetyCheckResult {
 function isUnique(candidate: ObservedElement, all: ObservedElement[]): boolean {
   const sig = signature(candidate);
   if (!sig) return true; // No identifiable signal — cannot determine duplicates
-  const others = all.filter((e) => e.id !== candidate.id && signature(e) === sig);
+  const others = all.filter(
+    (e) =>
+      e.id !== candidate.id &&
+      // Something off-screen is not a thing the step could have meant, and not
+      // a thing a tap could land on by mistake. Counting hidden twins made a
+      // form with a collapsed panel permanently ambiguous.
+      e.visible !== false &&
+      signature(e) === sig,
+  );
   return others.length === 0;
 }
 
+/**
+ * What makes two elements indistinguishable to a person reading the screen.
+ *
+ * Placeholder belongs here. Without it every empty text field on a form shares
+ * one signature — role alone, since an input has no text and no accessibility
+ * label — so "Nhập mã" and "KL đặt" collided and discovery declared the whole
+ * form ambiguous. That is the opposite of what the guard is for: those two are
+ * the easiest pair on the screen for a person to tell apart.
+ */
 function signature(e: ObservedElement): string | null {
-  const parts = [e.role, e.text, e.accessibilityLabel].filter(
+  const parts = [e.role, e.text, e.accessibilityLabel, e.placeholder].filter(
     (v): v is string => v != null && v.trim() !== '',
   );
   return parts.length > 0 ? parts.map((v) => v.toLowerCase()).join('|') : null;
 }
 
 function actionRequiresEnabled(action: ActionKind): boolean {
-  return ['tap', 'input', 'select', 'check', 'uncheck'].includes(action);
+  return ['tap', 'drag', 'input', 'select', 'check', 'uncheck'].includes(action);
 }
 
 function actionRequiresInteractive(action: ActionKind): boolean {
-  return ['tap', 'input', 'select', 'check', 'uncheck', 'scroll'].includes(action);
+  return ['tap', 'drag', 'input', 'select', 'check', 'uncheck', 'scroll'].includes(action);
 }

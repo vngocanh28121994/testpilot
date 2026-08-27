@@ -1,0 +1,576 @@
+{
+  "version": 1,
+  "entries": {
+    "priceBoard.oMaCoPhieu": {
+      "element": "priceBoard.oMaCoPhieu",
+      "locators": [
+        {
+          "strategy": "placeholder",
+          "value": "Mã cổ phiếu",
+          "source": "runtime-observed",
+          "status": "healed",
+          "confidence": 0.44,
+          "verifiedAt": "2026-08-24T10:29:30.723Z",
+          "platform": "web"
+        }
+      ],
+      "lastUpdatedAt": "2026-08-24T10:29:30.724Z"
+    },
+    "priceBoard.ads": {
+      "element": "priceBoard.ads",
+      "locators": [
+        {
+          "strategy": "xpath",
+          "value": "//*[not(*) and normalize-space(.)='ADS']",
+          "source": "runtime-observed",
+          "status": "healed",
+          "confidence": 0.4,
+          "verifiedAt": "2026-08-17T10:21:10.865Z",
+          "platform": "web"
+        }
+      ],
+      "lastUpdatedAt": "2026-08-20T09:31:42.729Z"
+    },
+    "priceBoard.stockSearchFirstResult": {
+      "element": "priceBoard.stockSearchFirstResult",
+      "locators": [
+        {
+          "strategy": "css",
+          "value": ".mat-autocomplete-panel mat-option[role='option']",
+          "source": "runtime-observed",
+          "status": "healed",
+          "confidence": 0.6,
+          "verifiedAt": "2026-08-26T10:33:39.989Z",
+          "platform": "web"
+        }
+      ],
+      "lastUpdatedAt": "2026-08-26T10:33:39.989Z"
+    },
+    "priceBoard.addStockButton": {
+      "element": "priceBoard.addStockButton",
+      "locators": [
+        {
+          "strategy": "css",
+          "value": "tcbs-icon[name='Circle add']",
+          "source": "runtime-observed",
+          "status": "healed",
+          "confidence": 0.79,
+          "verifiedAt": "2026-08-26T10:32:10.540Z",
+          "platform": "web"
+        }
+      ],
+      "lastUpdatedAt": "2026-08-26T10:32:10.540Z"
+    },
+    "priceBoard.xoaKhoiDanhMuc": {
+      "element": "priceBoard.xoaKhoiDanhMuc",
+      "locators": [
+        {
+          "strategy": "label",
+          "value": "Xoá khỏi danh mục",
+          "source": "runtime-observed",
+          "status": "healed",
+          "confidence": 0.6,
+          "verifiedAt": "2026-08-26T10:35:02.641Z",
+          "platform": "web"
+        }
+      ],
+      "lastUpdatedAt": "2026-08-26T10:35:02.641Z"
+    },
+    "priceBoard.iconTaiDongAds": {
+      "element": "priceBoard.iconTaiDongAds",
+      "locators": [
+        {
+          "strategy": "xpath",
+          "value": "(((//*[not(*) and normalize-space(.)='ADS'])[1]/ancestor::*[self::tr or @role='row' or contains(concat(' ', normalize-space(@class), ' '), ' content-row ') or contains(concat(' ', normalize-space(@class), ' '), ' table-row ') or contains(concat(' ', normalize-space(@class), ' '), ' list-row ') or contains(concat(' ', normalize-space(@class), ' '), ' item-row ')][1])//*[@data-walkthrough and (contains(translate(concat(@data-walkthrough,' ',@data-testid,' ',@aria-label,' ',@title,' ',@name,' ',@class),'ABCDEFGHIJKLMNOPQRSTUVWXYZ','abcdefghijklmnopqrstuvwxyz'),'more') or contains(translate(concat(@data-walkthrough,' ',@data-testid,' ',@aria-label,' ',@title,' ',@name,' ',@class),'ABCDEFGHIJKLMNOPQRSTUVWXYZ','abcdefghijklmnopqrstuvwxyz'),'menu') or contains(translate(concat(@data-walkthrough,' ',@data-testid,' ',@aria-label,' ',@title,' ',@name,' ',@class),'ABCDEFGHIJKLMNOPQRSTUVWXYZ','abcdefghijklmnopqrstuvwxyz'),'overflow') or contains(translate(concat(@data-walkthrough,' ',@data-testid,' ',@aria-label,' ',@title,' ',@name,' ',@class),'ABCDEFGHIJKLMNOPQRSTUVWXYZ','abcdefghijklmnopqrstuvwxyz'),'ellipsis'))])[1]",
+          "source": "runtime-observed",
+          "status": "healed",
+          "confidence": 0.98,
+          "verifiedAt": "2026-08-17T08:25:16.073Z",
+          "platform": "web"
+        },
+        {
+          "strategy": "relative",
+          "value": "row(\"ADS\") >> \"...\":metadata",
+          "source": "runtime-observed",
+          "status": "healed",
+          "confidence": 0.79,
+          "verifiedAt": "2026-08-17T10:21:12.870Z",
+          "platform": "web"
+        }
+      ],
+      "lastUpdatedAt": "2026-08-20T09:31:42.729Z"
+    },
+    "home.gocDauTu": {
+      "element": "home.gocDauTu",
+      "locators": [
+        {
+          "strategy": "label",
+          "value": "Gốc đầu tư",
+          "source": "runtime-observed",
+          "status": "healed",
+          "confidence": 0.6,
+          "verifiedAt": "2026-08-21T03:46:08.174Z",
+          "platform": "web"
+        }
+      ],
+      "lastUpdatedAt": "2026-08-21T03:46:08.174Z"
+    },
+    "home.traiPhieu": {
+      "element": "home.traiPhieu",
+      "locators": [
+        {
+          "strategy": "label",
+          "value": "Trái phiếu",
+          "source": "runtime-observed",
+          "status": "healed",
+          "confidence": 0.6,
+          "verifiedAt": "2026-08-21T03:46:07.613Z",
+          "platform": "web"
+        }
+      ],
+      "lastUpdatedAt": "2026-08-21T03:46:07.613Z"
+    },
+    "home.tongTien": {
+      "element": "home.tongTien",
+      "locators": [
+        {
+          "strategy": "label",
+          "value": "Tổng tiền",
+          "source": "runtime-observed",
+          "status": "healed",
+          "confidence": 0.6,
+          "verifiedAt": "2026-08-21T03:46:15.204Z",
+          "platform": "web"
+        }
+      ],
+      "lastUpdatedAt": "2026-08-21T03:46:15.204Z"
+    },
+    "home.tien": {
+      "element": "home.tien",
+      "locators": [
+        {
+          "strategy": "label",
+          "value": "Tiền",
+          "source": "runtime-observed",
+          "status": "healed",
+          "confidence": 0.6,
+          "verifiedAt": "2026-08-21T03:46:13.212Z",
+          "platform": "web"
+        }
+      ],
+      "lastUpdatedAt": "2026-08-21T03:46:13.212Z"
+    },
+    "home.coPhieu": {
+      "element": "home.coPhieu",
+      "locators": [
+        {
+          "strategy": "label",
+          "value": "Cổ phiếu",
+          "source": "runtime-observed",
+          "status": "healed",
+          "confidence": 0.6,
+          "verifiedAt": "2026-08-21T03:46:18.595Z",
+          "platform": "web"
+        }
+      ],
+      "lastUpdatedAt": "2026-08-21T03:46:18.595Z"
+    },
+    "home.giaTriVon": {
+      "element": "home.giaTriVon",
+      "locators": [
+        {
+          "strategy": "label",
+          "value": "Giá trị vốn",
+          "source": "runtime-observed",
+          "status": "healed",
+          "confidence": 0.6,
+          "verifiedAt": "2026-08-21T03:46:20.546Z",
+          "platform": "web"
+        }
+      ],
+      "lastUpdatedAt": "2026-08-21T03:46:20.546Z"
+    },
+    "home.menu": {
+      "element": "home.menu",
+      "locators": [
+        {
+          "strategy": "label",
+          "value": "Menu",
+          "source": "runtime-observed",
+          "status": "healed",
+          "confidence": 0.6,
+          "verifiedAt": "2026-08-21T03:46:25.747Z",
+          "platform": "web"
+        }
+      ],
+      "lastUpdatedAt": "2026-08-21T03:46:25.747Z"
+    },
+    "home.datLenh": {
+      "element": "home.datLenh",
+      "locators": [
+        {
+          "strategy": "label",
+          "value": "Đặt lệnh",
+          "source": "runtime-observed",
+          "status": "healed",
+          "confidence": 0.6,
+          "verifiedAt": "2026-08-23T16:04:35.285Z",
+          "platform": "web"
+        }
+      ],
+      "lastUpdatedAt": "2026-08-23T16:04:35.287Z"
+    },
+    "home.datLenhCoPhieu": {
+      "element": "home.datLenhCoPhieu",
+      "locators": [
+        {
+          "strategy": "label",
+          "value": "Đặt lệnh cổ phiếu",
+          "source": "runtime-observed",
+          "status": "healed",
+          "confidence": 0.7,
+          "verifiedAt": "2026-08-20T08:45:57.730Z",
+          "platform": "web"
+        }
+      ],
+      "lastUpdatedAt": "2026-08-20T09:31:42.729Z"
+    },
+    "home.kiemThu": {
+      "element": "home.kiemThu",
+      "locators": [
+        {
+          "strategy": "label",
+          "value": "Kiểm thử",
+          "source": "runtime-observed",
+          "status": "healed",
+          "confidence": 0.6,
+          "verifiedAt": "2026-08-21T03:46:35.007Z",
+          "platform": "web"
+        }
+      ],
+      "lastUpdatedAt": "2026-08-21T03:46:35.007Z"
+    },
+    "home.kiemThuFundmart": {
+      "element": "home.kiemThuFundmart",
+      "locators": [
+        {
+          "strategy": "label",
+          "value": "Kiểm thử Fundmart",
+          "source": "runtime-observed",
+          "status": "healed",
+          "confidence": 0.6,
+          "verifiedAt": "2026-08-21T03:46:37.587Z",
+          "platform": "web"
+        }
+      ],
+      "lastUpdatedAt": "2026-08-21T03:46:37.588Z"
+    },
+    "home.lenhThuong": {
+      "element": "home.lenhThuong",
+      "locators": [
+        {
+          "strategy": "label",
+          "value": "Lệnh thường",
+          "source": "runtime-observed",
+          "status": "healed",
+          "confidence": 0.6,
+          "verifiedAt": "2026-08-23T16:04:38.349Z",
+          "platform": "web"
+        }
+      ],
+      "lastUpdatedAt": "2026-08-23T16:04:38.349Z"
+    },
+    "home.luuLenh": {
+      "element": "home.luuLenh",
+      "locators": [
+        {
+          "strategy": "label",
+          "value": "Lưu lệnh",
+          "source": "runtime-observed",
+          "status": "healed",
+          "confidence": 0.6,
+          "verifiedAt": "2026-08-23T16:04:40.989Z",
+          "platform": "web"
+        }
+      ],
+      "lastUpdatedAt": "2026-08-23T16:04:40.989Z"
+    },
+    "home.nhapMa": {
+      "element": "home.nhapMa",
+      "locators": [
+        {
+          "strategy": "testId",
+          "value": "ticker",
+          "source": "runtime-observed",
+          "status": "healed",
+          "confidence": 0.5,
+          "verifiedAt": "2026-08-20T17:29:04.155Z",
+          "platform": "web"
+        },
+        {
+          "strategy": "placeholder",
+          "value": "Nhập mã",
+          "source": "runtime-observed",
+          "status": "healed",
+          "confidence": 0.65,
+          "verifiedAt": "2026-08-23T16:04:41.054Z",
+          "platform": "web"
+        }
+      ],
+      "lastUpdatedAt": "2026-08-23T16:04:41.054Z"
+    },
+    "home.searchFirstResult": {
+      "element": "home.searchFirstResult",
+      "locators": [
+        {
+          "strategy": "placeholder",
+          "value": "Tìm kiếm",
+          "source": "runtime-observed",
+          "status": "healed",
+          "confidence": 0.44,
+          "verifiedAt": "2026-08-20T17:10:07.141Z",
+          "platform": "web"
+        }
+      ],
+      "lastUpdatedAt": "2026-08-20T17:10:07.141Z"
+    },
+    "home.klDat": {
+      "element": "home.klDat",
+      "locators": [
+        {
+          "strategy": "label",
+          "value": "KL đặt",
+          "source": "runtime-observed",
+          "status": "healed",
+          "confidence": 0.6,
+          "verifiedAt": "2026-08-23T16:04:45.068Z",
+          "platform": "web"
+        }
+      ],
+      "lastUpdatedAt": "2026-08-23T16:04:45.068Z"
+    },
+    "home.giaDat": {
+      "element": "home.giaDat",
+      "locators": [
+        {
+          "strategy": "label",
+          "value": "Giá đặt",
+          "source": "runtime-observed",
+          "status": "healed",
+          "confidence": 0.6,
+          "verifiedAt": "2026-08-23T16:04:46.216Z",
+          "platform": "web"
+        }
+      ],
+      "lastUpdatedAt": "2026-08-23T16:04:46.216Z"
+    },
+    "home.daLuuLenhMua": {
+      "element": "home.daLuuLenhMua",
+      "locators": [
+        {
+          "strategy": "label",
+          "value": "Đã lưu lệnh mua",
+          "source": "runtime-observed",
+          "status": "healed",
+          "confidence": 0.6,
+          "verifiedAt": "2026-08-23T16:04:49.990Z",
+          "platform": "web"
+        }
+      ],
+      "lastUpdatedAt": "2026-08-23T16:04:49.990Z"
+    },
+    "home.luuMua": {
+      "element": "home.luuMua",
+      "locators": [
+        {
+          "strategy": "label",
+          "value": "Lưu mua",
+          "source": "runtime-observed",
+          "status": "healed",
+          "confidence": 0.6,
+          "verifiedAt": "2026-08-23T16:04:49.314Z",
+          "platform": "web"
+        }
+      ],
+      "lastUpdatedAt": "2026-08-23T16:04:49.314Z"
+    },
+    "home.oNhapKhoiLuongDatLenh": {
+      "element": "home.oNhapKhoiLuongDatLenh",
+      "locators": [
+        {
+          "strategy": "placeholder",
+          "value": "0",
+          "source": "ai-discovered",
+          "status": "suggested",
+          "confidence": 0.9,
+          "verifiedAt": "2026-08-23T11:59:54.340Z"
+        }
+      ],
+      "lastUpdatedAt": "2026-08-23T11:59:54.340Z"
+    },
+    "login.phaiSinh": {
+      "element": "login.phaiSinh",
+      "locators": [
+        {
+          "strategy": "label",
+          "value": "Phái sinh",
+          "source": "runtime-observed",
+          "status": "healed",
+          "confidence": 0.6,
+          "verifiedAt": "2026-08-23T16:43:57.002Z",
+          "platform": "web"
+        }
+      ],
+      "lastUpdatedAt": "2026-08-23T16:43:57.002Z"
+    },
+    "home.thongKeChungGiaoDichPs": {
+      "element": "home.thongKeChungGiaoDichPs",
+      "locators": [
+        {
+          "strategy": "label",
+          "value": "Thống kê chung giao dịch PS",
+          "source": "runtime-observed",
+          "status": "healed",
+          "confidence": 0.6,
+          "verifiedAt": "2026-08-23T16:43:58.274Z",
+          "platform": "web"
+        }
+      ],
+      "lastUpdatedAt": "2026-08-23T16:43:58.274Z"
+    },
+    "home.ngayTu": {
+      "element": "home.ngayTu",
+      "locators": [
+        {
+          "strategy": "text",
+          "value": "23/7/2026",
+          "source": "ai-discovered",
+          "status": "suggested",
+          "confidence": 1,
+          "verifiedAt": "2026-08-23T16:00:02.118Z"
+        }
+      ],
+      "lastUpdatedAt": "2026-08-23T16:00:02.118Z"
+    },
+    "auto.tcbf": {
+      "element": "auto.tcbf",
+      "locators": [
+        {
+          "strategy": "label",
+          "value": "TCBF",
+          "source": "runtime-observed",
+          "status": "healed",
+          "confidence": 0.6,
+          "verifiedAt": "2026-08-23T18:10:06.316Z",
+          "platform": "web"
+        }
+      ],
+      "lastUpdatedAt": "2026-08-23T18:10:06.321Z"
+    },
+    "auto.cacQuyCoTheBanQuanTam": {
+      "element": "auto.cacQuyCoTheBanQuanTam",
+      "locators": [
+        {
+          "strategy": "label",
+          "value": "Các quỹ có thể bạn quan tâm",
+          "source": "runtime-observed",
+          "status": "healed",
+          "confidence": 0.6,
+          "verifiedAt": "2026-08-23T18:10:06.942Z",
+          "platform": "web"
+        }
+      ],
+      "lastUpdatedAt": "2026-08-23T18:10:06.942Z"
+    },
+    "auto.dienBienGiaTrongVong1Thang": {
+      "element": "auto.dienBienGiaTrongVong1Thang",
+      "locators": [
+        {
+          "strategy": "label",
+          "value": "Diễn biến giá trong vòng 1 tháng",
+          "source": "runtime-observed",
+          "status": "healed",
+          "confidence": 0.6,
+          "verifiedAt": "2026-08-23T18:10:10.130Z",
+          "platform": "web"
+        }
+      ],
+      "lastUpdatedAt": "2026-08-23T18:10:10.130Z"
+    },
+    "addStockModal.searchInput": {
+      "element": "addStockModal.searchInput",
+      "locators": [
+        {
+          "strategy": "placeholder",
+          "value": "Mã cổ phiếu",
+          "source": "runtime-observed",
+          "status": "healed",
+          "confidence": 0.79,
+          "verifiedAt": "2026-08-26T10:34:15.907Z",
+          "platform": "web"
+        }
+      ],
+      "lastUpdatedAt": "2026-08-26T10:34:15.907Z"
+    },
+    "priceBoard.vicHose": {
+      "element": "priceBoard.vicHose",
+      "locators": [
+        {
+          "strategy": "label",
+          "value": "VIC-HOSE",
+          "source": "runtime-observed",
+          "status": "healed",
+          "confidence": 0.6,
+          "verifiedAt": "2026-08-25T02:51:03.829Z",
+          "platform": "web"
+        }
+      ],
+      "lastUpdatedAt": "2026-08-25T02:51:03.829Z"
+    },
+    "transfer.chonTkNhanTien": {
+      "element": "transfer.chonTkNhanTien",
+      "locators": [
+        {
+          "strategy": "label",
+          "value": "Chọn TK nhận tiền",
+          "source": "runtime-observed",
+          "status": "healed",
+          "confidence": 0.6,
+          "verifiedAt": "2026-08-27T03:42:45.657Z",
+          "platform": "web"
+        }
+      ],
+      "lastUpdatedAt": "2026-08-27T03:42:45.657Z"
+    },
+    "transfer.soTien": {
+      "element": "transfer.soTien",
+      "locators": [
+        {
+          "strategy": "label",
+          "value": "Số tiền",
+          "source": "runtime-observed",
+          "status": "healed",
+          "confidence": 0.6,
+          "verifiedAt": "2026-08-27T03:42:47.248Z",
+          "platform": "web"
+        }
+      ],
+      "lastUpdatedAt": "2026-08-27T03:42:47.248Z"
+    },
+    "transfer.tienChuyenPhi0": {
+      "element": "transfer.tienChuyenPhi0",
+      "locators": [
+        {
+          "strategy": "label",
+          "value": "Tiền chuyển (Phí = 0)",
+          "source": "runtime-observed",
+          "status": "healed",
+          "confidence": 0.6,
+          "verifiedAt": "2026-08-26T09:42:49.497Z",
+          "platform": "web"
+        }
+      ],
+      "lastUpdatedAt": "2026-08-26T09:42:49.497Z"
+    }
+  }
+}

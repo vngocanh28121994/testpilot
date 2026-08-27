@@ -6,6 +6,12 @@
       "runtimeExecutable": "npm",
       "runtimeArgs": ["run", "ui"],
       "port": 4300
+    },
+    {
+      "name": "test-runner",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "test:ui"],
+      "port": 4301
     }
   ]
 }

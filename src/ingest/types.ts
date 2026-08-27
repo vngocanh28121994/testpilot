@@ -7,6 +7,15 @@
  * server, or a plain HTTP client, is a one-file change.
  */
 
+export interface SourceVisual {
+  /** URL/data URI or an MCP-local identifier, kept for traceability only. */
+  ref: string;
+  /** Inline base64 returned by MCP. Preferred for private Confluence/Figma assets. */
+  data?: string;
+  mimeType?: string;
+  title?: string;
+}
+
 export interface SourceDoc {
   kind: 'confluence' | 'figma';
   /** The original link, kept for traceability in the report. */
@@ -14,8 +23,14 @@ export interface SourceDoc {
   title: string;
   /** Plain text for Confluence; a flattened node tree for Figma. */
   text: string;
-  /** Figma only: image URLs or node ids that a vision pass can look at. */
-  images?: string[];
+  /** Screenshots, attachments or rendered frames available to the vision pass. */
+  visuals?: SourceVisual[];
+  /** Figma links discovered inside a Confluence page. */
+  linkedSources?: string[];
+  /** Why images that exist on the page did not reach the vision pass. */
+  visualNotes?: string[];
+  /** Textual evidence produced by the vision pass; included in both AI passes. */
+  visualEvidence?: string;
   fetchedAt: string;
 }
 
@@ -27,6 +42,10 @@ export interface McpToolNames {
   confluencePage: string;
   /** e.g. 'figma_get_file' / 'get_figma_data'. */
   figmaFile: string;
+  /** Optional tool that returns Confluence attachment image blocks/URLs. */
+  confluenceAttachments?: string;
+  /** Optional tool that renders the selected Figma node/frame as an image. */
+  figmaImage?: string;
 }
 
 export interface IngestConfig {

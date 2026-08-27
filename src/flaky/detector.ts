@@ -10,8 +10,8 @@ import type { Registry } from '../core/registry.js';
  */
 
 export interface ScenarioHistory {
-  /** Newest first, capped at `window`. 'p' passed, 'f' failed, 'k' flaky (passed on retry). */
-  outcomes: Array<'p' | 'f' | 'k'>;
+  /** Newest first, capped at `window`. 'p' passed, 'f' failed, 'k' flaky, 's' skipped-while-quarantined. */
+  outcomes: Array<'p' | 'f' | 'k' | 's'>;
   lastSeen: string;
   quarantinedSince?: string;
 }
@@ -47,7 +47,7 @@ export interface FlakePolicy {
 
 export const DEFAULT_FLAKE_POLICY: FlakePolicy = {
   window: 30,
-  minRuns: 5,
+  minRuns: 10,
   quarantineAt: 0.15,
   brokenAt: 0.95,
 };
@@ -80,32 +80,48 @@ export class FlakeDetector {
       hist.outcomes.length = Math.min(hist.outcomes.length, this.policy.window);
       hist.lastSeen = new Date().toISOString();
 
-      const runs = hist.outcomes.length;
-      const bad = hist.outcomes.filter((o) => o !== 'p').length;
-      const hardFails = hist.outcomes.filter((o) => o === 'f').length;
-      const flakeRate = runs === 0 ? 0 : bad / runs;
-      const brokenNotFlaky = runs >= this.policy.minRuns && hardFails / runs >= this.policy.brokenAt;
-      const shouldQuarantine =
-        runs >= this.policy.minRuns && flakeRate >= this.policy.quarantineAt && !brokenNotFlaky;
-
-      if (shouldQuarantine && !hist.quarantinedSince) {
-        hist.quarantinedSince = new Date().toISOString();
-      } else if (!shouldQuarantine) {
-        delete hist.quarantinedSince;
-      }
-
-      verdicts.push({
-        key,
-        scenarioId: r.scenario.id,
-        platform: r.platform,
-        device: r.device,
-        flakeRate,
-        runs,
-        brokenNotFlaky,
-        shouldQuarantine,
-      });
+      verdicts.push(this.#evaluate(key, hist));
     }
     return verdicts;
+  }
+
+  /**
+   * Record a quarantine-skip for each scenario that was skipped this run.
+   * Each 's' outcome dilutes the failure rate so the quarantine can lift
+   * naturally once the window fills up with enough skips (or clean runs via
+   * --include-quarantined).
+   */
+  ingestSkipped(items: Array<{ id: string; platform: Platform; device: string }>): void {
+    const now = new Date().toISOString();
+    for (const item of items) {
+      const key = `${item.id}::${item.platform}::${item.device}`;
+      const hist = (this.db.scenarios[key] ??= { outcomes: [], lastSeen: '' });
+      hist.outcomes.unshift('s');
+      hist.outcomes.length = Math.min(hist.outcomes.length, this.policy.window);
+      hist.lastSeen = now;
+      this.#evaluate(key, hist);
+    }
+  }
+
+  #evaluate(key: string, hist: ScenarioHistory): FlakeVerdict {
+    const [scenarioId = '', platform = '', device = ''] = key.split('::') as [string, Platform, string];
+    const runs = hist.outcomes.length;
+    // 's' (quarantine-skip) is neutral — not a failure, but counts as a run
+    // so the failure rate dilutes over time and the quarantine can lift.
+    const bad = hist.outcomes.filter((o) => o === 'f' || o === 'k').length;
+    const hardFails = hist.outcomes.filter((o) => o === 'f').length;
+    const flakeRate = runs === 0 ? 0 : bad / runs;
+    const brokenNotFlaky = runs >= this.policy.minRuns && hardFails / runs >= this.policy.brokenAt;
+    const shouldQuarantine =
+      runs >= this.policy.minRuns && flakeRate >= this.policy.quarantineAt && !brokenNotFlaky;
+
+    if (shouldQuarantine && !hist.quarantinedSince) {
+      hist.quarantinedSince = new Date().toISOString();
+    } else if (!shouldQuarantine) {
+      delete hist.quarantinedSince;
+    }
+
+    return { key, scenarioId, platform: platform as Platform, device, flakeRate, runs, brokenNotFlaky, shouldQuarantine };
   }
 
   isQuarantined(scenarioId: string, platform: Platform, device: string): boolean {

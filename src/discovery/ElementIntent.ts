@@ -11,6 +11,8 @@
 
 export type ActionKind =
   | 'tap'
+  | 'hover'
+  | 'drag'
   | 'input'
   | 'select'
   | 'check'

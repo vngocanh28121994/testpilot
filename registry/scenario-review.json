@@ -1,0 +1,307 @@
+{
+  "version": 1,
+  "entries": {
+    "order-stock.feature::Đặt lệnh nháp": {
+      "id": "order-stock.feature::Đặt lệnh nháp",
+      "filename": "order-stock.feature",
+      "scenarioName": "Đặt lệnh nháp",
+      "contentHash": "6698c1389f426ba6bafee072385e5fc325080f1f595de926ade12e6592636b65",
+      "status": "approved",
+      "source": "legacy",
+      "updatedAt": "2026-08-24T01:16:24.205Z"
+    },
+    "dang-nhap.feature::Đăng nhập thành công vào tài khoản": {
+      "id": "dang-nhap.feature::Đăng nhập thành công vào tài khoản",
+      "filename": "dang-nhap.feature",
+      "scenarioName": "Đăng nhập thành công vào tài khoản",
+      "contentHash": "95d21a266ee3c1cb7a794a8b93b8ad49a28ae2e3787215bee05aa43a655c86a9",
+      "status": "approved",
+      "source": "legacy",
+      "updatedAt": "2026-08-24T01:17:46.817Z",
+      "reviewedAt": "2026-08-24T01:17:46.817Z"
+    },
+    "dang-nhap.feature::Đăng nhập thất bại — nhập sai thông tin": {
+      "id": "dang-nhap.feature::Đăng nhập thất bại — nhập sai thông tin",
+      "filename": "dang-nhap.feature",
+      "scenarioName": "Đăng nhập thất bại — nhập sai thông tin",
+      "contentHash": "b0e8a774a5079c6f277bd376b7db0504f9328117b65927102a4a1d7dab583f7c",
+      "status": "approved",
+      "source": "legacy",
+      "updatedAt": "2026-08-24T01:16:24.218Z"
+    },
+    "dang-nhap.feature::Tìm kiếm Bảng giá cổ phiếu sau đăng nhập": {
+      "id": "dang-nhap.feature::Tìm kiếm Bảng giá cổ phiếu sau đăng nhập",
+      "filename": "dang-nhap.feature",
+      "scenarioName": "Tìm kiếm Bảng giá cổ phiếu sau đăng nhập",
+      "contentHash": "58fbc4ba3a0778a6c9898eda99b0482150e373c0f2736daa8771dfb499514c49",
+      "status": "approved",
+      "source": "legacy",
+      "updatedAt": "2026-08-24T01:16:24.218Z"
+    },
+    "dang-nhap.feature::Kiểm tra tài sản trái phiếu": {
+      "id": "dang-nhap.feature::Kiểm tra tài sản trái phiếu",
+      "filename": "dang-nhap.feature",
+      "scenarioName": "Kiểm tra tài sản trái phiếu",
+      "contentHash": "e92415d986d9771e7aaa033776761175a2a26fe042b4421ac55df8a45d410bd1",
+      "status": "approved",
+      "source": "legacy",
+      "updatedAt": "2026-08-24T01:16:24.218Z"
+    },
+    "dang-nhap.feature::Chẩn đoán nút đăng nhập trên Device Farm": {
+      "id": "dang-nhap.feature::Chẩn đoán nút đăng nhập trên Device Farm",
+      "filename": "dang-nhap.feature",
+      "scenarioName": "Chẩn đoán nút đăng nhập trên Device Farm",
+      "contentHash": "230dee24905129236d2d563454c1828f6695326da63612e81b202158e7c08eee",
+      "status": "pending",
+      "source": "manual",
+      "updatedAt": "2026-08-24T02:01:03.087Z"
+    },
+    "fundmart.feature::Kiểm tra tooltip table": {
+      "id": "fundmart.feature::Kiểm tra tooltip table",
+      "filename": "fundmart.feature",
+      "scenarioName": "Kiểm tra tooltip table",
+      "contentHash": "1c64cb22558f0fae2c49c9d6d4e22c027af49309876d621a2516c1d6743cf053",
+      "status": "approved",
+      "source": "legacy",
+      "updatedAt": "2026-08-24T01:16:24.219Z"
+    },
+    "kiem-tra-hieu-qua-dau-tu-phai-sinh.feature::Kiểm tra hiệu quả đầu tư phái sinh": {
+      "id": "kiem-tra-hieu-qua-dau-tu-phai-sinh.feature::Kiểm tra hiệu quả đầu tư phái sinh",
+      "filename": "kiem-tra-hieu-qua-dau-tu-phai-sinh.feature",
+      "scenarioName": "Kiểm tra hiệu quả đầu tư phái sinh",
+      "contentHash": "1111d4f4b0750ed90665bf58c7a968454dd088152c9af5aec9b795763472666b",
+      "status": "approved",
+      "source": "legacy",
+      "updatedAt": "2026-08-24T01:16:24.220Z"
+    },
+    "chuc-nang-them-ma-co-phieu.feature::Thêm mã cổ phiếu mới vào danh mục": {
+      "id": "chuc-nang-them-ma-co-phieu.feature::Thêm mã cổ phiếu mới vào danh mục",
+      "filename": "chuc-nang-them-ma-co-phieu.feature",
+      "scenarioName": "Thêm mã cổ phiếu mới vào danh mục",
+      "contentHash": "84a473b9d35d1f7833298e2531439c0da40acb84819d08fab01db5aef2316425",
+      "status": "pending",
+      "source": "manual",
+      "updatedAt": "2026-08-26T08:15:55.577Z"
+    },
+    "chuc-nang-them-ma-co-phieu.feature::Tìm kiếm mã cổ phiếu theo tên doanh nghiệp": {
+      "id": "chuc-nang-them-ma-co-phieu.feature::Tìm kiếm mã cổ phiếu theo tên doanh nghiệp",
+      "filename": "chuc-nang-them-ma-co-phieu.feature",
+      "scenarioName": "Tìm kiếm mã cổ phiếu theo tên doanh nghiệp",
+      "contentHash": "33d8d4bd537ec262f35bcda6b175de4822701a099fb3aa9abac05f0faaffe265",
+      "status": "approved",
+      "source": "legacy",
+      "updatedAt": "2026-08-25T09:21:14.386Z",
+      "reviewedAt": "2026-08-25T09:21:14.386Z"
+    },
+    "chuc-nang-them-ma-co-phieu.feature::Thêm mã cổ phiếu đã có trong danh mục": {
+      "id": "chuc-nang-them-ma-co-phieu.feature::Thêm mã cổ phiếu đã có trong danh mục",
+      "filename": "chuc-nang-them-ma-co-phieu.feature",
+      "scenarioName": "Thêm mã cổ phiếu đã có trong danh mục",
+      "contentHash": "16dbb7312416882833bb2efe9af44bea37f5f22b8dd23c5a03d29ff4ff25d3f8",
+      "status": "approved",
+      "source": "legacy",
+      "updatedAt": "2026-08-25T09:21:14.386Z",
+      "reviewedAt": "2026-08-25T09:21:14.386Z"
+    },
+    "chuc-nang-them-ma-co-phieu.feature::Tìm kiếm mã cổ phiếu hiển thị tối đa 5 kết quả": {
+      "id": "chuc-nang-them-ma-co-phieu.feature::Tìm kiếm mã cổ phiếu hiển thị tối đa 5 kết quả",
+      "filename": "chuc-nang-them-ma-co-phieu.feature",
+      "scenarioName": "Tìm kiếm mã cổ phiếu hiển thị tối đa 5 kết quả",
+      "contentHash": "20b8f0c5d5361849e11d577e5d5d392c58af06dbede767479647839b2d763572",
+      "status": "approved",
+      "source": "legacy",
+      "updatedAt": "2026-08-25T09:21:14.386Z",
+      "reviewedAt": "2026-08-25T09:21:14.386Z"
+    },
+    "chuc-nang-them-ma-co-phieu.feature::Tìm kiếm theo mã ưu tiên hơn tìm kiếm theo tên doanh nghiệp": {
+      "id": "chuc-nang-them-ma-co-phieu.feature::Tìm kiếm theo mã ưu tiên hơn tìm kiếm theo tên doanh nghiệp",
+      "filename": "chuc-nang-them-ma-co-phieu.feature",
+      "scenarioName": "Tìm kiếm theo mã ưu tiên hơn tìm kiếm theo tên doanh nghiệp",
+      "contentHash": "6268aaff0d11d90df8ea1e1588acce241f5b4324385fd00cf4f19a84d6b098dd",
+      "status": "approved",
+      "source": "generated",
+      "updatedAt": "2026-08-25T09:21:14.386Z",
+      "reviewedAt": "2026-08-25T09:21:14.386Z"
+    },
+    "chuc-nang-them-ma-co-phieu.feature::Tự động lọc trùng kết quả tìm kiếm từ mã và tên doanh nghiệp": {
+      "id": "chuc-nang-them-ma-co-phieu.feature::Tự động lọc trùng kết quả tìm kiếm từ mã và tên doanh nghiệp",
+      "filename": "chuc-nang-them-ma-co-phieu.feature",
+      "scenarioName": "Tự động lọc trùng kết quả tìm kiếm từ mã và tên doanh nghiệp",
+      "contentHash": "f2e36e8ab44e1583d5e8d37e431e2113aeac0f12bcf45f86af710eb09b480445",
+      "status": "approved",
+      "source": "legacy",
+      "updatedAt": "2026-08-25T09:21:14.386Z",
+      "reviewedAt": "2026-08-25T09:21:14.386Z"
+    },
+    "chuc-nang-them-ma-co-phieu.feature::Xóa mã cổ phiếu khỏi danh mục": {
+      "id": "chuc-nang-them-ma-co-phieu.feature::Xóa mã cổ phiếu khỏi danh mục",
+      "filename": "chuc-nang-them-ma-co-phieu.feature",
+      "scenarioName": "Xóa mã cổ phiếu khỏi danh mục",
+      "contentHash": "ecee26e6aca075c5ff3d188cd5223b4ed5ce896e8fe0d930f995dbf46689e8e8",
+      "status": "approved",
+      "source": "legacy",
+      "updatedAt": "2026-08-25T09:21:14.386Z",
+      "reviewedAt": "2026-08-25T09:21:14.386Z"
+    },
+    "them-ma-co-phieu.feature::Thêm mã cổ phiếu mới vào danh mục": {
+      "id": "them-ma-co-phieu.feature::Thêm mã cổ phiếu mới vào danh mục",
+      "filename": "them-ma-co-phieu.feature",
+      "scenarioName": "Thêm mã cổ phiếu mới vào danh mục",
+      "contentHash": "cedbfd2cebc2c8cad7ff3644cf8c46f8fab1df527148a3f98e7e3e2712f5f364",
+      "status": "approved",
+      "source": "generated",
+      "updatedAt": "2026-08-25T16:39:18.751Z",
+      "reviewedAt": "2026-08-25T16:39:18.751Z"
+    },
+    "them-ma-co-phieu.feature::Tìm kiếm mã cổ phiếu theo tên doanh nghiệp": {
+      "id": "them-ma-co-phieu.feature::Tìm kiếm mã cổ phiếu theo tên doanh nghiệp",
+      "filename": "them-ma-co-phieu.feature",
+      "scenarioName": "Tìm kiếm mã cổ phiếu theo tên doanh nghiệp",
+      "contentHash": "9421f2d0ae390a742957475d17b1a3111a54b5871ee4d9425552afcffab1d920",
+      "status": "approved",
+      "source": "generated",
+      "updatedAt": "2026-08-25T16:39:18.751Z",
+      "reviewedAt": "2026-08-25T16:39:18.751Z"
+    },
+    "them-ma-co-phieu.feature::Hiển thị tối đa 5 kết quả gợi ý khi tìm kiếm": {
+      "id": "them-ma-co-phieu.feature::Hiển thị tối đa 5 kết quả gợi ý khi tìm kiếm",
+      "filename": "them-ma-co-phieu.feature",
+      "scenarioName": "Hiển thị tối đa 5 kết quả gợi ý khi tìm kiếm",
+      "contentHash": "c4e532a24746fcf946ac21a8c0b7f452335175ae51a636aa1d1a3357329edef8",
+      "status": "approved",
+      "source": "generated",
+      "updatedAt": "2026-08-25T16:39:18.751Z",
+      "reviewedAt": "2026-08-25T16:39:18.751Z"
+    },
+    "them-ma-co-phieu.feature::Lọc trùng kết quả khi mã trùng với tên doanh nghiệp": {
+      "id": "them-ma-co-phieu.feature::Lọc trùng kết quả khi mã trùng với tên doanh nghiệp",
+      "filename": "them-ma-co-phieu.feature",
+      "scenarioName": "Lọc trùng kết quả khi mã trùng với tên doanh nghiệp",
+      "contentHash": "9972fa910e76a3bc78ec4f34c1e212b8064b6fde06d18f1d1021c71489124951",
+      "status": "approved",
+      "source": "generated",
+      "updatedAt": "2026-08-25T16:39:18.751Z",
+      "reviewedAt": "2026-08-25T16:39:18.751Z"
+    },
+    "them-ma-co-phieu.feature::Chọn mã cổ phiếu đã có trong danh mục sẽ scroll tới và focus vào dòng đó": {
+      "id": "them-ma-co-phieu.feature::Chọn mã cổ phiếu đã có trong danh mục sẽ scroll tới và focus vào dòng đó",
+      "filename": "them-ma-co-phieu.feature",
+      "scenarioName": "Chọn mã cổ phiếu đã có trong danh mục sẽ scroll tới và focus vào dòng đó",
+      "contentHash": "f64693d03c2ad894659b10d148c134c5a677168702a9f87ee4ab74105ab8c248",
+      "status": "approved",
+      "source": "generated",
+      "updatedAt": "2026-08-25T16:39:18.751Z",
+      "reviewedAt": "2026-08-25T16:39:18.751Z"
+    },
+    "them-ma-co-phieu.feature::Xóa mã cổ phiếu khỏi danh mục hiện tại": {
+      "id": "them-ma-co-phieu.feature::Xóa mã cổ phiếu khỏi danh mục hiện tại",
+      "filename": "them-ma-co-phieu.feature",
+      "scenarioName": "Xóa mã cổ phiếu khỏi danh mục hiện tại",
+      "contentHash": "9b8e2addc3c7a7d013e3410c2dfcba94ae619dae44e2fee1ff87251c5762172e",
+      "status": "approved",
+      "source": "generated",
+      "updatedAt": "2026-08-25T16:39:18.751Z",
+      "reviewedAt": "2026-08-25T16:39:18.751Z"
+    },
+    "them-ma-co-phieu.feature::Xóa mã khỏi danh mục hiện tại không ảnh hưởng danh mục khác": {
+      "id": "them-ma-co-phieu.feature::Xóa mã khỏi danh mục hiện tại không ảnh hưởng danh mục khác",
+      "filename": "them-ma-co-phieu.feature",
+      "scenarioName": "Xóa mã khỏi danh mục hiện tại không ảnh hưởng danh mục khác",
+      "contentHash": "76cfdf19b10b89ae2f669c8188074838d37967ae0f7a5fb5cd55eb35fa43dce1",
+      "status": "approved",
+      "source": "generated",
+      "updatedAt": "2026-08-25T16:39:18.751Z",
+      "reviewedAt": "2026-08-25T16:39:18.751Z"
+    },
+    "chuyen-tien-noi-bo.feature::Số tiền được chuyển thay đổi theo tiểu khoản nguồn": {
+      "id": "chuyen-tien-noi-bo.feature::Số tiền được chuyển thay đổi theo tiểu khoản nguồn",
+      "filename": "chuyen-tien-noi-bo.feature",
+      "scenarioName": "Số tiền được chuyển thay đổi theo tiểu khoản nguồn",
+      "contentHash": "e1d0fab1e772c1c655d5edcd99d60ecb0cc5d8423a12f964f2dda9f7dc68bc10",
+      "status": "approved",
+      "source": "generated",
+      "updatedAt": "2026-08-27T02:54:54.826Z",
+      "reviewedAt": "2026-08-27T02:54:54.826Z"
+    },
+    "chuyen-tien-noi-bo.feature::Chuyển tiền từ tài khoản Thường sang Ký Quỹ thành công": {
+      "id": "chuyen-tien-noi-bo.feature::Chuyển tiền từ tài khoản Thường sang Ký Quỹ thành công",
+      "filename": "chuyen-tien-noi-bo.feature",
+      "scenarioName": "Chuyển tiền từ tài khoản Thường sang Ký Quỹ thành công",
+      "contentHash": "508e298528759135bb8824f673a94d62cdaaeef14d294061faa9dde0b75ccfc0",
+      "status": "approved",
+      "source": "generated",
+      "updatedAt": "2026-08-27T02:54:54.825Z",
+      "reviewedAt": "2026-08-27T02:54:54.825Z"
+    },
+    "chuyen-tien-noi-bo.feature::Chuyển tiền từ tài khoản Ký Quỹ sang Thường thành công": {
+      "id": "chuyen-tien-noi-bo.feature::Chuyển tiền từ tài khoản Ký Quỹ sang Thường thành công",
+      "filename": "chuyen-tien-noi-bo.feature",
+      "scenarioName": "Chuyển tiền từ tài khoản Ký Quỹ sang Thường thành công",
+      "contentHash": "6abbb1f35379adcda98072f02218284d7847672b9c5f8dd215fd42e38bff9b4e",
+      "status": "approved",
+      "source": "generated",
+      "updatedAt": "2026-08-27T02:54:54.825Z",
+      "reviewedAt": "2026-08-27T02:54:54.825Z"
+    },
+    "chuyen-tien-noi-bo.feature::Chọn tiểu khoản nguồn và đích từ dropdown": {
+      "id": "chuyen-tien-noi-bo.feature::Chọn tiểu khoản nguồn và đích từ dropdown",
+      "filename": "chuyen-tien-noi-bo.feature",
+      "scenarioName": "Chọn tiểu khoản nguồn và đích từ dropdown",
+      "contentHash": "e120ca78ccd5a2546879ba55d98c4995ec17d3564d6eeeb80c33c4224d14eb7b",
+      "status": "approved",
+      "source": "generated",
+      "updatedAt": "2026-08-27T02:54:54.825Z",
+      "reviewedAt": "2026-08-27T02:54:54.825Z"
+    },
+    "chuyen-tien-noi-bo.feature::Tiểu khoản đã chọn ở nguồn không xuất hiện ở dropdown đích": {
+      "id": "chuyen-tien-noi-bo.feature::Tiểu khoản đã chọn ở nguồn không xuất hiện ở dropdown đích",
+      "filename": "chuyen-tien-noi-bo.feature",
+      "scenarioName": "Tiểu khoản đã chọn ở nguồn không xuất hiện ở dropdown đích",
+      "contentHash": "690863bc2aa434aa45d5fe62b374170fa58c3ba77c9a783452bff7ab3607d081",
+      "status": "approved",
+      "source": "generated",
+      "updatedAt": "2026-08-27T02:54:54.825Z",
+      "reviewedAt": "2026-08-27T02:54:54.825Z"
+    },
+    "chuyen-tien-noi-bo.feature::Tiểu khoản đã chọn ở đích không xuất hiện ở dropdown nguồn": {
+      "id": "chuyen-tien-noi-bo.feature::Tiểu khoản đã chọn ở đích không xuất hiện ở dropdown nguồn",
+      "filename": "chuyen-tien-noi-bo.feature",
+      "scenarioName": "Tiểu khoản đã chọn ở đích không xuất hiện ở dropdown nguồn",
+      "contentHash": "71d88eef742d78cb439a19a9969cf84a17a9a7268d120e92efdc914bcc036cc9",
+      "status": "approved",
+      "source": "generated",
+      "updatedAt": "2026-08-27T02:54:54.825Z",
+      "reviewedAt": "2026-08-27T02:54:54.825Z"
+    },
+    "chuyen-tien-noi-bo.feature::Nhập số tiền vượt quá số tiền được chuyển": {
+      "id": "chuyen-tien-noi-bo.feature::Nhập số tiền vượt quá số tiền được chuyển",
+      "filename": "chuyen-tien-noi-bo.feature",
+      "scenarioName": "Nhập số tiền vượt quá số tiền được chuyển",
+      "contentHash": "172ec18aa58b0365a8736ea57e5efb2c47e0ff0a0598d889ba98651dfe8adae5",
+      "status": "approved",
+      "source": "generated",
+      "updatedAt": "2026-08-27T02:54:54.826Z",
+      "reviewedAt": "2026-08-27T02:54:54.826Z"
+    },
+    "chuyen-tien-noi-bo.feature::Nhập số tiền hợp lệ chuyển sang màn xác nhận": {
+      "id": "chuyen-tien-noi-bo.feature::Nhập số tiền hợp lệ chuyển sang màn xác nhận",
+      "filename": "chuyen-tien-noi-bo.feature",
+      "scenarioName": "Nhập số tiền hợp lệ chuyển sang màn xác nhận",
+      "contentHash": "87cc22993daa8d08f4e6c57ccae04506d4f3915b1e8388ffd088f1da8a74768c",
+      "status": "approved",
+      "source": "generated",
+      "updatedAt": "2026-08-27T02:54:54.826Z",
+      "reviewedAt": "2026-08-27T02:54:54.826Z"
+    },
+    "chuyen-tien-noi-bo.feature::Quay lại từ màn xác nhận trở về màn hình Chuyển tiền": {
+      "id": "chuyen-tien-noi-bo.feature::Quay lại từ màn xác nhận trở về màn hình Chuyển tiền",
+      "filename": "chuyen-tien-noi-bo.feature",
+      "scenarioName": "Quay lại từ màn xác nhận trở về màn hình Chuyển tiền",
+      "contentHash": "a12a8f06037616b152cc01767316d06c677d7745b4991eb52adeb8dfd7e564b3",
+      "status": "approved",
+      "source": "generated",
+      "updatedAt": "2026-08-27T02:54:54.826Z",
+      "reviewedAt": "2026-08-27T02:54:54.826Z"
+    }
+  }
+}

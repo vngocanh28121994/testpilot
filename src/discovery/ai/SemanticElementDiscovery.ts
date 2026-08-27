@@ -15,7 +15,8 @@ import type { RuntimeLocator } from '../RuntimeRegistry.js';
 import { StandardElementVerifier } from '../ElementVerifier.js';
 import { RuntimeRegistry } from '../RuntimeRegistry.js';
 import type { LlmProvider } from './AiDiscoveryTypes.js';
-import type { MatchScore } from '../ConfidenceScorer.js';
+import { textMatch, type MatchScore } from '../ConfidenceScorer.js';
+import { normalizeHumanText } from '../../core/text.js';
 
 export interface SemanticDiscoveryOptions {
   /** Confidence floor — AI candidates below this are rejected (default 60). */
@@ -89,6 +90,19 @@ export class SemanticElementDiscovery {
       evidence.push(
         `[semantic-ai] candidate observedElementId="${candidate.observedElementId}" not in observation`,
       );
+      return { intent, method: 'failed', observation, evidence };
+    }
+
+    // ── Guard written for AI answers specifically ─────────────────────────────
+    // The shared verifier accepts a *substring* label match, which is right for
+    // a locator someone authored and wrong for a guess: asked for "Lệnh thường"
+    // the model picked a control reading "Thường" — a different field entirely —
+    // with confidence 90, and the substring rule waved it through. A model is
+    // fluent enough to make a wrong answer look plausible, so its answers are
+    // held to what a human reading the screen would accept.
+    const objection = aiAnswerObjection(intent, el);
+    if (objection) {
+      evidence.push(`[semantic-ai] từ chối: ${objection}`);
       return { intent, method: 'failed', observation, evidence };
     }
 
@@ -179,6 +193,63 @@ function deriveLocator(
   if (el.resourceId) return { strategy: 'resourceId', value: el.resourceId };
   if (el.accessibilityLabel) return { strategy: 'label', value: el.accessibilityLabel };
   if (el.text) return { strategy: 'text', value: el.text };
+  // A form field often has neither an id nor any words of its own — the caption
+  // that names it lives in a sibling <legend>. Without these two the model could
+  // identify the right input and still produce nothing usable, which is exactly
+  // how the first wired run ended: "verification PASSED" and no locator.
+  if (el.placeholder) return { strategy: 'placeholder', value: el.placeholder };
+  if (el.css) return { strategy: 'css', value: el.css };
   if (el.xpath) return { strategy: 'xpath', value: el.xpath };
   return undefined;
+}
+
+/**
+ * Why an AI answer should not be trusted, or undefined when it may proceed.
+ *
+ * The tier only runs because the element's own words did NOT match the label —
+ * that is what deterministic matching already tried. So demanding they match
+ * here rejects every answer worth having: asked for "Giá đặt" the model
+ * correctly returns `<input name="price">`, whose only readable word is English.
+ *
+ * What can be judged is the *shape* of a wrong answer. Two rules, both from
+ * answers that were wrong in practice:
+ *
+ * 1. A typing step must land on something that holds a value.
+ *
+ * 2. Sharing some words with the label while missing the word the label is
+ *    *about* is the signature of a confusion, not a match. Asked for
+ *    "Lệnh thường" the model picked a control reading "Thường" — the value of a
+ *    different field — and one shared word made it look plausible. The same
+ *    head-word test the locator layer uses separates that from "Nhập mã"
+ *    answering for "Ô nhập mã cổ phiếu", which shares words *and* the head.
+ *
+ * An element sharing no words at all is left alone: no overlap means the model
+ * reasoned structurally, which is the whole reason to ask it.
+ */
+function aiAnswerObjection(intent: ElementIntent, el: ObservedElement): string | undefined {
+  if (intent.action === 'input' || intent.action === 'select') {
+    const role = (el.role ?? '').toLowerCase();
+    const holdsValue = /input|textarea|textbox|combobox|searchbox|spinbutton|select/.test(role);
+    if (!holdsValue && el.interactive !== true) {
+      return `bước ${intent.action} nhưng phần tử (role=${el.role ?? '?'}) không nhận được dữ liệu`;
+    }
+  }
+
+  const wanted = intent.text ?? intent.label ?? '';
+  if (!wanted.trim()) return undefined;
+
+  for (const value of [el.accessibilityLabel, el.placeholder, el.text]) {
+    if (!value?.trim()) continue;
+    if (textMatch(value, wanted) !== 'none') return undefined;  // khớp hợp lệ
+    if (sharesAWord(value, wanted)) {
+      return `chữ trên phần tử ("${value.trim().slice(0, 40)}") trùng một phần nhưng trật ý của "${wanted}"`;
+    }
+  }
+  return undefined;
+}
+
+function sharesAWord(a: string, b: string): boolean {
+  const words = (t: string) => new Set(normalizeHumanText(t).split(/\s+/).filter(Boolean));
+  const left = words(a);
+  return [...words(b)].some((w) => left.has(w));
 }

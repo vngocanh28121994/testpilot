@@ -2,6 +2,22 @@
  * AppiumMcpContextManager — enforces the NATIVE_APP vs WEBVIEW fallback policy
  * for Capacitor/Ionic hybrid apps.
  *
+ * PREREQUISITE — WebView debugging must be enabled in the app (verified 2026-08-12):
+ *   WebView context switching requires the app to call
+ *   `WebView.setWebContentsDebuggingEnabled(true)` so Chromedriver can attach.
+ *   Without it, `appium_get_page_source` falls back to UiAutomator2 native XML
+ *   even after `appium_context switch` → WEBVIEW, and CSS selectors fail.
+ *
+ *   The TCBS production build does NOT enable WebView debugging.  On a debug
+ *   build with WebContentsDebuggingEnabled=true:
+ *     - getPageSource() in WEBVIEW context → real HTML DOM
+ *     - findByLocator('css selector', ...) → works via Chromedriver
+ *     - parseWebViewHtml() below becomes reachable
+ *
+ *   Workaround for production build: use UiAutomator2 xpath in NATIVE_APP context
+ *   (e.g. //android.widget.EditText) — UiAutomator2 includes WebView-hosted
+ *   elements in the native hierarchy regardless of WebView debugging state.
+ *
  * Policy (strictly enforced):
  *   1. Always ensure NATIVE_APP context first.
  *   2. Get page source and parse it.
@@ -9,10 +25,10 @@
  *   4. If hybrid=true AND native has ≥1 interactive element → return NATIVE_APP observation.
  *   5. If hybrid=true AND native has 0 interactive elements:
  *        switch to WEBVIEW_com.fss.tcbs.mobiletrading
- *        get page source (HTML)
- *        parse HTML (minimal extractor — see parseWebViewHtml)
+ *        get page source (returns native XML via appium-mcp — NOT HTML)
+ *        parse HTML (dead code for appium-mcp — parseWebViewHtml receives native XML)
  *        ALWAYS restore NATIVE_APP in finally
- *        return WEBVIEW observation
+ *        return WEBVIEW observation (will have 0 elements for appium-mcp)
  *   6. If WebView switch/observation fails: restore NATIVE_APP in finally, rethrow.
  *
  * "Interactive" follows the existing ObservedElement.interactive semantics from
@@ -45,6 +61,14 @@ export class AppiumMcpContextManager {
    * Always starts in NATIVE_APP.
    * Switches to WEBVIEW only when hybrid=true and native has no interactive elements.
    * Restores NATIVE_APP in a finally block — even if the WebView observation fails.
+   *
+   * NOTE (Phase W1): For the production run.ts flow, WebView observation is now handled
+   * by WebViewCdpDriver (src/drivers/WebViewCdpDriver.ts), which connects via
+   * chromium.connectOverCDP() and sees the full Angular DOM (formcontrolname,
+   * data-testid, aria-label) that this appium-mcp path cannot reach.
+   * For the Appium-MCP path specifically, the correct fix would be to inject a
+   * WebViewCdpDriver instance here rather than relying on appium_get_page_source,
+   * which always returns UiAutomator2 native XML even in WEBVIEW context.
    */
   async observeWithFallback(): Promise<ObservationWithContext> {
     // Step 1: ensure NATIVE_APP context.
@@ -90,6 +114,10 @@ function isInteractive(el: ObservedElement): boolean {
 
 /**
  * Extract interactive elements from a Capacitor/Ionic WebView HTML page source.
+ *
+ * NOTE: This function is NOT REACHABLE via appium-mcp because appium_get_page_source
+ * always returns UiAutomator2 native XML even in WEBVIEW context.  It would only
+ * work with a Chromedriver-backed MCP that returns true HTML in WebView context.
  *
  * This is an intentionally minimal parser — it covers the element types and
  * attributes that Ionic/Angular/Capacitor apps expose.  It does NOT attempt to

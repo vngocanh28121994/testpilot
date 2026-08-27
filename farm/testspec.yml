@@ -7,12 +7,43 @@ version: 0.1
 phases:
   install:
     commands:
-      - export NVM_DIR=$HOME/.nvm
-      - . $NVM_DIR/nvm.sh
-      - nvm install 20
-      - nvm use 20
-      - node --version
+      # The host ships Node 18 and has no nvm — the previous `nvm install 20`
+      # here failed silently every run, leaving everything on 18. That went
+      # unnoticed until Playwright, which refuses to load below Node 20, and
+      # aws-sdk warns about it too. So fetch a Node 20 rather than asking for
+      # one. It lands inside the test package because that directory is the only
+      # thing that survives into the later phases, each of which is a fresh
+      # shell that inherits no PATH from this one.
       - cd $DEVICEFARM_TEST_PACKAGE_PATH
+      - export NODE_HOME=$DEVICEFARM_TEST_PACKAGE_PATH/node20
+      # The glibc-217 build, not the default one. The host is Amazon Linux 2,
+      # whose glibc predates the 2.28 that nodejs.org's normal linux-x64 tarball
+      # links against — that one downloads and unpacks perfectly and then dies
+      # with "GLIBC_2.28 not found" the first time it is run.
+      - >
+        NODE_VER=v20.18.1;
+        curl -fsSL "https://unofficial-builds.nodejs.org/download/release/$NODE_VER/node-$NODE_VER-linux-x64-glibc-217.tar.gz" -o /tmp/node20.tar.gz
+        && mkdir -p "$NODE_HOME"
+        && tar -xzf /tmp/node20.tar.gz -C "$NODE_HOME" --strip-components=1
+        || echo "không tải được Node 20"
+      # Prove it runs before letting it onto PATH. An unpacked-but-unrunnable
+      # node is worse than none: it shadows the working system one and takes the
+      # whole run down, which is exactly what the plain build did here.
+      - >
+        if "$NODE_HOME/bin/node" --version >/dev/null 2>&1; then
+          echo "Node 20 sẵn sàng: $("$NODE_HOME/bin/node" --version)";
+        else
+          echo "Node 20 không chạy được trên host này — gỡ bỏ, dùng node hệ thống";
+          rm -rf "$NODE_HOME";
+        fi
+      - export PATH="$NODE_HOME/bin:$PATH"
+      - node --version
+      # Playwright ships in the package because the WebView driver connects over
+      # CDP, and connectOverCDP attaches to the browser already running on the
+      # phone — it never launches one. Downloading ~130 MB of desktop Chromium
+      # here would buy nothing and cost upload minutes on every run.
+      - export PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1
+      - export PLAYWRIGHT_SKIP_VALIDATE_HOST_REQUIREMENTS=1
       - npm ci --omit=dev || npm install --omit=dev
 
   pre_test:
@@ -26,6 +57,10 @@ phases:
       # "No Chromedriver found that can automate Chrome <version>" the moment
       # the driver switches into the WebView — the device's WebView updates far
       # faster than the chromedrivers bundled with the Appium image.
+      #
+      # Bare feature names, because APPIUM_VERSION above pins Appium 2. Appium 3
+      # rejects them and demands `*:adb_shell` — it exits before it ever listens
+      # — so if that pin moves, this line has to move with it.
       - >
         appium --base-path=/wd/hub --log-timestamp --log-no-colors
         --allow-insecure=chromedriver_autodownload,adb_shell
@@ -43,6 +78,10 @@ phases:
   test:
     commands:
       - cd $DEVICEFARM_TEST_PACKAGE_PATH
+      # A separate shell from the install phase, so the interpreter has to be
+      # pointed at again. Falls back to the host's node when the download failed.
+      - export PATH="$DEVICEFARM_TEST_PACKAGE_PATH/node20/bin:$PATH"
+      - node --version
       # TESTPILOT_PLATFORM is read by src/cli/run.ts; the device name and
       # Appium endpoint come from the Device Farm environment.
       - export TESTPILOT_PLATFORM=$DEVICEFARM_DEVICE_PLATFORM_NAME
@@ -54,6 +93,9 @@ phases:
       # once, it reached the device as `{echo "device: ...}`, killed the test
       # phase before the runner started, and cost a full run.
       - echo "device=${DEVICEFARM_DEVICE_NAME:-KHONG_CO_BIEN_NAY}"
+      # Printed because an empty udid is what sends XCUITest to a Simulator,
+      # and the failure that follows names an SDK version instead of a phone.
+      - echo "udid=${DEVICEFARM_DEVICE_UDID:-KHONG_CO_BIEN_NAY}"
       - export TESTPILOT_APPIUM_HOST=127.0.0.1
       - export TESTPILOT_APPIUM_PORT=4723
       - export TESTPILOT_APPIUM_PATH=/wd/hub

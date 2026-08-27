@@ -12,6 +12,8 @@
 
 import type { ActionKind, ElementIntent } from './ElementIntent.js';
 import type { ObservedElement } from './UiObservation.js';
+import { textMatch } from './ConfidenceScorer.js';
+import { normalizeHumanText } from '../core/text.js';
 
 export interface VerificationChecks {
   exists: boolean;
@@ -82,7 +84,7 @@ export class StandardElementVerifier implements ElementVerifier {
     // ── semantic checks ───────────────────────────────────────────────────────
 
     if (intent.semanticRole != null && candidate.role != null) {
-      checks.roleMatch = norm(candidate.role) === norm(intent.semanticRole);
+      checks.roleMatch = rolesCompatible(intent.action, intent.semanticRole, candidate.role);
       if (!checks.roleMatch) {
         evidence.push(
           `role mismatch: expected "${intent.semanticRole}", found "${candidate.role}"`,
@@ -93,7 +95,7 @@ export class StandardElementVerifier implements ElementVerifier {
     if (intent.label != null) {
       const candidateText =
         candidate.accessibilityLabel ?? candidate.text ?? candidate.placeholder ?? '';
-      checks.labelMatch = norm(candidateText).includes(norm(intent.label));
+      checks.labelMatch = textMatch(candidateText, intent.label) !== 'none';
       if (!checks.labelMatch) {
         evidence.push(
           `label mismatch: expected "${intent.label}", element has "${candidateText || '(empty)'}"`,
@@ -106,7 +108,7 @@ export class StandardElementVerifier implements ElementVerifier {
     if (allElements.length > 1) {
       const sig = elementSignature(candidate);
       const duplicates = allElements.filter(
-        (e) => e.id !== candidate.id && elementSignature(e) === sig,
+        (e) => e.id !== candidate.id && e.visible !== false && elementSignature(e) === sig,
       ).length;
       checks.uniqueness = duplicates === 0;
       if (!checks.uniqueness) {
@@ -156,21 +158,28 @@ function computeScore(checks: VerificationChecks): number {
   return total > 0 ? Math.round((score / total) * 100) : 0;
 }
 
+/** Kept in step with InteractionSafety's signature — placeholder included. */
 function elementSignature(e: ObservedElement): string {
-  return [e.role, e.text, e.accessibilityLabel]
+  return [e.role, e.text, e.accessibilityLabel, e.placeholder]
     .filter((v): v is string => v != null)
     .map((v) => v.toLowerCase())
     .join('|');
 }
 
 function actionRequiresEnabled(action: ActionKind): boolean {
-  return ['tap', 'input', 'select', 'check', 'uncheck'].includes(action);
+  return ['tap', 'drag', 'input', 'select', 'check', 'uncheck'].includes(action);
 }
 
 function actionRequiresInteractive(action: ActionKind): boolean {
-  return ['tap', 'input', 'select', 'check', 'uncheck', 'scroll'].includes(action);
+  return ['tap', 'drag', 'input', 'select', 'check', 'uncheck', 'scroll'].includes(action);
 }
 
 function norm(s: string): string {
-  return s.toLowerCase().trim();
+  return normalizeHumanText(s);
+}
+
+function rolesCompatible(action: string, expected: string, actual: string): boolean {
+  if (norm(expected) === norm(actual)) return true;
+  if (action !== 'input' || norm(expected) !== 'textbox') return false;
+  return ['combobox', 'searchbox', 'spinbutton'].includes(norm(actual));
 }

@@ -7,6 +7,7 @@ import {
   CreateDevicePoolCommand,
   CreateUploadCommand,
   DeviceFarmClient,
+  GetDevicePoolCompatibilityCommand,
   GetRunCommand,
   GetUploadCommand,
   ListArtifactsCommand,
@@ -19,12 +20,16 @@ import {
   type UploadType,
 } from '@aws-sdk/client-device-farm';
 import {
+  deviceSlug,
   linkLatest,
   prune,
+  runDirName,
+  writeRunMeta,
   type RetentionPolicy,
   type RunMeta,
 } from '../core/runstore.js';
 import { appendDeviceVideos } from '../report/html.js';
+import { HealingStore } from '../healing/HealingStore.js';
 
 /**
  * AWS Device Farm runs the NATIVE half of the suite.
@@ -64,6 +69,8 @@ export interface FarmConfig {
   runsDir?: string;
   /** Where the rolling flake window lives locally, so the device's copy can merge in. */
   flakeDb?: string;
+  /** Cross-run locator-healing evidence, rebuilt from pulled report.json files. */
+  healingDb?: string;
   /** Only for the `latest-<platform>` pointer; the run itself lives in runsDir. */
   reportsDir?: string;
   retention?: RetentionPolicy;
@@ -97,6 +104,8 @@ export interface FarmRunResult {
   result: string;
   counters: Record<string, number | undefined>;
   artifacts: Array<{ name: string; type: string; url: string }>;
+  /** Local run directories created during this run (one per device). */
+  runDirs: string[];
 }
 
 export interface AwsStatus {
@@ -133,7 +142,7 @@ export interface AwsStatus {
 export async function awsStatus(region: string): Promise<AwsStatus> {
   const source = credentialSource();
   const canLogin = source === '~/.aws hoặc IAM role của máy' && (await awsLoginBinary()) !== undefined;
-  const client = new DeviceFarmClient({ region });
+  const client = await makeClient(region);
   try {
     const creds = await client.config.credentials();
     const out: AwsStatus = { ok: true, source, canLogin, keyHint: creds.accessKeyId.slice(0, 4) };
@@ -184,31 +193,85 @@ function firstLine(message: string): string {
  * one does, which is why an already-valid session looked like no session at all
  * for a while.
  */
-export async function awsLogin(region: string, log: FarmLog): Promise<void> {
-  const bin = await awsLoginBinary();
-  if (!bin) {
-    throw new Error(
-      'Không tìm thấy bản AWS CLI nào hỗ trợ `aws login`. ' +
-        'Cần AWS CLI v2 đủ mới; bản cũ hơn không có lệnh này.',
-    );
+/**
+ * The sign-in this machine is actually configured for.
+ *
+ * `aws login` and `aws sso login` are different flows against different
+ * identities, and picking the wrong one is worse than doing nothing: `aws login`
+ * writes a root `login_session` back into the profile, silently undoing an IAM
+ * Identity Center setup and returning the machine to root credentials that last
+ * about a quarter of an hour. So the config decides, not a default.
+ */
+export function loginCommand(config: string, profile?: string): {
+  kind: 'sso' | 'legacy';
+  args: string[];
+} {
+  const header = profile ? `[profile ${profile}]` : '[default]';
+  const start = config.indexOf(header);
+  if (start >= 0) {
+    const rest = config.slice(start + header.length);
+    const next = rest.search(/^\[/m);
+    const body = next >= 0 ? rest.slice(0, next) : rest;
+    if (/^\s*(sso_session|sso_start_url)\s*=/m.test(body)) {
+      return { kind: 'sso', args: ['sso', 'login', ...(profile ? ['--profile', profile] : [])] };
+    }
   }
-  log(`Dùng ${bin} — trình duyệt sẽ mở ra để bạn xác nhận.`);
-  await new Promise<void>((resolve, reject) => {
-    const child = spawn(bin, ['login', '--region', region], { stdio: ['ignore', 'pipe', 'pipe'] });
-    const emit = (buf: Buffer) => {
-      for (const line of buf.toString().split('\n')) if (line.trim()) log(line.trimEnd());
-    };
-    child.stdout.on('data', emit);
-    child.stderr.on('data', emit);
-    child.on('error', reject);
-    child.on('close', (code) =>
-      code === 0 ? resolve() : reject(new Error(`aws login thoát với mã ${code}`)),
-    );
-  });
+  return { kind: 'legacy', args: ['login'] };
 }
 
-/** First `aws` on PATH or in the usual places that actually knows `login`. */
-async function awsLoginBinary(): Promise<string | undefined> {
+export async function awsLogin(region: string, log: FarmLog): Promise<void> {
+  const cfgPath = path.join(os.homedir(), '.aws', 'config');
+  const config = await readFile(cfgPath, 'utf8').catch(() => '');
+  const { kind, args } = loginCommand(config, process.env.AWS_PROFILE);
+
+  const bin = await awsLoginBinary(args);
+  if (!bin) {
+    throw new Error(
+      `Không tìm thấy bản AWS CLI nào hỗ trợ \`aws ${args.join(' ')}\`. ` +
+        'Cần AWS CLI v2 đủ mới.',
+    );
+  }
+
+  // credential_process conflicts with `aws login`, and only with it: the SSO
+  // flow reads the profile rather than resolving credentials through it.
+  let originalCfg: string | null = null;
+  const CRED_PROC_RE = /^credential_process\s*=.*$/m;
+  if (kind === 'legacy' && CRED_PROC_RE.test(config)) {
+    originalCfg = config;
+    await writeFile(cfgPath, config.replace(CRED_PROC_RE, '').replace(/\n{3,}/g, '\n\n'), 'utf8')
+      .catch(() => { originalCfg = null; });
+  }
+
+  const full = kind === 'sso' ? args : [...args, '--region', region];
+  log(`Mở trình duyệt để xác nhận đăng nhập AWS (aws ${full.join(' ')})…`);
+  try {
+    await new Promise<void>((resolve, reject) => {
+      const child = spawn(bin, full, { stdio: ['ignore', 'pipe', 'pipe'] });
+      const emit = (buf: Buffer) => {
+        for (const line of buf.toString().split('\n')) if (line.trim()) log(line.trimEnd());
+      };
+      child.stdout.on('data', emit);
+      child.stderr.on('data', emit);
+      child.on('error', reject);
+      child.on('close', (code) =>
+        code === 0 ? resolve() : reject(new Error(`aws ${full.join(' ')} thoát với mã ${code}`)),
+      );
+    });
+  } finally {
+    // Restore credential_process so the SDK keeps auto-refreshing.
+    if (originalCfg !== null) {
+      await writeFile(cfgPath, originalCfg, 'utf8').catch(() => {});
+    }
+  }
+}
+
+/**
+ * The first AWS CLI on this machine that understands the sign-in we intend to run.
+ *
+ * Defaults to probing `login`, which is what the other callers mean by the
+ * question they are really asking: is there a recent enough CLI here at all.
+ */
+async function awsLoginBinary(args: string[] = ['login']): Promise<string | undefined> {
   const candidates = [
     process.env.TESTPILOT_AWS_CLI,
     `${process.env.HOME ?? ''}/.local/bin/aws`,
@@ -219,7 +282,7 @@ async function awsLoginBinary(): Promise<string | undefined> {
 
   for (const bin of candidates) {
     const ok = await new Promise<boolean>((resolve) => {
-      const child = spawn(bin, ['login', 'help'], { stdio: 'ignore' });
+      const child = spawn(bin, [...args.filter((a) => !a.startsWith('--')), 'help'], { stdio: 'ignore' });
       child.on('error', () => resolve(false));
       child.on('close', (code) => resolve(code === 0));
     });
@@ -228,12 +291,52 @@ async function awsLoginBinary(): Promise<string | undefined> {
   return undefined;
 }
 
+/**
+ * Build a DeviceFarmClient that auto-refreshes short-lived credentials.
+ *
+ * When the machine uses `aws login` (IAM Identity Center developer tokens),
+ * STS credentials expire in ~15 min but a refresh token keeps the session
+ * alive for up to 90 days. `fromProcess` calls `aws configure export-credentials`
+ * on every SDK request when the current token has expired, transparently
+ * refreshing without any browser prompt. Falls back to the SDK default chain
+ * (env vars, ~/.aws/credentials, IAM role…) on machines that don't have the CLI.
+ */
+async function makeClient(region: string): Promise<DeviceFarmClient> {
+  const bin = await awsLoginBinary();
+  if (bin) {
+    return new DeviceFarmClient({ region, credentials: exportCredentials(bin) });
+  }
+  return new DeviceFarmClient({ region });
+}
+
+/** Credential provider that calls `aws configure export-credentials`. */
+function exportCredentials(bin: string) {
+  return async () => {
+    const raw = await new Promise<string>((resolve, reject) => {
+      let out = '';
+      const child = spawn(bin, ['configure', 'export-credentials'], { stdio: ['ignore', 'pipe', 'ignore'] });
+      child.stdout.on('data', (buf: Buffer) => { out += buf.toString(); });
+      child.on('error', reject);
+      child.on('close', (code) =>
+        code === 0 ? resolve(out) : reject(new Error(`aws configure export-credentials exit ${code}`)),
+      );
+    });
+    const c = JSON.parse(raw) as { AccessKeyId: string; SecretAccessKey: string; SessionToken?: string; Expiration?: string };
+    return {
+      accessKeyId: c.AccessKeyId,
+      secretAccessKey: c.SecretAccessKey,
+      ...(c.SessionToken ? { sessionToken: c.SessionToken } : {}),
+      ...(c.Expiration ? { expiration: new Date(c.Expiration) } : {}),
+    };
+  };
+}
+
 /* ------------------------------------------------------------------ */
 /* Discovery — what the UI's pickers are filled from                    */
 /* ------------------------------------------------------------------ */
 
 export async function listProjects(region: string) {
-  const client = new DeviceFarmClient({ region });
+  const client = await makeClient(region);
   const out: Array<{ arn: string; name: string }> = [];
   let nextToken: string | undefined;
   do {
@@ -245,8 +348,33 @@ export async function listProjects(region: string) {
 }
 
 export async function listDevicePools(region: string, projectArn: string) {
-  const client = new DeviceFarmClient({ region });
-  const out: Array<{ arn: string; name: string; type: string; description: string }> = [];
+  const client = await makeClient(region);
+  const out: Array<{
+    arn: string; name: string; type: string; description: string;
+    /** Platforms the pool can actually run, empty when it could not be told. */
+    platforms: string[];
+  }> = [];
+
+  // One lookup for the whole account, reused for every pool below. A pool lists
+  // its members as rules, not as devices, so the platform of a pool is only
+  // knowable by resolving those device ARNs against this table.
+  const platformOf = new Map<string, string>();
+  try {
+    let deviceToken: string | undefined;
+    do {
+      const page = await client.send(
+        new ListDevicesCommand({ arn: projectArn, ...(deviceToken ? { nextToken: deviceToken } : {}) }),
+      );
+      for (const d of page.devices ?? []) {
+        if (d.arn && d.platform) platformOf.set(d.arn, d.platform === 'IOS' ? 'ios' : 'android');
+      }
+      deviceToken = page.nextToken;
+    } while (deviceToken);
+  } catch {
+    // Leaves every pool with no platform, which the caller reads as "unknown"
+    // and shows regardless. Losing the filter is better than hiding a pool.
+  }
+
   let nextToken: string | undefined;
   do {
     const page = await client.send(
@@ -254,7 +382,13 @@ export async function listDevicePools(region: string, projectArn: string) {
     );
     for (const p of page.devicePools ?? []) {
       if (p.arn && p.name) {
-        out.push({ arn: p.arn, name: p.name, type: p.type ?? '', description: p.description ?? '' });
+        out.push({
+          arn: p.arn,
+          name: p.name,
+          type: p.type ?? '',
+          description: p.description ?? '',
+          platforms: poolPlatforms(p.rules ?? [], platformOf),
+        });
       }
     }
     nextToken = page.nextToken;
@@ -263,12 +397,110 @@ export async function listDevicePools(region: string, projectArn: string) {
 }
 
 /**
+ * Which platforms a pool can run, read from its rules.
+ *
+ * Two rule shapes matter. A pool built from hand-picked devices lists their
+ * ARNs, so its platforms are those devices' platforms. A curated pool selects
+ * by attribute instead, and `PLATFORM` says so directly.
+ *
+ * Anything else returns empty, meaning "could not tell" — and an unknown pool
+ * is shown rather than hidden. A filter that quietly removes the pool someone
+ * needs is worse than one that occasionally offers an extra.
+ */
+function poolPlatforms(
+  rules: Array<{ attribute?: string; operator?: string; value?: string }>,
+  platformOf: Map<string, string>,
+): string[] {
+  const found = new Set<string>();
+  for (const rule of rules) {
+    let values: string[] = [];
+    try {
+      const parsed: unknown = JSON.parse(rule.value ?? '""');
+      values = Array.isArray(parsed) ? parsed.map(String) : [String(parsed)];
+    } catch {
+      values = rule.value ? [rule.value] : [];
+    }
+    if (rule.attribute === 'ARN') {
+      for (const arn of values) {
+        const platform = platformOf.get(arn);
+        if (platform) found.add(platform);
+      }
+    } else if (rule.attribute === 'PLATFORM') {
+      for (const v of values) found.add(v.toUpperCase() === 'IOS' ? 'ios' : 'android');
+    }
+  }
+  return [...found];
+}
+
+/**
  * Every device Device Farm offers for one platform. This is a long list (many
  * hundreds), so the caller filters it; returning it whole keeps the filtering
  * in the browser where it is instant.
  */
+/**
+ * Refuses to schedule a run no device in the pool can execute.
+ *
+ * Device Farm accepts the run either way and answers minutes later with
+ * `result=SKIPPED` and an empty counter block — which reads like a suite that
+ * ran and found nothing, not like a pool holding four Android phones and an
+ * .ipa. The mismatch is knowable before anything is scheduled, and AWS exposes
+ * exactly that question, so it is asked here where the answer still costs
+ * nothing.
+ *
+ * A partially compatible pool is allowed through: the run has devices to
+ * execute on, and the ones left out are named rather than silently dropped.
+ */
+async function assertPoolCanRun(
+  client: DeviceFarmClient,
+  cfg: FarmConfig,
+  appArn: string,
+  testArn: string,
+  specArn: string,
+  log: (line: string) => void,
+): Promise<void> {
+  let result;
+  try {
+    // Both fields, redundant as that looks. `testType` alone is refused —
+    // APPIUM_NODE only runs in custom environment mode, which is defined by the
+    // testspec — and `test` alone is refused too, with "testType are required".
+    // Sending both is the combination Device Farm actually accepts.
+    result = await client.send(new GetDevicePoolCompatibilityCommand({
+      devicePoolArn: cfg.devicePoolArn,
+      appArn,
+      testType: 'APPIUM_NODE',
+      test: { type: 'APPIUM_NODE', testPackageArn: testArn, testSpecArn: specArn },
+    }));
+  } catch (err) {
+    // A failed probe must not block a run that might have worked. Say so and
+    // let Device Farm be the judge, as it was before this check existed.
+    log(`Không kiểm tra được độ tương thích của pool (${(err as Error).message}) — vẫn gửi run.`);
+    return;
+  }
+
+  const ok = result.compatibleDevices ?? [];
+  const bad = result.incompatibleDevices ?? [];
+  if (ok.length > 0) {
+    if (bad.length > 0) {
+      log(`Pool có ${ok.length} máy chạy được, ${bad.length} máy bị bỏ qua: ` +
+        bad.map((d) => d.device?.name ?? '?').join(', '));
+    }
+    return;
+  }
+
+  const why = bad.slice(0, 4).map((d) => {
+    const reason = d.incompatibilityMessages?.[0]?.message ?? 'không rõ lý do';
+    return `  - ${d.device?.name ?? '?'}: ${reason}`;
+  });
+  throw new Error(
+    `Không máy nào trong device pool chạy được ${cfg.platform === 'android' ? 'APK' : 'IPA'} này ` +
+    `(${bad.length} máy đều không tương thích):\n${why.join('\n')}\n` +
+    'Chọn pool khác ở ô "Device pool", hoặc tích thiết bị rồi đặt tên và bấm ' +
+    '"Tạo pool từ thiết bị đã chọn" — tích thôi chưa tạo ra pool.',
+  );
+}
+
 export async function listDevices(region: string, platform: 'android' | 'ios'): Promise<FarmDevice[]> {
-  const client = new DeviceFarmClient({ region });
+  const client = await makeClient(region);
   const want = platform === 'android' ? 'ANDROID' : 'IOS';
   const out: FarmDevice[] = [];
   let nextToken: string | undefined;
@@ -304,7 +536,7 @@ export async function listDevices(region: string, platform: 'android' | 'ios'): 
  * caller having to copy an ARN out of a terminal that may already be gone.
  */
 export async function listRuns(region: string, projectArn: string) {
-  const client = new DeviceFarmClient({ region });
+  const client = await makeClient(region);
   const page = await client.send(new ListRunsCommand({ arn: projectArn }));
   return (page.runs ?? [])
     .filter((r): r is typeof r & { arn: string } => Boolean(r.arn))
@@ -330,7 +562,7 @@ export async function createDevicePool(
   deviceArns: string[],
 ): Promise<{ arn: string; name: string }> {
   if (deviceArns.length === 0) throw new Error('Chọn ít nhất một device trước khi tạo pool.');
-  const client = new DeviceFarmClient({ region });
+  const client = await makeClient(region);
   const created = await client.send(
     new CreateDevicePoolCommand({
       projectArn,
@@ -390,7 +622,7 @@ export async function scheduleFarmRun(
     );
   }
 
-  const client = new DeviceFarmClient({ region: cfg.region });
+  const client = await makeClient(cfg.region);
   const specPath = await renderTestSpec(cfg.testSpecPath, cfg.env ?? {});
 
   stage(1);
@@ -410,6 +642,8 @@ export async function scheduleFarmRun(
   );
   log('Upload testspec…');
   const specArn = await upload(client, cfg.projectArn, specPath, 'APPIUM_NODE_TEST_SPEC');
+
+  await assertPoolCanRun(client, cfg, appArn, testArn, specArn, log);
 
   const scheduled = await client.send(
     new ScheduleRunCommand({
@@ -450,7 +684,7 @@ export async function collectFarmRun(
 ): Promise<FarmRunResult> {
   const log = ev.log;
   const stage = ev.stage ?? (() => {});
-  const client = new DeviceFarmClient({ region: cfg.region });
+  const client = await makeClient(cfg.region);
 
   stage(2);
   const run = await waitForRun(client, runArn, cfg.timeoutMs ?? 60 * 60_000, log);
@@ -462,14 +696,27 @@ export async function collectFarmRun(
   const artifacts = await listArtifacts(client, runArn);
   log(`${jobs.length} thiết bị, ${artifacts.length} artifact.`);
 
+  const runDirs: string[] = [];
   if (cfg.runsDir) {
     for (const job of jobs) {
       const jobArtifacts = await listArtifacts(client, job.arn);
-      const runDir = await pullReport(jobArtifacts, cfg.runsDir, job, cfg.flakeDb, log);
+      let runDir = await pullReport(
+        jobArtifacts,
+        cfg.runsDir,
+        job,
+        cfg.flakeDb,
+        cfg.healingDb,
+        log,
+      );
       if (!runDir) {
         log(`${job.deviceName}: không tìm thấy report — kiểm tra phase post_test của testspec.`);
-        continue;
+        // No full report, but still create a minimal directory so the video
+        // can be pulled and shown in the UI — the recording is often the only
+        // evidence of what went wrong before the runner died.
+        runDir = await createFallbackRunDir(cfg.runsDir, cfg.platform, job, runArn, log);
       }
+      if (!runDir) continue;
+      runDirs.push(runDir);
       // The device's screen recording is a Device Farm artifact, not something
       // the runner produced, so it is not in the bundle and the report
       // generated on the device cannot reference it. Fetch it into the same run
@@ -497,6 +744,7 @@ export async function collectFarmRun(
       warned: run.counters?.warned,
     },
     artifacts,
+    runDirs,
   };
 }
 
@@ -677,17 +925,10 @@ export async function listJobs(client: DeviceFarmClient, runArn: string): Promis
   return out;
 }
 
-/** `Google Pixel 7` -> `google-pixel-7`, for a directory name. */
-export function deviceSlug(name: string): string {
-  return (
-    name
-      .normalize('NFD')
-      .replace(/[\u0300-\u036f]/g, '')
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, '-')
-      .replace(/^-|-$/g, '') || 'device'
-  );
-}
+// Naming a run directory after its device is a runstore concern, not a farm
+// one: a parallel local run needs the identical rule. Re-exported so the
+// existing importers keep their import path.
+export { deviceSlug };
 
 async function listArtifacts(client: DeviceFarmClient, arn: string) {
   const out: FarmRunResult['artifacts'] = [];
@@ -723,6 +964,7 @@ async function pullReport(
   runsDir: string,
   job: FarmJob,
   flakeDb: string | undefined,
+  healingDb: string | undefined,
   log: FarmLog,
 ): Promise<string | undefined> {
   const bundle = artifacts.find((a) => a.type === 'CUSTOMER_ARTIFACT');
@@ -766,12 +1008,23 @@ async function pullReport(
     // nothing here. Bring the images across and repoint the links, otherwise
     // every piece of failure evidence in a farm report is a broken image.
     const moved = await recoverArtifacts(tmp, path.join(localRunDir, 'artifacts'), localRunDir);
+    if (await recoverNetworkLog(tmp, path.join(localRunDir, 'artifacts'))) {
+      log(`${job.deviceName}: kèm network.log`);
+    }
     const merged = flakeDb
       ? await mergeFlakeDb(tmp, flakeDb, job, await runnerDeviceLabel(localRunDir), log)
       : 0;
+    let healingEvents = 0;
+    if (healingDb) {
+      const healing = await HealingStore.load(healingDb);
+      healingEvents = await healing.backfill(runsDir);
+      await healing.save();
+    }
     log(
       `${job.deviceName} → ${localRunDir}` +
-        `${moved ? ` (+${moved} ảnh)` : ''}${merged ? ` (+${merged} mục flaky)` : ''}`,
+        `${moved ? ` (+${moved} ảnh)` : ''}` +
+        `${merged ? ` (+${merged} mục flaky)` : ''}` +
+        `${healingEvents ? ` (+${healingEvents} healing event)` : ''}`,
     );
     return localRunDir;
   } catch (err) {
@@ -872,6 +1125,28 @@ async function mergeFlakeDb(
  * but the filenames the runner generated are unique per scenario and attempt.
  * Returns how many images were recovered.
  */
+/**
+ * Brings the network log across from the artifact bundle.
+ *
+ * It is written to $DEVICEFARM_LOG_DIR, which is beside the run directory
+ * rather than inside it, so the plain directory copy in pullReport() misses it
+ * — the log that finally explained a week of farm failures had to be fished
+ * out of the zip by hand. Copied by exact name rather than by extension: the
+ * bundle also holds appium.log and logcat, which are large and are already
+ * available as their own artifacts.
+ */
+export async function recoverNetworkLog(
+  bundleRoot: string,
+  artifactsDir: string,
+): Promise<boolean> {
+  const found = await findFiles(bundleRoot, /(^|\/)network\.log$/);
+  const src = found[0];
+  if (!src) return false;
+  await mkdir(artifactsDir, { recursive: true });
+  await run('cp', [src, path.join(artifactsDir, 'network.log')]);
+  return true;
+}
+
 export async function recoverArtifacts(
   bundleRoot: string,
   artifactsDir: string,
@@ -973,6 +1248,42 @@ function sleep(ms: number): Promise<void> {
  * existed — has no way to know about it. Without this, a passing device run
  * leaves no evidence at all.
  */
+/**
+ * Creates a minimal run directory when the customer artifact had no report.
+ * The directory gets a meta.json so the UI can show it, and the caller will
+ * pull the Device Farm video into it immediately after.
+ */
+async function createFallbackRunDir(
+  runsDir: string,
+  platform: string,
+  job: FarmJob,
+  runArn: string,
+  log: FarmLog,
+): Promise<string | undefined> {
+  try {
+    const now = new Date().toISOString();
+    const dirName = runDirName(now, platform, undefined, job.deviceName);
+    const dir = path.join(runsDir, dirName);
+    await mkdir(dir, { recursive: true });
+    const meta: RunMeta = {
+      id: dirName,
+      platform,
+      kind: 'farm',
+      device: job.deviceName + (job.os ? ` (Android ${job.os})` : ''),
+      status: job.result === 'PASSED' ? 'passed' : 'failed',
+      startedAt: now,
+      finishedAt: now,
+      farmRunArn: runArn,
+    };
+    await writeRunMeta(dir, meta);
+    log(`${job.deviceName}: tạo thư mục fallback để lưu video → ${dir}`);
+    return dir;
+  } catch (err) {
+    log(`${job.deviceName}: không tạo được fallback dir: ${(err as Error).message}`);
+    return undefined;
+  }
+}
+
 async function pullFarmVideos(
   artifacts: FarmRunResult['artifacts'],
   runDir: string,

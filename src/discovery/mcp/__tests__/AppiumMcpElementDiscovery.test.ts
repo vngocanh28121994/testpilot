@@ -261,6 +261,25 @@ describe('AppiumMcpElementDiscovery — TEST H: findElement() is disabled', () =
 // ── TEST I: real Android XML → UiObservation via NativeObservationAdapter ────
 
 describe('AppiumMcpElementDiscovery — TEST I: real XML → UiObservation', () => {
+  it('preserves Playwright placeholder and css evidence through the MCP bridge', async () => {
+    const { client } = makeClientSpy({
+      inspect: async () => ({
+        platform: 'web',
+        elements: [{
+          type: 'combobox',
+          placeholder: 'Mã cổ phiếu',
+          css: 'input[placeholder="Mã cổ phiếu"]',
+          visible: true,
+          enabled: true,
+          interactable: true,
+        }],
+      }),
+    });
+    const result = await new AppiumMcpElementDiscovery(client).inspect();
+    assert.equal(result.elements[0]?.placeholder, 'Mã cổ phiếu');
+    assert.equal(result.elements[0]?.css, 'input[placeholder="Mã cổ phiếu"]');
+  });
+
   it('inspect() converts Android XML to UiObservation with correct platform', async () => {
     const { client } = makeClientSpy();
     const discovery = new AppiumMcpElementDiscovery(client);

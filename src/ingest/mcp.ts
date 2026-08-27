@@ -69,8 +69,18 @@ export class McpBridge {
     if ((res as { isError?: boolean }).isError) {
       throw new Error(`MCP tool "${tool}" failed: ${asText((res as { content?: unknown }).content)}`);
     }
-    return (res as { structuredContent?: unknown; content?: unknown }).structuredContent
-      ?? (res as { content?: unknown }).content;
+    const structured = (res as { structuredContent?: unknown }).structuredContent;
+    const content = (res as { content?: unknown }).content;
+    // Some design/document MCP servers put the node tree in structuredContent
+    // and screenshots in image content blocks. Returning only the former made
+    // every screenshot disappear before ingestion could inspect it.
+    if (structured !== undefined && content !== undefined) {
+      if (structured && typeof structured === 'object' && !Array.isArray(structured)) {
+        return { ...(structured as Record<string, unknown>), _mcpContent: content };
+      }
+      return { structuredContent: structured, content };
+    }
+    return structured ?? content;
   };
 
   async close(): Promise<void> {
@@ -85,6 +95,8 @@ export class McpBridge {
 export function guessToolNames(tools: McpToolInfo[]): {
   confluencePage?: string;
   figmaFile?: string;
+  confluenceAttachments?: string;
+  figmaImage?: string;
 } {
   const score = (t: McpToolInfo, words: string[]): number => {
     const hay = `${t.name} ${t.description}`.toLowerCase();
@@ -97,8 +109,37 @@ export function guessToolNames(tools: McpToolInfo[]): {
       .sort((a, b) => b.s - a.s);
     return ranked[0]?.t.name;
   };
+  /**
+   * Ranked by description, but gated on the tool's own name.
+   *
+   * Matching the gate against the description too is what proposed
+   * `searchConfluenceUsingCql` as an attachment reader: its blurb lists the
+   * content types CQL can search over, "attachments" among them. A tool that
+   * returns images says so in its name; a tool that merely mentions the word is
+   * a search endpoint, and wiring it here spends a call per workflow to get
+   * back no image at all.
+   */
+  const bestNamed = (words: string[], required: string[]): string | undefined => {
+    const ranked = tools
+      .map((t) => ({ t, name: t.name.toLowerCase(), s: score(t, words) }))
+      .filter((r) => required.some((word) => r.name.includes(word)))
+      .sort((a, b) => b.s - a.s);
+    return ranked[0]?.t.name;
+  };
+  const confluencePage = best(['confluence', 'page', 'get']);
+  const figmaFile = bestNamed(['figma', 'file', 'data'], ['figma', 'design']);
+  const confluenceAttachments = bestNamed(
+    ['confluence', 'attachment', 'image'],
+    ['attachment', 'media', 'download'],
+  );
+  const figmaImage = bestNamed(
+    ['figma', 'screenshot', 'render', 'image'],
+    ['screenshot', 'render', 'image', 'thumbnail'],
+  );
   return {
-    ...(best(['confluence', 'page', 'get']) ? { confluencePage: best(['confluence', 'page', 'get'])! } : {}),
-    ...(best(['figma', 'file', 'data']) ? { figmaFile: best(['figma', 'file', 'data'])! } : {}),
+    ...(confluencePage ? { confluencePage } : {}),
+    ...(figmaFile ? { figmaFile } : {}),
+    ...(confluenceAttachments ? { confluenceAttachments } : {}),
+    ...(figmaImage ? { figmaImage } : {}),
   };
 }

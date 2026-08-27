@@ -32,6 +32,8 @@ export const TestPilotErrorCode = {
   // ── session / context ──────────────────────────────────────────────────────
   RUNTIME_SESSION_MISMATCH: 'RUNTIME_SESSION_MISMATCH',
   RUNTIME_CONTEXT_MISMATCH: 'RUNTIME_CONTEXT_MISMATCH',
+  /** The driver has a session, but no application surface has been opened yet. */
+  RUNTIME_APP_NOT_LAUNCHED: 'RUNTIME_APP_NOT_LAUNCHED',
 
   // ── safety ─────────────────────────────────────────────────────────────────
   ACTION_NOT_SAFE: 'ACTION_NOT_SAFE',

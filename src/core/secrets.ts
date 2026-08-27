@@ -13,11 +13,35 @@ import path from 'node:path';
  */
 
 export const SECRETS_FILE = '.testpilot.secrets.json';
+export const MODEL_KEY_NAMES = [
+  'DEEPSEEK_API_KEY',
+  'GEMINI_API_KEY',
+  'ANTHROPIC_API_KEY',
+] as const;
+
+/**
+ * Credentials for reading source documents, as opposed to calling a model.
+ *
+ * Confluence attachments are private and the MCP OAuth grant carries no
+ * attachment scope, so images on a spec page need a Confluence API token of
+ * their own. Stored alongside the model keys because the handling is identical:
+ * kept locally, adopted into the process, never returned or logged.
+ */
+export const INGEST_KEY_NAMES = [
+  'CONFLUENCE_EMAIL',
+  'CONFLUENCE_API_TOKEN',
+] as const;
 
 interface SecretsFile {
   version: 1;
   /** account label -> password */
   accounts: Record<string, string>;
+  /**
+   * Vendor api keys, so a model key does not have to be exported by hand on
+   * every shell that starts the server. Same rules as a password: never
+   * committed, never logged, never returned to the browser.
+   */
+  apiKeys?: Record<string, string>;
 }
 
 const EMPTY: SecretsFile = { version: 1, accounts: {} };
@@ -33,7 +57,11 @@ export class Secrets {
     if (!existsSync(abs)) return new Secrets(abs, { ...EMPTY, accounts: {} });
     try {
       const parsed = JSON.parse(await readFile(abs, 'utf8')) as Partial<SecretsFile>;
-      return new Secrets(abs, { version: 1, accounts: parsed.accounts ?? {} });
+      return new Secrets(abs, {
+        version: 1,
+        accounts: parsed.accounts ?? {},
+        ...(parsed.apiKeys ? { apiKeys: parsed.apiKeys } : {}),
+      });
     } catch {
       // A corrupt secrets file must not take the whole UI down; treat it as empty.
       return new Secrets(abs, { ...EMPTY, accounts: {} });
@@ -50,6 +78,14 @@ export class Secrets {
 
   set(label: string, password: string): void {
     this.data.accounts[label] = password;
+  }
+
+  apiKey(name: string): string | undefined {
+    return this.data.apiKeys?.[name];
+  }
+
+  setApiKey(name: string, key: string): void {
+    this.data.apiKeys = { ...this.data.apiKeys, [name]: key };
   }
 
   /** Drops every stored password whose account no longer exists in the config. */
@@ -72,6 +108,20 @@ export class Secrets {
 }
 
 /**
+ * Load locally stored model keys into this process without returning or logging
+ * their values. An explicitly exported environment variable always wins.
+ * Shared by UI, generator CLI and runtime semantic discovery so provider
+ * selection cannot depend on how the user started Horus.
+ */
+export async function adoptStoredApiKeys(file = SECRETS_FILE): Promise<void> {
+  const secrets = await Secrets.load(file);
+  for (const name of [...MODEL_KEY_NAMES, ...INGEST_KEY_NAMES]) {
+    const stored = secrets.apiKey(name);
+    if (stored && !process.env[name]) process.env[name] = stored;
+  }
+}
+
+/**
  * The substitution table handed to the executor. Gherkin refers to credentials
  * as `{{account.maker.username}}`, never as a literal — so a .feature file stays
  * safe to commit and the same suite can run against any environment.
@@ -79,18 +129,40 @@ export class Secrets {
 export function accountVariables(
   accounts: Array<{ label: string; username: string }>,
   secrets: Secrets,
+  alias: Record<string, string> = {},
 ): Record<string, string> {
   const vars: Record<string, string> = {};
-  for (const a of accounts) {
-    const key = a.label.trim().toLowerCase();
-    if (!key) continue;
+  const put = (key: string, a: { label: string; username: string }): void => {
     vars[`account.${key}.username`] = a.username;
 
     // The secrets file is deliberately not shipped to a device farm, so on a
     // farm run the password arrives through the environment instead. Local
     // file first: it is the copy a developer just edited.
     const pw = secrets.get(a.label) ?? process.env[secretEnvName(a.label)];
+    // Assigned or removed, never left behind. A role re-points an existing key
+    // at a different account, so a password merely *not overwritten* is the
+    // previous account's password sitting under the new account's username —
+    // a SIT login attempted with the prod password, and a guard downstream
+    // that sees a value and concludes all is well.
     if (pw !== undefined) vars[`account.${key}.password`] = pw;
+    else delete vars[`account.${key}.password`];
+  };
+
+  for (const a of accounts) {
+    const key = a.label.trim().toLowerCase();
+    if (!key) continue;
+    put(key, a);
+  }
+
+  // Roles last, so `{{account.tcbs.*}}` means the environment's account even
+  // when a label of that name also exists. Without this precedence a config
+  // whose prod label *is* `tcbs` would quietly keep resolving to prod on a SIT
+  // run — the exact silent-wrong-environment failure the roles exist to stop.
+  for (const [role, label] of Object.entries(alias)) {
+    const key = role.trim().toLowerCase();
+    const target = accounts.find((a) => a.label.trim().toLowerCase() === label.trim().toLowerCase());
+    if (!key || !target) continue;
+    put(key, target);
   }
   return vars;
 }

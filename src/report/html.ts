@@ -1,6 +1,7 @@
 import { existsSync } from 'node:fs';
 import { mkdir, readdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
+import { chaptersOf, isWholeRunRecording, testWindowSeconds, type Chapter } from './videoIndex.js';
 import type { RunReport, ScenarioResult } from '../core/types.js';
 import type { FlakeVerdict } from '../flaky/detector.js';
 
@@ -40,7 +41,7 @@ export async function appendDeviceVideos(runDir: string): Promise<number> {
   const indexFile = path.join(runDir, 'index.html');
   if (!existsSync(dir) || !existsSync(indexFile)) return 0;
 
-  const files = (await readdir(dir)).filter((f) => /^devicefarm-.*\.mp4$/i.test(f)).sort();
+  const files = (await readdir(dir)).filter(isWholeRunRecording).sort();
   if (files.length === 0) return 0;
 
   let html = await readFile(indexFile, 'utf8');
@@ -116,6 +117,12 @@ function render(report: RunReport, verdicts: FlakeVerdict[], outDir: string): st
   .wrap { overflow-x:auto; }
   .tag { font-size:.75rem; padding:.1rem .45rem; border-radius:999px; border:1px solid var(--line); }
   .v-passed{color:var(--pass)} .v-failed{color:var(--fail)} .v-flaky{color:var(--flake)}
+  /* A healed step succeeded, so it is not red — but it leaned on a spare
+     locator, which is worth noticing rather than reading as a plain pass. */
+  .v-healed{color:var(--flake)}
+  /* Not a failure, so not red — but it must not read as a clean pass either,
+     which is exactly what an uncoloured cell would do. */
+  .v-unverified{color:#d19a66}
   details { border:1px solid var(--line); border-radius:8px; padding:.6rem .8rem; margin:.4rem 0; background:var(--card); }
   summary { cursor:pointer; }
   code { font:13px/1.4 ui-monospace,SFMono-Regular,Menlo,monospace; }
@@ -180,9 +187,64 @@ ${failures(report.results, outDir)}
 <h2>Bản ghi màn hình</h2>
 ${recordings(report.results, outDir)}
 
-<h2>Locator healing — proposed fixes</h2>
+<h2>Locator healing — this run</h2>
 ${heals(report)}
+
+<h2>Bước không chứng minh được kết quả</h2>
+${unverified(report)}
+
+<h2>Câu hỏi lượt chạy chưa tự quyết được</h2>
+${openQuestions(report)}
 </main></body></html>`;
+}
+
+/**
+ * Decisions the run deferred instead of guessing.
+ *
+ * Shown, not asked. A workflow that pauses on every uncertainty becomes an
+ * obstruction, and three days of real runs produced no question worth stopping
+ * for — so these accumulate here until there is evidence that a blocking gate
+ * would earn its keep.
+ */
+function openQuestions(report: RunReport): string {
+  const questions = report.openQuestions ?? [];
+  if (questions.length === 0) {
+    return '<p class="empty">Lượt chạy này không có điểm nào phải hỏi.</p>';
+  }
+  return questions.map((q) => `<div class="wrap">
+  <p><strong>${esc(q.prompt)}</strong></p>
+  ${q.scenario ? `<p class="dim">${esc(q.scenario)}${q.line ? ` · dòng ${q.line}` : ''}</p>` : ''}
+  ${q.reason ? `<p>${esc(q.reason)}</p>` : ''}
+  ${q.options?.length ? `<ul>${q.options.map((o) => `<li>${esc(o)}</li>`).join('')}</ul>` : ''}
+</div>`).join('\n');
+}
+
+/**
+ * Steps that ran clean but proved nothing.
+ *
+ * These never reach the failures table — the run is green — so without a
+ * section of their own they exist only in report.json. A tap whose outcome is
+ * unobservable is how a click that did nothing stayed green for a whole day.
+ */
+function unverified(report: RunReport): string {
+  const rows = report.results.flatMap((r) =>
+    (r.runs.at(-1)?.steps ?? [])
+      .filter((step) => step.status === 'unverified')
+      .map((step) => ({ scenario: r.scenario.name, step })));
+  if (rows.length === 0) {
+    return '<p class="empty">Mọi hành động trong lượt chạy này đều có bằng chứng thay đổi.</p>';
+  }
+  return `<div class="wrap"><table>
+<thead><tr><th>Scenario</th><th>Bước</th><th>Dòng</th></tr></thead>
+<tbody>
+${rows
+  .map(({ scenario, step }) => `<tr>
+  <td>${esc(scenario)}</td>
+  <td class="v-unverified">${esc(step.step.text)}</td>
+  <td>${step.step.line}</td>
+</tr>`)
+  .join('\n')}
+</tbody></table></div>`;
 }
 
 function row(r: ScenarioResult, v?: FlakeVerdict): string {
@@ -236,6 +298,16 @@ function failures(results: ScenarioResult[], outDir: string): string {
       const last = r.runs[r.runs.length - 1];
       const step = last?.steps.find((s) => s.status === 'failed');
       const shot = step?.screenshot ? assetHref(outDir, step.screenshot) : '';
+      // Screenshots the scenario asked for on its way to failing. They are the
+      // steps someone wrote precisely because that moment was worth seeing, and
+      // showing them beside the failure shot is the difference between "it
+      // broke here" and "here is what it looked like getting there".
+      const staged = (last?.steps ?? [])
+        .filter((st) => st.status !== 'failed' && st.screenshot)
+        .map((st) => ({
+          href: assetHref(outDir, st.screenshot!),
+          label: st.step.text.replace(/^I take a screenshot named "(.*)"$/i, '$1'),
+        }));
       const where = manyDevices ? `<span class="where">${esc(r.platform)}/${esc(r.device)}</span>` : '';
       // Only the first is expanded: a run with ten failures should open as a
       // list you can scan, not as ten screenshots you have to scroll past.
@@ -244,7 +316,8 @@ function failures(results: ScenarioResult[], outDir: string): string {
   ${step ? `<p><code>${esc(step.step.keyword)} ${esc(step.step.text)}</code> — line ${step.step.line}</p>
   <pre>${esc(step.error?.message ?? '')}</pre>` : '<p class="empty">No failing step recorded.</p>'}
   <div class="media">
-    ${shot ? `<figure class="shot"><figcaption>Screenshot — bấm để xem cỡ thật</figcaption><a href="${esc(shot)}" target="_blank"><img src="${esc(shot)}" loading="lazy" alt="Screenshot at failure"></a></figure>` : ''}
+    ${shot ? `<figure class="shot"><figcaption>Screenshot khi fail — bấm để xem cỡ thật</figcaption><a href="${esc(shot)}" target="_blank"><img src="${esc(shot)}" loading="lazy" alt="Screenshot at failure"></a></figure>` : ''}
+    ${staged.map((sh) => `<figure class="shot"><figcaption>${esc(sh.label)}</figcaption><a href="${esc(sh.href)}" target="_blank"><img src="${esc(sh.href)}" loading="lazy" alt="${esc(sh.label)}"></a></figure>`).join('\n    ')}
     ${videoFigures(r, outDir)}
   </div>
 </details>`;
@@ -309,59 +382,8 @@ function recordings(results: ScenarioResult[], outDir: string): string {
  * `runs[].startedAt` is the moment a scenario attempt actually began — after
  * the session exists — so it is the first frame worth looking at.
  */
-interface Chapter {
-  name: string;
-  status: string;
-  /** Seconds after the first scenario started. */
-  at: number;
-}
 
-/**
- * Where each scenario sits inside the device recording.
- *
- * A two-minute video of six scenarios with no markers is unreadable: you cannot
- * tell which case is running, and on this suite two thirds of the running time
- * is one scenario waiting out a timeout with the screen perfectly still. The
- * per-attempt start times are already in the report, so the recording can have
- * a table of contents instead of a scrubber and a guess.
- */
-async function chaptersOf(runDir: string): Promise<Chapter[]> {
-  const file = path.join(runDir, 'report.json');
-  if (!existsSync(file)) return [];
-  try {
-    const { report } = JSON.parse(await readFile(file, 'utf8')) as { report: RunReport };
-    const entries = report.results.flatMap((r) =>
-      r.runs.map((run) => ({
-        name: r.scenario.name,
-        status: run.status,
-        t: Date.parse(run.startedAt),
-      })),
-    );
-    const valid = entries.filter((e) => !Number.isNaN(e.t)).sort((a, b) => a.t - b.t);
-    const first = valid[0]?.t;
-    if (first === undefined) return [];
-    return valid.map((e) => ({ name: e.name, status: e.status, at: (e.t - first) / 1000 }));
-  } catch {
-    return [];
-  }
-}
 
-async function testWindowSeconds(runDir: string): Promise<number | undefined> {
-  const file = path.join(runDir, 'report.json');
-  if (!existsSync(file)) return undefined;
-  try {
-    const { report } = JSON.parse(await readFile(file, 'utf8')) as { report: RunReport };
-    const end = Date.parse(report.finishedAt);
-    const starts = report.results
-      .flatMap((r) => r.runs.map((run) => Date.parse(run.startedAt)))
-      .filter((t) => !Number.isNaN(t));
-    if (starts.length === 0 || Number.isNaN(end)) return undefined;
-    const first = Math.min(...starts);
-    return end <= first ? undefined : (end - first) / 1000;
-  } catch {
-    return undefined;
-  }
-}
 
 const DEVICE_SLOT = '<!--device-recordings-->';
 const SEEK_MARKER = 'data-device-seek';
@@ -420,21 +442,26 @@ for (const v of document.querySelectorAll('video[data-test-seconds]')) {
 const EMPTY_ATTR = 'data-recordings-empty';
 
 function heals(report: RunReport): string {
-  if (report.healSuggestions.length === 0) {
-    return '<p class="empty">No locator needed healing this run.</p>';
+  const events = report.results.flatMap((result) =>
+    result.runs.flatMap((run) => run.steps.flatMap((step) =>
+      step.heal ? [{ platform: result.platform, step }] : [],
+    )),
+  );
+  if (events.length === 0) {
+    return '<p class="empty">No locator healing event was recorded in this run.</p>';
   }
   return `<div class="wrap"><table>
-<thead><tr><th>Element</th><th>Platform</th><th>Current</th><th>Proposed</th><th>Heals</th><th>Why</th></tr></thead>
+<thead><tr><th>Step</th><th>Element</th><th>Platform</th><th>Primary failed</th><th>Recovered with</th><th>Result</th></tr></thead>
 <tbody>
-${report.healSuggestions
+${events
   .map(
-    (h) => `<tr>
-  <td><code>${esc(h.elementId)}</code></td>
-  <td>${esc(h.platform)}</td>
-  <td><code>${esc(h.current.strategy)}=${esc(h.current.value)}</code></td>
-  <td><code>${esc(h.proposed.strategy)}=${esc(h.proposed.value)}</code></td>
-  <td>${h.successes}</td>
-  <td>${esc(h.rationale)}</td>
+    ({ platform, step }) => `<tr>
+  <td>${esc(step.step.text)}</td>
+  <td><code>${esc(step.heal!.elementId)}</code></td>
+  <td>${esc(platform)}</td>
+  <td><code>${esc(step.heal!.from.strategy)}=${esc(step.heal!.from.value)}</code></td>
+  <td><code>${esc(step.heal!.to.strategy)}=${esc(step.heal!.to.value)}</code></td>
+  <td class="v-${step.status}">${esc(step.status)}</td>
 </tr>`,
   )
   .join('\n')}

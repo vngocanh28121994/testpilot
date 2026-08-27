@@ -38,6 +38,25 @@ const HIGH_RISK_KEYWORDS: readonly string[] = [
   'erase',
   'clear all',
   'reset',
+
+  // Vietnamese. The list above is the generic one; on a Vietnamese trading app
+  // it matches nothing at all — "Đặt lệnh" and "Chuyển tiền" contain none of
+  // those words, so the gate that exists to stop discovery from clicking a
+  // destructive control was open on exactly the controls that matter here.
+  //
+  // Written without diacritics as well, because element text arrives normalised
+  // in some paths and raw in others.
+  'đặt lệnh', 'dat lenh',
+  'xác nhận', 'xac nhan',
+  'chuyển tiền', 'chuyen tien',
+  'nộp tiền', 'nop tien',
+  'rút tiền', 'rut tien',
+  'ứng tiền', 'ung tien',
+  'đăng ký', 'dang ky',
+  'huỷ', 'hủy', 'huy',
+  'xoá', 'xóa', 'xoa',
+  'bán', 'ban',
+  'mua',
 ];
 
 const INTERACTIVE_ACTIONS: ReadonlySet<string> = new Set([
@@ -65,13 +84,33 @@ export function classifyActionRisk(
 ): ActionRisk {
   if (elementText) {
     const lower = elementText.toLowerCase();
-    if ([...HIGH_RISK_KEYWORDS, ...extraHighRisk].some((k) => lower.includes(k.toLowerCase()))) {
+    if ([...HIGH_RISK_KEYWORDS, ...extraHighRisk].some((k) => mentions(lower, k.toLowerCase()))) {
       return 'HIGH';
     }
   }
 
   if (INTERACTIVE_ACTIONS.has(action.toLowerCase())) return 'MEDIUM';
   return 'LOW';
+}
+
+/**
+ * Whether the text really uses the keyword, rather than merely containing its
+ * letters.
+ *
+ * Substring matching was fine while every keyword was a long English word, and
+ * stopped being fine the moment short Vietnamese ones joined the list: "mua"
+ * sits inside "Dư mua" legitimately, but "ban" sits inside "banner", and a
+ * table header should not be classified as a destructive control. A keyword of
+ * several words is still matched as a phrase — "chuyển tiền" cannot be split.
+ */
+function mentions(text: string, keyword: string): boolean {
+  if (keyword.includes(' ')) return text.includes(keyword);
+  const boundary = '[^\\p{L}\\p{N}]';
+  return new RegExp(`(^|${boundary})${escapeRegExp(keyword)}($|${boundary})`, 'u').test(text);
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
 export const DEFAULT_HIGH_RISK_KEYWORDS = HIGH_RISK_KEYWORDS;

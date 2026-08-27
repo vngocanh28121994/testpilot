@@ -123,6 +123,115 @@ describe('Resolver — baseline (no discovery)', () => {
     assert.equal(result.candidate.value, 'btn-login');
   });
 
+  it('does not persist or runtime-confirm a fragile healed XPath', async () => {
+    const authored: LocatorCandidate = {
+      strategy: 'label', value: 'Icon ... tại dòng ADS', weight: 0.8, origin: 'authored',
+    };
+    const reg = await makeRegistry('priceBoard.iconTaiDongAds', authored);
+    let confirms = 0;
+    const discovery = {
+      confirmLocator: () => { confirms += 1; },
+    } as unknown as ElementDiscovery;
+    const resolver = new Resolver(makeDriver(), reg, {
+      timeoutMs: 500, pollMs: 50, requireVisible: true, verifyHealedMatch: false,
+    }, discovery);
+    const fragile: LocatorCandidate = {
+      strategy: 'xpath',
+      value: `((//*[not(*) and normalize-space(.)='ADS'])[1]/ancestor::*[` +
+        `contains(concat(' ', normalize-space(@class), ' '), ' content-row ')][1]` +
+        `//*[contains(translate(concat(@data-walkthrough,' ',@class),` +
+        `'ABCDEFGHIJKLMNOPQRSTUVWXYZ','abcdefghijklmnopqrstuvwxyz'),'more')])[1]`,
+      weight: 0.98,
+      origin: 'healed',
+    };
+
+    resolver.confirmResolution('priceBoard.iconTaiDongAds', {
+      handle: makeHandle(fragile),
+      candidate: fragile,
+      healed: true,
+      previous: authored,
+      attempts: 1,
+    });
+
+    assert.deepEqual(reg.candidates('priceBoard.iconTaiDongAds', 'android'), [authored]);
+    assert.equal(confirms, 0);
+  });
+
+  it('instantiates one row-action template for different runtime row values', async () => {
+    const template: LocatorCandidate = {
+      strategy: 'relative',
+      value: 'row("{{rowText}}") >> "...":metadata',
+      weight: 0.95,
+      origin: 'authored',
+    };
+    const reg = await makeRegistry('priceBoard.rowActionMenu', template);
+    const seen: string[] = [];
+    const driver = makeDriver(async (candidate) => {
+      seen.push(candidate.value);
+      return makeHandle(candidate);
+    });
+    const resolver = new Resolver(driver, reg, {
+      timeoutMs: 500, pollMs: 50, requireVisible: true, verifyHealedMatch: false,
+    });
+
+    const ads = await resolver.resolve('priceBoard.rowActionMenu', {
+      locatorParams: { rowText: 'ADS', action: '...' },
+    });
+    const fpt = await resolver.resolve('priceBoard.rowActionMenu', {
+      locatorParams: { rowText: 'FPT', action: '...' },
+    });
+
+    assert.equal(ads.candidate.value, 'row("ADS") >> "...":metadata');
+    assert.equal(fpt.candidate.value, 'row("FPT") >> "...":metadata');
+    assert.deepEqual(seen, [
+      'row("ADS") >> "...":metadata',
+      'row("FPT") >> "...":metadata',
+    ]);
+    resolver.confirmResolution('priceBoard.rowActionMenu', ads);
+    resolver.confirmResolution('priceBoard.rowActionMenu', fpt);
+    const health = reg.raw.elements['priceBoard.rowActionMenu']?.health;
+    assert.equal(health?.heals, 0);
+    assert.equal(
+      health?.winners[
+        'relative:row("{{rowText}}") >> "...":metadata'
+      ],
+      2,
+    );
+  });
+
+  it('reuses one text template for visible and absent checks with different values', async () => {
+    const template: LocatorCandidate = {
+      strategy: 'label', value: '{{text}}', weight: 0.9, origin: 'authored',
+    };
+    let visible = new Set(['ADS', 'FPT']);
+    const reg = await makeRegistry('priceBoard.dynamicText', template);
+    reg.element('priceBoard.dynamicText').label = '{{text}}';
+    reg.element('priceBoard.dynamicText').template = { kind: 'text' };
+    const driver = makeDriver(async (candidate) =>
+      visible.has(candidate.value) ? makeHandle(candidate) : null,
+    );
+    const resolver = new Resolver(driver, reg, {
+      timeoutMs: 100, pollMs: 10, requireVisible: true, verifyHealedMatch: false,
+    });
+
+    const ads = await resolver.resolve('priceBoard.dynamicText', {
+      locatorParams: { text: 'ADS' },
+    });
+    const fpt = await resolver.resolve('priceBoard.dynamicText', {
+      locatorParams: { text: 'FPT' },
+    });
+    assert.equal(ads.candidate.value, 'ADS');
+    assert.equal(fpt.candidate.value, 'FPT');
+
+    visible = new Set(['FPT']);
+    await resolver.resolveAbsent('priceBoard.dynamicText', {
+      locatorParams: { text: 'ADS' },
+    });
+    assert.equal(await resolver.isVisibleNow('priceBoard.dynamicText', {
+      locatorParams: { text: 'FPT' },
+    }), true);
+  });
+
   it('throws ElementNotFoundError when all candidates fail', async () => {
     const stale: LocatorCandidate = {
       strategy: 'testId', value: 'old-id', weight: 0.95, origin: 'authored',
@@ -138,11 +247,182 @@ describe('Resolver — baseline (no discovery)', () => {
       (err: Error) => err instanceof ElementNotFoundError,
     );
   });
+
+  it('accepts a previously verified healed locator when it is now the primary candidate', async () => {
+    const persisted: LocatorCandidate = {
+      strategy: 'css',
+      value: ".mat-autocomplete-panel mat-option[role='option']",
+      weight: 0.95,
+      origin: 'healed',
+    };
+    const driver = makeDriver(async (candidate) =>
+      candidate.value === persisted.value
+        ? {
+            candidate,
+            isVisible: async () => true,
+            // The registry label is "Kết quả tìm kiếm đầu tiên". A real
+            // autocomplete option has dynamic business text instead.
+            text: async () => 'ADS-HOSE',
+          }
+        : null,
+    );
+    const reg = await makeRegistry('first-search-result', persisted);
+    reg.element('first-search-result').label = 'Kết quả tìm kiếm đầu tiên';
+    const resolver = new Resolver(driver, reg, {
+      timeoutMs: 100,
+      pollMs: 10,
+      requireVisible: true,
+      verifyHealedMatch: true,
+    });
+
+    const result = await resolver.resolve('first-search-result');
+
+    assert.equal(result.candidate.value, persisted.value);
+    assert.equal(result.healed, false, 'a persisted primary locator is no longer a fallback');
+  });
+
+  it('synthesizes a semantic label locator for a selector-less web element', async () => {
+    const reg = await Registry.load('/dev/null/nonexistent-selectorless-web-registry.json');
+    reg.upsertElement({
+      id: 'priceBoard.removeFromWatchlist',
+      label: 'Xoá khỏi danh mục',
+      screen: 'priceBoard',
+      candidates: {},
+    });
+    const driver = {
+      ...makeDriver(async (candidate) =>
+        candidate.strategy === 'label' && candidate.value === 'Xoá khỏi danh mục'
+          ? { candidate, isVisible: async () => true, text: async () => 'Xóa khỏi danh mục' }
+          : null,
+      ),
+      platform: 'web' as const,
+    };
+    const resolver = new Resolver(driver, reg, {
+      timeoutMs: 100,
+      pollMs: 10,
+      requireVisible: true,
+      verifyHealedMatch: true,
+    });
+
+    const result = await resolver.resolve('priceBoard.removeFromWatchlist');
+
+    assert.equal(result.candidate.strategy, 'label');
+    assert.equal(result.healed, true);
+  });
+
+  it('uses a cheap exact-leaf locator for a compact option in a business label', async () => {
+    const reg = await Registry.load('/dev/null/nonexistent-compact-option-registry.json');
+    reg.upsertElement({
+      id: 'fund.price1m',
+      label: 'Giá 1M',
+      screen: 'fundDetail',
+      candidates: {},
+    });
+    const expected = "//*[not(*) and normalize-space(.)='1M']";
+    const driver = {
+      ...makeDriver(async (candidate) =>
+        candidate.strategy === 'xpath' && candidate.value === expected
+          ? { candidate, isVisible: async () => true, text: async () => '1M' }
+          : null,
+      ),
+      platform: 'web' as const,
+    };
+    const resolver = new Resolver(driver, reg, {
+      timeoutMs: 100,
+      pollMs: 10,
+      requireVisible: true,
+      verifyHealedMatch: true,
+    });
+
+    const result = await resolver.resolve('fund.price1m', { discoveryAction: 'tap' });
+
+    assert.equal(result.candidate.strategy, 'xpath');
+    assert.equal(result.candidate.value, expected);
+    assert.equal(result.healed, true);
+  });
+
+  it('anchors a compact option inside the previously asserted business region', async () => {
+    const reg = await Registry.load('/dev/null/nonexistent-contextual-option-registry.json');
+    reg.upsertElement({
+      id: 'fund.price1m',
+      label: 'Giá 1M',
+      screen: 'fundDetail',
+      candidates: {},
+    });
+    const driver = {
+      ...makeDriver(async (candidate) =>
+        candidate.strategy === 'xpath' &&
+        candidate.value.includes('Các quỹ có thể bạn quan tâm') &&
+        candidate.value.includes("normalize-space(.)='1M'")
+          ? { candidate, isVisible: async () => true, text: async () => 'Giá 1M' }
+          : null,
+      ),
+      platform: 'web' as const,
+    };
+    const resolver = new Resolver(driver, reg, {
+      timeoutMs: 100,
+      pollMs: 10,
+      requireVisible: true,
+      verifyHealedMatch: true,
+    });
+
+    const result = await resolver.resolve('fund.price1m', {
+      discoveryAction: 'tap',
+      semanticContext: ['Các quỹ có thể bạn quan tâm', 'Diễn biến giá trong vòng 1 tháng'],
+      contextAnchor: 'Các quỹ có thể bạn quan tâm',
+    });
+
+    assert.equal(result.candidate.strategy, 'xpath');
+    assert.match(result.candidate.value, /Các quỹ có thể bạn quan tâm/);
+    assert.notEqual(result.candidate.value, "//*[not(*) and normalize-space(.)='1M']");
+  });
 });
 
 // ── resolver with discovery ───────────────────────────────────────────────────
 
 describe('Resolver — with ElementDiscovery', () => {
+  it('discovers and stores a locator for a selector-less natural-language element', async () => {
+    const driver = makeDriver(async (c) =>
+      c.value === 'stock-code-input' ? makeHandle(c) : null,
+    );
+    const reg = await Registry.load('/dev/null/nonexistent-selectorless-registry.json');
+    reg.upsertElement({
+      id: 'priceBoard.stockCodeInput',
+      label: 'Ô mã cổ phiếu',
+      screen: 'priceBoard',
+      candidates: {},
+    });
+    const discovery = await makeDiscovery(makeProvider({
+      ...makeObservation('stock-code-input'),
+      platform: 'android',
+      elements: [{
+        id: 'stock-input',
+        role: 'android.widget.EditText',
+        text: '',
+        accessibilityLabel: 'Ô mã cổ phiếu',
+        testId: 'stock-code-input',
+        visible: true,
+        enabled: true,
+        interactive: true,
+        index: 0,
+      }],
+    }));
+    const resolver = new Resolver(driver, reg, {
+      timeoutMs: 1000, pollMs: 50, requireVisible: true, verifyHealedMatch: false,
+    }, discovery);
+
+    const result = await resolver.resolve('priceBoard.stockCodeInput', {
+      discoveryAction: 'input',
+    });
+
+    assert.equal(result.candidate.value, 'stock-code-input');
+    assert.equal(result.candidate.origin, 'healed');
+    assert.equal(reg.candidates('priceBoard.stockCodeInput', 'android').length, 0,
+      'a discovered locator stays provisional until its operation succeeds');
+    resolver.confirmResolution('priceBoard.stockCodeInput', result);
+    assert.equal(reg.candidates('priceBoard.stockCodeInput', 'android')[0]?.value, 'stock-code-input');
+  });
+
   it('uses discovered locator when registry candidate fails', async () => {
     const staleCandidate: LocatorCandidate = {
       strategy: 'testId', value: 'old-id', weight: 0.95, origin: 'authored',
@@ -429,6 +709,19 @@ describe('buildElementIntent', () => {
     assert.equal(intent.label, 'Login');
     assert.equal(intent.screen, 'LoginScreen');
   });
+
+  it('preserves the runtime action so discovery rejects a non-interactive match', async () => {
+    const { buildElementIntent } = await import('../../discovery/DriverObservationAdapter.js');
+    const intent = buildElementIntent('stock-input', {
+      id: 'stock-input',
+      label: 'Ô mã cổ phiếu',
+      screen: 'priceBoard',
+      candidates: {},
+    }, 'input');
+    assert.equal(intent.action, 'input');
+    assert.equal(intent.semanticRole, 'textbox');
+    assert.equal(intent.placeholder, 'mã cổ phiếu');
+  });
 });
 
 describe('mapDiscoveryStrategy', () => {
@@ -437,6 +730,7 @@ describe('mapDiscoveryStrategy', () => {
     assert.equal(mapDiscoveryStrategy('testId'), 'testId');
     assert.equal(mapDiscoveryStrategy('resourceId'), 'testId');
     assert.equal(mapDiscoveryStrategy('accessibility'), 'label');
+    assert.equal(mapDiscoveryStrategy('placeholder'), 'placeholder');
     assert.equal(mapDiscoveryStrategy('css'), 'css');
     assert.equal(mapDiscoveryStrategy('xpath'), 'xpath');
   });
@@ -456,6 +750,40 @@ describe('mapDiscoveryStrategy', () => {
 // Resolver without elementDiscovery, so McpClient.inspect() was never called.
 
 describe('Resolver — AppiumMcpElementDiscovery as ObservationProvider', () => {
+  it('retries a known locator before spending time on discovery', async () => {
+    let findCalls = 0;
+    let inspectCallCount = 0;
+    const mockMcpClient: McpClient = {
+      async inspect() {
+        inspectCallCount += 1;
+        return { platform: 'android', elements: [] };
+      },
+      async findElement(_desc: string) { return {}; },
+      async screenshot() { return ''; },
+    };
+    const appiumMcp = new AppiumMcpElementDiscovery(mockMcpClient);
+    const runtimeReg = await RuntimeRegistry.load('/dev/null/nonexistent-known-grace.json');
+    const discovery = new ElementDiscovery(appiumMcp, runtimeReg);
+    const candidate: LocatorCandidate = {
+      strategy: 'testId', value: 'total-assets', weight: 0.95, origin: 'authored',
+    };
+    const driver = makeDriver(async (current) => {
+      findCalls += 1;
+      return findCalls >= 3 ? makeHandle(current) : null;
+    });
+    const reg = await makeRegistry('home.totalAssets', candidate);
+    const resolver = new Resolver(driver, reg, {
+      timeoutMs: 500, pollMs: 10, requireVisible: true, verifyHealedMatch: false,
+    }, discovery);
+
+    const result = await resolver.resolve('home.totalAssets');
+
+    assert.equal(result.candidate.value, 'total-assets');
+    assert.equal(findCalls, 3);
+    assert.equal(inspectCallCount, 0,
+      'a locator that appears during the initial grace polls must not trigger discovery');
+  });
+
   it('calls McpClient.inspect() exactly once when registry candidates fail', async () => {
     let inspectCallCount = 0;
 

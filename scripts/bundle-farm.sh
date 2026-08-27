@@ -2,8 +2,7 @@
 # Build the Appium Node test package AWS Device Farm expects.
 #
 # Device Farm unzips this into $DEVICEFARM_TEST_PACKAGE_PATH and runs the
-# commands in farm/testspec.yml. Playwright is deliberately excluded: it is a
-# ~300MB dependency the native run never touches.
+# commands in farm/testspec.yml.
 set -euo pipefail
 
 OUT="build/testpilot-appium.zip"
@@ -33,7 +32,21 @@ node -e '
   const platform = (cfg.farm && cfg.farm.platform) || "android";
   const reg = JSON.parse(fs.readFileSync(cfg.paths?.registry ?? "registry/elements.json", "utf8"));
 
-  const naked = Object.values(reg.elements).filter((e) => !(e.candidates?.[platform]?.length));
+  // Locator strategies are not interchangeable between hybrid and native. In a
+  // WebView the driver resolves against the DOM, so css/role are fine; in
+  // native mode css throws outright and role becomes a UiSelector className,
+  // which needs an Android widget class, not "button". Both cost device
+  // minutes to find out.
+  const hybrid = Boolean(cfg[platform]?.hybrid);
+
+  // In hybrid mode the WebView driver resolves against the DOM, so web
+  // candidates are fully valid for the target platform — only flag elements
+  // that have no candidates at all (neither platform-specific nor web).
+  const naked = Object.values(reg.elements).filter((e) => {
+    if (e.candidates?.[platform]?.length) return false;
+    if (hybrid && e.candidates?.web?.length) return false;
+    return true;
+  });
   if (naked.length) {
     console.error(`\nDừng: ${naked.length}/${Object.keys(reg.elements).length} element không có locator cho "${platform}":`);
     for (const e of naked.slice(0, 8)) console.error(`  - ${e.id} (chỉ có: ${Object.keys(e.candidates ?? {}).join(", ") || "không có gì"})`);
@@ -44,12 +57,6 @@ node -e '
   // Tags sit on their own line above the Scenario they belong to, so this walks
   // lines and carries pending tags forward rather than trying to split blocks.
   const dir = cfg.paths?.features ?? "features";
-  // Locator strategies are not interchangeable between hybrid and native. In a
-  // WebView the driver resolves against the DOM, so css/role are fine; in
-  // native mode css throws outright and role becomes a UiSelector className,
-  // which needs an Android widget class, not "button". Both cost device
-  // minutes to find out.
-  const hybrid = Boolean(cfg[platform]?.hybrid);
   if (!hybrid) {
     const bad = [];
     for (const e of Object.values(reg.elements)) {
@@ -102,7 +109,12 @@ cp -R registry "$STAGE/registry"
 # package because the Device Farm host cannot download one itself; see
 # scripts/fetch-chromedriver.sh. `zip -y` is not used, so preserve the exec bit
 # by re-applying it on the device (testspec does that).
-HYBRID=$(node -e 'const c=require("./testpilot.config.json"); process.stdout.write(c.android?.hybrid || c.ios?.hybrid ? "1" : "")' 2>/dev/null || true)
+# Android-only, and deliberately so. chromedriver drives Chrome's WebView; iOS
+# WebViews are reached through the WebKit remote debugger, which is part of the
+# XCUITest driver. Keyed on either platform's hybrid flag, an iOS bundle shipped
+# a 21 MB linux/x64 binary the job then failed to exec — noise in the log at the
+# exact moment someone is reading it to find out why iOS did not start.
+HYBRID=$(node -e 'const c=require("./testpilot.config.json"); const p=c.farm?.platform ?? "android"; process.stdout.write(p === "android" && c.android?.hybrid ? "1" : "")' 2>/dev/null || true)
 
 if [ -n "$HYBRID" ] && [ -f build/chromedriver/chromedriver ]; then
   mkdir -p "$STAGE/chromedriver"
@@ -110,9 +122,9 @@ if [ -n "$HYBRID" ] && [ -f build/chromedriver/chromedriver ]; then
   chmod +x "$STAGE/chromedriver/chromedriver"
   echo "bundling chromedriver ($(du -h build/chromedriver/chromedriver | cut -f1))"
 elif [ -z "$HYBRID" ] && [ -f build/chromedriver/chromedriver ]; then
-  # Only a hybrid run ever spawns chromedriver, so shipping 21 MB of it to the
-  # farm in native mode is pure upload time.
-  echo "bỏ qua chromedriver — hybrid đang tắt, native không dùng tới"
+  # Only an Android hybrid run ever spawns chromedriver, so shipping 21 MB of it
+  # anywhere else is pure upload time.
+  echo "bỏ qua chromedriver — chỉ Android hybrid mới dùng tới"
 elif [ -n "$HYBRID" ]; then
   echo "Cảnh báo: hybrid đang bật nhưng chưa có build/chromedriver/chromedriver." >&2
   echo "  Nếu host Device Farm không tải được driver, lượt chạy sẽ chết ở bước chuyển WebView." >&2
@@ -121,11 +133,15 @@ fi
 cp testpilot.config.json "$STAGE/"
 cp package.json package-lock.json "$STAGE/" 2>/dev/null || cp package.json "$STAGE/"
 
-# Strip the web-only dependency so the farm install stays small and fast.
+# Playwright stays. It was stripped here as a "web-only" dependency, which was
+# wrong for a hybrid app: the WebView driver drives the phone's WebView over
+# CDP through Playwright, so removing it left every farm run falling back to
+# native context, where a Capacitor app's UI does not exist. The package alone
+# is small; the browser download it would normally trigger is disabled in the
+# testspec's install phase, and connectOverCDP never needs one anyway.
 node -e '
   const fs = require("fs");
   const p = JSON.parse(fs.readFileSync("'"$STAGE"'/package.json", "utf8"));
-  delete p.dependencies.playwright;
   delete p.devDependencies;
   p.scripts = {};
   fs.writeFileSync("'"$STAGE"'/package.json", JSON.stringify(p, null, 2));

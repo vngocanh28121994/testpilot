@@ -15,7 +15,7 @@ import type { UiDriver } from '../drivers/driver.js';
 import type { ElementDef } from '../core/types.js';
 import type { ObservedElement, UiObservation } from './UiObservation.js';
 import type { ObservationProvider } from './ElementDiscovery.js';
-import type { ElementIntent } from './ElementIntent.js';
+import type { ActionKind, ElementIntent } from './ElementIntent.js';
 import type { LocatorCandidate } from '../core/types.js';
 
 // ── observation provider factory ──────────────────────────────────────────────
@@ -56,6 +56,7 @@ export function observedToUiObservation(
       testId: o.testId,
       placeholder: o.placeholder,
       css: o.css,
+      attributes: o.context?.length ? { region: o.context.join(' > ') } : undefined,
       // observe() only returns elements that exist and are visible.
       // enabled/focused/selected are not tracked in Observed.
       visible: true,
@@ -81,20 +82,43 @@ export function observedToUiObservation(
 /**
  * Build a minimal ElementIntent from a Registry element definition.
  *
- * Uses action='assert-visible' because the Resolver's job is to locate
- * the element, not to verify it is interactable — the driver handles that
- * when it actually performs the tap / input.
+ * The caller supplies the runtime action whenever possible. That lets the
+ * verifier reject a merely visible node when the scenario needs an input,
+ * button, or other interactive element. Read-only callers retain the safe
+ * `assert-visible` default.
  */
 export function buildElementIntent(
   elementId: string,
   elementDef: ElementDef,
+  action: ActionKind = 'assert-visible',
+  context?: string[],
 ): ElementIntent {
+  const inputPlaceholder = action === 'input' && elementDef.label
+    ? inferInputPlaceholder(elementDef.label)
+    : undefined;
   return {
     id: elementId,
-    action: 'assert-visible',
+    action,
     ...(elementDef.label ? { label: elementDef.label } : {}),
     ...(elementDef.screen ? { screen: elementDef.screen } : {}),
+    ...(action === 'input' ? { semanticRole: 'textbox' } : {}),
+    ...(inputPlaceholder ? { placeholder: inputPlaceholder } : {}),
+    ...(context?.length ? { context } : {}),
   };
+}
+
+/**
+ * Natural-language feature authors say "Ô mã cổ phiếu" while the HTML input
+ * exposes placeholder="Mã cổ phiếu". Strip only explicit field nouns; the
+ * remaining phrase is still runtime-verified, so this does not turn arbitrary
+ * labels into permissive substring matches.
+ */
+function inferInputPlaceholder(label: string): string | undefined {
+  const inferred = label
+    .trim()
+    .replace(/^(?:ô|trường|input)\s+/iu, '')
+    .trim();
+  return inferred && inferred !== label.trim() ? inferred : undefined;
 }
 
 // ── strategy mapping ──────────────────────────────────────────────────────────
@@ -114,6 +138,7 @@ export function mapDiscoveryStrategy(
     testId: 'testId',
     resourceId: 'testId',     // stable ID, semantically equivalent to testId
     accessibility: 'label',   // accessibility label → label strategy
+    placeholder: 'placeholder',
     css: 'css',
     xpath: 'xpath',
   };

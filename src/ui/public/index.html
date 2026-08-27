@@ -3,14 +3,19 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Horus — Scenario Studio</title>
+<title>Horus — App Automation Studio</title>
 <link rel="stylesheet" href="/style.css">
+<link rel="stylesheet" href="/flatpickr.min.css">
+<link rel="icon" type="image/png" href="/favicon.png">
 </head>
 <body>
 <div class="app" id="app">
 
   <aside class="sidebar">
     <div class="brand">
+      <!-- Shown only while the sidebar is collapsed, where the full wordmark
+           does not fit. aria-hidden because it is the same name, abbreviated. -->
+      <div class="brand-mark" aria-hidden="true">H</div>
       <div class="brand-name">Horus</div>
       <div class="brand-sub">Powered by anhvn8</div>
     </div>
@@ -28,13 +33,13 @@
 
     <!-- ============================ Scenario Studio ============================ -->
     <section class="page" data-page="studio">
-      <h1 class="page-title">Scenario Studio</h1>
+      <h1 class="page-title">App Automation Studio</h1>
 
       <div class="card">
         <div class="field">
-          <label for="srcInput">Tài liệu đầu vào (link Confluence)</label>
+          <label for="srcInput">Tài liệu đầu vào (Confluence hoặc Figma)</label>
           <div class="inline-input">
-            <input id="srcInput" type="url" placeholder="Dán link Confluence… (Enter để thêm)"
+            <input id="srcInput" type="url" placeholder="Dán link Confluence/Figma… (Enter để thêm)"
                    autocomplete="off" spellcheck="false">
             <button class="chip-btn" id="srcAdd" type="button">Thêm</button>
           </div>
@@ -47,11 +52,15 @@
                  autocomplete="off" spellcheck="false">
         </div>
 
-        <div class="field">
-          <label for="targetFeature">Target Feature Name</label>
-          <input id="targetFeature" type="text" placeholder="checkout-flow"
-                 autocomplete="off" spellcheck="false">
-        </div>
+        <details class="studio-advanced" id="featureFocusSettings">
+          <summary>Đặt tên cho file feature<span class="faint"> (tuỳ chọn)</span></summary>
+          <div class="field">
+            <label for="targetFeature">Tên chức năng cần kiểm thử</label>
+            <input id="targetFeature" type="text" placeholder="Để trống để AI tự xác định từ tài liệu"
+                   autocomplete="off" spellcheck="false">
+            <p class="hint">Chỉ điền khi tài liệu có nhiều chức năng nhưng workflow này cần tập trung vào một chức năng cụ thể. Nếu để trống, AI sẽ tự đặt tên từ bộ testcase đã sinh.</p>
+          </div>
+        </details>
 
         <div class="field">
           <label>Test Accounts</label>
@@ -60,6 +69,16 @@
           <p class="hint">Mật khẩu lưu riêng ở <code>.testpilot.secrets.json</code> (không nằm trong
              config, không vào git). Trong Gherkin dùng
              <code>{{account.&lt;mô-tả&gt;.password}}</code>.</p>
+        </div>
+
+        <div class="field" id="envEditorField">
+          <label>Môi trường</label>
+          <div id="envEditor"></div>
+          <button class="ghost-btn" id="envAdd" type="button">+ Thêm môi trường</button>
+          <p class="hint">Mỗi môi trường nói: dùng account nào, và cài package nào. File
+             <code>.feature</code> không bao giờ nhắc tên môi trường — nó chỉ xin
+             <code>{{account.&lt;vai-trò&gt;.username}}</code>, và bảng dưới đây quyết định vai trò
+             đó là account thật nào.</p>
         </div>
 
         <div class="field">
@@ -72,6 +91,44 @@
           <label for="note">Additional Note</label>
           <textarea id="note" rows="3" placeholder="Hướng dẫn bổ sung cho pipeline (tuỳ chọn)"></textarea>
         </div>
+
+        <details class="studio-advanced" id="workflowExecutionSettings">
+          <summary>Tự động chạy sau khi duyệt</summary>
+          <p class="hint">Thiết lập một lần. Workflow sẽ tự tiếp tục với các lựa chọn này sau khi bạn bấm Hoàn thành kịch bản.</p>
+          <div class="workflow-setting-label">Nền tảng chạy</div>
+          <div class="workflow-platforms" id="workflowPlatforms">
+            <label class="workflow-platform-option"><input type="checkbox" value="web"><span>Web</span></label>
+            <label class="workflow-platform-option"><input type="checkbox" value="android"><span>Android</span></label>
+            <label class="workflow-platform-option"><input type="checkbox" value="ios"><span>iOS</span></label>
+            <label class="workflow-platform-option"><input type="checkbox" id="workflowFarm"><span>Device Farm</span></label>
+          </div>
+          <!-- Revealed only once Device Farm is chosen: the platform question
+               belongs to the farm, and asking it otherwise invites picking a
+               device for a run that will never leave this machine. -->
+          <div class="workflow-farm-detail" id="workflowFarmDetail" hidden>
+            <span class="workflow-setting-label">Thiết bị trên farm</span>
+            <label class="workflow-platform-option"><input type="radio" name="farmPlatform" value="android"><span>Android</span></label>
+            <label class="workflow-platform-option"><input type="radio" name="farmPlatform" value="ios"><span>iOS</span></label>
+            <p class="hint">Farm chạy sau cùng, và chỉ khi bộ testcase đã xanh ở local — phút thiết bị là tiền thật. Nếu chỉ chọn farm thì chạy ngay.</p>
+          </div>
+          <!-- Filled from /api/preflight whenever a local platform is ticked.
+               Android and iOS need a device, a running Appium and a build, and
+               none of that is visible from a checkbox. -->
+          <div class="workflow-preflight" id="workflowPreflight" hidden></div>
+          <div class="workflow-execution-row">
+            <label class="workflow-env-field">Môi trường
+              <select id="workflowEnv"></select>
+            </label>
+            <label class="workflow-headed">
+              <input id="workflowHeaded" type="checkbox">
+              <span class="workflow-toggle" aria-hidden="true"></span>
+              <span class="workflow-headed-copy">
+                <strong>Hiện trình duyệt</strong>
+                <small>Chỉ áp dụng khi chạy Web</small>
+              </span>
+            </label>
+          </div>
+        </details>
 
         <div class="btnrow" style="margin-bottom:12px">
           <button class="ghost-btn" id="studioSave" type="button">Lưu (không chạy)</button>
@@ -86,11 +143,11 @@
         <pre class="console" id="genLog"></pre>
       </div>
 
-      <h2 class="section-title">My Recent Scenarios</h2>
+      <h2 class="section-title">Lịch sử workflow gần đây</h2>
       <div class="table-card">
         <table class="grid">
           <thead>
-            <tr><th>Feature</th><th>Date</th><th>Status</th><th class="right">Stages</th></tr>
+            <tr><th>Chức năng</th><th>Thời gian</th><th>Trạng thái</th><th class="right">Task</th></tr>
           </thead>
           <tbody id="recent"></tbody>
         </table>
@@ -110,15 +167,199 @@
       </div>
     </section>
 
+    <!-- ============================ Scenario Review ============================ -->
+    <section class="page" data-page="scenario-review" hidden>
+      <h1 class="page-title">Kịch bản</h1>
+
+      <div class="card workflow-gate" id="workflowGate" hidden>
+        <div class="workflow-gate-head">
+          <div>
+            <h2>Workflow đang chờ review</h2>
+            <p class="hint" id="workflowGateSummary"></p>
+          </div>
+          <span class="pill waiting_review" id="workflowGateStatus">Chờ duyệt</span>
+        </div>
+        <ol class="stages workflow-stages" id="workflowReviewStages"></ol>
+        <div class="workflow-coverage" id="workflowCoverage" hidden>
+          <div class="workflow-coverage-head">
+            <strong id="workflowCoverageTitle">Coverage cần bổ sung</strong>
+            <span id="workflowCoverageCount"></span>
+          </div>
+          <p id="workflowCoverageHelp"></p>
+          <ul id="workflowCoverageList"></ul>
+        </div>
+        <!-- Shown whenever the run is blocked on a decision, at whatever stage
+             it got stuck: generation can hit an ambiguous document, healing can
+             hit a hypothesis it is not allowed to test on a real account. -->
+        <div class="workflow-questions" id="workflowQuestions" hidden>
+          <div class="workflow-questions-head">
+            <strong>Cần bạn quyết định</strong>
+            <span id="workflowQuestionsCount"></span>
+          </div>
+          <p class="hint" id="workflowQuestionsHelp"></p>
+          <form id="workflowQuestionsForm"></form>
+          <p class="status" id="workflowQuestionsStatus"></p>
+          <div class="workflow-gate-actions">
+            <button class="primary-btn narrow" id="workflowAnswers" type="button">Bổ sung thông tin và chạy tiếp</button>
+          </div>
+        </div>
+        <pre class="console workflow-log" id="workflowReviewLog" hidden></pre>
+        <p class="status" id="workflowCompleteStatus"></p>
+        <div class="workflow-gate-actions">
+          <span class="hint" id="workflowGateHint"></span>
+          <button class="primary-btn narrow" id="workflowComplete" type="button">Hoàn thành kịch bản và tiếp tục chạy</button>
+        </div>
+        <div class="workflow-report-links" id="workflowReportLinks"></div>
+      </div>
+
+      <!-- Toolbar -->
+      <div class="rv-toolbar">
+        <div class="rv-search-wrap">
+          <input id="rvSearch" type="search" placeholder="Tìm kịch bản…" autocomplete="off">
+        </div>
+        <select id="rvFileFilter" class="rv-filter-select">
+          <option value="">Tất cả file</option>
+        </select>
+        <select id="rvStatusFilter" class="rv-filter-select rv-status-filter" aria-label="Lọc theo trạng thái duyệt">
+          <option value="">Tất cả trạng thái</option>
+          <option value="pending">Chờ duyệt</option>
+          <option value="approved">Đã duyệt</option>
+          <option value="rejected">Không duyệt</option>
+        </select>
+        <div class="rv-tag-filter" id="rvTagFilter">
+          <button class="rv-tag-filter-btn" id="rvTagFilterBtn" type="button" aria-haspopup="true" aria-expanded="false">
+            <span id="rvTagFilterLabel">Tags</span>
+          </button>
+          <div class="rv-tag-filter-panel" id="rvTagFilterPanel" hidden>
+            <input class="rv-tag-filter-search" id="rvTagFilterSearch" type="search"
+              placeholder="Tìm tag…" autocomplete="off" aria-label="Tìm tag">
+            <div class="rv-tag-filter-options" id="rvTagFilterOptions"></div>
+            <div class="rv-tag-filter-footer">
+              <span id="rvTagFilterSummary">Chưa chọn tag</span>
+              <button class="rv-tag-filter-clear" id="rvTagFilterClear" type="button">Xoá bộ lọc</button>
+            </div>
+          </div>
+        </div>
+        <button class="primary-btn narrow rv-bulk-action" id="rvBulkApprove" type="button" hidden>Duyệt đã chọn (<span id="rvBulkApproveCount">0</span>)</button>
+        <button class="danger-btn narrow rv-bulk-action" id="rvBulkDelete" type="button" hidden>Xoá đã chọn (<span id="rvBulkCount">0</span>)</button>
+        <button class="primary-btn narrow rv-add-scenario" id="rvAddScenario" type="button">＋ Thêm kịch bản</button>
+      </div>
+      <p class="status rv-review-status" id="rvReviewStatus"></p>
+
+      <!-- Table -->
+      <div class="table-card rv-table-card">
+        <table class="grid rv-table" id="rvTable">
+          <thead>
+            <tr>
+              <th class="rv-col-check"><label><input type="checkbox" id="rvSelectAll" title="Chọn tất cả kết quả đang lọc"></label></th>
+              <th class="rv-col-file">Feature file</th>
+              <th class="rv-col-name">Kịch bản</th>
+              <th class="rv-col-tags">Tags</th>
+              <th class="rv-col-steps right">Bước</th>
+              <th class="rv-col-review">Trạng thái</th>
+              <th class="rv-col-actions"></th>
+            </tr>
+          </thead>
+          <tbody id="rvBody"></tbody>
+        </table>
+      </div>
+      <p class="rv-summary" id="rvSummary"></p>
+      <div class="pager" id="rvPager"></div>
+    </section>
+
+    <!-- Scenario editor side panel (shared, fixed overlay) -->
+    <div class="rv-panel" id="rvPanel">
+      <div class="rv-panel-header">
+        <div class="rv-panel-meta">
+          <div class="rv-panel-title" id="rvPanelTitle">Chỉnh sửa kịch bản</div>
+          <div class="rv-panel-file" id="rvPanelFile"></div>
+          <label class="rv-panel-target" id="rvPanelTarget" hidden>
+            <span>Thêm vào feature</span>
+            <select id="rvPanelTargetFile"></select>
+            <input id="rvPanelNewFile" type="text" autocomplete="off" hidden
+              placeholder="Tên feature mới, vd: Đăng ký tài khoản"
+              aria-label="Tên feature mới">
+            <span class="rv-newfile-hint" id="rvPanelNewFileHint" hidden></span>
+          </label>
+        </div>
+        <button class="rv-panel-close" id="rvPanelClose" type="button" title="Đóng">✕</button>
+      </div>
+      <div class="rv-editor-tags">
+        <span class="rv-editor-tags-label">Tags</span>
+        <div class="rv-editor-tag-control" id="rvEditorTagControl">
+          <div class="rv-editor-tag-chips" id="rvEditorTagChips"></div>
+          <input id="rvEditorTagInput" type="text" autocomplete="off"
+            placeholder="Chọn hoặc nhập tag mới…" aria-label="Tags của kịch bản">
+          <div class="rv-editor-tag-suggestions" id="rvEditorTagSuggestions" hidden></div>
+        </div>
+      </div>
+      <div class="rv-editor-wrap">
+        <div class="rv-editor-hint">
+          <span>Gherkin editor</span>
+          <button class="rv-syntax-toggle" id="rvSyntaxToggle" type="button"
+            aria-expanded="false" aria-controls="rvSyntax">📖 Cú pháp có sẵn</button>
+          <span class="rv-editor-keys">Tab thụt lề · Shift+Tab bỏ thụt lề</span>
+        </div>
+        <div class="rv-syntax" id="rvSyntax" hidden>
+          <div class="rv-syntax-lead">
+            Bấm vào một dòng để chèn vào kịch bản. Chỉ những câu dưới đây chạy được —
+            câu khác hãy viết tự nhiên rồi bấm <b>✦ Chuẩn hoá</b>.
+          </div>
+          <input class="rv-syntax-search" id="rvSyntaxSearch" type="search"
+            placeholder="Tìm câu lệnh, action hoặc element…" aria-label="Tìm trong hướng dẫn">
+          <div class="rv-syntax-body" id="rvSyntaxBody"></div>
+        </div>
+        <textarea class="rv-panel-editor" id="rvPanelEditor" spellcheck="false"></textarea>
+      </div>
+      <div class="rv-scenario-plan" id="rvScenarioPlan" hidden></div>
+      <div class="rv-action-proposals" id="rvActionProposals" hidden></div>
+      <div class="rv-save-progress" id="rvSaveProgress" hidden role="status" aria-live="polite">
+        <div class="rv-save-progress-card">
+          <span class="rv-save-spinner" aria-hidden="true"></span>
+          <div>
+            <strong id="rvSaveProgressTitle">Đang xử lý kịch bản…</strong>
+            <span id="rvSaveProgressDetail">Vui lòng giữ nguyên màn hình này.</span>
+          </div>
+        </div>
+      </div>
+      <div class="rv-panel-footer">
+        <button class="ghost-btn narrow rv-normalize" id="rvPanelNormalize" type="button">✦ Chuẩn hoá</button>
+        <span class="status" id="rvPanelStatus"></span>
+        <button class="ghost-btn narrow" id="rvPanelCancel" type="button">Huỷ</button>
+        <button class="primary-btn narrow" id="rvPanelSave" type="button">Lưu thay đổi</button>
+      </div>
+    </div>
+
+    <!-- Shared destructive-action confirmation. Native confirm() is avoided so
+         the message and keyboard behaviour stay consistent across browsers. -->
+    <dialog class="confirm-dialog" id="confirmDialog">
+      <div class="confirm-dialog-icon" aria-hidden="true">!</div>
+      <div class="confirm-dialog-copy">
+        <h2 id="confirmDialogTitle">Xác nhận thao tác</h2>
+        <p id="confirmDialogMessage"></p>
+      </div>
+      <div class="confirm-dialog-actions">
+        <button class="ghost-btn" id="confirmDialogCancel" type="button">Huỷ</button>
+        <button class="danger-btn narrow" id="confirmDialogAccept" type="button">Xác nhận</button>
+      </div>
+    </dialog>
+    <div class="rv-backdrop" id="rvBackdrop"></div>
+
     <!-- ============================ Scenario History ============================ -->
     <section class="page" data-page="scenario-history" hidden>
-      <h1 class="page-title">Scenario History</h1>
+      <h1 class="page-title">Workflow History</h1>
       <div id="historyList"></div>
+    </section>
+
+    <!-- ========================= Farm Run Detail ========================= -->
+    <section class="page" data-page="farm-run-detail" hidden>
+      <button class="ghost-btn back-btn" type="button" id="farmDetailBack">← Quay lại</button>
+      <div id="farmRunDetail"></div>
     </section>
 
     <!-- ============================ E2E Runner ============================ -->
     <section class="page" data-page="e2e-runner" hidden>
-      <h1 class="page-title">E2E Runner</h1>
+      <h1 class="page-title">Local Runner</h1>
       <div class="card">
         <div class="cols">
           <div class="field">
@@ -130,12 +371,151 @@
             </select>
           </div>
           <div class="field">
-            <label for="tag">Lọc theo tag</label>
-            <input id="tag" type="text" placeholder="@smoke" autocomplete="off">
+            <label>Lọc theo tag</label>
+            <!-- The panel is positioned against this wrapper, not against the
+                 field: anchoring to the field would measure from the label. -->
+            <div class="tag-anchor">
+              <div class="tag-picker" id="tagPicker">
+                <span class="tag-picker-placeholder" id="tagPickerPlaceholder">Tất cả tag — bấm để lọc</span>
+              </div>
+              <input id="tag" type="hidden">
+              <div class="tag-suggestions" id="tagSuggestions" hidden></div>
+            </div>
           </div>
         </div>
-        <p class="hint">Android/iOS chạy qua Appium nên đưa được lên AWS Device Farm.
-           Web chạy Playwright cục bộ — Device Farm không hỗ trợ Playwright.</p>
+        <!-- Only rendered when the config defines environments. Local runs only:
+             SIT and UAT sit behind a VPN the Device Farm container has no route
+             to, so the farm card below deliberately has no equivalent. -->
+        <div class="field" id="envField" hidden>
+          <label for="runEnv">Môi trường</label>
+          <select id="runEnv"></select>
+          <p class="hint" id="envHint"></p>
+        </div>
+        <!-- Only rendered when <platform>.devices is configured. -->
+        <div class="field device-field" id="deviceField" hidden>
+          <label>Thiết bị <span class="faint" id="deviceHint"></span></label>
+          <div class="device-picker" id="devicePicker"></div>
+        </div>
+        <!-- Build cài lên máy thật. Hai trường riêng: một lượt chạy cross-platform
+             cài .apk lên Android và .ipa lên iOS trong cùng một lần bấm. -->
+        <div class="field app-field" id="appField" hidden>
+          <label>Build cài lên máy</label>
+          <div class="app-paths">
+            <!-- Reports, does not edit. This card is read seconds before a
+                 run, so what gets installed belongs here; changing it belongs
+                 on the one screen that owns builds. -->
+            <div class="app-path">
+              <span>Android <span class="faint">.apk</span></span>
+              <span class="mono" id="androidApp"></span>
+              <span class="app-path-state" id="androidAppState"></span>
+            </div>
+            <div class="app-path">
+              <span>iOS <span class="faint">.ipa</span></span>
+              <span class="mono" id="iosApp"></span>
+              <span class="app-path-state" id="iosAppState"></span>
+            </div>
+          </div>
+          <p class="hint" id="appFieldHint"></p>
+          <button class="linklike" type="button" id="appManage">Đổi bản build →</button>
+        </div>
+        <!-- prereq block — JS updates data-platform to show/hide rows -->
+        <div class="prereq-block" id="prereqBlock" data-platform="web">
+          <p class="prereq-title">Yêu cầu trước khi chạy</p>
+          <div class="prereq-web prereq-row">
+            <span class="prereq-ok">✓</span>
+            <span>Playwright tự quản lý browser — không cần cài thêm gì.</span>
+          </div>
+          <!-- iOS only, and first: nothing else can be checked until the
+               toolchain that builds WebDriverAgent is in place. -->
+          <div class="prereq-ios prereq-row">
+            <span class="prereq-step"></span>
+            <span>Xcode (bắt buộc cho iOS — driver phải build WebDriverAgent):
+              <span class="prereq-actions">
+                <code class="prereq-cmd">xcodebuild -version</code>
+                <button class="prereq-btn" id="btnXcode" type="button">⟳ Kiểm tra</button>
+              </span>
+              <span class="prereq-sub">Command Line Tools là không đủ — cần Xcode đầy đủ.</span>
+              <pre class="prereq-out" id="xcodeOut" hidden></pre>
+            </span>
+          </div>
+          <div class="prereq-native prereq-row">
+            <span class="prereq-step"></span>
+            <span>Khởi động Appium server:
+              <span class="prereq-actions">
+                <code class="prereq-cmd">appium</code>
+                <button class="prereq-btn" id="btnAppium" type="button">▶ Khởi động</button>
+                <button class="prereq-btn" id="btnAppiumRestart" type="button"
+                  title="Dừng Appium đang chạy rồi khởi động lại — dùng khi nó treo">↻ Khởi động lại</button>
+              </span>
+              <span class="prereq-sub">Chờ đến khi thấy "listener started on 0.0.0.0:4723"</span>
+              <pre class="prereq-out" id="appiumOut" hidden></pre>
+            </span>
+          </div>
+          <div class="prereq-native prereq-row">
+            <span class="prereq-step"></span>
+            <span>
+              <span class="prereq-android">Kết nối thiết bị Android hoặc bật emulator:
+                <span class="prereq-actions">
+                  <code class="prereq-cmd">adb devices</code>
+                  <button class="prereq-btn" id="btnAdb" type="button">⟳ Kiểm tra</button>
+                </span>
+              </span>
+              <span class="prereq-ios">Kết nối iPhone/iPad hoặc bật iOS Simulator:
+                <span class="prereq-actions">
+                  <code class="prereq-cmd">xcrun xctrace list devices</code>
+                  <button class="prereq-btn" id="btnIos" type="button">⟳ Kiểm tra</button>
+                </span>
+              </span>
+              <pre class="prereq-out" id="deviceOut" hidden></pre>
+            </span>
+          </div>
+          <!-- Three settings on the phone itself. No command on this machine can
+               read them back, so they are stated rather than checked — and they
+               are the usual reason a correctly installed setup still fails. -->
+          <div class="prereq-ios prereq-row">
+            <span class="prereq-step"></span>
+            <span>Chuẩn bị trên iPhone/iPad:
+              <ol class="prereq-list">
+                <li><b>Tin cậy máy tính</b> — cắm cáp, mở khoá máy, bấm “Tin cậy” rồi nhập mật mã.
+                  <span class="prereq-note">Chỉ hiện khi máy đang mở khoá. Lỡ bấm “Không tin cậy”:
+                    <span class="prereq-path">Cài đặt › Cài đặt chung › Chuyển hoặc Đặt lại iPhone ›
+                    Đặt lại › Đặt lại Vị trí &amp; Quyền riêng tư</span>, rồi cắm lại.</span></li>
+                <li><b>Chế độ nhà phát triển</b> (iOS 16+) —
+                  <span class="prereq-path">Cài đặt › Quyền riêng tư &amp; Bảo mật › Chế độ nhà phát triển</span>
+                  → bật → khởi động lại máy → xác nhận.
+                  <span class="prereq-note">Mục này chỉ xuất hiện sau khi máy đã cắm vào Xcode một lần,
+                    hoặc đã cài một app ký bằng chứng chỉ dev. Máy mới sẽ không thấy dòng đó.</span></li>
+                <li><b>Web Inspector</b> — <span class="prereq-path">Cài đặt › Safari › Nâng cao › Web Inspector</span>.
+                  <span class="prereq-note">Chỉ cần khi <code>ios.hybrid = true</code>. Không bật thì Appium
+                    không thấy WebView context nào và app hybrid trông như màn hình rỗng.</span></li>
+              </ol>
+            </span>
+          </div>
+          <div class="prereq-native prereq-row">
+            <span class="prereq-step"></span>
+            <span>Appium driver:
+              <span class="prereq-actions">
+                <code class="prereq-cmd prereq-android">appium driver install uiautomator2</code>
+                <code class="prereq-cmd prereq-ios">appium driver install xcuitest</code>
+                <button class="prereq-btn" id="btnDriver" type="button">Kiểm tra / Cài đặt</button>
+              </span>
+              <pre class="prereq-out" id="driverOut" hidden></pre>
+            </span>
+          </div>
+          <!-- The step that has no Android counterpart at all, and the one that
+               most often blocks a first iOS run. -->
+          <div class="prereq-ios prereq-row">
+            <span class="prereq-step"></span>
+            <span>Ký WebDriverAgent bằng tài khoản Apple Developer:
+              <span class="prereq-sub">Mở <code>WebDriverAgent.xcodeproj</code> trong thư mục driver xcuitest
+                → tab <b>Signing &amp; Capabilities</b> → chọn <b>Team</b> → đổi Bundle Identifier thành
+                một chuỗi chưa ai dùng → build lên máy thật một lần.</span>
+              <span class="prereq-note">Bỏ qua bước này thì Appium báo “Failed to create session”
+                dù đã tin cậy máy tính và bật Chế độ nhà phát triển đầy đủ.
+                Chạy trên Simulator thì không cần ký.</span>
+            </span>
+          </div>
+        </div>
 
         <label class="check"><input type="checkbox" id="headed">
           Hiện trình duyệt để theo dõi (headed)</label>
@@ -148,9 +528,49 @@
           <input id="slowMo" type="number" min="0" max="3000" step="50">
         </div>
 
-        <button class="primary-btn" id="runSuite" type="button">Chạy test</button>
+        <label class="check"><input type="checkbox" id="includeQuarantined">
+          Bao gồm test bị cách ly (quarantined)</label>
+
+        <div style="display:flex;gap:8px;align-items:center">
+          <button class="primary-btn" id="runSuite" type="button">Chạy test</button>
+          <button class="danger-btn" id="stopSuite" type="button" hidden>Dừng test</button>
+        </div>
       </div>
-      <pre class="console" id="runLog"></pre>
+      <pre class="console" id="runLog" hidden></pre>
+      <!-- Populated after a run finishes; this is the page someone is already
+           looking at, so the log they need does not live one navigation away. -->
+      <div id="localNetwork" hidden></div>
+
+      <!-- Local run history (embedded) -->
+      <div id="localRunHistory" hidden>
+        <h2 class="section-title">Lịch sử chạy local</h2>
+        <div class="run-filter-bar">
+          <div class="rfilter-date-wrap">
+            <span class="rfilter-icon">📅</span>
+            <input type="text" id="localRunDate" class="rfilter-date" placeholder="Tất cả ngày" readonly />
+          </div>
+          <div class="rfilter-seg" id="localPlatformFilter">
+            <button type="button" class="seg active" data-plt="all">Tất cả</button>
+            <button type="button" class="seg" data-plt="web">Web</button>
+            <button type="button" class="seg" data-plt="android">Android</button>
+            <button type="button" class="seg" data-plt="ios">iOS</button>
+          </div>
+          <button type="button" class="rfilter-clear" id="localRunDateClear" hidden>✕ Xoá bộ lọc</button>
+        </div>
+        <div class="table-card">
+          <table class="grid">
+            <thead>
+              <tr>
+                <th>Thời gian</th><th>Platform</th><th>Tag</th>
+                <th class="right">Pass</th><th class="right">Fail</th>
+                <th class="right">Thời lượng</th><th></th>
+              </tr>
+            </thead>
+            <tbody id="localRunBody"></tbody>
+          </table>
+        </div>
+        <div class="pager" id="localRunPager"></div>
+      </div>
     </section>
 
     <!-- ============================ Device Farm ============================ -->
@@ -189,6 +609,7 @@
           <button class="ghost-btn" id="fLoad" type="button">Tải project</button>
           <span class="status" id="fConn"></span>
         </div>
+        <p class="err" id="fConnErr" hidden></p>
       </div>
 
       <div class="card">
@@ -205,6 +626,7 @@
           <div class="field">
             <label for="fPool">Device pool</label>
             <select id="fPool"><option value="">— chọn project trước —</option></select>
+            <p class="hint" id="fPoolNote"></p>
           </div>
         </div>
 
@@ -238,13 +660,12 @@
       <div class="card">
         <h3 class="card-title">Gói cài đặt</h3>
 
+        <!-- Read-only. Uploading lives on one screen now; a second uploader
+             here is a second way for the same value to drift. -->
         <div class="field">
-          <label for="fAppFile">App build (<span id="fExt">.apk</span>)</label>
-          <div class="drop" id="fDrop">
-            <input type="file" id="fAppFile" accept=".apk,.ipa">
-            <span id="fDropText">Kéo file vào đây hoặc bấm để chọn</span>
-          </div>
+          <label>App build (<span id="fExt">.apk</span>)</label>
           <p class="hint" id="fAppPath">Chưa có file nào.</p>
+          <button class="linklike" type="button" id="fAppManage">Đổi bản build →</button>
         </div>
 
         <div class="cols">
@@ -263,11 +684,61 @@
 
       <div class="card">
         <h3 class="card-title">Môi trường chạy</h3>
-        <p class="hint">Các biến này được chèn thành <code>export</code> ở đầu phase
-           <code>test</code> của testspec. File testspec được upload nguyên văn lên AWS —
-           đừng để secret ở đây.</p>
+        <p class="hint">Thêm biến môi trường để điều chỉnh hành vi test mà không cần sửa code.
+          Các biến được chèn thành <code>export KEY=VALUE</code> ở đầu phase <code>test</code>
+          của testspec, và đọc trong code qua <code>process.env.KEY</code>.</p>
+
+        <details class="env-guide">
+          <summary>Xem hướng dẫn &amp; các biến có sẵn</summary>
+          <div class="env-guide-body">
+            <p class="env-guide-section">Biến tích hợp sẵn của TestPilot</p>
+            <table class="env-table">
+              <tr>
+                <td><code>TESTPILOT_TAG</code></td>
+                <td>Chỉ chạy scenario có tag này thay vì cả suite.<br>
+                  <span class="env-example">Ví dụ: <code>dang-nhap</code></span></td>
+              </tr>
+              <tr>
+                <td><code>TESTPILOT_APPIUM_HOST</code></td>
+                <td>Override host Appium (mặc định <code>127.0.0.1</code>).</td>
+              </tr>
+              <tr>
+                <td><code>TESTPILOT_PLATFORM</code></td>
+                <td>Tự động set bởi Device Farm (<code>Android</code> / <code>iOS</code>). Không cần thêm tay.</td>
+              </tr>
+            </table>
+
+            <p class="env-guide-section" style="margin-top:12px">Biến tuỳ chỉnh</p>
+            <p class="hint" style="margin:0 0 6px">Thêm bất kỳ biến nào để dùng trong test:</p>
+            <table class="env-table">
+              <tr>
+                <td><code>API_BASE_URL</code></td>
+                <td>Trỏ test sang môi trường SIT/UAT/Prod khác nhau.<br>
+                  <span class="env-example">Ví dụ: <code>https://api-uat.tcbs.com.vn</code></span></td>
+              </tr>
+              <tr>
+                <td><code>RETRY_COUNT</code></td>
+                <td>Số lần retry mỗi bước (nếu runner hỗ trợ).</td>
+              </tr>
+            </table>
+
+            <p class="hint warn-hint" style="margin-top:10px">
+              Không để password, token, hay API key ở đây — testspec được upload nguyên văn
+              lên AWS và có thể bị log. Dùng AWS Secrets Manager cho thông tin nhạy cảm.
+            </p>
+          </div>
+        </details>
         <div id="fEnv"></div>
         <button class="ghost-btn" id="fEnvAdd" type="button">+ Thêm biến</button>
+
+        <div class="field" style="margin-top:18px">
+          <label>Lọc theo tag <span class="faint">(để trống = chạy tất cả)</span></label>
+          <div class="tag-picker" id="fTagPicker">
+            <span class="tag-picker-placeholder" id="fTagPickerPlaceholder">Tất cả scenario — bấm để lọc</span>
+          </div>
+          <input id="fTag" type="hidden">
+          <div class="tag-suggestions" id="fTagSuggestions" hidden></div>
+        </div>
 
         <div class="cols" style="margin-top:18px">
           <div class="field">
@@ -298,9 +769,48 @@
         <ol class="stages" id="fStages"></ol>
         <pre class="console" id="fLog"></pre>
       </div>
+
+      <!-- Farm run history (embedded) -->
+      <div id="farmRunHistory" hidden>
+        <h2 class="section-title">Lịch sử chạy Device Farm</h2>
+        <div class="run-filter-bar">
+          <div class="rfilter-date-wrap">
+            <span class="rfilter-icon">📅</span>
+            <input type="text" id="farmRunDate" class="rfilter-date" placeholder="Tất cả ngày" readonly />
+          </div>
+          <div class="rfilter-seg" id="farmPlatformFilter">
+            <button type="button" class="seg active" data-plt="all">Tất cả</button>
+            <button type="button" class="seg" data-plt="android">Android</button>
+            <button type="button" class="seg" data-plt="ios">iOS</button>
+          </div>
+          <button type="button" class="rfilter-clear" id="farmRunDateClear" hidden>✕ Xoá bộ lọc</button>
+        </div>
+        <div class="table-card">
+          <table class="grid">
+            <thead>
+              <tr>
+                <th>Thời gian</th><th>Platform</th><th>Feature</th><th>Stages</th>
+                <th>Trạng thái</th><th class="right">Thời lượng</th><th></th>
+              </tr>
+            </thead>
+            <tbody id="farmRunBody"></tbody>
+          </table>
+        </div>
+        <div class="pager" id="farmRunPager"></div>
+      </div>
     </section>
 
     <!-- ============================ E2E History ============================ -->
+    <!-- The one place an app build is uploaded. Local runs, workflows and
+         Device Farm all install what this page points at. -->
+    <section class="page" data-page="builds" hidden>
+      <h1>Bản build</h1>
+      <div class="card">
+        <p class="hint" id="buildsRoot"></p>
+        <div id="buildsTable"></div>
+      </div>
+    </section>
+
     <section class="page" data-page="e2e-history" hidden>
       <h1 class="page-title">E2E History</h1>
       <div class="tabbar" id="reportTabs">
@@ -328,7 +838,62 @@
         </table>
       </div>
       <iframe class="report" id="reportFrame" title="Báo cáo chạy test" hidden></iframe>
+      <div id="runDetail" hidden>
+        <div id="runShots" hidden></div>
+        <div id="runNetwork" hidden></div>
+        <div id="runLogWrap">
+          <button type="button" id="historyLogToggle">▼ Log</button>
+          <pre class="console" id="historyRunLog"></pre>
+        </div>
+      </div>
       <p class="empty" id="noReports">Chưa có báo cáo nào. Chạy một lượt test ở E2E Runner trước.</p>
+    </section>
+
+    <!-- ============================ Healing Center ============================ -->
+    <section class="page" data-page="healing-center" hidden>
+      <h1 class="page-title">Healing Center</h1>
+      <p class="hint">Tổng hợp locator được Playwright/Appium phục hồi qua nhiều lần chạy. Chỉ locator đủ bằng chứng mới có thể được áp dụng làm primary.</p>
+
+      <div class="healing-summary">
+        <div class="healing-stat"><b id="healProposed">0</b><span>Chờ duyệt</span></div>
+        <div class="healing-stat"><b id="healWatching">0</b><span>Đang theo dõi</span></div>
+        <div class="healing-stat"><b id="healApplied">0</b><span>Đã áp dụng</span></div>
+        <div class="healing-stat"><b id="healRejected">0</b><span>Đã từ chối</span></div>
+      </div>
+
+      <div class="healing-toolbar">
+        <div class="field compact">
+          <label for="healStatusFilter">Trạng thái</label>
+          <select id="healStatusFilter">
+            <option value="all">Tất cả</option>
+            <option value="proposed">Chờ duyệt</option>
+            <option value="watching">Đang theo dõi</option>
+            <option value="applied">Đã áp dụng</option>
+            <option value="rejected">Đã từ chối</option>
+          </select>
+        </div>
+        <div class="field compact">
+          <label for="healPlatformFilter">Platform</label>
+          <select id="healPlatformFilter">
+            <option value="all">Tất cả</option>
+            <option value="web">Web</option>
+            <option value="android">Android</option>
+            <option value="ios">iOS</option>
+          </select>
+        </div>
+        <span class="hint" id="healingPolicy"></span>
+      </div>
+
+      <div class="table-card healing-table-card">
+        <table class="grid healing-table">
+          <thead><tr>
+            <th>Element</th><th>Platform</th><th>Primary hiện tại</th><th>Locator đã fail</th><th>Locator phục hồi</th>
+            <th class="right">Heals</th><th class="right">Runs</th><th class="right">Máy</th><th>Lần cuối</th><th>Trạng thái</th><th></th>
+          </tr></thead>
+          <tbody id="healingBody"></tbody>
+        </table>
+      </div>
+      <p class="status" id="healingStatus"></p>
     </section>
 
     <!-- ============================ Personal Settings ============================ -->
@@ -376,6 +941,42 @@
             <input id="toolFigma" list="mcpTools" type="text" placeholder="figma_get_file">
           </div>
         </div>
+        <details class="studio-advanced" data-mcp="any" hidden>
+          <summary>Tool đọc ảnh/design <span class="faint">(khuyến nghị)</span></summary>
+          <p class="hint">Nếu MCP tách nội dung và ảnh thành tool riêng, Horus sẽ tự gọi thêm hai tool này.</p>
+          <div class="cols">
+            <div class="field">
+              <label for="toolConfluenceAttachments">Tool ảnh đính kèm Confluence</label>
+              <input id="toolConfluenceAttachments" list="mcpTools" type="text" placeholder="confluence_get_attachments">
+            </div>
+            <div class="field">
+              <label for="toolFigmaImage">Tool render ảnh Figma</label>
+              <input id="toolFigmaImage" list="mcpTools" type="text" placeholder="figma_get_screenshot">
+            </div>
+          </div>
+        </details>
+        <details class="studio-advanced" data-mcp="any" hidden>
+          <summary>Ảnh trong trang Confluence <span class="faint" id="confluenceAuthState"></span></summary>
+          <p class="hint">
+            Ảnh bạn tải lên Confluence là file riêng tư, MCP không có quyền đọc.
+            Tạo API token tại <code>id.atlassian.com</code> → Security → API tokens,
+            rồi điền vào đây để Horus đọc được ảnh thiết kế làm bằng chứng sinh testcase.
+          </p>
+          <div class="cols">
+            <div class="field">
+              <label for="confluenceEmail">Email Atlassian</label>
+              <input id="confluenceEmail" type="email" autocomplete="off" placeholder="ban@congty.com">
+            </div>
+            <div class="field">
+              <label for="confluenceToken">API token</label>
+              <input id="confluenceToken" type="password" autocomplete="off" placeholder="••••••••">
+            </div>
+          </div>
+          <div class="btnrow">
+            <button class="ghost-btn" id="confluenceAuthSave" type="button">Lưu</button>
+            <span class="status" id="confluenceAuthStatus"></span>
+          </div>
+        </details>
         <datalist id="mcpTools"></datalist>
 
         <div class="btnrow" data-mcp="any" hidden>
@@ -400,10 +1001,21 @@
         <h3 class="card-title">Môi trường</h3>
         <dl class="kv">
           <dt>Config file</dt><dd id="cfgFile">—</dd>
-          <dt>ANTHROPIC_API_KEY</dt><dd id="apiKey">—</dd>
+          <dt>API key sinh testcase (DeepSeek/Anthropic)</dt><dd id="apiKey">—</dd>
           <dt>Element trong registry</dt><dd id="elCount">—</dd>
         </dl>
         <p class="err" id="cfgErr" hidden></p>
+      </div>
+
+      <div class="card">
+        <h3 class="card-title">AI phân tích ảnh/design</h3>
+        <p class="hint">Gemini đọc ảnh Confluence/Figma, sau đó DeepSeek xử lý phần text và sinh testcase. Khóa được lưu riêng trong <code>.testpilot.secrets.json</code> và không xuất hiện trong log.</p>
+        <div class="inline-input model-key-input">
+          <input id="geminiVisionKey" type="password" autocomplete="new-password"
+                 placeholder="Gemini API key">
+          <button class="chip-btn" id="saveVisionKey" type="button">Lưu key</button>
+        </div>
+        <p class="status" id="visionKeyStatus"></p>
       </div>
 
       <div class="btnrow">
@@ -424,6 +1036,7 @@
   </main>
 </div>
 
+<script src="/flatpickr.min.js"></script>
 <script type="module" src="/app.js"></script>
 </body>
 </html>

@@ -18,6 +18,7 @@ async function main(): Promise<void> {
       env: { ...cfg.farm.env, ...(await farmSecretEnv(cfg, log)) },
       runsDir: cfg.paths.runs,
       flakeDb: cfg.paths.flakeDb,
+      healingDb: cfg.paths.healingDb,
       reportsDir: cfg.paths.reports,
       retention: cfg.retention,
     },

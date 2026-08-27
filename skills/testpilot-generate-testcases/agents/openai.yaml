@@ -1,0 +1,6 @@
+interface:
+  display_name: "Thiết kế testcase TestPilot"
+  short_description: "Sinh Gherkin TestPilot ngắn gọn, đủ coverage"
+  default_prompt: "Dùng $testpilot-generate-testcases để đọc tài liệu sản phẩm này và sinh bộ testcase TestPilot ngắn gọn, bám sát nguồn, bao phủ đủ nghiệp vụ."
+policy:
+  allow_implicit_invocation: true

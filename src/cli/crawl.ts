@@ -75,9 +75,14 @@ async function main(): Promise<void> {
   for (const def of defs) {
     const existing = registry.raw.elements[def.id];
     if (!existing) {
-      registry.raw.elements[def.id] = def;
+      // Observed on the running application, which is stronger evidence than
+      // anything read from a document.
+      registry.raw.elements[def.id] = { ...def, provenance: 'discovered' };
       added++;
       continue;
+    }
+    if (!existing.provenance || existing.provenance === 'byproduct') {
+      existing.provenance = 'discovered';
     }
     mergeCandidates(existing, def, args.platform);
     merged++;

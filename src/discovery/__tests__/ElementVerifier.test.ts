@@ -118,6 +118,14 @@ describe('StandardElementVerifier — input action', () => {
 });
 
 describe('StandardElementVerifier — semantic checks', () => {
+  it('treats Vietnamese tone-mark spelling variants as the same label', () => {
+    const result = verifier.verify(
+      intent({ action: 'tap', label: 'Xoá khỏi danh mục' }),
+      element({ text: 'Xóa khỏi danh mục', enabled: true, interactive: true }),
+    );
+    assert.equal(result.checks.labelMatch, true);
+    assert.ok(result.passed);
+  });
   it('role mismatch recorded in evidence', () => {
     const result = verifier.verify(
       intent({ action: 'tap', semanticRole: 'button' }),
@@ -158,6 +166,15 @@ describe('StandardElementVerifier — semantic checks', () => {
       element({ text: 'Login Button' }),
     );
     assert.equal(result.checks.labelMatch, true);
+  });
+
+  it('accepts a compact runtime option named with business context', () => {
+    const result = verifier.verify(
+      intent({ action: 'tap', label: 'Giá 1M' }),
+      element({ text: '1M', role: 'tab', enabled: true, interactive: true }),
+    );
+    assert.equal(result.checks.labelMatch, true);
+    assert.ok(result.passed);
   });
 });
 

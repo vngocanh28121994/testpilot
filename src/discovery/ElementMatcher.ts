@@ -95,20 +95,41 @@ export class DeterministicMatcher implements ElementMatcher {
       reasons: matchScore.reasons,
       penalties: matchScore.penalties,
       verified: false,
-      locator: bestLocator(element),
+      locator: bestLocator(element, observation.platform),
       score: matchScore,
     }));
   }
 }
 
 /** Derive the most stable locator from what the platform exposed. */
-function bestLocator(el: ObservedElement): { strategy: string; value: string } | undefined {
+function bestLocator(
+  el: ObservedElement,
+  platform: UiObservation['platform'],
+): { strategy: string; value: string } | undefined {
   if (el.testId) return { strategy: 'testId', value: el.testId };
   if (el.resourceId) return { strategy: 'resourceId', value: el.resourceId };
   if (el.accessibilityLabel) return { strategy: 'accessibility', value: el.accessibilityLabel };
+  if (el.placeholder) return { strategy: 'placeholder', value: el.placeholder };
   if (el.css) return { strategy: 'css', value: el.css };
   if (el.xpath) return { strategy: 'xpath', value: el.xpath };
+  // Static web text often has no id/class (for example a ticker symbol in a
+  // virtual table). Matching only a leaf node avoids the ancestor-text trap;
+  // the ambiguity and verification gates still run before this locator is
+  // accepted or persisted.
+  if (platform === 'web' && el.text && !el.childIds?.length) {
+    return {
+      strategy: 'xpath',
+      value: `//*[not(*) and normalize-space(.)=${xpathLiteral(el.text)}]`,
+    };
+  }
   return undefined;
+}
+
+function xpathLiteral(value: string): string {
+  if (!value.includes("'")) return `'${value}'`;
+  if (!value.includes('"')) return `"${value}"`;
+  return `concat(${value.split("'").map((part, i) =>
+    `${i ? `,"'",` : ''}'${part}'`).join('')})`;
 }
 
 function clamp(n: number, lo: number, hi: number): number {

@@ -32,8 +32,10 @@ interface McpElement {
   name?: string;
   value?: string;
   text?: string;
+  placeholder?: string;
   resourceId?: string;
   testId?: string;
+  css?: string;
   xpath?: string;
   bounds?: { x: number; y: number; width: number; height: number } | string;
   visible?: boolean;
@@ -180,8 +182,10 @@ function convertMcpJson(raw: McpInspectionResult): UiObservation {
       role: el.type,
       text: el.text ?? el.value,
       accessibilityLabel: el.label ?? el.name,
+      placeholder: el.placeholder,
       resourceId: el.resourceId,
       testId: el.testId,
+      css: el.css,
       xpath: el.xpath,
       bounds: parseBounds(el.bounds),
       visible: el.visible ?? true,

@@ -23,6 +23,8 @@ export interface Observed {
   resourceId?: string;
   /** CSS selector the driver believes is unique. Web only. */
   css?: string;
+  /** Nearest visible section/card heading(s), used to disambiguate controls. */
+  context?: string[];
   /** True when the user can act on it: button, link, input, clickable node. */
   interactive: boolean;
   /** Position among same-role siblings. The fallback of last resort. */
@@ -52,12 +54,30 @@ const WEIGHT = {
   exactText: 0.7,
   /** `#id` is written once and addressed forever. */
   cssId: 0.85,
+  /**
+   * `button.btn-login` — an app-authored class, no structural combinators.
+   * Ranked above visible text because text is the thing that provably rots:
+   * it is translated, reworded, and — as the TCInvest login button showed —
+   * rewritten by `text-transform` between the DOM and the screen. A class name
+   * survives all three.
+   */
+  cssClass: 0.82,
   /** A structural `div > div:nth-of-type(2)` path breaks the next time anyone
    *  wraps something in a container. It is a locator of last resort that only
    *  looks respectable. */
   cssPath: 0.35,
   index: 0.3,
 } as const;
+
+/**
+ * True for a selector that addresses an element by what it *is* — a tag plus
+ * one or more class names — rather than by where it sits. Anything with a
+ * combinator (` `, `>`, `+`, `~`) or a positional pseudo-class is a structural
+ * path and keeps the lower `cssPath` weight.
+ */
+function isSemanticClassSelector(sel: string): boolean {
+  return /^[a-zA-Z][\w-]*(\.[A-Za-z_][\w-]*)+$/.test(sel);
+}
 
 /** Below this, a locator is a stopgap rather than something to rely on. */
 export const FRAGILE_BELOW = 0.5;
@@ -96,7 +116,12 @@ export function candidatesFor(o: Observed, platform: Platform): LocatorCandidate
   if (o.placeholder) add('placeholder', o.placeholder, WEIGHT.placeholder);
   if (o.text && !o.container && !isIconLigature(o.text)) add('label', o.text, WEIGHT.exactText);
   if (o.css && platform === 'web') {
-    add('css', o.css, o.css.startsWith('#') ? WEIGHT.cssId : WEIGHT.cssPath);
+    const w = o.css.startsWith('#')
+      ? WEIGHT.cssId
+      : isSemanticClassSelector(o.css)
+        ? WEIGHT.cssClass
+        : WEIGHT.cssPath;
+    add('css', o.css, w);
   }
 
   // Position is emitted only when nothing better exists, and only for native,

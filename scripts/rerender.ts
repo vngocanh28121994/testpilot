@@ -40,6 +40,10 @@ async function main(): Promise<void> {
         report: RunReport;
         verdicts: FlakeVerdict[];
       };
+      // Old versions wrote cross-run proposals into every run snapshot. The
+      // HTML now derives only this run's step.heal events; clear stale aggregate
+      // data while rebuilding the historical report.
+      report.healSuggestions = [];
       await writeHtmlReport(report, verdicts ?? [], dir);
       const videos = await appendDeviceVideos(dir);
       console.log(`[rerender] ${entry.name}${videos ? ` (+${videos} video)` : ''}`);
