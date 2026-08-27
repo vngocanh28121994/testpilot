@@ -29,7 +29,15 @@
     /* Linting */
     "noUnusedLocals": true,
     "noUnusedParameters": true,
-    "erasableSyntaxOnly": true,
+    // KHÔNG bật "erasableSyntaxOnly" dù sen có bật. Xem UI-MIGRATION-PLAN §6.1d.
+    //
+    // `import type` từ ../src/ kéo backend vào TS program này, và compilerOptions
+    // áp cho CẢ program — không scope theo thư mục được. Backend dùng constructor
+    // parameter property ở History, Registry, HealingStore (một idiom TS hoàn toàn
+    // bình thường), nên bật cờ này là 6 lỗi TS1294 trong code không thuộc về ui/.
+    //
+    // Ý định của cờ — cấm enum/namespace/parameter property trong code MỚI — được
+    // giữ nguyên bằng ESLint ở eslint.config.js, nơi phạm vi đúng là ui/src.
     "noFallthroughCasesInSwitch": true,
 
     /* Path aliases */

@@ -10,33 +10,53 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as ProbeStreamRouteImport } from './routes/probe.stream'
+import { Route as TodoSlugRouteImport } from './routes/todo.$slug'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ProbeStreamRoute = ProbeStreamRouteImport.update({
+  id: '/probe/stream',
+  path: '/probe/stream',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const TodoSlugRoute = TodoSlugRouteImport.update({
+  id: '/todo/$slug',
+  path: '/todo/$slug',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/probe/stream': typeof ProbeStreamRoute
+  '/todo/$slug': typeof TodoSlugRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/probe/stream': typeof ProbeStreamRoute
+  '/todo/$slug': typeof TodoSlugRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/probe/stream': typeof ProbeStreamRoute
+  '/todo/$slug': typeof TodoSlugRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/'
+  fullPaths: '/' | '/probe/stream' | '/todo/$slug'
   fileRoutesByTo: FileRoutesByTo
-  to: '/'
-  id: '__root__' | '/'
+  to: '/' | '/probe/stream' | '/todo/$slug'
+  id: '__root__' | '/' | '/probe/stream' | '/todo/$slug'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  ProbeStreamRoute: typeof ProbeStreamRoute
+  TodoSlugRoute: typeof TodoSlugRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -48,11 +68,27 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/probe/stream': {
+      id: '/probe/stream'
+      path: '/probe/stream'
+      fullPath: '/probe/stream'
+      preLoaderRoute: typeof ProbeStreamRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/todo/$slug': {
+      id: '/todo/$slug'
+      path: '/todo/$slug'
+      fullPath: '/todo/$slug'
+      preLoaderRoute: typeof TodoSlugRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  ProbeStreamRoute: ProbeStreamRoute,
+  TodoSlugRoute: TodoSlugRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

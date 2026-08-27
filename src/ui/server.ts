@@ -12,6 +12,16 @@ import { fileURLToPath } from 'node:url';
 import { createHash } from 'node:crypto';
 import { completeJson, listModels, llmAvailable, missingKeyHint, pickModel } from '../llm/client.js';
 import { ConfigSchema, applyEnv, loadConfig, resolveModel, saveConfig, type TestPilotConfig } from '../config.js';
+// Hợp đồng dùng chung với app React ở ui/. Chỉ có type — không kéo theo gì
+// lúc chạy. Gắn kiểu trả về cho handler ở đây chính là chỗ TypeScript bắt
+// được lệch hợp đồng, thay vì để nó nổ ở trình duyệt. Xem contracts.ts.
+import type {
+  Build,
+  HealingResponse,
+  HistoryResponse,
+  RunHistoryEntry,
+  StateResponse,
+} from './contracts.js';
 import { Registry } from '../core/registry.js';
 import { ScenarioReviewStore, scenarioBlocks } from '../core/scenarioReview.js';
 import { listRuns } from '../core/runstore.js';
@@ -216,8 +226,10 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
     case 'GET /api/models':
       return json(res, 200, await models());
 
-    case 'GET /api/history':
-      return json(res, 200, { runs: await recentRuns() });
+    case 'GET /api/history': {
+      const body: HistoryResponse = { runs: await recentRuns() };
+      return json(res, 200, body);
+    }
 
     case 'GET /api/healing': {
       const cfg = await loadConfig(CONFIG_FILE);
@@ -833,7 +845,7 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
 /* Handlers                                                            */
 /* ------------------------------------------------------------------ */
 
-async function state() {
+async function state(): Promise<StateResponse> {
   let config: TestPilotConfig;
   let configError: string | null = null;
   try {
@@ -911,7 +923,7 @@ async function envBuilds(
  * request can ask this server about an arbitrary file. A missing build is worth
  * saying out loud: Appium fails on it minutes into a run, long after the typo.
  */
-type Build = { path: string; exists: boolean; sizeMb?: number; own?: boolean } | null;
+
 
 const withOwn = (build: Build, own: boolean): Build => (build ? { ...build, own } : build);
 
@@ -925,7 +937,7 @@ async function describeBuild(rel: string | undefined): Promise<Build> {
   }
 }
 
-async function healingState(cfg: TestPilotConfig) {
+async function healingState(cfg: TestPilotConfig): Promise<HealingResponse> {
   const healing = await HealingStore.load(cfg.paths.healingDb);
   const imported = await healing.backfill(cfg.paths.runs);
   if (imported > 0) await healing.save();
@@ -2183,7 +2195,7 @@ async function summarizeWorkflowRecovery(reportPaths: string[]): Promise<Workflo
  * in the run's own record.
  */
 
-async function recentRuns() {
+async function recentRuns(): Promise<RunHistoryEntry[]> {
   const history = await History.load();
   return history.list().map((r) => ({ ...r, stagesDone: stagesDone(r) }));
 }

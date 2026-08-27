@@ -402,6 +402,35 @@ trước, phần còn lại bổ sung dần theo từng PR trang. **Không đư�
 - **Cổng kiểm chứng cuối Phase 2:** `npm run ui:build && grep -rl "node:fs\|require(" dist/ui/app/assets/`
   phải **không ra kết quả nào**.
 
+#### 6.1d ⛔ KHÔNG bật `erasableSyntaxOnly`, dù `sen` có bật
+
+Phát hiện khi chạy Phase 2. `sen/frontend` bật cờ này trong `tsconfig.app.json`; copy sang đây là
+**6 lỗi TS1294** trong code backend:
+
+```
+src/core/history.ts(175,5): error TS1294: This syntax is not allowed when 'erasableSyntaxOnly' is enabled.
+src/core/registry.ts(67,5):  error TS1294: ...
+src/healing/HealingStore.ts(86,5): error TS1294: ...
+```
+
+Nguyên nhân là hệ quả trực tiếp của §6.1a: `import type` từ `../src/` kéo backend vào TS program của
+`ui/`, và **`compilerOptions` áp cho cả program — không scope theo thư mục được**. `History`,
+`Registry`, `HealingStore` đều dùng constructor parameter property (`private readonly file: string`),
+một idiom TS hoàn toàn bình thường mà `erasableSyntaxOnly` cấm.
+
+**Không sửa backend cho một cờ của frontend.** Ý định của cờ — code mới phải xoá-type-là-chạy-được —
+được giữ nguyên bằng ba rule ESLint, nơi phạm vi đúng là `ui/src`:
+
+```js
+'@typescript-eslint/parameter-properties': ['error', { prefer: 'class-property' }],
+'@typescript-eslint/no-namespace': 'error',
+'no-restricted-syntax': ['error', { selector: 'TSEnumDeclaration', message: '…' }],
+```
+
+Đây là lần thứ hai một cờ của `sen` không sống sót qua ranh giới `ui/` → `src/` (lần đầu là
+`composite`, §13 Phase 1). Quy tắc rút ra: **mọi cờ `tsconfig` của `sen` đều phải được thử với một
+`import type` xuyên biên trước khi tin.**
+
 ### 6.2 ⛔ SSE-over-POST cần hook riêng — và cần một store để job sống sót qua điều hướng
 
 Query/Mutation trả một giá trị cuối; 9 route này trả một *dòng chảy*. Giữ nguyên bộ parse khung đã
@@ -712,7 +741,16 @@ khớp `ui/**`, nên phép thử đó **luôn pass một cách rỗng**. Phép t
 
 ---
 
-### Phase 2 — Contract + tầng API + design token · 3–3,5 ngày
+### Phase 2 — Contract + tầng API + design token · 3–3,5 ngày · ✅ **ĐÃ XONG**
+
+> **Trạng thái thực tế.** Tầng contract + API + stream + layout đã chạy với dữ liệu thật. Ba phát
+> hiện mới, chi tiết ở §13:
+>
+> | # | Phát hiện | Sửa |
+> |---|---|---|
+> | 1 | **`erasableSyntaxOnly` không dùng được** — 6 lỗi TS1294 trong backend | Bỏ cờ, thay bằng 3 rule ESLint scope đúng `ui/src` (§6.1d) |
+> | 2 | **`react-refresh/only-export-components` báo lỗi mọi route file** — TanStack bắt buộc export hằng `Route` | Chuyển component sang `panels/` (đúng §3.1) + `allowExportNames: ['Route']` cho `src/routes/**` |
+> | 3 | **R10 chỉ đúng với điều hướng TRONG SPA.** `page.goto`/F5 là reload thật, giết cả module scope | Không phải hồi quy — bản cũ F5 cũng mất stream. Đã ghi vào phép thử để người sau không kết luận nhầm |
 
 **Mục tiêu:** mọi trang sau này chỉ việc gọi hook, không tự `fetch`. Đây là phase dài nhất trong nhóm
 nền móng vì nó gánh thêm §6.1b.
@@ -1227,8 +1265,58 @@ việc 0,5 ngày, làm bất cứ lúc nào **trước khi bắt đầu Phase 4*
 **Nợ kỹ thuật ghi nhận:** job `ui` của CI chạy `ui:build` thay cho `ui:test` — chưa có test nào thì
 `vitest run` thoát 1. Phase 3 thêm lại `ui:test`.
 
-### Việc đầu tiên của Phase 2
+### Phase 2 — ✅ xong
 
-`src/ui/contracts.ts` (§6.1b) — phần rủi ro nhất còn lại, và Phase 1 vừa chứng minh nền cho nó đã
-đứng được: `import type` xuyên biên compile sạch, và ESLint chặn đúng chiều còn lại.
+| File | Vai trò |
+|---|---|
+| `src/ui/contracts.ts` | **Backend change #2.** Hợp đồng type cho các route ưu tiên; chỉ type, không `node:*`, không runtime. Dẫn xuất từ type miền (`HealingRecord & {…}`) chứ không chép tay |
+| `src/ui/server.ts` | Gắn kiểu trả về tường minh: `state()`, `healingState()`, `recentRuns()`, `GET /api/history`. `type Build` cục bộ → chuyển vào contracts |
+| `ui/src/api/client.ts` | `ApiRequestError` mang `path`/`status`/`issues`/`printed`; **giữ đủ hai nhánh lỗi** như `app.js:335` |
+| `ui/src/api/routes.ts` | 32 route JSON + 8 route STREAM, khai báo một lần |
+| `ui/src/api/upload.ts` | §6.6 — raw body, query string, XHR để có progress |
+| `ui/src/lib/streamJob.ts` | Port `streamInto()`, tách parse khỏi DOM, thêm AbortSignal |
+| `ui/src/stores/jobStore.ts` | Store Zustand **duy nhất**; trần 5.000 dòng log; không abort khi unmount |
+| `ui/src/hooks/useStreamJob.ts` | Không có `useEffect` cleanup — đó là điểm mấu chốt của R10 |
+| `ui/src/hooks/useAppState.ts` | §6.7 — `select` cắt lát `/api/state`, 9 hook dẫn xuất |
+| `ui/src/lib/nav.ts` | 14 mục NAV chép từ `app.js:71`, 6 mục giữ nguyên `why` |
+| `ui/src/components/layout/{Sidebar,Header,Main,AppShell}.tsx` | Khung trang |
+| `ui/src/components/{ThemeProvider,ThemeSwitch}.tsx` + `hooks/useTheme.ts` | Dark mode (bản cũ chỉ có light) |
+| `ui/src/panels/{Dashboard,Todo,StreamProbe}/` | Panel; route file chỉ còn 3 dòng |
 
+**Nghiệm thu — chạy thật:**
+
+| Phép thử | Kết quả |
+|---|---|
+| `ui:lint` / `ui:typecheck` / `ui:build` / `typecheck` / `format` | ✅ exit 0 |
+| `npm test` backend sau khi thêm contract | ✅ 835/835 |
+| **Hợp đồng có gác thật không** — cố tình đổi `hasApiKey: boolean` → `number` | ✅ `server.ts(875,5): error TS2322` |
+| Sidebar 14 mục, 6 mục placeholder | ✅ |
+| Dashboard đọc `/api/state` qua proxy | ✅ 106 element, dữ liệu thật |
+| **R3 — SSE qua Vite proxy** | ✅ proxy trả **2 chunk** (thẳng backend chỉ 1) ⇒ chảy dần, không buffer |
+| **R10 — job sống sót qua điều hướng SPA** | ✅ panel unmount thật (0 node log), stream vẫn hoàn tất, quay lại còn đủ log |
+| R10 với F5 thật | ✅ mất job — **đúng như bản cũ**, không phải hồi quy |
+| **R14 — upload 200 MB qua proxy** | ✅ 200 MB / 1,47 s, file đúng 209.715.200 byte, config không bị đụng |
+| **R2 — bundle sạch** | ✅ không có `node:fs`/`node:path`/`require(`; **zod không lọt** dù contracts dẫn xuất từ `z.infer` |
+| Contrast AA cả hai theme, 5 token `--status-*` | ✅ light 4,76–5,43:1 · dark 5,51–9,38:1 (ngưỡng AA 4,5:1) |
+| Code splitting | ✅ `AppShell`, `routes`, `todo.$slug` tách chunk riêng |
+
+**Nợ kỹ thuật ghi nhận:**
+
+1. `ui/src/panels/StreamProbe/` + `routes/probe.stream.tsx` là **bàn thử dev-only**, dựng để nghiệm
+   thu R3/R10 trước khi có Local Runner. **Xoá cả hai khi Phase 4 #7 xong.**
+2. Contract mới phủ nhóm route ưu tiên. Các route còn lại bổ sung theo từng PR trang, đúng như §6.1b
+   dự kiến — DoD của mỗi trang đã có ô này.
+3. `StateResponse.features` / `reports` / `deviceEnv` còn là `unknown[]` / `Record<string, unknown>`.
+   Cố ý: ba nhánh đó chỉ Phase 4 #4/#9/#10 mới dùng, và siết type mò trong khi chưa có màn hình dùng
+   nó là đoán. **Dùng `unknown` chứ không `any`** — nơi dùng buộc phải thu hẹp.
+
+### Việc đầu tiên của Phase 3
+
+`ui/src/test/setup.ts`. Hai điều phải nhớ ngay, cả hai đều do Phase 2 tạo ra:
+
+1. `useJobStore.getState().resetAll()` trong `afterEach` — store nằm ở module scope (đó là cả điểm
+   của nó), nên nó sẽ rò trạng thái giữa các test nếu không dọn.
+2. Handler MSW cho 8 route STREAM phải trả `ReadableStream` khung `event:`/`data:` thật. Trả JSON là
+   `streamJob` không bao giờ được test — mà nó vừa là thứ đỡ toàn bộ R3/R10.
+
+Và thêm lại `- run: npm run ui:test` vào job `ui` của `.github/workflows/ci.yml`.

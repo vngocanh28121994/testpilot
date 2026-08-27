@@ -46,6 +46,20 @@ export default defineConfig([
           ],
         },
       ],
+      // ---- Thay cho "erasableSyntaxOnly" của tsconfig (§6.1d) ----
+      // Cờ tsconfig áp cho cả program nên nó bắt lỗi cả backend; ba rule dưới
+      // đây áp đúng phạm vi ui/src và giữ nguyên ý định ban đầu: code mới phải
+      // xoá-type-là-chạy-được, không có cú pháp cần biến đổi lúc build.
+      '@typescript-eslint/parameter-properties': ['error', { prefer: 'class-property' }],
+      '@typescript-eslint/no-namespace': 'error',
+      'no-restricted-syntax': [
+        'error',
+        {
+          selector: 'TSEnumDeclaration',
+          message: 'Dùng union type hoặc object `as const` thay cho enum.',
+        },
+      ],
+
       // @types/node có mặt vì §6.1a, nên `process` và `__dirname` bỗng thành
       // global hợp lệ trong code trình duyệt. Đóng lại cái cửa vừa mở.
       'no-restricted-globals': [
@@ -53,6 +67,20 @@ export default defineConfig([
         { name: '__dirname', message: 'Đây là code trình duyệt.' },
         { name: '__filename', message: 'Đây là code trình duyệt.' },
       ],
+    },
+  },
+  {
+    // Route file của TanStack Router BẮT BUỘC export một hằng tên `Route`.
+    // Đó là cấu trúc của thư viện, không phải mùi code — nhưng
+    // react-refresh/only-export-components thấy một export không-phải-component
+    // thì kêu về mọi component trong cùng file.
+    //
+    // Không nới rule một cách vô điều kiện: kỷ luật thật sự là route file phải
+    // MỎNG, logic nằm ở panels/ (UI-MIGRATION-PLAN §3.1). `allowExportNames`
+    // chỉ dọn đúng phần nhiễu mà cấu trúc thư viện gây ra.
+    files: ['src/routes/**/*.tsx'],
+    rules: {
+      'react-refresh/only-export-components': ['error', { allowExportNames: ['Route'] }],
     },
   },
   {
