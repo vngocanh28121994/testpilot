@@ -9,6 +9,7 @@ import {
 import { useState } from 'react';
 import { ChevronDown, ChevronUp, ChevronsUpDown } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 
 /**
  * Bảng dùng chung, dựng trên TanStack Table 8.
@@ -60,21 +61,21 @@ export function DataTable<T>({
   const colCount = table.getAllLeafColumns().length;
 
   return (
-    <div className={cn('border-border overflow-x-auto rounded-lg border', className)}>
-      <table className="w-full text-sm">
+    <div className={cn('overflow-x-auto rounded-lg border', className)}>
+      <Table>
         {caption && <caption className="sr-only">{caption}</caption>}
-        <thead>
+        <TableHeader>
           {table.getHeaderGroups().map((group) => (
-            <tr key={group.id} className="text-muted-foreground text-left text-xs">
+            <TableRow key={group.id}>
               {group.headers.map((header) => {
                 const sortable = header.column.getCanSort();
                 const dir = header.column.getIsSorted();
                 const align = (header.column.columnDef.meta as { align?: 'right' } | undefined)?.align;
                 return (
-                  <th
+                  <TableHead
                     key={header.id}
                     aria-sort={dir === 'asc' ? 'ascending' : dir === 'desc' ? 'descending' : undefined}
-                    className={cn('px-2 py-2 font-medium', align === 'right' && 'text-right')}
+                    className={cn(align === 'right' && 'text-right')}
                   >
                     {header.isPlaceholder ? null : sortable ? (
                       <button
@@ -94,42 +95,45 @@ export function DataTable<T>({
                     ) : (
                       flexRender(header.column.columnDef.header, header.getContext())
                     )}
-                  </th>
+                  </TableHead>
                 );
               })}
-            </tr>
+            </TableRow>
           ))}
-        </thead>
-        <tbody>
+        </TableHeader>
+        <TableBody>
           {loading && (
-            <tr>
-              <td colSpan={colCount} className="text-muted-foreground px-2 py-6 text-center">
+            <TableRow>
+              <TableCell colSpan={colCount} className="text-muted-foreground py-6 text-center">
                 {loadingLabel}
-              </td>
-            </tr>
+              </TableCell>
+            </TableRow>
           )}
           {!loading && data.length === 0 && (
-            <tr>
-              <td colSpan={colCount} className="text-muted-foreground px-2 py-6 text-center">
+            <TableRow>
+              <TableCell colSpan={colCount} className="text-muted-foreground py-6 text-center">
                 {empty}
-              </td>
-            </tr>
+              </TableCell>
+            </TableRow>
           )}
           {!loading &&
             table.getRowModel().rows.map((row) => (
-              <tr key={row.id} className="border-border border-t">
+              <TableRow key={row.id}>
                 {row.getVisibleCells().map((cell) => {
                   const align = (cell.column.columnDef.meta as { align?: 'right' } | undefined)?.align;
                   return (
-                    <td key={cell.id} className={cn('px-2 py-2', align === 'right' && 'text-right tabular-nums')}>
+                    <TableCell
+                      key={cell.id}
+                      className={cn(align === 'right' && 'text-right tabular-nums')}
+                    >
                       {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                    </td>
+                    </TableCell>
                   );
                 })}
-              </tr>
+              </TableRow>
             ))}
-        </tbody>
-      </table>
+        </TableBody>
+      </Table>
     </div>
   );
 }

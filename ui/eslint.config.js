@@ -84,6 +84,25 @@ export default defineConfig([
     },
   },
   {
+    // Primitive của shadcn: sinh bằng CLI, chép từ sen, KHÔNG sửa tay (§3.1).
+    //
+    // Hai rule dưới đây báo lỗi trên chính mã nguồn upstream của shadcn, và
+    // sen/frontend cũng đỏ y hệt ở đúng file này — đã kiểm. Cụ thể:
+    //   · react-refresh: các file này export cả component lẫn `cva` variant,
+    //     đó là hình dạng của shadcn chứ không phải mùi code.
+    //   · react-hooks/purity: `Math.random()` trong useMemo ở
+    //     SidebarMenuSkeleton, dùng để random bề rộng skeleton. Không ảnh
+    //     hưởng tính đúng — chỉ là chiều rộng một ô xám.
+    //
+    // Chỉ tắt HAI rule đó, không ignore cả thư mục: nếu ta lỡ tay sửa vào đây
+    // và để lại `any` hay biến thừa thì vẫn phải đỏ.
+    files: ['src/components/ui/**/*.{ts,tsx}'],
+    rules: {
+      'react-refresh/only-export-components': 'off',
+      'react-hooks/purity': 'off',
+    },
+  },
+  {
     // Helper của test không phải component và không bao giờ được fast-refresh;
     // `export * from '@testing-library/react'` là cách dùng chuẩn của
     // renderWithProviders, không phải mùi code.

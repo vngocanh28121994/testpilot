@@ -1,5 +1,6 @@
 import { AppShell } from '@/components/layout/AppShell';
 import { DataTable } from '@/components/data-table';
+import { Card, CardContent } from '@/components/ui/card';
 import { useAppState } from '@/hooks/useAppState';
 import { featureColumns } from './columns';
 
@@ -25,10 +26,12 @@ export default function DashboardPanel() {
     <AppShell title="Dashboard">
       <div role="group" aria-label="Tổng quan" className="flex flex-wrap gap-3">
         {(tiles.data ?? []).map((t) => (
-          <div key={t.label} className="border-border min-w-32 rounded-lg border px-4 py-3">
-            <div className="text-2xl font-semibold tabular-nums">{t.value}</div>
-            <div className="text-muted-foreground text-xs">{t.label}</div>
-          </div>
+          <Card key={t.label} className="min-w-32 py-4">
+            <CardContent className="px-4">
+              <div className="text-2xl font-semibold tabular-nums">{t.value}</div>
+              <div className="text-muted-foreground text-xs">{t.label}</div>
+            </CardContent>
+          </Card>
         ))}
       </div>
 

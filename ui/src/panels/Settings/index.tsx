@@ -10,7 +10,9 @@ import {
   useSaveModelKey,
 } from './hooks/useSettings';
 import { mcpFromForm, mcpToForm, visionKeyStatus, type McpForm } from './mcp';
-import { Field, Section, inputClass } from './Field';
+import { Field, Section } from './Field';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 
 const PATH_FIELDS = [
   ['docs', 'Tài liệu'],
@@ -111,10 +113,9 @@ function SettingsForm({
 
         <Section title="Vision key (Gemini)">
           <Field label="Gemini API key" hint={vision.text}>
-              <input
+              <Input
                 type="password"
-              className={inputClass}
-              value={geminiKey}
+                            value={geminiKey}
               onChange={(e) => setGeminiKey(e.target.value)}
               // Ô LUÔN bắt đầu rỗng, kể cả khi đã có key: server không bao giờ
               // gửi giá trị về (R9). Placeholder là thứ duy nhất nói ra trạng thái.
@@ -124,18 +125,16 @@ function SettingsForm({
             />
           </Field>
           <div>
-            <button
-              type="button"
+            <Button
               disabled={saveKey.isPending}
               onClick={() => {
                 const key = geminiKey.trim();
                 if (!key) return;
                 saveKey.mutate({ provider: 'gemini', key }, { onSuccess: () => setGeminiKey('') });
               }}
-              className="bg-primary text-primary-foreground rounded-md px-3 py-1.5 text-sm disabled:opacity-50"
-            >
+              >
               {saveKey.isPending ? 'Đang lưu…' : 'Lưu vision key'}
-            </button>
+            </Button>
             {!geminiKey.trim() && (
               <span className="text-muted-foreground ms-2 text-xs">
                 Nhập key mới hoặc giữ nguyên key đã lưu.
@@ -146,10 +145,9 @@ function SettingsForm({
 
         <Section title="Confluence">
           <Field label="Email Atlassian">
-              <input
+              <Input
                 type="email"
-              className={inputClass}
-              value={email}
+                            value={email}
               onChange={(e) => setEmailEdit(e.target.value)}
             />
           </Field>
@@ -157,17 +155,15 @@ function SettingsForm({
             label="API token"
             hint={authLoaded ? (hasToken ? '(đã cấu hình)' : '(chưa cấu hình)') : ''}
           >
-              <input
+              <Input
                 type="password"
-              className={inputClass}
-              value={token}
+                            value={token}
               onChange={(e) => setToken(e.target.value)}
               placeholder={hasToken ? '•••••••• (token đã lưu)' : 'API token'}
             />
           </Field>
           <div>
-            <button
-              type="button"
+            <Button
               disabled={saveAuth.isPending}
               onClick={() => {
                 if (!email.trim() || !token.trim()) return;
@@ -176,10 +172,9 @@ function SettingsForm({
                   { onSuccess: () => setToken('') },
                 );
               }}
-              className="bg-primary text-primary-foreground rounded-md px-3 py-1.5 text-sm disabled:opacity-50"
-            >
+              >
               {saveAuth.isPending ? 'Đang lưu…' : 'Lưu Confluence auth'}
-            </button>
+            </Button>
             {(!email.trim() || !token.trim()) && (
               <span className="text-muted-foreground ms-2 text-xs">
                 Cần cả email Atlassian và API token.
@@ -192,8 +187,7 @@ function SettingsForm({
           <Field label="Transport">
               <select
                 aria-label="Transport"
-              className={inputClass}
-              value={mcp.transport}
+                            value={mcp.transport}
               onChange={(e) => set('transport', e.target.value as McpForm['transport'])}
             >
               <option value="">Không dùng MCP</option>
@@ -207,43 +201,42 @@ function SettingsForm({
           {mcp.transport === 'stdio' && (
             <>
               <Field label="Command">
-                  <input
-                    className={inputClass} value={mcp.command} onChange={(e) => set('command', e.target.value)} />
+                  <Input
+                     value={mcp.command} onChange={(e) => set('command', e.target.value)} />
               </Field>
               <Field label="Args" hint="Cách nhau bằng dấu cách.">
-                  <input
-                    className={inputClass} value={mcp.args} onChange={(e) => set('args', e.target.value)} />
+                  <Input
+                     value={mcp.args} onChange={(e) => set('args', e.target.value)} />
               </Field>
             </>
           )}
           {mcp.transport === 'http' && (
             <Field label="URL">
-                <input
-                  className={inputClass} value={mcp.url} onChange={(e) => set('url', e.target.value)} />
+                <Input
+                   value={mcp.url} onChange={(e) => set('url', e.target.value)} />
             </Field>
           )}
 
           {mcp.transport && (
             <>
               <Field label="Tool: Confluence page">
-                  <input
-                    className={inputClass} value={mcp.confluencePage} onChange={(e) => set('confluencePage', e.target.value)} />
+                  <Input
+                     value={mcp.confluencePage} onChange={(e) => set('confluencePage', e.target.value)} />
               </Field>
               <Field label="Tool: Figma file">
-                  <input
-                    className={inputClass} value={mcp.figmaFile} onChange={(e) => set('figmaFile', e.target.value)} />
+                  <Input
+                     value={mcp.figmaFile} onChange={(e) => set('figmaFile', e.target.value)} />
               </Field>
               <Field label="Tool: Confluence attachments">
-                  <input
-                    className={inputClass} value={mcp.confluenceAttachments} onChange={(e) => set('confluenceAttachments', e.target.value)} />
+                  <Input
+                     value={mcp.confluenceAttachments} onChange={(e) => set('confluenceAttachments', e.target.value)} />
               </Field>
               <Field label="Tool: Figma image">
-                  <input
-                    className={inputClass} value={mcp.figmaImage} onChange={(e) => set('figmaImage', e.target.value)} />
+                  <Input
+                     value={mcp.figmaImage} onChange={(e) => set('figmaImage', e.target.value)} />
               </Field>
               <div>
-                <button
-                  type="button"
+                <Button
                   disabled={probe.isPending}
                   onClick={() =>
                     probe.mutate(mcpFromForm(mcp), {
@@ -260,10 +253,10 @@ function SettingsForm({
                         })),
                     })
                   }
-                  className="border-border rounded-md border px-3 py-1.5 text-sm disabled:opacity-50"
+                  variant="outline"
                 >
                   {probe.isPending ? 'Đang kết nối…' : 'Kiểm tra kết nối'}
-                </button>
+                </Button>
                 {probe.isSuccess && (
                   <span className="text-muted-foreground ms-2 text-xs">
                     {probe.data.tools.length} tool khả dụng.
@@ -277,9 +270,8 @@ function SettingsForm({
         <Section title="Đường dẫn">
           {PATH_FIELDS.map(([key, label]) => (
             <Field key={key} label={label}>
-                <input
-                  className={inputClass}
-                value={paths[key]}
+                <Input
+                                  value={paths[key]}
                 onChange={(e) => setPaths((p) => ({ ...p, [key]: e.target.value }))}
               />
             </Field>
@@ -287,8 +279,7 @@ function SettingsForm({
         </Section>
 
         <div>
-          <button
-            type="button"
+          <Button
             disabled={saveConfig.isPending}
             onClick={() => {
               saveConfig.mutate({
@@ -303,10 +294,9 @@ function SettingsForm({
                 },
               });
             }}
-            className="bg-primary text-primary-foreground rounded-md px-4 py-2 text-sm disabled:opacity-50"
-          >
+            >
             {saveConfig.isPending ? 'Đang lưu…' : 'Lưu cài đặt'}
-          </button>
+          </Button>
         </div>
       </div>
     </AppShell>

@@ -1,6 +1,23 @@
-import type { ReactNode } from 'react';
 import { cn } from '@/lib/utils';
 
-export function Main({ children, className }: { children: ReactNode; className?: string }) {
-  return <main className={cn('min-w-0 flex-1 overflow-x-hidden overflow-y-auto p-6', className)}>{children}</main>;
+type MainProps = React.HTMLAttributes<HTMLElement> & {
+  fixed?: boolean;
+  fluid?: boolean;
+  ref?: React.Ref<HTMLElement>;
+};
+
+/** Theo sen/frontend/src/components/layout/main.tsx. */
+export function Main({ fixed, className, fluid, ...props }: MainProps) {
+  return (
+    <main
+      data-layout={fixed ? 'fixed' : 'auto'}
+      className={cn(
+        'px-4 py-6',
+        fixed && 'flex grow flex-col overflow-hidden',
+        !fluid && '@7xl/content:mx-auto @7xl/content:w-full @7xl/content:max-w-7xl',
+        className,
+      )}
+      {...props}
+    />
+  );
 }

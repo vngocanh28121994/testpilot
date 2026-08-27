@@ -1,18 +1,13 @@
 import { Toaster as Sonner, type ToasterProps } from 'sonner';
+import { useTheme } from '@/hooks/useTheme';
 
-/**
- * Bọc mỏng quanh sonner để Toaster theo theme của app.
- *
- * Đây là chỗ shadcn CLI sẽ ghi đè nếu ai đó chạy `npx shadcn add sonner`.
- * Bản shadcn gốc đọc theme từ next-themes; TestPilot chưa có ThemeProvider
- * (Phase 2), nên tạm đọc thẳng class `dark` trên <html>.
- */
-export function Toaster(props: ToasterProps) {
-  const theme = document.documentElement.classList.contains('dark') ? 'dark' : 'light';
+export function Toaster({ ...props }: ToasterProps) {
+  const { resolved } = useTheme();
+
   return (
     <Sonner
-      theme={theme}
-      className="toaster group"
+      theme={resolved}
+      className="toaster group [&_div[data-content]]:w-full"
       style={
         {
           '--normal-bg': 'var(--popover)',

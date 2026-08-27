@@ -144,6 +144,38 @@ Ba điểm cốt lõi của quy ước này:
    khai báo `validateSearch` và render `<Header>…</Header><Main><Panel/></Main>`. Toàn bộ logic ở
    `panels/`. Giữ đúng kỷ luật này thì `routeTree.gen.ts` sinh lại không bao giờ đụng logic.
 
+### 3.3 Design system — đã áp dụng
+
+Token, primitive và khuôn layout lấy từ `sen/frontend`. Chi tiết đã làm:
+
+| Lớp | Nội dung |
+|---|---|
+| **Token** (`ui/src/index.css`) | Nền trung tính slate + **brand PRIMARY xanh lá**, `--radius: 0.625rem`, `--chart-1..5`, bộ `--sidebar-*` đầy đủ (gồm `sidebar-primary`, `sidebar-ring`), `--ring` = brand chứ không phải xám, font sans/serif/mono, base reset của sen |
+| **Primitive** (`ui/src/components/ui/`) | 15 file chép thẳng từ `sen`: button, card, input, label, select, badge, separator, table, skeleton, tooltip, sidebar, sheet, scroll-area, dropdown-menu, collapsible + `hooks/use-mobile` |
+| **Layout** | `Header` (đổ bóng chỉ khi cuộn > 10px), `Main` (max-w-7xl), `AppSidebar` trên shadcn `Sidebar` — thu gọn được, có rail, tự thành sheet trên mobile |
+
+**Bốn chỗ cố ý lệch khỏi `sen`:**
+
+1. **Không mang khối `LEGACY tokens`** (`--text`, `--app-bg`, `--surface`, `--panel-bg`…). Chính `sen`
+   ghi "Xoá block này khi đã migrate hết panel" — đó là nợ của họ, không phải design system.
+2. **Không mang animation riêng của `sen`**: `login-neural`, `brand-logo`, `analysis-hero`, theme
+   highlight.js. Chúng thuộc màn hình đăng nhập / chat / phân tích của `sen`.
+3. **Không `@import` Merriweather.** Giữ token `--font-serif` để hợp đồng không đổi, nhưng grep toàn
+   bộ `src/` của `sen` chỉ ra **đúng một** dòng nhắc tới nó — chính dòng khai báo. Import tốn **272 KB
+   woff2, 27% thư mục assets**, cho một typeface không chữ nào dùng. Cách bật lại ghi ngay trong CSS.
+4. **Thêm `--status-*`** (pass/fail/flaky/skip/running). `sen` không có khái niệm tương đương, còn
+   bảng điều khiển này sống bằng trạng thái một lần chạy. Đạt AA cả hai theme.
+
+**Một điểm cần biết về brand green:** cặp `--primary-foreground` trên `--primary` ở **dark mode chỉ
+đạt 3,08:1** (AA-large, chưa đủ AA cho chữ thường). Đây là token của `sen`, kế thừa nguyên trạng chứ
+không tự sửa palette của họ. Nếu muốn đạt AA đầy đủ thì phải chỉnh `--primary-foreground` ở `.dark`,
+và đó là một quyết định về brand, không phải về code.
+
+**Ba class cũ `.input` / `.button` / `.console`** (có từ trước, 7 file đang dùng) được **giữ nhưng
+dựng lại trên token mới** — cùng chiều cao, radius, ring focus với `<Button>`/`<Input>` của shadcn,
+để chúng không còn là một ngôn ngữ thứ hai. Mỗi trang khi migrate ở Phase 4 thì đổi sang primitive
+và xoá dần; hết chỗ dùng thì xoá cả block.
+
 ### 3.2 Ba chỗ trong `sen` KHÔNG nên copy nguyên
 
 | Chỗ | Vấn đề | Làm gì ở TestPilot |

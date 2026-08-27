@@ -1,18 +1,148 @@
 @import 'tailwindcss';
 @import 'tw-animate-css';
 
+/* KHÔNG import '@fontsource-variable/merriweather' như sen — cố ý.
+   Token --font-serif bên dưới vẫn giữ nguyên để hợp đồng design system không
+   đổi, nhưng sen khai báo font này rồi KHÔNG dùng ở đâu cả (grep toàn bộ src/
+   của sen chỉ ra đúng một dòng: chính dòng khai báo). Import nó tốn 272 KB
+   woff2 — 27% toàn bộ thư mục assets — cho một typeface không chữ nào dùng.
+
+   Khi nào thực sự cần `font-serif`: thêm lại đúng dòng
+       @import '@fontsource-variable/merriweather';
+   ở đây. Không có nó thì `font-serif` rơi về serif hệ thống. */
+
 @custom-variant dark (&:is(.dark *));
 
-/*
- * Token của TestPilot, ánh xạ từ stylesheet legacy sang biến shadcn.
- * Xem UI-MIGRATION-PLAN §Phase 2.8.
- *
- * Khác bản cũ ở một điểm lớn: bản cũ CHỈ có light theme. Khối .dark bên dưới
- * là mới, và bốn màu trạng thái phải đọc được trên cả hai nền — console log
- * dùng chúng dày đặc, và một màu "flaky" chìm vào nền tối thì cả trang log
- * mất nghĩa.
- */
+/* ============================================================
+   Design system — theo sen/frontend.
+   Nền trung tính "slate" của shadcn + brand PRIMARY màu xanh lá.
+   Nguồn: sen/frontend/src/index.css.
+   ============================================================
+
+   BA thứ của sen KHÔNG mang sang, đều có lý do:
+
+   1. Khối `LEGACY tokens` (--text, --app-bg, --surface, --panel-bg…).
+      Chính sen đánh dấu "Xoá block này khi đã migrate hết panel" — đó là nợ
+      kỹ thuật của họ, không phải design system. TestPilot bắt đầu từ đầu nên
+      không có gì để bắc cầu sang.
+   2. Animation riêng của sen: login-neural, brand-logo, analysis-hero. Chúng
+      thuộc về màn hình đăng nhập và trang phân tích của sen — TestPilot không
+      có hai màn hình đó.
+   3. Theme highlight.js. Của tính năng chat trong sen.
+
+   MỘT thứ thêm vào: --status-*. Bảng điều khiển này sống bằng trạng thái một
+   lần chạy (pass/fail/flaky/skip/running) và sen không có khái niệm tương
+   đương. Chúng phải đạt contrast AA trên CẢ hai theme vì console log dùng
+   chúng dày đặc.
+   ============================================================ */
+
+:root {
+  --radius: 0.625rem;
+
+  --background: oklch(1 0 0);
+  --foreground: oklch(0.129 0.042 264.695);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.129 0.042 264.695);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.129 0.042 264.695);
+
+  /* brand green */
+  --primary: oklch(0.527 0.154 150.069);
+  --primary-foreground: oklch(0.982 0.018 155.826);
+
+  --secondary: oklch(0.968 0.007 247.896);
+  --secondary-foreground: oklch(0.208 0.042 265.755);
+  --muted: oklch(0.968 0.007 247.896);
+  --muted-foreground: oklch(0.554 0.046 257.417);
+  /* accent = hover trung tính (KHÔNG phải brand) để hover sidebar/menu nhã */
+  --accent: oklch(0.968 0.007 247.896);
+  --accent-foreground: oklch(0.208 0.042 265.755);
+  --destructive: oklch(0.577 0.245 27.325);
+  --border: oklch(0.929 0.013 255.508);
+  --input: oklch(0.929 0.013 255.508);
+  --ring: oklch(0.527 0.154 150.069);
+
+  --chart-1: oklch(0.646 0.222 41.116);
+  --chart-2: oklch(0.6 0.118 184.704);
+  --chart-3: oklch(0.398 0.07 227.392);
+  --chart-4: oklch(0.828 0.189 84.429);
+  --chart-5: oklch(0.769 0.188 70.08);
+
+  --sidebar: oklch(0.984 0.003 247.858);
+  --sidebar-foreground: var(--foreground);
+  --sidebar-primary: oklch(0.527 0.154 150.069);
+  --sidebar-primary-foreground: oklch(0.982 0.018 155.826);
+  --sidebar-accent: oklch(0.968 0.007 247.896);
+  --sidebar-accent-foreground: oklch(0.208 0.042 265.755);
+  --sidebar-border: oklch(0.929 0.013 255.508);
+  --sidebar-ring: oklch(0.527 0.154 150.069);
+
+  /* Trạng thái một lần chạy — riêng của TestPilot. */
+  --status-pass: oklch(0.52 0.145 155);
+  --status-fail: oklch(0.55 0.222 27);
+  --status-flaky: oklch(0.55 0.13 75);
+  --status-skip: oklch(0.554 0.046 257.417);
+  --status-running: oklch(0.55 0.14 250);
+
+  --sans: system-ui, 'Segoe UI', Roboto, sans-serif;
+  --mono: ui-monospace, Consolas, monospace;
+}
+
+.dark {
+  --background: oklch(0.129 0.042 264.695);
+  --foreground: oklch(0.984 0.003 247.858);
+  --card: oklch(0.14 0.04 259.21);
+  --card-foreground: oklch(0.984 0.003 247.858);
+  --popover: oklch(0.208 0.042 265.755);
+  --popover-foreground: oklch(0.984 0.003 247.858);
+
+  /* brand green (sáng hơn cho nền tối) */
+  --primary: oklch(0.627 0.194 149.214);
+  --primary-foreground: oklch(0.982 0.018 155.826);
+
+  --secondary: oklch(0.279 0.041 260.031);
+  --secondary-foreground: oklch(0.984 0.003 247.858);
+  --muted: oklch(0.279 0.041 260.031);
+  --muted-foreground: oklch(0.704 0.04 256.788);
+  --accent: oklch(0.279 0.041 260.031);
+  --accent-foreground: oklch(0.984 0.003 247.858);
+  --destructive: oklch(0.704 0.191 22.216);
+  --border: oklch(1 0 0 / 10%);
+  --input: oklch(1 0 0 / 15%);
+  --ring: oklch(0.627 0.194 149.214);
+
+  --chart-1: oklch(0.488 0.243 264.376);
+  --chart-2: oklch(0.696 0.17 162.48);
+  --chart-3: oklch(0.769 0.188 70.08);
+  --chart-4: oklch(0.627 0.265 303.9);
+  --chart-5: oklch(0.645 0.246 16.439);
+
+  --sidebar: oklch(0.208 0.042 265.755);
+  --sidebar-foreground: oklch(0.984 0.003 247.858);
+  --sidebar-primary: oklch(0.627 0.194 149.214);
+  --sidebar-primary-foreground: oklch(0.982 0.018 155.826);
+  --sidebar-accent: oklch(0.279 0.041 260.031);
+  --sidebar-accent-foreground: oklch(0.984 0.003 247.858);
+  --sidebar-border: oklch(1 0 0 / 10%);
+  --sidebar-ring: oklch(0.627 0.194 149.214);
+
+  --status-pass: oklch(0.75 0.17 155);
+  --status-fail: oklch(0.72 0.19 25);
+  --status-flaky: oklch(0.8 0.15 80);
+  --status-skip: oklch(0.65 0.03 257);
+  --status-running: oklch(0.75 0.14 250);
+}
+
 @theme inline {
+  --font-sans: var(--sans);
+  --font-serif: 'Merriweather Variable', serif;
+  --font-mono: var(--mono);
+
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-card: var(--card);
@@ -31,92 +161,58 @@
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
   --color-sidebar: var(--sidebar);
   --color-sidebar-foreground: var(--sidebar-foreground);
-  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
   --color-sidebar-accent: var(--sidebar-accent);
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
 
-  /* Trạng thái một lần chạy. Không có trong shadcn — token riêng của TestPilot. */
   --color-status-pass: var(--status-pass);
   --color-status-fail: var(--status-fail);
   --color-status-flaky: var(--status-flaky);
   --color-status-skip: var(--status-skip);
   --color-status-running: var(--status-running);
-
-  --radius-sm: calc(var(--radius) - 4px);
-  --radius-md: calc(var(--radius) - 2px);
-  --radius-lg: var(--radius);
-  --radius-xl: calc(var(--radius) + 4px);
 }
 
-:root {
-  --radius: 0.5rem;
-
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.208 0.042 265.755);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.208 0.042 265.755);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.208 0.042 265.755);
-  --primary: oklch(0.208 0.042 265.755);
-  --primary-foreground: oklch(0.984 0.003 247.858);
-  --secondary: oklch(0.968 0.007 247.896);
-  --secondary-foreground: oklch(0.208 0.042 265.755);
-  --muted: oklch(0.968 0.007 247.896);
-  --muted-foreground: oklch(0.554 0.046 257.417);
-  --accent: oklch(0.968 0.007 247.896);
-  --accent-foreground: oklch(0.208 0.042 265.755);
-  --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.929 0.013 255.508);
-  --input: oklch(0.929 0.013 255.508);
-  --ring: oklch(0.704 0.04 256.788);
-
-  --sidebar: oklch(0.984 0.003 247.858);
-  --sidebar-foreground: oklch(0.208 0.042 265.755);
-  --sidebar-border: oklch(0.929 0.013 255.508);
-  --sidebar-accent: oklch(0.968 0.007 247.896);
-  --sidebar-accent-foreground: oklch(0.208 0.042 265.755);
-
-  --status-pass: oklch(0.52 0.145 155);
-  --status-fail: oklch(0.55 0.222 27);
-  --status-flaky: oklch(0.55 0.13 75);
-  --status-skip: oklch(0.554 0.046 257.417);
-  --status-running: oklch(0.55 0.14 250);
+/* ===== base resets ===== */
+* {
+  box-sizing: border-box;
 }
 
-.dark {
-  --background: oklch(0.208 0.042 265.755);
-  --foreground: oklch(0.984 0.003 247.858);
-  --card: oklch(0.279 0.041 260.031);
-  --card-foreground: oklch(0.984 0.003 247.858);
-  --popover: oklch(0.279 0.041 260.031);
-  --popover-foreground: oklch(0.984 0.003 247.858);
-  --primary: oklch(0.929 0.013 255.508);
-  --primary-foreground: oklch(0.208 0.042 265.755);
-  --secondary: oklch(0.279 0.041 260.031);
-  --secondary-foreground: oklch(0.984 0.003 247.858);
-  --muted: oklch(0.279 0.041 260.031);
-  --muted-foreground: oklch(0.704 0.04 256.788);
-  --accent: oklch(0.279 0.041 260.031);
-  --accent-foreground: oklch(0.984 0.003 247.858);
-  --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.551 0.027 264.364);
+html,
+body,
+#root {
+  min-height: 100%;
+}
 
-  --sidebar: oklch(0.279 0.041 260.031);
-  --sidebar-foreground: oklch(0.984 0.003 247.858);
-  --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-accent: oklch(0.279 0.041 260.031);
-  --sidebar-accent-foreground: oklch(0.984 0.003 247.858);
+body {
+  margin: 0;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
 
-  /* Sáng hơn bản light: trên nền tối, cùng một sắc độ sẽ chìm. */
-  --status-pass: oklch(0.75 0.17 155);
-  --status-fail: oklch(0.72 0.19 25);
-  --status-flaky: oklch(0.8 0.15 80);
-  --status-skip: oklch(0.65 0.03 257);
-  --status-running: oklch(0.75 0.14 250);
+button,
+input,
+textarea,
+select {
+  font: inherit;
+}
+
+p,
+h1,
+h2,
+h3 {
+  margin: 0;
 }
 
 @layer base {
@@ -126,16 +222,36 @@
   body {
     @apply bg-background text-foreground;
   }
+  html {
+    @apply font-sans;
+  }
+  button:not(:disabled),
+  [role='button']:not(:disabled) {
+    cursor: pointer;
+  }
 }
 
+/* ============================================================
+   Utility của TestPilot — .input / .button / .console
+   ============================================================
+   Ba class này KHÔNG đến từ sen; chúng có từ trước và 7 file đang dùng
+   (Farm, Runner, ScenarioReview, Healing, DateRangePicker, Pagination).
+
+   Giữ lại nhưng dựng lại trên đúng token/hình dáng của design system mới
+   (chiều cao 9, radius-md, ring focus 3px) để chúng không còn là một ngôn ngữ
+   thứ hai nằm cạnh <Button>/<Input> của shadcn.
+
+   Hướng đi: mỗi trang khi được migrate ở Phase 4 thì đổi sang <Button>/<Input>
+   và xoá dần chỗ dùng. Khi không còn ai dùng, xoá cả block này.
+   ============================================================ */
 @layer components {
   .input {
-    @apply border-border bg-background mt-1 block w-full rounded border p-2 text-sm;
+    @apply border-input bg-background focus-visible:ring-ring/50 mt-1 block h-9 w-full min-w-0 rounded-md border px-3 py-1 text-sm shadow-xs transition-[color,box-shadow] outline-none focus-visible:ring-[3px];
   }
   .button {
-    @apply border-border rounded border px-2 py-1 text-sm disabled:opacity-50;
+    @apply bg-background hover:bg-accent hover:text-accent-foreground focus-visible:ring-ring/50 inline-flex h-9 shrink-0 items-center justify-center gap-2 rounded-md border px-4 py-2 text-sm font-medium whitespace-nowrap shadow-xs transition-all outline-none focus-visible:ring-[3px] disabled:pointer-events-none disabled:opacity-50;
   }
   .console {
-    @apply bg-muted mt-3 max-h-96 overflow-auto rounded p-3 text-xs whitespace-pre-wrap;
+    @apply bg-muted mt-3 max-h-96 overflow-auto rounded-md p-3 font-mono text-xs whitespace-pre-wrap;
   }
 }

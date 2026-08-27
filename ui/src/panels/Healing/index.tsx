@@ -9,6 +9,8 @@ import {
   type StatusFilter,
 } from './hooks/useHealingFilters';
 import { HealingRow } from './HealingRow';
+import { Card, CardContent } from '@/components/ui/card';
+import { Label } from '@/components/ui/label';
 
 const HEADERS = [
   'Element',
@@ -26,10 +28,12 @@ const HEADERS = [
 
 function Stat({ value, label }: { value: number; label: string }) {
   return (
-    <div className="border-border rounded-lg border px-4 py-3">
-      <div className="text-2xl font-semibold tabular-nums">{value}</div>
-      <div className="text-muted-foreground text-xs">{label}</div>
-    </div>
+    <Card className="min-w-32 py-4">
+      <CardContent className="px-4">
+        <div className="text-2xl font-semibold tabular-nums">{value}</div>
+        <div className="text-muted-foreground text-xs">{label}</div>
+      </CardContent>
+    </Card>
   );
 }
 
@@ -63,13 +67,14 @@ export default function HealingPanel() {
       </div>
 
       <div className="mt-4 flex flex-wrap items-end gap-4">
-        <label className="flex flex-col gap-1 text-xs">
-          <span className="text-muted-foreground">Trạng thái</span>
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor="heal-status">Trạng thái</Label>
           <select
+            id="heal-status"
             aria-label="Trạng thái"
             value={status}
             onChange={(e) => setStatus(e.target.value as StatusFilter)}
-            className="border-border bg-background rounded-md border px-2 py-1 text-sm"
+            className="border-input bg-background focus-visible:ring-ring/50 rounded-md border px-2 py-1.5 text-sm shadow-xs outline-none focus-visible:ring-[3px]"
           >
             {STATUS_OPTIONS.map((o) => (
               <option key={o.value} value={o.value}>
@@ -77,15 +82,16 @@ export default function HealingPanel() {
               </option>
             ))}
           </select>
-        </label>
+        </div>
 
-        <label className="flex flex-col gap-1 text-xs">
-          <span className="text-muted-foreground">Platform</span>
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor="heal-platform">Platform</Label>
           <select
+            id="heal-platform"
             aria-label="Platform"
             value={platform}
             onChange={(e) => setPlatform(e.target.value as PlatformFilter)}
-            className="border-border bg-background rounded-md border px-2 py-1 text-sm"
+            className="border-input bg-background focus-visible:ring-ring/50 rounded-md border px-2 py-1.5 text-sm shadow-xs outline-none focus-visible:ring-[3px]"
           >
             {PLATFORM_OPTIONS.map((o) => (
               <option key={o.value} value={o.value}>
@@ -93,7 +99,7 @@ export default function HealingPanel() {
               </option>
             ))}
           </select>
-        </label>
+        </div>
 
         {policy && (
           <span className="text-muted-foreground text-xs">

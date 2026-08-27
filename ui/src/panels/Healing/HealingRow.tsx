@@ -1,6 +1,9 @@
 import type { HealingRecordView } from '@core/ui/contracts.js';
 import { when } from '@/lib/datetime';
 import { cn } from '@/lib/utils';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { TableCell, TableRow } from '@/components/ui/table';
 import {
   deviceTooltip,
   formatLocator,
@@ -17,11 +20,11 @@ const TONE_CLASS = {
 
 function LocatorCell({ value, title }: { value: string; title?: string }) {
   return (
-    <td className="max-w-[16rem] align-top">
+    <TableCell className="max-w-[16rem] align-top">
       <code className="block truncate font-mono text-xs" title={title ?? value}>
         {value}
       </code>
-    </td>
+    </TableCell>
   );
 }
 
@@ -46,14 +49,14 @@ export function HealingRow({ record, pending, busy, onRequest, onConfirm, onCanc
   const weakEvidence = record.deviceCount === 1 && record.runs > 1;
 
   return (
-    <tr className="border-border border-t align-top">
-      <td className="py-2 font-mono text-xs">{record.elementId}</td>
-      <td>
-        <span className="bg-accent rounded px-1.5 py-0.5 text-xs">{record.platform}</span>
-      </td>
+    <TableRow className="align-top">
+      <TableCell className="font-mono text-xs">{record.elementId}</TableCell>
+      <TableCell>
+        <Badge variant="secondary">{record.platform}</Badge>
+      </TableCell>
       <LocatorCell value={formatLocator(record.primary)} />
       <LocatorCell value={formatLocator(record.current)} />
-      <td className="max-w-[16rem] align-top">
+      <TableCell className="max-w-[16rem] align-top">
         <code className="block truncate font-mono text-xs" title={formatLocator(record.proposed)}>
           {formatLocator(record.proposed)}
         </code>
@@ -65,24 +68,26 @@ export function HealingRow({ record, pending, busy, onRequest, onConfirm, onCanc
             {q.score}/100 · {qualityLabel(q)}
           </span>
         )}
-      </td>
-      <td className="text-right tabular-nums">{record.successes}</td>
-      <td className="text-right tabular-nums" title={record.runIds.join('\n')}>
+      </TableCell>
+      <TableCell className="text-right tabular-nums">{record.successes}</TableCell>
+      <TableCell className="text-right tabular-nums" title={record.runIds.join('\n')}>
         {record.runs}
-      </td>
-      <td
+      </TableCell>
+      <TableCell
         className={cn('text-right tabular-nums', weakEvidence && 'text-muted-foreground')}
         title={deviceTooltip(record.devices)}
       >
         {record.deviceCount}
-      </td>
-      <td className="text-muted-foreground text-xs whitespace-nowrap">{when(record.lastSeen)}</td>
-      <td>
-        <span className="bg-accent rounded px-1.5 py-0.5 text-xs whitespace-nowrap">
+      </TableCell>
+      <TableCell className="text-muted-foreground text-xs whitespace-nowrap">
+        {when(record.lastSeen)}
+      </TableCell>
+      <TableCell>
+        <Badge variant="outline" className="whitespace-nowrap">
           {healingStatusLabel(record.status)}
-        </span>
-      </td>
-      <td className="text-right">
+        </Badge>
+      </TableCell>
+      <TableCell className="text-right">
         <Actions
           record={record}
           pending={pending}
@@ -93,12 +98,10 @@ export function HealingRow({ record, pending, busy, onRequest, onConfirm, onCanc
           onConfirm={onConfirm}
           onCancel={onCancel}
         />
-      </td>
-    </tr>
+      </TableCell>
+    </TableRow>
   );
 }
-
-const BTN = 'rounded px-2 py-1 text-xs whitespace-nowrap disabled:opacity-50';
 
 function Actions({
   record,
@@ -115,16 +118,11 @@ function Actions({
   if (pending) {
     return (
       <div className="flex justify-end gap-1">
-        <button
-          type="button"
+        <Button
+          size="sm"
+          variant={pending === 'apply' ? 'default' : 'destructive'}
           disabled={busy}
           onClick={() => onConfirm(pending)}
-          className={cn(
-            BTN,
-            pending === 'apply'
-              ? 'bg-primary text-primary-foreground'
-              : 'bg-destructive text-white',
-          )}
         >
           {busy
             ? pending === 'apply'
@@ -133,10 +131,10 @@ function Actions({
             : pending === 'apply'
               ? 'Xác nhận áp dụng'
               : 'Xác nhận từ chối'}
-        </button>
-        <button type="button" disabled={busy} onClick={onCancel} className={cn(BTN, 'border-border border')}>
+        </Button>
+        <Button size="sm" variant="outline" disabled={busy} onClick={onCancel}>
           Huỷ
-        </button>
+        </Button>
       </div>
     );
   }
@@ -145,18 +143,17 @@ function Actions({
 
   return (
     <div className="flex justify-end gap-1">
-      <button
-        type="button"
+      <Button
+        size="sm"
         disabled={blocked}
         title={blocked ? `Chưa đạt quality gate: ${reasons.join(', ')}` : undefined}
         onClick={() => onRequest('apply')}
-        className={cn(BTN, 'bg-primary text-primary-foreground')}
       >
         Áp dụng
-      </button>
-      <button type="button" onClick={() => onRequest('reject')} className={cn(BTN, 'border-border border')}>
+      </Button>
+      <Button size="sm" variant="outline" onClick={() => onRequest('reject')}>
         Từ chối
-      </button>
+      </Button>
     </div>
   );
 }
