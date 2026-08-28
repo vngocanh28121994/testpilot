@@ -25,9 +25,9 @@
       Chính sen đánh dấu "Xoá block này khi đã migrate hết panel" — đó là nợ
       kỹ thuật của họ, không phải design system. TestPilot bắt đầu từ đầu nên
       không có gì để bắc cầu sang.
-   2. Animation riêng của sen: login-neural, brand-logo, analysis-hero. Chúng
-      thuộc về màn hình đăng nhập và trang phân tích của sen — TestPilot không
-      có hai màn hình đó.
+   2. Animation brand-logo và analysis-hero. Chúng thuộc về màn hình đăng nhập
+      và trang phân tích của sen — TestPilot không có hai màn hình đó.
+      (login-neural thì CÓ mang sang: xem block "dot-field" ở cuối file.)
    3. Theme highlight.js. Của tính năng chat trong sen.
 
    MỘT thứ thêm vào: --status-*. Bảng điều khiển này sống bằng trạng thái một
@@ -137,6 +137,69 @@
   --status-flaky: oklch(0.8 0.15 80);
   --status-skip: oklch(0.65 0.03 257);
   --status-running: oklch(0.75 0.14 250);
+}
+
+/* Bảng màu Techcombank: dùng đỏ nhận diện #ed1c24 làm primary, rồi mở rộng
+   thành các màu hỗ trợ cho viền focus, sidebar, hover, chart và nền động. */
+:root[data-color-theme='techcombank'] {
+  --primary: #ed1c24;
+  --primary-foreground: #ffffff;
+  --secondary: #fff0f1;
+  --secondary-foreground: #52141c;
+  --muted: #fff4f5;
+  --muted-foreground: #8b4b52;
+  --accent: #ffe6e8;
+  --accent-foreground: #52141c;
+  --ring: #ed1c24;
+
+  --chart-1: #ed1c24;
+  --chart-2: #d06a3e;
+  --chart-3: #991620;
+  --chart-4: #c88a16;
+  --chart-5: #b44b72;
+
+  --sidebar: #fffafa;
+  --sidebar-primary: #ed1c24;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-primary-strong: #b9131b;
+  --sidebar-accent: #ffe6e8;
+  --sidebar-accent-foreground: #52141c;
+  --sidebar-border: #f3d8dc;
+  --sidebar-ring: #ed1c24;
+}
+
+.dark[data-color-theme='techcombank'] {
+  --background: #1d1013;
+  --foreground: #fff7f7;
+  --card: #251316;
+  --card-foreground: #fff7f7;
+  --popover: #34181d;
+  --popover-foreground: #fff7f7;
+  --primary: #ed1c24;
+  --primary-foreground: #ffffff;
+  --secondary: #3a2025;
+  --secondary-foreground: #fff7f7;
+  --muted: #3a2025;
+  --muted-foreground: #d8b7bc;
+  --accent: #48262d;
+  --accent-foreground: #fff7f7;
+  --ring: #fa6670;
+
+  --chart-1: #fa6670;
+  --chart-2: #ef9668;
+  --chart-3: #d9515b;
+  --chart-4: #e4b452;
+  --chart-5: #df7899;
+
+  --sidebar: #30191e;
+  --sidebar-foreground: #fff7f7;
+  --sidebar-primary: #ed1c24;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-primary-strong: #ff7b83;
+  --sidebar-accent: #48262d;
+  --sidebar-accent-foreground: #fff7f7;
+  --sidebar-border: #ffffff1a;
+  --sidebar-ring: #fa6670;
 }
 
 @theme inline {
@@ -260,5 +323,354 @@ h3 {
   }
   .console {
     @apply bg-muted mt-3 max-h-96 overflow-auto rounded-md p-3 font-mono text-xs whitespace-pre-wrap;
+  }
+}
+
+/* ============================================================
+   Nền động "dot field" — cổng từ sen/frontend
+   (src/components/login/depth-neural-background.tsx + .login-neural* trong
+   src/index.css). Bên sen nó là nền của màn hình đăng nhập và trang phân
+   tích; ở đây nó là nền chung của AppShell nên đổi tiền tố class thành
+   `dot-field` cho khớp ngữ cảnh.
+
+   Màu lấy từ --primary qua color-mix, KHÔNG hardcode indigo như sen: brand của
+   TestPilot là xanh lá, nền phải đi theo token chứ không đi theo màu của sen.
+
+   Chuyển động nằm hết ở CSS (transform/opacity — chỉ compositor, không layout);
+   canvas chỉ vẽ đường nối. prefers-reduced-motion tắt toàn bộ animation.
+   ============================================================ */
+
+@keyframes dot-field-drift {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  50% {
+    transform: translate3d(0, -10px, 0) scale(1.06);
+  }
+}
+
+@keyframes dot-field-drift-a {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  33% {
+    transform: translate3d(-6px, -16px, 0) scale(1.05);
+  }
+  66% {
+    transform: translate3d(3px, -8px, 0) scale(1.03);
+  }
+}
+
+@keyframes dot-field-drift-b {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  40% {
+    transform: translate3d(10px, -12px, 0) scale(1.06);
+  }
+  70% {
+    transform: translate3d(4px, -20px, 0) scale(1.08);
+  }
+}
+
+@keyframes dot-field-drift-c {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  25% {
+    transform: translate3d(14px, -6px, 0) scale(1.04);
+  }
+  50% {
+    transform: translate3d(-4px, -14px, 0) scale(1.06);
+  }
+  75% {
+    transform: translate3d(-10px, -4px, 0) scale(1.03);
+  }
+}
+
+@keyframes dot-field-drift-d {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  20% {
+    transform: translate3d(2px, 8px, 0) scale(0.97);
+  }
+  60% {
+    transform: translate3d(-8px, -18px, 0) scale(1.07);
+  }
+  80% {
+    transform: translate3d(4px, -6px, 0) scale(1.03);
+  }
+}
+
+@keyframes dot-field-drift-e {
+  0% {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  25% {
+    transform: translate3d(12px, -10px, 0) scale(1.05);
+  }
+  50% {
+    transform: translate3d(8px, -20px, 0) scale(1.08);
+  }
+  75% {
+    transform: translate3d(-6px, -14px, 0) scale(1.05);
+  }
+  100% {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+}
+
+@keyframes dot-field-drift-f {
+  0% {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  25% {
+    transform: translate3d(-12px, -8px, 0) scale(1.05);
+  }
+  50% {
+    transform: translate3d(-6px, -22px, 0) scale(1.09);
+  }
+  75% {
+    transform: translate3d(8px, -12px, 0) scale(1.04);
+  }
+  100% {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+}
+
+@keyframes dot-field-drift-g {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  15% {
+    transform: translate3d(4px, -6px, 0) scale(1.02);
+  }
+  30% {
+    transform: translate3d(-3px, -12px, 0) scale(1.04);
+  }
+  45% {
+    transform: translate3d(7px, -8px, 0) scale(1.03);
+  }
+  60% {
+    transform: translate3d(-5px, -18px, 0) scale(1.05);
+  }
+  75% {
+    transform: translate3d(2px, -10px, 0) scale(1.03);
+  }
+  90% {
+    transform: translate3d(-4px, -4px, 0) scale(1.01);
+  }
+}
+
+@keyframes dot-field-drift-h {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  35% {
+    transform: translate3d(-16px, -18px, 0) scale(1.07);
+  }
+  65% {
+    transform: translate3d(10px, -24px, 0) scale(1.1);
+  }
+}
+
+@keyframes dot-field-scan {
+  0% {
+    transform: translate3d(-8%, -3%, 0) rotate(-10deg);
+    opacity: 0;
+  }
+  25% {
+    opacity: 0.12;
+  }
+  50% {
+    transform: translate3d(10%, 4%, 0) rotate(-10deg);
+    opacity: 0.18;
+  }
+  100% {
+    transform: translate3d(26%, 10%, 0) rotate(-10deg);
+    opacity: 0;
+  }
+}
+
+.dot-field {
+  background:
+    radial-gradient(
+      circle at 18% 20%,
+      color-mix(in oklab, var(--primary) 15%, transparent) 0%,
+      transparent 34%
+    ),
+    radial-gradient(
+      circle at 78% 74%,
+      color-mix(in oklab, var(--primary) 12%, transparent) 0%,
+      transparent 28%
+    ),
+    transparent;
+}
+
+.dot-field__wash {
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(
+      circle at 20% 64%,
+      color-mix(in oklab, var(--primary) 22%, transparent) 0%,
+      transparent 22%
+    ),
+    radial-gradient(
+      circle at 72% 18%,
+      color-mix(in oklab, var(--primary) 18%, transparent) 0%,
+      transparent 24%
+    ),
+    radial-gradient(
+      circle at 62% 66%,
+      color-mix(in oklab, var(--primary) 12%, transparent) 0%,
+      transparent 18%
+    ),
+    radial-gradient(
+      circle at 35% 58%,
+      color-mix(in oklab, var(--primary) 18%, white 6%) 0%,
+      transparent 20%
+    );
+  filter: blur(32px);
+  opacity: 0.92;
+}
+
+.dot-field__grid {
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(color-mix(in oklab, var(--primary) 10%, transparent) 1px, transparent 1px),
+    linear-gradient(
+      90deg,
+      color-mix(in oklab, var(--primary) 10%, transparent) 1px,
+      transparent 1px
+    );
+  background-size: 34px 34px;
+  mask-image: radial-gradient(circle at center, black 42%, transparent 92%);
+  opacity: 0.28;
+}
+
+.dot-field__beam {
+  position: absolute;
+  inset: -10%;
+  background: linear-gradient(
+    115deg,
+    transparent 36%,
+    color-mix(in oklab, var(--primary) 26%, transparent) 48%,
+    transparent 62%
+  );
+  filter: blur(48px);
+  animation: dot-field-scan 9s linear infinite;
+}
+
+.dot-field__cluster {
+  position: absolute;
+  display: block;
+  border-radius: 9999px;
+  transform: translate(-50%, -50%);
+  background: radial-gradient(
+    circle,
+    color-mix(in oklab, var(--primary) 26%, white 18%) 0%,
+    color-mix(in oklab, var(--primary) 10%, transparent) 34%,
+    transparent 70%
+  );
+  filter: blur(10px);
+  animation: dot-field-drift ease-in-out infinite;
+}
+
+.dot-field__cluster::before {
+  content: '';
+  position: absolute;
+  inset: 24%;
+  border-radius: inherit;
+  border: 1px solid color-mix(in oklab, var(--primary) 40%, transparent);
+  box-shadow:
+    0 0 26px color-mix(in oklab, var(--primary) 18%, transparent),
+    inset 0 0 20px color-mix(in oklab, var(--primary) 14%, transparent);
+}
+
+.dot-field__cluster::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 18px;
+  height: 18px;
+  border-radius: 9999px;
+  transform: translate(-50%, -50%);
+  background: color-mix(in oklab, var(--primary) 72%, white 28%);
+  box-shadow:
+    0 0 0 8px color-mix(in oklab, var(--primary) 12%, transparent),
+    0 0 28px color-mix(in oklab, var(--primary) 32%, transparent);
+}
+
+.dot-field__particle {
+  position: absolute;
+  display: block;
+  border-radius: 9999px;
+  background: color-mix(in oklab, var(--primary) 72%, white 14%);
+  box-shadow: 0 0 0 1px color-mix(in oklab, var(--primary) 24%, transparent);
+  animation: dot-field-drift ease-in-out infinite;
+}
+
+.dot-field__particle::before {
+  content: '';
+  position: absolute;
+  inset: 50%;
+  width: var(--particle-halo);
+  height: var(--particle-halo);
+  transform: translate(-50%, -50%);
+  border-radius: 9999px;
+  background: radial-gradient(
+    circle,
+    color-mix(in oklab, var(--primary) 24%, transparent) 0%,
+    transparent 70%
+  );
+}
+
+.dot-field__particle::after {
+  content: '';
+  position: absolute;
+  inset: -1px;
+  border-radius: inherit;
+  background: white;
+  opacity: 0.9;
+  mix-blend-mode: screen;
+}
+
+.dot-field__particle--back {
+  background: color-mix(in oklab, var(--primary) 56%, white 10%);
+}
+
+.dot-field__particle--front {
+  background: color-mix(in oklab, var(--primary) 84%, white 20%);
+}
+
+.dark .dot-field__grid {
+  opacity: 0.22;
+}
+
+.dark .dot-field__cluster {
+  background: radial-gradient(
+    circle,
+    color-mix(in oklab, var(--primary) 22%, white 10%) 0%,
+    color-mix(in oklab, var(--primary) 12%, transparent) 36%,
+    transparent 72%
+  );
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dot-field__beam,
+  .dot-field__cluster,
+  .dot-field__particle {
+    animation: none;
   }
 }

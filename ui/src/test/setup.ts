@@ -60,6 +60,14 @@ if (!globalThis.ResizeObserver) {
   Object.defineProperty(globalThis, 'ResizeObserver', { configurable: true, value: ResizeObserverStub });
 }
 
+// DotBackground vẽ dây nối bằng canvas 2D; jsdom không cài đặt getContext và
+// in một dòng "Not implemented" cho MỖI lần render AppShell. Component đã xử lý
+// đúng khi getContext trả null, nên stub ở đây chỉ để output test đọc được.
+Object.defineProperty(HTMLCanvasElement.prototype, 'getContext', {
+  configurable: true,
+  value: () => null,
+});
+
 // 'error' chứ không phải 'warn' như sen. Một request không có handler nghĩa là
 // test đang lặng lẽ gọi ra mạng thật — ở đây thì nó fail và không ai thấy,
 // còn ở CI thì nó treo. Cứ để nó đỏ ngay.
