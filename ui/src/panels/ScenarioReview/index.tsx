@@ -12,6 +12,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Input } from '@/components/ui/input';
 import { FilterChip } from '@/components/FilterChip';
 import { TagFilter } from '@/components/TagFilter';
+import { DropdownSelect } from '@/components/DropdownSelect';
 import {
   AlertDialog,
   AlertDialogActionButton,
@@ -246,7 +247,7 @@ function ReviewBody({ state, search }: { state: StateResponse; search: ScenarioS
             <div className="relative min-w-56 flex-1">
               <Search className="text-muted-foreground pointer-events-none absolute start-3 top-1/2 size-4 -translate-y-1/2" />
               <Input
-                className="h-9 ps-9"
+                className="h-9 bg-white ps-9 text-slate-900 placeholder:text-slate-500 dark:bg-white dark:text-slate-900 dark:placeholder:text-slate-500"
                 value={draftQuery}
                 aria-label="Tìm kịch bản"
                 placeholder="Tìm theo tên kịch bản, feature file hoặc tag…"
@@ -265,31 +266,31 @@ function ReviewBody({ state, search }: { state: StateResponse; search: ScenarioS
               />
             </div>
 
-            <select
-              aria-label="Lọc theo feature file"
-              className="input mt-0 h-9 w-auto min-w-40 max-w-56"
+            <DropdownSelect
+              ariaLabel="Lọc theo feature file"
+              className="w-auto min-w-40 max-w-56"
               value={search.file ?? ''}
-              onChange={(event) => patch({ file: event.target.value || undefined })}
-            >
-              <option value="">Tất cả file</option>
-              {state.features.map((feature) => (
-                <option key={feature.name}>{feature.name}</option>
-              ))}
-            </select>
+              onValueChange={(value) => patch({ file: value || undefined })}
+              options={[
+                { value: '', label: 'Tất cả file' },
+                ...state.features.map((feature) => ({ value: feature.name, label: feature.name })),
+              ]}
+            />
 
-            <select
-              aria-label="Lọc theo trạng thái duyệt"
-              className="input mt-0 h-9 w-auto min-w-36"
+            <DropdownSelect
+              ariaLabel="Lọc theo trạng thái duyệt"
+              className="w-auto min-w-36"
               value={search.status ?? ''}
-              onChange={(event) =>
-                patch({ status: (event.target.value || undefined) as ScenarioSearch['status'] })
+              onValueChange={(value) =>
+                patch({ status: (value || undefined) as ScenarioSearch['status'] })
               }
-            >
-              <option value="">Mọi trạng thái</option>
-              <option value="pending">Chờ duyệt</option>
-              <option value="approved">Đã duyệt</option>
-              <option value="rejected">Không duyệt</option>
-            </select>
+              options={[
+                { value: '', label: 'Mọi trạng thái' },
+                { value: 'pending', label: 'Chờ duyệt' },
+                { value: 'approved', label: 'Đã duyệt' },
+                { value: 'rejected', label: 'Không duyệt' },
+              ]}
+            />
 
             <TagFilter
               value={search.tags ?? []}

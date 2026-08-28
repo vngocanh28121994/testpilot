@@ -10,6 +10,11 @@ import SettingsPanel from '@/panels/Settings';
 
 const ready = () => screen.findByLabelText('Transport');
 
+async function chooseTransport(user: ReturnType<typeof userEvent.setup>, value: 'stdio' | 'http') {
+  await user.click(await ready());
+  await user.click(await screen.findByRole('option', { name: value }));
+}
+
 describe('SettingsPanel', () => {
   /**
    * R9 — bí mật không bao giờ quay lại trình duyệt.
@@ -60,17 +65,17 @@ describe('SettingsPanel', () => {
   it('chỉ hiện trường của transport đang chọn', async () => {
     const user = userEvent.setup();
     await renderWithRouter(<SettingsPanel />);
-    const transport = await ready();
+    await ready();
 
     // Không dùng MCP ⇒ không có trường nào của MCP.
     expect(screen.queryByLabelText('Command')).toBeNull();
     expect(screen.queryByLabelText('URL')).toBeNull();
 
-    await user.selectOptions(transport, 'stdio');
+    await chooseTransport(user, 'stdio');
     expect(screen.getByLabelText('Command')).toBeInTheDocument();
     expect(screen.queryByLabelText('URL')).toBeNull();
 
-    await user.selectOptions(transport, 'http');
+    await chooseTransport(user, 'http');
     expect(screen.getByLabelText('URL')).toBeInTheDocument();
     expect(screen.queryByLabelText('Command')).toBeNull();
   });
@@ -121,7 +126,7 @@ describe('SettingsPanel', () => {
   it('probe MCP chỉ điền hộ ô còn trống', async () => {
     const user = userEvent.setup();
     await renderWithRouter(<SettingsPanel />);
-    await user.selectOptions(await ready(), 'stdio');
+    await chooseTransport(user, 'stdio');
 
     const figma = screen.getByLabelText('Tool: Figma file');
     await user.type(figma, 'toi-tu-dien');

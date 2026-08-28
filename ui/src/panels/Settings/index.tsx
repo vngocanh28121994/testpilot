@@ -22,6 +22,7 @@ import { mcpFromForm, mcpToForm, visionKeyStatus, type McpForm } from './mcp';
 import { Field } from '@/components/Field';
 import { GroupHeading } from '@/components/GroupHeading';
 import { ColorThemePicker } from '@/components/ColorThemePicker';
+import { DropdownSelect } from '@/components/DropdownSelect';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -318,16 +319,16 @@ function SettingsForm({
               </CardHeader>
               <CardContent className="flex flex-col gap-4">
                 <Field label="Transport">
-                  <select
-                    aria-label="Transport"
-                    className="input mt-0"
+                  <DropdownSelect
+                    ariaLabel="Transport"
                     value={mcp.transport}
-                    onChange={(e) => set('transport', e.target.value as McpForm['transport'])}
-                  >
-                    <option value="">Không dùng MCP</option>
-                    <option value="stdio">stdio</option>
-                    <option value="http">http</option>
-                  </select>
+                    onValueChange={(value) => set('transport', value as McpForm['transport'])}
+                    options={[
+                      { value: '', label: 'Không dùng MCP' },
+                      { value: 'stdio', label: 'stdio' },
+                      { value: 'http', label: 'http' },
+                    ]}
+                  />
                 </Field>
 
                 {/* stdio và http mang hai bộ trường loại trừ nhau; hiện cả hai sẽ mời

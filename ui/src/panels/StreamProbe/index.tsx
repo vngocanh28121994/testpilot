@@ -1,5 +1,7 @@
 import { useEffect } from 'react';
 import { AppShell } from '@/components/layout/AppShell';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { useStreamJob } from '@/hooks/useStreamJob';
 import { useJobStore } from '@/stores/jobStore';
 import { STREAM_ROUTES } from '@/api/routes';
@@ -23,37 +25,50 @@ export default function StreamProbePanel() {
   }, []);
 
   return (
-    <AppShell title="Stream probe (dev)">
-      <div className="flex gap-2">
-        <button
-          type="button"
-          data-testid="start"
-          onClick={() => job.start()}
-          className="bg-primary text-primary-foreground rounded-md px-3 py-1.5 text-sm"
-        >
-          Bắt đầu
-        </button>
-        <button
-          type="button"
-          data-testid="abort"
-          onClick={job.abort}
-          className="border-border rounded-md border px-3 py-1.5 text-sm"
-        >
-          Dừng
-        </button>
-      </div>
+    <AppShell title="Stream probe (dev)" description="Nghiệm thu luồng log trực tiếp trong môi trường phát triển.">
+      <section className="max-w-4xl space-y-6" aria-label="Stream probe">
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Điều khiển probe</CardTitle>
+            <CardDescription>Chạy hoặc dừng tác vụ kiểm tra stream của Appium.</CardDescription>
+          </CardHeader>
+          <CardContent className="flex flex-wrap items-center gap-3">
+            <Button
+              type="button"
+              data-testid="start"
+              onClick={() => job.start()}
+            >
+              Bắt đầu
+            </Button>
+            <Button
+              type="button"
+              data-testid="abort"
+              variant="outline"
+              onClick={job.abort}
+            >
+              Dừng
+            </Button>
+            <p className="text-muted-foreground text-sm">
+              Trạng thái: <b data-testid="status" className="text-foreground">{job.status}</b> · số dòng log:{' '}
+              <b data-testid="count" className="text-foreground">{job.logs.length}</b>
+            </p>
+          </CardContent>
+        </Card>
 
-      <p className="mt-3 text-sm">
-        trạng thái: <b data-testid="status">{job.status}</b> · số dòng log:{' '}
-        <b data-testid="count">{job.logs.length}</b>
-      </p>
-
-      <pre
-        data-testid="log"
-        className="border-border bg-muted mt-3 max-h-96 overflow-auto rounded-md border p-3 text-xs whitespace-pre-wrap"
-      >
-        {job.logs.join('\n')}
-      </pre>
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Log trực tiếp</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <pre
+              data-testid="log"
+              className="border-border bg-muted max-h-96 overflow-auto rounded-md border p-3 text-xs whitespace-pre-wrap"
+            >
+              {job.logs.join('\n')}
+            </pre>
+          </CardContent>
+        </Card>
+      </section>
     </AppShell>
   );
 }

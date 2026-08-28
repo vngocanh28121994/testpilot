@@ -39,10 +39,10 @@ export function AppShell({
       <SidebarInset className="isolate min-w-0">
         <DotBackground disableMouseLinks className="fixed z-0" />
         <Header fixed>
-          <div className="flex min-w-0 items-center gap-2 text-sm">
-            <h1 className="font-medium">{title}</h1>
+          <div className="flex min-w-0 items-center gap-2">
+            <h1 className="text-lg font-semibold">{title}</h1>
             {description && (
-              <span className="text-muted-foreground truncate max-md:hidden">
+              <span className="text-muted-foreground truncate text-base max-md:hidden">
                 - {description}
               </span>
             )}

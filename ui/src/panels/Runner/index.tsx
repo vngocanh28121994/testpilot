@@ -25,6 +25,7 @@ import { DateRangePicker } from '@/components/DateRangePicker';
 import { Pagination } from '@/components/Pagination';
 import { FilterChip } from '@/components/FilterChip';
 import { TagFilter } from '@/components/TagFilter';
+import { DropdownSelect } from '@/components/DropdownSelect';
 import type { PreflightResponse, ReportView, SaveConfigResponse, StateResponse } from '@core/ui/contracts.js';
 
 const PAGE_DESCRIPTION = 'Chạy bộ test ngay trên máy này, trước khi đẩy lên farm.';
@@ -104,15 +105,16 @@ export default function RunnerPanel() {
             <CardContent className="flex flex-col gap-4">
               <div className="grid gap-4 sm:grid-cols-2">
                 <Field label="Platform">
-                  <select
-                    className="input mt-0"
+                  <DropdownSelect
+                    ariaLabel="Platform"
                     value={platform}
-                  onChange={(e) => setPlatform(e.target.value as typeof platform)}
-                  >
-                    <option value="web">web — Playwright</option>
-                    <option value="android">android — Appium</option>
-                    <option value="ios">ios — Appium</option>
-                  </select>
+                    onValueChange={(value) => setPlatform(value as typeof platform)}
+                    options={[
+                      { value: 'web', label: 'web — Playwright' },
+                      { value: 'android', label: 'android — Appium' },
+                      { value: 'ios', label: 'ios — Appium' },
+                    ]}
+                  />
                 </Field>
                 {/* Popover, không phải danh sách luôn mở.
                     `TagPicker` là ô SOẠN tag cho một kịch bản; đặt nó vào đây
@@ -134,16 +136,15 @@ export default function RunnerPanel() {
                 </Field>
                 {environments.length > 0 && (
                   <Field label="Môi trường">
-                    <select
-                      className="input mt-0"
+                    <DropdownSelect
+                      ariaLabel="Môi trường"
                       value={env}
-                      onChange={(e) => setEnv(e.target.value)}
-                    >
-                      <option value="">Mặc định</option>
-                      {environments.map((item) => (
-                        <option key={item}>{item}</option>
-                      ))}
-                    </select>
+                      onValueChange={setEnv}
+                      options={[
+                        { value: '', label: 'Mặc định' },
+                        ...environments.map((item) => ({ value: item, label: item })),
+                      ]}
+                    />
                   </Field>
                 )}
               </div>

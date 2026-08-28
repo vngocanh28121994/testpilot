@@ -42,13 +42,15 @@ export function AppSidebar() {
   return (
     <Sidebar collapsible="icon" variant="floating">
       <SidebarHeader>
-        <div className="flex items-center gap-2 px-2 py-1.5">
-          <img
-            src={`${import.meta.env.BASE_URL}logo.png`}
-            alt=""
-            className="size-6 shrink-0 rounded"
-          />
-          <span className="truncate font-semibold group-data-[collapsible=icon]:hidden">
+        <div className="flex items-center gap-2 px-2 py-1.5 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-0">
+          <div className="flex size-7 shrink-0 items-center justify-center group-data-[collapsible=icon]:size-8">
+            <img
+              src={`${import.meta.env.BASE_URL}logo.png`}
+              alt=""
+              className="h-6 w-auto max-w-full object-contain"
+            />
+          </div>
+          <span className="truncate text-lg font-semibold group-data-[collapsible=icon]:hidden">
             TestPilot
           </span>
         </div>
@@ -66,7 +68,7 @@ export function AppSidebar() {
                   chìm hẳn xuống dưới nhãn mục con. Cho to hơn một nấc và dùng
                   sắc brand đậm để chúng dẫn mắt được. */}
               {group.title && (
-                <SidebarGroupLabel className="text-sidebar-primary-strong text-sm font-semibold">
+                <SidebarGroupLabel className="text-sidebar-primary-strong text-[15px] font-semibold">
                   {group.title}
                 </SidebarGroupLabel>
               )}
@@ -102,7 +104,7 @@ function NavLink({ item, pathname }: { item: NavItem; pathname: string }) {
   const { setOpenMobile } = useSidebar();
   return (
     <SidebarMenuItem>
-      <SidebarMenuButton asChild isActive={isActive(pathname, item.to)} tooltip={item.label}>
+      <SidebarMenuButton className="h-9 text-base" asChild isActive={isActive(pathname, item.to)} tooltip={item.label}>
         <Link to={item.to} onClick={() => setOpenMobile(false)}>
           <item.icon className="shrink-0" />
           <span className="flex-1 truncate">{item.label}</span>
@@ -116,7 +118,7 @@ function NavSubLink({ item, pathname }: { item: NavItem; pathname: string }) {
   const { setOpenMobile } = useSidebar();
   return (
     <SidebarMenuSubItem>
-      <SidebarMenuSubButton asChild isActive={isActive(pathname, item.to)}>
+      <SidebarMenuSubButton className="h-8 text-[15px]" asChild isActive={isActive(pathname, item.to)}>
         {/* `title` giữ nguyên lời giải thích để hover được ngay ở menu; không
             thay được bằng tooltip của SidebarMenuButton vì mục con không có. */}
         <Link to={item.to} title={item.why} onClick={() => setOpenMobile(false)}>
@@ -152,7 +154,7 @@ function InProgressMenu({ active, pathname }: { active: boolean; pathname: strin
             <DropdownMenuLabel>{IN_PROGRESS.label}</DropdownMenuLabel>
             <DropdownMenuSeparator />
             {IN_PROGRESS.items.map((item) => (
-              <DropdownMenuItem key={item.id} asChild>
+              <DropdownMenuItem key={item.id} className="text-base" asChild>
                 <Link to={item.to} title={item.why} onClick={() => setOpenMobile(false)}>
                   <item.icon className="shrink-0" aria-label="chưa nối" />
                   <span className="truncate">{item.label}</span>
@@ -171,7 +173,7 @@ function InProgressMenu({ active, pathname }: { active: boolean; pathname: strin
     <Collapsible asChild defaultOpen={active} className="group/collapsible">
       <SidebarMenuItem>
         <CollapsibleTrigger asChild>
-          <SidebarMenuButton tooltip={IN_PROGRESS.label} isActive={active}>
+          <SidebarMenuButton className="h-9 text-base" tooltip={IN_PROGRESS.label} isActive={active}>
             <IN_PROGRESS.icon className="shrink-0" />
             <span className="flex-1 truncate">{IN_PROGRESS.label}</span>
             <ChevronRight className="ms-auto transition-transform duration-200 group-data-[state=open]/collapsible:rotate-90" />

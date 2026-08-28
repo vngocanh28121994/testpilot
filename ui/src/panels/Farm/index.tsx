@@ -29,6 +29,7 @@ import { Input } from '@/components/ui/input';
 import { DateRangePicker } from '@/components/DateRangePicker';
 import { Pagination } from '@/components/Pagination';
 import { TagPicker } from '@/components/TagPicker';
+import { DropdownSelect } from '@/components/DropdownSelect';
 import { api, qs } from '@/api/client';
 import { ROUTES, STREAM_ROUTES } from '@/api/routes';
 import { useAppState } from '@/hooks/useAppState';
@@ -228,28 +229,25 @@ export default function FarmPanel() {
 
                 <div className="grid gap-4 sm:grid-cols-2">
                   <Field label="Region">
-                    <NativeSelect
+                    <Dropdown
                       value={region}
                       onChange={setRegion}
                       options={['us-west-2', 'us-east-1']}
                     />
                   </Field>
                   <Field label="Project">
-                    <select
-                      className="input mt-0"
+                    <DropdownSelect
+                      ariaLabel="Project"
                       value={project}
-                      onChange={(e) => {
-                        setProject(e.target.value);
+                      onValueChange={(value) => {
+                        setProject(value);
                         setPool('');
                       }}
-                    >
-                      <option value="">— chọn project —</option>
-                      {projects.map((item) => (
-                        <option key={item.arn} value={item.arn}>
-                          {item.name}
-                        </option>
-                      ))}
-                    </select>
+                      options={[
+                        { value: '', label: '— chọn project —' },
+                        ...projects.map((item) => ({ value: item.arn, label: item.name })),
+                      ]}
+                    />
                   </Field>
                 </div>
 
@@ -276,7 +274,7 @@ export default function FarmPanel() {
               <CardContent className="flex flex-col gap-4">
                 <div className="grid gap-4 sm:grid-cols-2">
                   <Field label="Hệ điều hành">
-                    <NativeSelect
+                    <Dropdown
                       value={platform}
                       onChange={(value) => {
                         setPlatform(value as 'android' | 'ios');
@@ -286,18 +284,18 @@ export default function FarmPanel() {
                     />
                   </Field>
                   <Field label="Device pool">
-                    <select
-                      className="input mt-0"
+                    <DropdownSelect
+                      ariaLabel="Device pool"
                       value={pool}
-                      onChange={(e) => setPool(e.target.value)}
-                    >
-                      <option value="">— chọn pool —</option>
-                      {shownPools.map((item) => (
-                        <option key={item.arn} value={item.arn}>
-                          {item.name} ({item.type})
-                        </option>
-                      ))}
-                    </select>
+                      onValueChange={setPool}
+                      options={[
+                        { value: '', label: '— chọn pool —' },
+                        ...shownPools.map((item) => ({
+                          value: item.arn,
+                          label: `${item.name} (${item.type})`,
+                        })),
+                      ]}
+                    />
                     <p className="text-muted-foreground mt-1 text-xs" aria-live="polite">
                       {selectedPool
                         ? `Pool đã chọn: ${selectedPool.name}${selectedPool.platforms?.length ? ` · ${selectedPool.platforms.join(', ')}` : ''}.`
@@ -525,25 +523,25 @@ export default function FarmPanel() {
           </CardHeader>
           <CardContent>
             <div className="mb-4 flex flex-wrap items-end gap-3"><label className="text-sm">Khoảng ngày<DateRangePicker value={historyRange} onChange={(next) => { setHistoryRange(next); setHistoryPage(1); }} /></label><div className="flex gap-1">{(['all', 'android', 'ios'] as const).map((item) => <Button key={item} size="sm" variant={historyPlatform === item ? 'default' : 'outline'} onClick={() => { setHistoryPlatform(item); setHistoryPage(1); }}>{item === 'all' ? 'Tất cả' : item}</Button>)}</div><Button className="ms-auto" size="sm" variant="ghost" onClick={() => { setHistoryRange(undefined); setHistoryPlatform('all'); setHistoryPage(1); }}>Xoá bộ lọc</Button></div>
-            <div className="overflow-x-auto rounded-lg border">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="text-muted-foreground text-left">
-                    <th className="p-2 font-medium">Thời điểm</th>
-                    <th className="p-2 font-medium">Feature</th>
-                    <th className="p-2 font-medium">Trạng thái</th>
-                    <th className="p-2" />
+            <div className="border-border overflow-x-auto rounded-lg border bg-white dark:bg-card">
+              <table className="w-full min-w-160 text-sm">
+                <thead className="bg-muted/50 text-muted-foreground text-left text-xs">
+                  <tr>
+                    <th className="px-4 py-3 font-medium">Thời điểm</th>
+                    <th className="px-4 py-3 font-medium">Feature</th>
+                    <th className="px-4 py-3 font-medium">Trạng thái</th>
+                    <th className="px-4 py-3" />
                   </tr>
                 </thead>
                 <tbody>
                   {shownFarmRuns.map((run) => (
-                    <tr key={run.id} className="border-t">
-                      <td className="p-2">{when(run.startedAt)}</td>
-                      <td className="p-2">{run.feature}</td>
-                      <td className="p-2">
+                    <tr key={run.id} className="border-border hover:bg-muted/30 border-t transition-colors">
+                      <td className="px-4 py-3">{when(run.startedAt)}</td>
+                      <td className="px-4 py-3">{run.feature}</td>
+                      <td className="px-4 py-3">
                         <StatusPill status={run.status} />
                       </td>
-                      <td className="p-2">
+                      <td className="px-4 py-3">
                         <Link
                           to="/farm/$runId"
                           params={{ runId: run.id }}
@@ -555,8 +553,8 @@ export default function FarmPanel() {
                     </tr>
                   ))}
                   {shownFarmRuns.length === 0 && (
-                    <tr className="border-t">
-                      <td colSpan={4} className="text-muted-foreground p-6 text-center">
+                    <tr className="border-border border-t">
+                      <td colSpan={4} className="text-muted-foreground px-4 py-8 text-center">
                         Không có lần chạy Device Farm khớp bộ lọc.
                       </td>
                     </tr>
@@ -729,7 +727,7 @@ function Note({ icon: Icon, children }: { icon: typeof Info; children: ReactNode
   );
 }
 
-function NativeSelect({
+function Dropdown({
   value,
   onChange,
   options,
@@ -739,10 +737,11 @@ function NativeSelect({
   options: string[];
 }): ReactNode {
   return (
-    <select className="input mt-0" value={value} onChange={(e) => onChange(e.target.value)}>
-      {options.map((option) => (
-        <option key={option}>{option}</option>
-      ))}
-    </select>
+    <DropdownSelect
+      ariaLabel="Chọn giá trị"
+      value={value}
+      onValueChange={onChange}
+      options={options.map((option) => ({ value: option, label: option }))}
+    />
   );
 }

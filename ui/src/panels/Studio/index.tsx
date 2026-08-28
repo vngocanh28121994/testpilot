@@ -7,6 +7,7 @@ import { AppShell } from '@/components/layout/AppShell';
 import { CheckRow } from '@/components/CheckRow';
 import { Field } from '@/components/Field';
 import { GroupHeading } from '@/components/GroupHeading';
+import { DropdownSelect } from '@/components/DropdownSelect';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -337,11 +338,21 @@ function StudioFormPanel({ state }: { state: StateResponse }) {
               </CardHeader>
               <CardContent className="flex flex-col gap-4">
                 <Field label="Model">
-                  <select className="input mt-0" value={model} onChange={(e) => setModel(e.target.value)}>
-                    <option value="auto">auto — {models.data?.auto ?? 'server chọn model'}</option>
-                    {model !== 'auto' && !models.data?.models.some((item) => item.id === model) && <option value={model}>{model}</option>}
-                    {models.data?.models.map((item) => <option key={item.id} value={item.id}>{item.display_name ?? item.id}</option>)}
-                  </select>
+                  <DropdownSelect
+                    ariaLabel="Model"
+                    value={model}
+                    onValueChange={setModel}
+                    options={[
+                      { value: 'auto', label: `auto — ${models.data?.auto ?? 'server chọn model'}` },
+                      ...(model !== 'auto' && !models.data?.models.some((item) => item.id === model)
+                        ? [{ value: model, label: model }]
+                        : []),
+                      ...(models.data?.models.map((item) => ({
+                        value: item.id,
+                        label: item.display_name ?? item.id,
+                      })) ?? []),
+                    ]}
+                  />
                 </Field>
                 <p className="text-muted-foreground -mt-2 text-xs">{models.isPending ? 'Đang lấy danh sách từ nhà cung cấp…' : models.data?.live ? 'Danh sách lấy trực tiếp từ nhà cung cấp.' : `Đang dùng danh sách mặc định${models.data?.reason ? ` — ${models.data.reason}` : '.'}`}</p>
                 <Field label="Additional Note">
@@ -380,32 +391,29 @@ function StudioFormPanel({ state }: { state: StateResponse }) {
 
                 {farm && (
                   <Field label="Hệ điều hành trên Device Farm">
-                    <select
-                      className="input mt-0"
+                    <DropdownSelect
+                      ariaLabel="Hệ điều hành trên Device Farm"
                       value={farm}
-                      onChange={(e) => setFarm(e.target.value)}
-                    >
-                      <option value="android">Android</option>
-                      <option value="ios">iOS</option>
-                    </select>
+                      onValueChange={setFarm}
+                      options={[
+                        { value: 'android', label: 'Android' },
+                        { value: 'ios', label: 'iOS' },
+                      ]}
+                    />
                   </Field>
                 )}
 
                 <Field label="Môi trường">
-                  <select
-                    className="input mt-0"
+                  <DropdownSelect
+                    ariaLabel="Môi trường"
                     value={workflowEnv}
-                    onChange={(e) => setWorkflowEnv(e.target.value)}
-                  >
-                    {/* Config chưa khai môi trường nào thì select rỗng trơ ra như
-                        đang hỏng; nói thẳng ra vẫn hơn. */}
-                    {Object.keys(environments).length === 0 && (
-                      <option value="">— chưa cấu hình môi trường —</option>
-                    )}
-                    {Object.keys(environments).map((item) => (
-                      <option key={item}>{item}</option>
-                    ))}
-                  </select>
+                    onValueChange={setWorkflowEnv}
+                    options={
+                      Object.keys(environments).length === 0
+                        ? [{ value: '', label: '— chưa cấu hình môi trường —' }]
+                        : Object.keys(environments).map((item) => ({ value: item, label: item }))
+                    }
+                  />
                 </Field>
 
                 <CheckRow

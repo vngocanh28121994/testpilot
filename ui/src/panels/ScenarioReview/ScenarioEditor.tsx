@@ -7,6 +7,7 @@ import { ROUTES } from '@/api/routes';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
+import { DropdownSelect } from '@/components/DropdownSelect';
 import { Sheet, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { Textarea } from '@/components/ui/textarea';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
@@ -145,11 +146,17 @@ export function ScenarioEditor({
         </SheetHeader>
         <div className="space-y-4 px-4 pb-4">
           {creating && <label className="block text-sm font-medium">Feature đích
-            <select className="input mt-1" value={file} onChange={(event) => { setFile(event.target.value); setNormalization(null); }}>
-              <option value="">Chọn feature…</option>
-              {features.map((feature) => <option key={feature.name} value={feature.name}>{feature.name}</option>)}
-              <option value={NEW_FILE}>＋ Feature mới…</option>
-            </select>
+            <DropdownSelect
+              ariaLabel="Feature đích"
+              className="mt-1"
+              value={file}
+              onValueChange={(value) => { setFile(value); setNormalization(null); }}
+              options={[
+                { value: '', label: 'Chọn feature…' },
+                ...features.map((feature) => ({ value: feature.name, label: feature.name })),
+                { value: NEW_FILE, label: '＋ Feature mới…' },
+              ]}
+            />
           </label>}
           {creating && file === NEW_FILE && <label className="block text-sm font-medium">Tên feature<Input className="mt-1" value={newTitle} onChange={(event) => setNewTitle(event.target.value)} placeholder="Ví dụ: Chuyển tiền nội bộ" /></label>}
           <div className="flex items-center justify-between gap-2">

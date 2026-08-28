@@ -1,4 +1,5 @@
 import { AppShell } from '@/components/layout/AppShell';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { PLACEHOLDERS } from '@/lib/nav';
 
 /**
@@ -13,13 +14,16 @@ export default function TodoPanel({ slug }: { slug: string }) {
   const label = item?.label ?? 'Mục này';
 
   return (
-    <AppShell title={label}>
-      <div className="border-border max-w-2xl rounded-lg border p-5">
-        <p>
-          <b>{label}</b> có trong design nhưng chưa có gì đứng sau nó trong TestPilot.
-        </p>
-        {item?.why && <p className="text-muted-foreground mt-2 text-sm">{item.why}</p>}
-      </div>
+    <AppShell title={label} description={item?.why}>
+      <Card className="max-w-2xl">
+        <CardHeader>
+          <CardTitle>{label}</CardTitle>
+          <CardDescription>Hạng mục này đang được chuẩn bị trong lộ trình TestPilot.</CardDescription>
+        </CardHeader>
+        <CardContent className="text-muted-foreground text-sm">
+          Chưa có dữ liệu hoặc thao tác khả dụng cho mục này.
+        </CardContent>
+      </Card>
     </AppShell>
   );
 }

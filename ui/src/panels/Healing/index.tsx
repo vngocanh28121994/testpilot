@@ -11,6 +11,7 @@ import {
 import { HealingRow } from './HealingRow';
 import { Clock, CircleCheckBig, CircleSlash, Eye } from 'lucide-react';
 import { Field } from '@/components/Field';
+import { DropdownSelect } from '@/components/DropdownSelect';
 import { StatTile } from '@/components/StatTile';
 import { TINTS } from '@/lib/tints';
 import {
@@ -105,32 +106,26 @@ export default function HealingPanel() {
           <CardContent className="flex flex-col gap-4">
             <div className="grid gap-4 sm:max-w-md sm:grid-cols-2">
               <Field label="Trạng thái">
-                <select
-                  aria-label="Trạng thái"
-                  className="input mt-0"
+                <DropdownSelect
+                  ariaLabel="Trạng thái"
                   value={status}
-                  onChange={(e) => setStatus(e.target.value as StatusFilter)}
-                >
-                  {STATUS_OPTIONS.map((o) => (
-                    <option key={o.value} value={o.value}>
-                      {o.label}
-                    </option>
-                  ))}
-                </select>
+                  onValueChange={(value) => setStatus(value as StatusFilter)}
+                  options={STATUS_OPTIONS.map((option) => ({
+                    value: option.value,
+                    label: option.label,
+                  }))}
+                />
               </Field>
               <Field label="Platform">
-                <select
-                  aria-label="Platform"
-                  className="input mt-0"
+                <DropdownSelect
+                  ariaLabel="Platform"
                   value={platform}
-                  onChange={(e) => setPlatform(e.target.value as PlatformFilter)}
-                >
-                  {PLATFORM_OPTIONS.map((o) => (
-                    <option key={o.value} value={o.value}>
-                      {o.label}
-                    </option>
-                  ))}
-                </select>
+                  onValueChange={(value) => setPlatform(value as PlatformFilter)}
+                  options={PLATFORM_OPTIONS.map((option) => ({
+                    value: option.value,
+                    label: option.label,
+                  }))}
+                />
               </Field>
             </div>
 

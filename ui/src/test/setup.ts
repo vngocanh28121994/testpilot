@@ -68,6 +68,24 @@ Object.defineProperty(HTMLCanvasElement.prototype, 'getContext', {
   value: () => null,
 });
 
+// Radix Select kiểm tra pointer capture khi mở danh sách; jsdom không cài các
+// API này dù trình duyệt thật luôn có. Stub để kiểm thử đúng hành vi chọn,
+// không phải khả năng vẽ pointer capture của browser engine.
+for (const method of ['hasPointerCapture', 'setPointerCapture', 'releasePointerCapture'] as const) {
+  if (!HTMLElement.prototype[method]) {
+    Object.defineProperty(HTMLElement.prototype, method, {
+      configurable: true,
+      value: method === 'hasPointerCapture' ? () => false : () => {},
+    });
+  }
+}
+if (!HTMLElement.prototype.scrollIntoView) {
+  Object.defineProperty(HTMLElement.prototype, 'scrollIntoView', {
+    configurable: true,
+    value: () => {},
+  });
+}
+
 // 'error' chứ không phải 'warn' như sen. Một request không có handler nghĩa là
 // test đang lặng lẽ gọi ra mạng thật — ở đây thì nó fail và không ai thấy,
 // còn ở CI thì nó treo. Cứ để nó đỏ ngay.

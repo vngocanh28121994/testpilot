@@ -49,7 +49,9 @@ describe('ScenarioReviewPanel — thanh lọc', () => {
     const { router } = await render();
     await screen.findByText('Đăng nhập thành công');
 
-    await user.selectOptions(screen.getByLabelText('Lọc theo trạng thái duyệt'), 'approved');
+    expect(screen.getByLabelText('Lọc theo trạng thái duyệt')).toHaveClass('bg-white');
+    await user.click(screen.getByLabelText('Lọc theo trạng thái duyệt'));
+    await user.click(await screen.findByRole('option', { name: 'Đã duyệt' }));
 
     expect(router.state.location.search).toMatchObject({ status: 'approved' });
     expect(screen.queryByRole('button', { name: 'Lọc' })).not.toBeInTheDocument();
@@ -61,6 +63,7 @@ describe('ScenarioReviewPanel — thanh lọc', () => {
     await screen.findByText('Đăng nhập thành công');
 
     const box = screen.getByLabelText('Tìm kịch bản');
+    expect(box).toHaveClass('bg-white');
     await user.type(box, 'Sai mật khẩu');
     await user.tab();
     expect(router.state.location.search).toMatchObject({ q: 'Sai mật khẩu' });

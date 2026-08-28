@@ -37,7 +37,8 @@ describe('RunnerPanel — nhiều thiết bị', () => {
     );
     await renderWithRouter(<RunnerPanel />, { path: '/runner' });
     await screen.findByText('Sẵn sàng chạy.');
-    await user.selectOptions(screen.getByLabelText('Platform'), 'android');
+    await user.click(screen.getByLabelText('Platform'));
+    await user.click(await screen.findByRole('option', { name: 'android — Appium' }));
     await screen.findByRole('checkbox', { name: 'Chọn Pixel 7' });
     await user.click(screen.getByRole('checkbox', { name: 'Chọn Pixel 7' }));
     await user.click(screen.getByRole('checkbox', { name: 'Chọn Pixel 8' }));
@@ -54,7 +55,8 @@ describe('RunnerPanel — nhiều thiết bị', () => {
       })),
     );
     await renderWithRouter(<RunnerPanel />, { path: '/runner' });
-    await user.selectOptions(screen.getByLabelText('Platform'), 'android');
+    await user.click(screen.getByLabelText('Platform'));
+    await user.click(await screen.findByRole('option', { name: 'android — Appium' }));
     await screen.findByText('Chưa sẵn sàng chạy.');
     expect(screen.getByRole('button', { name: 'Khởi động Appium' })).toBeEnabled();
     expect(screen.getByRole('button', { name: 'Chạy test' })).toBeDisabled();

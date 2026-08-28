@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Field } from '@/components/Field';
 import { Input } from '@/components/ui/input';
+import { DropdownSelect } from '@/components/DropdownSelect';
 import { uploadBuild } from '@/api/upload';
 import type { StudioForm } from '@core/ui/contracts.js';
 
@@ -59,7 +60,7 @@ export function EnvEditor({
         </div>
         <div className="grid gap-3 md:grid-cols-2">
           <Field label="Web base URL"><Input value={env.web?.baseUrl ?? ''} placeholder="https://…" onChange={(event) => changeEnv(name, { ...env, web: { ...env.web, baseUrl: event.target.value } })} /></Field>
-          <div className="space-y-2"><p className="text-sm font-medium">Role → account</p>{accounts.map((account) => <label key={account.label} className="grid grid-cols-2 items-center gap-2 text-sm"><span>{account.label}</span><select className="input mt-0" value={env.accounts?.[account.label] ?? ''} onChange={(event) => changeEnv(name, { ...env, accounts: { ...env.accounts, [account.label]: event.target.value } })}><option value="">— chưa gán —</option>{accounts.map((option) => <option key={option.label} value={option.label}>{option.label}</option>)}</select></label>)}</div>
+          <div className="space-y-2"><p className="text-sm font-medium">Role → account</p>{accounts.map((account) => <label key={account.label} className="grid grid-cols-2 items-center gap-2 text-sm"><span>{account.label}</span><DropdownSelect ariaLabel={`Account cho ${account.label}`} value={env.accounts?.[account.label] ?? ''} onValueChange={(value) => changeEnv(name, { ...env, accounts: { ...env.accounts, [account.label]: value } })} options={[{ value: '', label: '— chưa gán —' }, ...accounts.map((option) => ({ value: option.label, label: option.label }))]} /></label>)}</div>
           {(['android', 'ios'] as const).map((platform) => <div key={platform} className="rounded border p-3"><p className="mb-1 text-sm font-medium">{platform === 'android' ? 'Android (.apk)' : 'iOS (.ipa)'}</p><p className="text-muted-foreground truncate text-xs">{env[platform]?.app || 'Chưa có build riêng'}</p><label className="mt-2 inline-flex"><input className="sr-only" type="file" accept={platform === 'android' ? '.apk' : '.ipa'} onChange={(event) => { const file = event.target.files?.[0]; if (file) void upload(name, platform, file); event.currentTarget.value = ''; }} /><span className="button text-xs"><Upload /> {uploading === `${name}:${platform}` ? 'Đang tải…' : 'Tải build'}</span></label></div>)}
         </div>
       </section>)}

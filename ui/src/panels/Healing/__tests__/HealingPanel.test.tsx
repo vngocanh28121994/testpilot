@@ -40,14 +40,17 @@ describe('HealingPanel', () => {
     await screen.findByText('login.submit');
     expect(rows()).toHaveLength(4);
 
-    await user.selectOptions(screen.getByLabelText('Trạng thái'), 'proposed');
+    await user.click(screen.getByLabelText('Trạng thái'));
+    await user.click(await screen.findByRole('option', { name: 'Chờ duyệt' }));
     expect(rows()).toHaveLength(2);
 
-    await user.selectOptions(screen.getByLabelText('Platform'), 'android');
+    await user.click(screen.getByLabelText('Platform'));
+    await user.click(await screen.findByRole('option', { name: 'Android' }));
     expect(rows()).toHaveLength(1);
     expect(screen.getByText('cart.total')).toBeInTheDocument();
 
-    await user.selectOptions(screen.getByLabelText('Platform'), 'web');
+    await user.click(screen.getByLabelText('Platform'));
+    await user.click(await screen.findByRole('option', { name: 'Web' }));
     expect(rows()).toHaveLength(1);
     expect(screen.getByText('login.submit')).toBeInTheDocument();
   });
@@ -56,7 +59,8 @@ describe('HealingPanel', () => {
     const user = userEvent.setup();
     await renderWithRouter(<HealingPanel />);
     await screen.findByText('login.submit');
-    await user.selectOptions(screen.getByLabelText('Trạng thái'), 'rejected');
+    await user.click(screen.getByLabelText('Trạng thái'));
+    await user.click(await screen.findByRole('option', { name: 'Đã từ chối' }));
     expect(screen.getByText('Không có healing record khớp bộ lọc.')).toBeInTheDocument();
   });
 
