@@ -1,8 +1,11 @@
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { endOfDay, startOfDay } from 'date-fns';
+import type { DateRange } from 'react-day-picker';
 import { Link } from '@tanstack/react-router';
 import { toast } from 'sonner';
 import {
   Download,
+  Info,
   LogIn,
   Play,
   Plus,
@@ -10,22 +13,29 @@ import {
   ShieldAlert,
   ShieldCheck,
   Smartphone,
+  TerminalSquare,
   Trash2,
 } from 'lucide-react';
 import { AppShell } from '@/components/layout/AppShell';
 import { Field } from '@/components/Field';
 import { CheckRow } from '@/components/CheckRow';
 import { GroupHeading } from '@/components/GroupHeading';
+import { StageList } from '@/components/StageList';
 import { StatusPill } from '@/components/StatusPill';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
+import { DateRangePicker } from '@/components/DateRangePicker';
+import { Pagination } from '@/components/Pagination';
+import { TagPicker } from '@/components/TagPicker';
 import { api, qs } from '@/api/client';
 import { ROUTES, STREAM_ROUTES } from '@/api/routes';
 import { useAppState } from '@/hooks/useAppState';
 import { useStreamJob } from '@/hooks/useStreamJob';
 import { when } from '@/lib/datetime';
+import { FARM_IDLE_STAGES } from '@/lib/stages';
+import { cn } from '@/lib/utils';
 import type {
   AwsStatus,
   FarmApiResponse,
@@ -50,7 +60,7 @@ async function farmGet<T>(path: string): Promise<T> {
 }
 
 export default function FarmPanel() {
-  const state = useAppState((s) => ({ config: s.config, appBuilds: s.appBuilds, runs: s.runs }));
+  const state = useAppState((s) => ({ config: s.config, appBuilds: s.appBuilds, runs: s.runs, features: s.features, tagTaxonomy: s.tagTaxonomy }));
   const saved = state.data?.config.farm;
   const [region, setRegion] = useState(saved?.region ?? 'us-west-2');
   const [platform, setPlatform] = useState<'android' | 'ios'>(saved?.platform ?? 'android');
@@ -61,6 +71,12 @@ export default function FarmPanel() {
   const [devices, setDevices] = useState<FarmDevice[]>([]);
   const [selected, setSelected] = useState<string[]>([]);
   const [poolName, setPoolName] = useState('');
+  const [deviceQuery, setDeviceQuery] = useState('');
+  const [realAvailableOnly, setRealAvailableOnly] = useState(false);
+  const [tagsSelected, setTagsSelected] = useState(() => (saved?.env?.TESTPILOT_TAG ?? '').split(',').filter(Boolean));
+  const [historyRange, setHistoryRange] = useState<DateRange>();
+  const [historyPlatform, setHistoryPlatform] = useState<'all' | 'android' | 'ios'>('all');
+  const [historyPage, setHistoryPage] = useState(1);
   const [aws, setAws] = useState<AwsStatus | null>(null);
   const [form, setForm] = useState(() => ({
     testPackagePath: saved?.testPackagePath ?? 'build/testpilot-appium.zip',
@@ -69,7 +85,7 @@ export default function FarmPanel() {
     jobTimeoutMinutes: saved?.jobTimeoutMinutes ?? 30,
     videoCapture: saved?.videoCapture ?? true,
     sendSecrets: saved?.sendSecrets ?? false,
-    env: Object.entries(saved?.env ?? {}).map(([key, value]) => ({ key, value })),
+    env: Object.entries(saved?.env ?? {}).filter(([key]) => key !== 'TESTPILOT_TAG').map(([key, value]) => ({ key, value })),
     bundle: true,
   }));
   const job = useStreamJob('farm-run', STREAM_ROUTES.farmRun);
@@ -116,6 +132,7 @@ export default function FarmPanel() {
     const env = Object.fromEntries(
       form.env.map(({ key, value }) => [key.trim(), value]).filter(([key]) => key),
     );
+    if (tagsSelected.length) env.TESTPILOT_TAG = tagsSelected.join(',');
     const body: FarmForm = {
       region,
       projectArn: project,
@@ -127,7 +144,8 @@ export default function FarmPanel() {
       jobTimeoutMinutes: form.jobTimeoutMinutes,
       videoCapture: form.videoCapture,
       sendSecrets: form.sendSecrets,
-      ...(Object.keys(env).length > 0 ? { env } : {}),
+      // Gửi cả object rỗng để bỏ tag không vô tình giữ TESTPILOT_TAG từ lượt trước.
+      env,
       bundle: form.bundle,
     };
     job.start(body);
@@ -135,8 +153,23 @@ export default function FarmPanel() {
   const shownPools = pools.filter(
     (item) => !item.platforms?.length || item.platforms.includes(platform),
   );
+  const selectedPool = shownPools.find((item) => item.arn === pool);
+  const shownDevices = useMemo(() => {
+    const query = deviceQuery.trim().toLowerCase();
+    return devices
+      .filter((item) => !realAvailableOnly || (item.formFactor.toUpperCase() !== 'VIRTUAL' && ['AVAILABLE', 'HIGHLY_AVAILABLE'].includes(item.availability)))
+      .filter((item) => !query || `${item.name} ${item.manufacturer} ${item.os}`.toLowerCase().includes(query))
+      .slice(0, 300);
+  }, [deviceQuery, devices, realAvailableOnly]);
+  const tagOptions = useMemo(
+    () => [...new Set(state.data?.features.flatMap((feature) => feature.scenarios.flatMap((scenario) => scenario.tags)) ?? [])].sort(),
+    [state.data],
+  );
   const build = state.data?.appBuilds[platform];
   const farmRuns = (state.data?.runs ?? []).filter((run) => run.kind === 'farm');
+  const filteredFarmRuns = farmRuns.filter((run) => (historyPlatform === 'all' || run.platform === historyPlatform) && farmInRange(run.startedAt, historyRange));
+  const historyPageCount = Math.max(1, Math.ceil(filteredFarmRuns.length / 10));
+  const shownFarmRuns = filteredFarmRuns.slice((Math.min(historyPage, historyPageCount) - 1) * 10, Math.min(historyPage, historyPageCount) * 10);
 
   return (
     <AppShell title="AWS Device Farm" description={PAGE_DESCRIPTION}>
@@ -167,10 +200,13 @@ export default function FarmPanel() {
                       Chưa kết nối
                     </Badge>
                   )}
-                  <span className="text-muted-foreground text-sm">
-                    {aws?.ok
-                      ? `Nguồn: ${aws.source}`
-                      : (aws?.reason ?? 'Đang kiểm tra credential…')}
+                  <span
+                    className={cn(
+                      'text-sm',
+                      expiringSoon(aws) ? 'text-status-flaky' : 'text-muted-foreground',
+                    )}
+                  >
+                    {aws ? credentialLine(aws) : 'Đang kiểm tra credential…'}
                   </span>
                   <div className="ms-auto flex flex-wrap gap-2">
                     <Button variant="outline" size="sm" onClick={checkAws}>
@@ -185,6 +221,8 @@ export default function FarmPanel() {
                     )}
                   </div>
                 </div>
+
+                {aws && <LoginHelp status={aws} />}
 
                 {login.logs.length > 0 && <pre className="console">{login.logs.join('\n')}</pre>}
 
@@ -260,6 +298,13 @@ export default function FarmPanel() {
                         </option>
                       ))}
                     </select>
+                    <p className="text-muted-foreground mt-1 text-xs" aria-live="polite">
+                      {selectedPool
+                        ? `Pool đã chọn: ${selectedPool.name}${selectedPool.platforms?.length ? ` · ${selectedPool.platforms.join(', ')}` : ''}.`
+                        : pools.length > shownPools.length
+                          ? `Đã ẩn ${pools.length - shownPools.length} pool không phù hợp với ${platform}.`
+                          : 'Chọn pool phù hợp với nền tảng để chạy.'}
+                    </p>
                   </Field>
                 </div>
 
@@ -280,13 +325,27 @@ export default function FarmPanel() {
                     Hoặc tự chọn thiết bị và tạo pool mới
                   </summary>
                   <div className="mt-3 flex flex-col gap-3">
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <Input
+                        type="search"
+                        value={deviceQuery}
+                        onChange={(event) => setDeviceQuery(event.target.value)}
+                        placeholder="Lọc tên, hãng hoặc phiên bản OS…"
+                        aria-label="Lọc thiết bị"
+                      />
+                      <CheckRow
+                        label="Chỉ thiết bị thật đang rảnh"
+                        checked={realAvailableOnly}
+                        onChange={setRealAvailableOnly}
+                      />
+                    </div>
                     <Button variant="outline" size="sm" className="self-start" onClick={loadDevices}>
                       <Download className="size-4" />
                       Tải thiết bị
                     </Button>
                     {devices.length > 0 && (
                       <div className="max-h-64 overflow-auto rounded-lg border">
-                        {devices.map((item) => (
+                        {shownDevices.map((item) => (
                           <label
                             key={item.arn}
                             className="hover:bg-muted/50 flex items-center gap-2 border-b p-2 text-sm last:border-b-0"
@@ -309,6 +368,9 @@ export default function FarmPanel() {
                             </span>
                           </label>
                         ))}
+                        {shownDevices.length === 0 && (
+                          <p className="text-muted-foreground p-4 text-sm">Không có thiết bị khớp bộ lọc.</p>
+                        )}
                       </div>
                     )}
                     <div className="flex gap-2">
@@ -390,12 +452,40 @@ export default function FarmPanel() {
                   checked={form.sendSecrets}
                   onChange={(sendSecrets) => setForm((old) => ({ ...old, sendSecrets }))}
                 />
+                {form.sendSecrets && (
+                  <p className="border-destructive/40 bg-destructive/5 text-destructive rounded-md border p-3 text-sm">
+                    Cần bật thì <code>{'{{account.*.password}}'}</code> mới có giá trị trên máy thật. Mật khẩu được chèn vào testspec, upload lên S3 dưới dạng văn bản thuần và lưu theo lịch sử run — ai truy cập AWS có thể đọc được. Hãy đổi mật khẩu sau khi test xong; tắt thì placeholder giữ nguyên và đăng nhập sẽ không qua.
+                  </p>
+                )}
               </div>
+
+              <section className="rounded-lg border p-4" aria-labelledby="farm-env-guide-title">
+                <h4 id="farm-env-guide-title" className="text-sm font-medium">Hướng dẫn biến môi trường</h4>
+                <p className="text-muted-foreground mt-1 text-xs">Biến được chèn thành <code>export KEY=VALUE</code> trong phase test của testspec.</p>
+                <dl className="mt-3 grid gap-2 text-sm sm:grid-cols-3">
+                  <div><dt><code>TESTPILOT_TAG</code></dt><dd className="text-muted-foreground text-xs">Tự đặt từ bộ lọc tag bên dưới.</dd></div>
+                  <div><dt><code>TESTPILOT_APPIUM_HOST</code></dt><dd className="text-muted-foreground text-xs">Override host Appium, mặc định 127.0.0.1.</dd></div>
+                  <div><dt><code>TESTPILOT_PLATFORM</code></dt><dd className="text-muted-foreground text-xs">Device Farm tự thiết lập Android hoặc iOS.</dd></div>
+                </dl>
+                <p className="text-muted-foreground mt-3 text-xs">Không đặt password, token hay API key ở đây: testspec có thể được upload và ghi log. Dùng AWS Secrets Manager cho dữ liệu nhạy cảm.</p>
+              </section>
 
               <EnvEditor
                 entries={form.env}
                 onChange={(env) => setForm((old) => ({ ...old, env }))}
               />
+
+              <Field label="Lọc scenario theo tag">
+                <TagPicker
+                  value={tagsSelected}
+                  onChange={setTagsSelected}
+                  taxonomy={state.data?.tagTaxonomy}
+                  knownTags={tagOptions}
+                  placeholder="Tất cả scenario — chọn nhiều tag để chạy tập hợp"
+                  aria-label="Lọc tag Device Farm"
+                />
+                <p className="text-muted-foreground mt-1 text-xs">Giá trị được gửi bằng <code>TESTPILOT_TAG</code>.</p>
+              </Field>
 
               <div>
                 <Button disabled={job.status === 'running'} onClick={start}>
@@ -406,7 +496,26 @@ export default function FarmPanel() {
             </CardContent>
           </Card>
 
-          {job.logs.length > 0 && <pre className="console mt-0">{job.logs.join('\n')}</pre>}
+          {(job.logs.length > 0 || job.status === 'running') && (
+            <Card aria-labelledby="farm-progress-title">
+              <CardHeader>
+                <CardTitle id="farm-progress-title">Tiến trình</CardTitle>
+                <CardDescription>
+                  Bốn stage của một lượt farm. Upload và hàng chờ thiết bị là hai phần chậm
+                  nhất, nên chúng phải nhìn thấy được chứ không gộp thành một dòng.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="flex flex-col gap-4">
+                <StageList stages={job.run?.stages} idle={FARM_IDLE_STAGES} />
+                {job.logs.length > 0 && (
+                  <pre className="console mt-0">
+                    {job.logs.join('\n')}
+                    {job.error ? `\n❌ ${job.error}` : ''}
+                  </pre>
+                )}
+              </CardContent>
+            </Card>
+          )}
         </section>
 
         <Card aria-labelledby="history-title">
@@ -415,6 +524,7 @@ export default function FarmPanel() {
             <CardDescription>Các lượt đã gửi lên farm từ máy này.</CardDescription>
           </CardHeader>
           <CardContent>
+            <div className="mb-4 flex flex-wrap items-end gap-3"><label className="text-sm">Khoảng ngày<DateRangePicker value={historyRange} onChange={(next) => { setHistoryRange(next); setHistoryPage(1); }} /></label><div className="flex gap-1">{(['all', 'android', 'ios'] as const).map((item) => <Button key={item} size="sm" variant={historyPlatform === item ? 'default' : 'outline'} onClick={() => { setHistoryPlatform(item); setHistoryPage(1); }}>{item === 'all' ? 'Tất cả' : item}</Button>)}</div><Button className="ms-auto" size="sm" variant="ghost" onClick={() => { setHistoryRange(undefined); setHistoryPlatform('all'); setHistoryPage(1); }}>Xoá bộ lọc</Button></div>
             <div className="overflow-x-auto rounded-lg border">
               <table className="w-full text-sm">
                 <thead>
@@ -426,7 +536,7 @@ export default function FarmPanel() {
                   </tr>
                 </thead>
                 <tbody>
-                  {farmRuns.map((run) => (
+                  {shownFarmRuns.map((run) => (
                     <tr key={run.id} className="border-t">
                       <td className="p-2">{when(run.startedAt)}</td>
                       <td className="p-2">{run.feature}</td>
@@ -444,22 +554,25 @@ export default function FarmPanel() {
                       </td>
                     </tr>
                   ))}
-                  {farmRuns.length === 0 && (
+                  {shownFarmRuns.length === 0 && (
                     <tr className="border-t">
                       <td colSpan={4} className="text-muted-foreground p-6 text-center">
-                        Chưa có lần chạy Device Farm.
+                        Không có lần chạy Device Farm khớp bộ lọc.
                       </td>
                     </tr>
                   )}
                 </tbody>
               </table>
             </div>
+            <Pagination page={Math.min(historyPage, historyPageCount)} pageCount={historyPageCount} onPageChange={setHistoryPage} />
           </CardContent>
         </Card>
       </section>
     </AppShell>
   );
 }
+
+function farmInRange(iso: string | undefined, range: DateRange | undefined) { if (!range?.from) return true; const time = Date.parse(iso ?? ''); return !Number.isNaN(time) && time >= startOfDay(range.from).getTime() && time <= endOfDay(range.to ?? range.from).getTime(); }
 
 function EnvEditor({
   entries,
@@ -518,6 +631,101 @@ function EnvEditor({
         </div>
       ))}
     </section>
+  );
+}
+
+/** Còn dưới 15 phút — cùng ngưỡng mà scheduler cảnh báo (app.js:5093). */
+function expiringSoon(aws: AwsStatus | null): boolean {
+  return aws?.ok === true && aws.expiresInMinutes !== undefined && aws.expiresInMinutes < 15;
+}
+
+/**
+ * Một dòng nói đủ ba thứ: nguồn, key nào, và còn sống bao lâu.
+ *
+ * Bản React trước đây chỉ hiện `Nguồn: X` và bỏ rơi `keyHint` lẫn
+ * `expiresInMinutes` mà server vẫn gửi. Hạn dùng mới là thứ quyết định: một
+ * lượt farm chạy 20 phút với credential còn 5 phút sẽ chết giữa chừng, SAU khi
+ * đã upload 216MB và tiêu phút thiết bị.
+ */
+function credentialLine(aws: AwsStatus): string {
+  if (!aws.ok) return aws.reason ?? 'Không dùng được credential.';
+  const parts = [`Nguồn: ${aws.source}`];
+  if (aws.keyHint) parts.push(`key ${aws.keyHint}…`);
+  parts.push(
+    aws.expiresInMinutes === undefined
+      ? 'không hết hạn (IAM role hoặc access key)'
+      : aws.expiresInMinutes < 0
+        ? 'đã hết hạn'
+        : `còn ${aws.expiresInMinutes} phút`,
+  );
+  return parts.join(' · ');
+}
+
+/**
+ * Vì sao không có nút "Đăng nhập AWS", và phải làm gì.
+ *
+ * Đây là chỗ lấp lỗ hổng lớn nhất của thẻ này: ba tình huống hoàn toàn khác
+ * nhau trước đây cùng rơi vào một ngõ cụt — một câu lỗi tiếng Anh của AWS SDK
+ * và một nút "Kiểm tra lại" bấm bao nhiêu lần cũng ra đúng câu đó.
+ *
+ * Im lặng ở đây tốn nhiều thời gian hơn vẻ ngoài của nó: người dùng không có
+ * cách nào phân biệt "máy này chưa cài AWS CLI" với "phiên đã hết hạn, bấm
+ * đăng nhập là xong".
+ */
+function LoginHelp({ status }: { status: AwsStatus }) {
+  // Đã kết nối được thì không có gì phải giải thích.
+  if (status.ok) return null;
+
+  // Không có phiên nào để đăng nhập: credential đến từ biến môi trường, IAM
+  // role của container, hay web identity. Sửa nằm ở cấu hình triển khai, và
+  // một trình duyệt mở ra sẽ mở trên server chứ không phải ở đây.
+  if (!status.login) {
+    return (
+      <Note icon={Info}>
+        Credential đến từ <b>{status.source}</b>, nên không có phiên nào để đăng nhập từ màn
+        này. Sửa ở nơi cấu hình credential cho tiến trình đang chạy TestPilot.
+      </Note>
+    );
+  }
+
+  if (!status.login.cliFound) {
+    return (
+      <Note icon={TerminalSquare}>
+        <span>
+          Chưa tìm thấy AWS CLI v2 trên máy này, nên chưa chạy được{' '}
+          <code className="bg-muted rounded px-1 py-0.5 font-mono text-xs">
+            {status.login.command}
+          </code>
+          . Cài AWS CLI v2
+          {status.login.kind === 'sso' ? '' : ' và cấu hình profile'}, rồi bấm “Kiểm tra lại”.
+        </span>
+      </Note>
+    );
+  }
+
+  // Nút đăng nhập đang hiện. Nói ra lệnh nó sắp chạy — `aws login` và
+  // `aws sso login` là hai luồng vào hai danh tính khác nhau, và bấm nhầm tệ
+  // hơn là không bấm (devicefarm.ts loginCommand).
+  return (
+    <Note icon={LogIn}>
+      <span>
+        Bấm “Đăng nhập AWS” sẽ chạy{' '}
+        <code className="bg-muted rounded px-1 py-0.5 font-mono text-xs">
+          {status.login.command}
+        </code>
+        {status.login.profile ? ` cho profile “${status.login.profile}”` : ''} và mở trình duyệt
+        trên chính máy này.
+      </span>
+    </Note>
+  );
+}
+
+function Note({ icon: Icon, children }: { icon: typeof Info; children: ReactNode }) {
+  return (
+    <div className="bg-muted/50 text-muted-foreground flex items-start gap-2 rounded-lg border px-3 py-2 text-sm">
+      <Icon className="mt-0.5 size-4 shrink-0" />
+      <span className="min-w-0">{children}</span>
+    </div>
   );
 }
 

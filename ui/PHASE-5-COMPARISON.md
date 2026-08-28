@@ -2,21 +2,30 @@
 
 Ngày kiểm: 2026-08-27. Checklist được ghi trước cutover; UI React nay phục vụ tại `/`.
 
-| Bề mặt             | Cũ                        | Mới                               | Bằng chứng                                             |
-| ------------------ | ------------------------- | --------------------------------- | ------------------------------------------------------ |
-| Điều hướng         | 14 mục                    | 14 mục                            | Browser check: `#nav button` = 14, navigation mới = 14 |
-| Dashboard          | số liệu + feature table   | panel Dashboard hiện hữu          | smoke test mở app                                      |
-| Healing Center     | lọc + review              | lọc + review mutation             | E2E mock review                                        |
-| Personal Settings  | config/secret form        | config/secret form                | unit + smoke hiện hữu                                  |
-| Studio             | lưu + workflow stream     | lưu + SSE workflow                | E2E mock `studio/save` + `/api/gen`                    |
-| Scenario Review    | lọc, review, bulk, editor | URL filters, review, bulk, editor | E2E mutation + React key check                         |
-| Workflow History   | card/log/report link      | card/log/report link              | route `/scenarios/history`                             |
-| Bản build          | raw upload                | raw upload XHR + progress         | contract + build chunk `builds-*`                      |
-| Local Runner       | run/stop/log/report       | run/stop/jobStore/log/report      | route/chunk `runner-*`                                 |
-| E2E History        | report iframe/artifacts   | iframe, screenshot, network log   | route/chunk `runner.history-*`                         |
-| Device Farm        | AWS/pool/run stream       | AWS/pool/run stream               | E2E mock `/api/farm/run`                               |
-| Farm Run Detail    | stage, video, log         | stage, video, log                 | route/chunk `farm.$runId-*`                            |
-| Placeholder `todo` | giải thích 6 mục chưa nối | cùng `why` từ NAV                 | smoke test Zephyr                                      |
+> **Bảng này đo theo TRANG, không theo THAO TÁC.** Bằng chứng của nó là "route
+> tồn tại và render được" — đúng ở mức đó, và chỉ ở mức đó. Một đợt đối chiếu
+> sâu hơn (2026-08-28) tìm ra 17 khoảng cách nghiệp vụ mà bảng này không thấy;
+> ví dụ dòng "Local Runner ✅" trong khi bản React không có một nút prereq nào.
+>
+> Danh sách đầy đủ và kế hoạch lấp: [`../REACT-PARITY-PLAN.md`](../REACT-PARITY-PLAN.md).
+> Cột "Còn thiếu" dưới đây đã được thêm vào; ✅ ở cột "Mới" chỉ có nghĩa "trang
+> có tồn tại".
+
+| Bề mặt             | Cũ                        | Mới (mức trang)                   | Còn thiếu ở mức thao tác (§ trong REACT-PARITY-PLAN)                                                                                                  |
+| ------------------ | ------------------------- | --------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Điều hướng         | 14 mục                    | 14 mục                            | —                                                                                                                                                     |
+| Dashboard          | số liệu + feature table   | panel Dashboard hiện hữu          | —                                                                                                                                                     |
+| Healing Center     | lọc + review              | lọc + review mutation             | —                                                                                                                                                     |
+| Personal Settings  | config/secret form        | config/secret form                | —                                                                                                                                                     |
+| Studio             | lưu + workflow stream     | lưu + SSE workflow                | ✅ dẫn sang gate (§2.2), ✅ thanh stage (§3.5); còn trình soạn Môi trường (§3.1), chọn model (§3.4)                                                   |
+| Scenario Review    | lọc, review, bulk, editor | URL filters, review, bulk, editor | ✅ Workflow Gate (§2.1); còn chuẩn hoá + duyệt action (§2.3), thêm/xoá kịch bản (§3.2), tag đa chọn (§4.1), `pomWarnings` (§4.7), bảng cú pháp (§4.8) |
+| Workflow History   | card/log/report link      | card/log/report link              | —                                                                                                                                                     |
+| Bản build          | raw upload                | raw upload XHR + progress         | —                                                                                                                                                     |
+| Local Runner       | run/stop/log/report       | run/stop/jobStore/log/report      | nút prereq (§2.4), chọn nhiều thiết bị (§3.3), thẻ bản build (§4.5), slowMo (§4.6), bộ lọc lịch sử (§4.2)                                             |
+| E2E History        | report iframe/artifacts   | iframe, screenshot, network log   | tab platform, lọc tuần/máy, video có chương (§4.3)                                                                                                    |
+| Device Farm        | AWS/pool/run stream       | AWS/pool/run stream               | ✅ thanh stage (§3.5); còn lọc thiết bị, lọc tag, hướng dẫn biến env (§4.4), bộ lọc lịch sử (§4.2)                                                    |
+| Farm Run Detail    | stage, video, log         | stage, video, log                 | video có chương (§4.3)                                                                                                                                |
+| Placeholder `todo` | giải thích 6 mục chưa nối | cùng `why` từ NAV                 | —                                                                                                                                                     |
 
 ## Kiểm tra giao diện
 
@@ -29,8 +38,12 @@ Ngày kiểm: 2026-08-27. Checklist được ghi trước cutover; UI React nay 
 ## Cổng nghiệm thu đã chạy
 
 - `npm run typecheck`
-- `npm run ui:test` — 71 tests
-- `npm run ui:test:e2e` — 10 tests
+- `npm run ui:test` — 96 tests (71 lúc cutover; +25 từ Mốc 0/1 của parity plan)
+- `npm run ui:test:e2e` — 12 tests (10 lúc cutover; +2 cho Workflow Gate)
 - `npm run ui:build`
+
+`ui/src/components/layout/__tests__/AppSidebar.test.tsx` flaky ~3/10 lần chạy cả
+bộ (không flaky khi chạy riêng). Đã xác nhận có SẴN từ commit `f19c498`, không
+phải hồi quy của đợt parity.
 
 `ui:lint` không có lỗi. Nó còn một warning có sẵn từ `useReactTable`, vì React Compiler không memoize API TanStack Table một cách an toàn.

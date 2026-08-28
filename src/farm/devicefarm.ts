@@ -108,6 +108,30 @@ export interface FarmRunResult {
   runDirs: string[];
 }
 
+/**
+ * What signing in from this machine would actually do.
+ *
+ * Reported rather than left implicit because "no login button" has three very
+ * different causes, and a screen that cannot tell them apart sends people to
+ * re-run the same failing check forever:
+ *
+ *   - nothing to sign into at all (env keys, container role, web identity) —
+ *     `AwsStatus.login` is absent;
+ *   - a sign-in exists but the CLI that performs it is not installed —
+ *     `cliFound: false`;
+ *   - ready to go — `cliFound: true`, and `command` says what will run.
+ */
+export interface AwsLoginPlan {
+  /** `aws sso login` (IAM Identity Center) vs the legacy `aws login`. */
+  kind: 'sso' | 'legacy';
+  /** The exact command, so the screen can name it instead of hinting at it. */
+  command: string;
+  /** false = no AWS CLI v2 new enough to run `command` was found on this machine. */
+  cliFound: boolean;
+  /** Set when AWS_PROFILE selects a named profile. */
+  profile?: string;
+}
+
 export interface AwsStatus {
   ok: boolean;
   /** Why not, in words a person can act on. */
@@ -125,6 +149,8 @@ export interface AwsStatus {
    * the fix is a deployment change and a browser would open on a server.
    */
   canLogin: boolean;
+  /** Absent when there is no session to sign into. See AwsLoginPlan. */
+  login?: AwsLoginPlan;
 }
 
 /**
@@ -141,11 +167,13 @@ export interface AwsStatus {
  */
 export async function awsStatus(region: string): Promise<AwsStatus> {
   const source = credentialSource();
-  const canLogin = source === '~/.aws hoặc IAM role của máy' && (await awsLoginBinary()) !== undefined;
+  const login = await loginPlan(region);
+  const canLogin = login !== undefined && login.cliFound;
   const client = await makeClient(region);
+  const base = { source, canLogin, ...(login ? { login } : {}) };
   try {
     const creds = await client.config.credentials();
-    const out: AwsStatus = { ok: true, source, canLogin, keyHint: creds.accessKeyId.slice(0, 4) };
+    const out: AwsStatus = { ok: true, ...base, keyHint: creds.accessKeyId.slice(0, 4) };
     if (creds.expiration) {
       out.expiresAt = creds.expiration.toISOString();
       out.expiresInMinutes = Math.round((creds.expiration.getTime() - Date.now()) / 60_000);
@@ -155,8 +183,51 @@ export async function awsStatus(region: string): Promise<AwsStatus> {
     await client.send(new ListProjectsCommand({}));
     return out;
   } catch (err) {
-    return { ok: false, source, canLogin, reason: firstLine((err as Error).message) };
+    return { ok: false, ...base, reason: firstLine((err as Error).message) };
   }
+}
+
+/**
+ * Which sign-in this machine is set up for, or `undefined` for none.
+ *
+ * Replaces a string comparison against `credentialSource()` that quietly
+ * excluded everyone using `AWS_PROFILE` — the most common IAM Identity Center
+ * setup there is. `awsLogin()` two functions below has always read
+ * `process.env.AWS_PROFILE` and built `aws sso login --profile x`; the status
+ * call simply never advertised it, so the button that would have run it stayed
+ * hidden on exactly the machines it was written for.
+ *
+ * A named profile is offered ONLY when it is genuinely an SSO profile. A named
+ * profile carrying static keys has nothing to sign into, and `loginCommand`
+ * would fall back to legacy `aws login` there — which writes a root
+ * `login_session` back into the profile. Suggesting that is worse than showing
+ * no button, which is the whole point of the warning on `loginCommand`.
+ */
+async function loginPlan(region: string): Promise<AwsLoginPlan | undefined> {
+  const e = process.env;
+  // Env keys, container roles, web identity: the credentials come from outside
+  // this machine's control. The fix is a deployment change, and a browser
+  // opened here would appear on a server nobody is looking at.
+  if (e.AWS_ACCESS_KEY_ID) return undefined;
+  if (e.AWS_CONTAINER_CREDENTIALS_RELATIVE_URI || e.AWS_CONTAINER_CREDENTIALS_FULL_URI) {
+    return undefined;
+  }
+  if (e.AWS_WEB_IDENTITY_TOKEN_FILE) return undefined;
+
+  const profile = e.AWS_PROFILE;
+  const config = await readFile(path.join(os.homedir(), '.aws', 'config'), 'utf8').catch(() => '');
+  const { kind, args } = loginCommand(config, profile);
+  if (profile && kind !== 'sso') return undefined;
+
+  // Mirror what awsLogin() will actually spawn, region flag included, so the
+  // screen never names a command different from the one that runs.
+  const full = kind === 'sso' ? args : [...args, '--region', region];
+  return {
+    kind,
+    command: `aws ${full.join(' ')}`,
+    cliFound: (await awsLoginBinary(args)) !== undefined,
+    ...(profile ? { profile } : {}),
+  };
 }
 
 /**

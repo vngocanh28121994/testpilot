@@ -9,6 +9,7 @@ export const Route = createFileRoute('/scenarios')({
     status: search.status === 'pending' || search.status === 'approved' || search.status === 'rejected' ? search.status : undefined,
     tags: Array.isArray(search.tags) ? search.tags.filter((tag): tag is string => typeof tag === 'string') : undefined,
     page: typeof search.page === 'number' && Number.isInteger(search.page) && search.page > 1 ? search.page : undefined,
+    runId: typeof search.runId === 'string' && search.runId ? search.runId : undefined,
   }),
   component: ScenarioRoute,
 });

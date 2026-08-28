@@ -62,8 +62,18 @@ export function AppSidebar() {
         <nav aria-label="Điều hướng chính">
           {NAV_GROUPS.map((group) => (
             <SidebarGroup key={group.title}>
-              {group.title && <SidebarGroupLabel>{group.title}</SidebarGroupLabel>}
-              <SidebarMenu>
+              {/* Mặc định của shadcn là text-xs, màu mờ 70% — ba tiêu đề nhóm
+                  chìm hẳn xuống dưới nhãn mục con. Cho to hơn một nấc và dùng
+                  sắc brand đậm để chúng dẫn mắt được. */}
+              {group.title && (
+                <SidebarGroupLabel className="text-sidebar-primary-strong text-sm font-semibold">
+                  {group.title}
+                </SidebarGroupLabel>
+              )}
+              {/* Thụt mục con vào một nấc để thấy ngay chúng thuộc tiêu đề nào.
+                  Bỏ thụt khi sidebar thu gọn còn icon: lúc đó tiêu đề nhóm bị
+                  ẩn, thụt vào chỉ làm icon lệch khỏi logo và mục Inprogress. */}
+              <SidebarMenu className="ps-2 group-data-[collapsible=icon]:ps-0">
                 {group.items.map((item) => (
                   <NavLink key={item.id} item={item} pathname={pathname} />
                 ))}

@@ -30,7 +30,13 @@ export const stateFixture: StateResponse = {
     environments: {},
     defaultEnv: '',
     farm: {},
-    llm: {},
+    // Bốn khoá dưới đây có mặt trong MỌI phản hồi thật (ConfigSchema đặt
+    // default cho tất cả), và Studio đọc thẳng `cfg.workflow.platforms` —
+    // fixture thiếu chúng thì panel ném TypeError trước cả assertion đầu tiên.
+    sources: [],
+    targetFeature: '',
+    workflow: { platforms: ['web'], headed: false },
+    llm: { model: 'auto', effort: 'high', note: '' },
   } as unknown as StateResponse['config'],
   configError: null,
   configFile: '/tmp/testpilot.config.json',
@@ -42,7 +48,10 @@ export const stateFixture: StateResponse = {
       feature: 'Đăng nhập',
       background: [],
       scenarios: [
-        { name: 'Đăng nhập thành công', tags: ['@web'], platforms: ['web'], steps: 4, stepTexts: [], review: null },
+        // Hai tag khác nhau, cố ý: bộ lọc tag là multi-select, mà một fixture
+        // chỉ có đúng một tag thì không phân biệt được "chọn được nhiều" với
+        // "chọn được một".
+        { name: 'Đăng nhập thành công', tags: ['@web', '@smoke'], platforms: ['web'], steps: 4, stepTexts: [], review: null },
         { name: 'Sai mật khẩu', tags: ['@web'], platforms: ['web'], steps: 3, stepTexts: [], review: null },
       ],
       coverage: null,
@@ -125,3 +134,114 @@ export const healingFixture: HealingResponse = {
   ],
   summary: { total: 4, proposed: 2, watching: 1, applied: 1, rejected: 0 },
 };
+
+/* ------------------------------------------------------------------ */
+/* Workflow Gate                                                       */
+/* ------------------------------------------------------------------ */
+
+import type {
+  FeatureSummary,
+  RunHistoryEntry,
+  ScenarioSummary,
+  WorkflowQuestion,
+  WorkflowStage,
+} from '@core/ui/contracts.js';
+
+/** 11 stage của WORKFLOW_STAGES, dừng lại đúng ở bước chờ duyệt (bước 6). */
+const gateStages: WorkflowStage[] = [
+  { name: 'Đọc và xác thực tài liệu', status: 'done' },
+  { name: 'AI phân tích yêu cầu, màn hình và element', status: 'done' },
+  { name: 'Cập nhật element registry', status: 'done' },
+  { name: 'Sinh bộ testcase', status: 'done' },
+  { name: 'Chuẩn hoá và bind step', status: 'done' },
+  { name: 'Chờ duyệt / chỉnh sửa testcase', status: 'running' },
+  { name: 'Chuẩn bị môi trường automation', status: 'pending' },
+  { name: 'Chạy các kịch bản đã duyệt', status: 'pending' },
+  { name: 'Healing và chạy lại lỗi locator', status: 'pending' },
+  { name: 'Sinh report, ảnh và video', status: 'pending' },
+  { name: 'Hoàn tất workflow', status: 'pending' },
+];
+
+export const gateQuestions: WorkflowQuestion[] = [
+  {
+    id: 'wf-1-q1',
+    kind: 'radio',
+    prompt: 'Danh mục theo dõi nào là danh mục mặc định?',
+    rationale: 'Tài liệu nhắc tới hai danh mục mà không nói cái nào mở sẵn.',
+    options: ['Danh mục của tôi', 'Danh mục đề xuất'],
+    source: 'generation',
+  },
+  {
+    id: 'wf-1-q2',
+    kind: 'text',
+    prompt: 'Số tài khoản dùng để kiểm thử chuyển tiền?',
+    source: 'healing',
+    context: { scenario: 'Chuyển tiền nội bộ', line: 12 },
+  },
+];
+
+function scenario(name: string, status: 'pending' | 'approved' | 'rejected'): ScenarioSummary {
+  return {
+    name,
+    tags: ['@web'],
+    platforms: ['web'],
+    steps: 4,
+    stepTexts: [],
+    review: { status } as ScenarioSummary['review'],
+  };
+}
+
+/**
+ * State có một workflow đang dừng ở gate.
+ *
+ * `stateFixture` cố ý KHÔNG chứa run nào `kind: 'workflow'`, nên gate vắng mặt
+ * ở mọi test khác — đúng như hành vi thật khi không có workflow nào đang chờ.
+ */
+export function gateState(
+  over: {
+    status?: RunHistoryEntry['status'];
+    reviews?: Array<'pending' | 'approved' | 'rejected'>;
+    questions?: WorkflowQuestion[];
+    missing?: FeatureSummary['coverage'];
+  } = {},
+): StateResponse {
+  const reviews = over.reviews ?? ['pending', 'pending'];
+  const feature: FeatureSummary = {
+    name: 'dang-nhap.feature',
+    content: 'Feature: Đăng nhập\n',
+    revision: 'r1',
+    feature: 'Đăng nhập',
+    background: [],
+    scenarios: [
+      scenario('Đăng nhập thành công', reviews[0] ?? 'pending'),
+      scenario('Sai mật khẩu', reviews[1] ?? 'pending'),
+    ],
+    coverage:
+      over.missing === undefined
+        ? {
+            decision: 'incomplete',
+            total: 3,
+            covered: 2,
+            missing: [{ id: 'RQ-03', rule: 'Khoá tài khoản sau 5 lần sai', sourceQuote: '' }],
+            auditedAt: '2026-08-27T10:00:00.000Z',
+          }
+        : over.missing,
+    error: null,
+  };
+
+  const run = {
+    id: 'wf-1',
+    feature: 'Đăng nhập',
+    kind: 'workflow',
+    startedAt: '2026-08-27T09:00:00.000Z',
+    status: over.status ?? 'waiting_review',
+    stages: gateStages,
+    stagesDone: 5,
+    log: [],
+    generatedFile: 'dang-nhap.feature',
+    generated: { scenarios: 2, steps: 7, screens: 1, elements: 12, visuals: 3 },
+    questions: over.questions ?? [],
+  } as unknown as RunHistoryEntry;
+
+  return { ...stateFixture, features: [feature], runs: [run] };
+}

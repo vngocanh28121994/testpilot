@@ -3,6 +3,8 @@ import { healingHandlers } from './healing';
 import { configHandlers } from './config';
 import { prereqHandlers } from './prereq';
 import { settingsHandlers } from './settings';
+import { workflowHandlers } from './workflow';
+import { farmHandlers } from './farm';
 
 /**
  * Handler mặc định cho các route mà test thường chạm tới.
@@ -19,4 +21,6 @@ export const handlers = [
   ...configHandlers,
   ...prereqHandlers,
   ...settingsHandlers,
+  ...workflowHandlers,
+  ...farmHandlers,
 ];

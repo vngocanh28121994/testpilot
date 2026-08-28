@@ -26,12 +26,34 @@
 
 import type { TestPilotConfig } from '../config.js';
 import type { Platform, ScenarioSpec, RunReport, LocatorCandidate } from '../core/types.js';
-import type { WorkflowRun } from '../core/history.js';
+import type {
+  QuestionKind,
+  WorkflowQuestion,
+  WorkflowRun,
+  WorkflowStage,
+} from '../core/history.js';
+import type { AnswerSubmission } from '../core/questions.js';
 import type { HealingRecord } from '../healing/HealingStore.js';
 import type { LocatorQuality } from '../core/locatorQuality.js';
 import type { PreflightResult } from '../core/preflight.js';
 import type { TagTaxonomyView } from '../core/tagTaxonomy.js';
 import type { ScenarioReviewEntry } from '../core/scenarioReview.js';
+import type {
+  ScenarioPlan,
+  ScenarioPlanStep,
+  ScenarioPlanStepKind,
+} from '../steps/scenarioPlan.js';
+import type {
+  LearnedActionDef,
+  LearnedActionKind,
+  LearnedActionParameter,
+  LearnedActionStatus,
+} from '../actions/ActionRegistry.js';
+import type { Chapter } from '../report/videoIndex.js';
+import type {
+  AwsLoginPlan,
+  AwsStatus as FarmAwsStatus,
+} from '../farm/devicefarm.js';
 
 export type {
   TestPilotConfig,
@@ -40,11 +62,23 @@ export type {
   RunReport,
   LocatorCandidate,
   WorkflowRun,
+  WorkflowStage,
+  WorkflowQuestion,
+  QuestionKind,
+  AnswerSubmission,
   HealingRecord,
   LocatorQuality,
   PreflightResult,
   TagTaxonomyView,
   ScenarioReviewEntry,
+  ScenarioPlan,
+  ScenarioPlanStep,
+  ScenarioPlanStepKind,
+  LearnedActionDef,
+  LearnedActionKind,
+  LearnedActionParameter,
+  LearnedActionStatus,
+  Chapter,
 };
 
 /* ------------------------------------------------------------------ */
@@ -192,6 +226,22 @@ export interface ReportView {
   networkLogUrl: string | null;
   videoUrls?: string[];
   shotUrls?: Array<{ name: string; url: string; onFailure: boolean }>;
+  /**
+   * Tập con của `videoUrls` là bản ghi CẢ lượt chạy, không phải từng scenario
+   * (server.ts:1149). Chỉ những file này mới có chương và mới cần tua qua phần
+   * cài app — bản ghi từng scenario đã bắt đầu đúng chỗ rồi.
+   */
+  wholeVideoUrls?: string[];
+  /** Mốc thời gian từng scenario, tính từ scenario đầu tiên chứ không từ đầu file. */
+  chapters?: Chapter[];
+  /**
+   * Độ dài phần TEST trong bản ghi cả lượt, tính bằng giây.
+   *
+   * Offset để nhảy qua phần cài app + tạo session Appium phải tính ở trình
+   * duyệt (`video.duration - testSeconds`), vì file không mang timestamp tuyệt
+   * đối nào để căn, và chỉ trình duyệt biết duration sau `loadedmetadata`.
+   */
+  testSeconds?: number;
 }
 
 export interface BuildInventoryRow {
@@ -258,12 +308,23 @@ export interface FeatureReviewBulkRequest {
   decision: 'approve' | 'reject';
 }
 
+/**
+ * Hai trường cảnh báo POM là HAI thứ khác nhau, không phải một trường viết sai
+ * số nhiều — cả hai đều do server trả về và cả hai đều phải hiện ra:
+ *
+ * - `pomWarnings` (mảng): đồng bộ POM THÀNH CÔNG nhưng binding phải đoán, ví dụ
+ *   một nhãn khớp hai control (server.ts:420, 471, 538). Hiện ở tông TRUNG TÍNH,
+ *   không phải xanh: thao tác thành công thật, nhưng có step có thể đang trỏ
+ *   nhầm control, và dấu tick xanh là cách để chuyện đó trôi qua không ai để ý.
+ * - `pomWarning` (chuỗi): đồng bộ POM HỎNG HẲN (server.ts:433, 480, 545).
+ */
 export interface FeatureMutationResponse {
   ok: true;
   revision?: string;
   content?: string;
   review?: ScenarioReviewEntry;
   reviewed?: number;
+  pomWarnings?: string[];
   pomWarning?: string;
 }
 
@@ -293,7 +354,16 @@ export interface FarmDevice {
   formFactor: string;
   availability: string;
 }
-export interface AwsStatus { ok: boolean; source: string; reason?: string; keyHint?: string; expiresInMinutes?: number; canLogin?: boolean }
+/**
+ * Dẫn xuất, KHÔNG chép tay — đúng ràng buộc 3 ở đầu file.
+ *
+ * Bản chép tay trước đây đã lệch đúng như ràng buộc đó cảnh báo: nó thiếu
+ * `expiresAt`, và khai `canLogin` là tuỳ chọn trong khi server luôn gửi. Màn
+ * Device Farm vì thế không đọc được hạn dùng của credential — thứ quyết định
+ * một lượt chạy 20 phút có sống nổi tới lúc thu artifact hay không.
+ */
+export type { AwsLoginPlan };
+export type AwsStatus = FarmAwsStatus;
 
 /* ------------------------------------------------------------------ */
 /* GET /api/healing · POST /api/healing/review                         */
@@ -410,9 +480,25 @@ export interface VocabularyForm {
   hint?: string;
 }
 
+/** Một action đã duyệt, đúng hình dạng route vocabulary trả về. */
+export interface VocabularyAction {
+  id: string;
+  label: string;
+  phraseTemplate: string;
+  parameters: LearnedActionParameter[];
+}
+
+/** Element có thể chèn vào step dưới dạng tham chiếu `"id"`. */
+export interface VocabularyElement {
+  id: string;
+  label: string;
+  screen: string;
+}
+
 export interface VocabularyResponse {
   forms: VocabularyForm[];
-  actions: unknown[];
+  actions: VocabularyAction[];
+  elements: VocabularyElement[];
 }
 
 /* ------------------------------------------------------------------ */
@@ -456,3 +542,167 @@ export type JobFrame =
   | { type: 'run'; run: WorkflowRun }
   | { type: 'error'; message: string }
   | { type: 'done'; ok: boolean };
+
+/* ------------------------------------------------------------------ */
+/* Workflow gate — questions · answers · complete                      */
+/* ------------------------------------------------------------------ */
+
+/**
+ * GET /api/workflow/questions?runId= (server.ts:271).
+ *
+ * `pending` là số câu CHƯA trả lời, không phải tổng số câu: câu đã trả lời vẫn
+ * được giữ lại vì chúng chính là hồ sơ giải thích vì sao lượt chạy làm những
+ * gì nó đã làm.
+ */
+export interface WorkflowQuestionsResponse {
+  status: WorkflowRun['status'];
+  questions: WorkflowQuestion[];
+  pending: number;
+}
+
+export interface WorkflowAnswersRequest {
+  runId: string;
+  answers: AnswerSubmission[];
+}
+
+/**
+ * POST /api/workflow/answers (server.ts:284).
+ *
+ * Trả lời và chạy tiếp là HAI lời gọi tách nhau, cố ý: câu trả lời được ghi
+ * xuống ngay khi tới, nên người điền được nửa form rồi bỏ đi không mất gì, và
+ * lượt chạy chỉ nhúc nhích khi `remaining === 0`.
+ */
+export interface WorkflowAnswersResponse {
+  remaining: number;
+  status: WorkflowRun['status'];
+}
+
+export interface WorkflowCompleteRequest {
+  runId: string;
+}
+
+/* ------------------------------------------------------------------ */
+/* POST /api/feature/normalize                                         */
+/* ------------------------------------------------------------------ */
+
+export interface NormalizeRequest {
+  content: string;
+}
+
+export interface NormalizeChange {
+  line: number;
+  from: string;
+  to: string;
+  reason: string;
+}
+
+/**
+ * Phản hồi của normalizer (server.ts:1287, `DraftNormalization`).
+ *
+ * `DraftNormalization` là interface CỤC BỘ trong server.ts và server.ts không
+ * export gì cả, nên hình dạng bao ngoài phải khai lại ở đây. Các type con thì
+ * dẫn xuất — `ScenarioPlan` và `LearnedActionDef` là type miền thật.
+ *
+ * `valid === false` là điều kiện KHOÁ nút Lưu (app.js:3244). Ghi xuống đĩa một
+ * file mà runner không chạy được thì lỗi chỉ lộ ra ở lượt chạy sau đó rất lâu.
+ */
+export interface NormalizeResponse {
+  content: string;
+  changes: NormalizeChange[];
+  unresolved: Array<{ line: number; text: string }>;
+  valid: boolean;
+  error?: string;
+  /** Có gọi model hay chỉ chạy luật cục bộ. */
+  usedAi: boolean;
+  /** Element chưa có trong registry; Playwright sẽ tự tìm lúc chạy. */
+  discoveredLater: Array<{ id: string; label: string; screen: string }>;
+  /** Action AI đề xuất, đang ở trạng thái `proposed` — cần người duyệt. */
+  actionProposals: LearnedActionDef[];
+  /** Action đã duyệt từ trước và được áp dụng trong lượt chuẩn hoá này. */
+  appliedActions: Array<{ id: string; label: string; line: number }>;
+  actionAnalysis: { available: boolean; attempted: boolean; reason?: string };
+  scenarioPlan: ScenarioPlan;
+}
+
+/* ------------------------------------------------------------------ */
+/* GET /api/actions · POST /api/actions/review                         */
+/* ------------------------------------------------------------------ */
+
+export interface ActionsResponse {
+  actions: LearnedActionDef[];
+}
+
+export interface ActionsReviewRequest {
+  id: string;
+  decision: 'approve' | 'reject';
+}
+
+export interface ActionsReviewResponse {
+  action: LearnedActionDef;
+  actions: LearnedActionDef[];
+}
+
+/* ------------------------------------------------------------------ */
+/* GET /api/models                                                     */
+/* ------------------------------------------------------------------ */
+
+/**
+ * `auto` là thứ mà lựa chọn "auto" thực sự phân giải ra TRÊN SERVER NÀY — nó
+ * phụ thuộc key mà server có, nên trang không thể hardcode (server.ts:models()).
+ * `live: false` nghĩa là đang dùng danh sách mặc định, và `reason` nói vì sao.
+ */
+export interface ModelsResponse {
+  models: Array<{ id: string; display_name?: string }>;
+  live: boolean;
+  reason?: string;
+  auto: string;
+}
+
+/* ------------------------------------------------------------------ */
+/* GET /api/prereq/*                                                   */
+/* ------------------------------------------------------------------ */
+
+/** `state` là chuỗi thô của adb: `device`, `unauthorized`, `offline`… */
+export interface PrereqAndroidDevice {
+  id: string;
+  state: string;
+  manufacturer?: string;
+  model?: string;
+  androidVersion?: string;
+  kind: 'physical' | 'emulator';
+}
+
+export interface PrereqAdbResponse {
+  devices: PrereqAndroidDevice[];
+}
+
+/** `devices` là các dòng người đọc được; `attached` là máy thật đang cắm. */
+export interface PrereqIosDevicesResponse {
+  devices: string[];
+  attached: string[];
+}
+
+export interface PrereqXcodeResponse {
+  ok: boolean;
+  version?: string;
+  path?: string;
+  sdk?: string;
+  reason?: string;
+}
+
+/**
+ * `managed` = tiến trình Appium do CHÍNH server này khởi động.
+ *
+ * Khác `running`: một Appium chạy sẵn từ terminal vẫn `running` nhưng không
+ * `managed`, nên nút "Khởi động lại" không có gì để dừng.
+ */
+export interface PrereqAppiumStatusResponse {
+  running: boolean;
+  managed: boolean;
+  pid?: number;
+  lastExit?: { code: number | null; signal: string | null; at: string };
+}
+
+export interface PrereqDriverRequest {
+  driver: string;
+}

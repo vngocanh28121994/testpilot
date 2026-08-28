@@ -1,7 +1,7 @@
 import { existsSync } from 'node:fs';
 import { mkdir, readdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
-import { chaptersOf, isWholeRunRecording, testWindowSeconds, type Chapter } from './videoIndex.js';
+import { chaptersOf, isWholeRunRecording, testWindowSeconds } from './videoIndex.js';
 import type { RunReport, ScenarioResult } from '../core/types.js';
 import type { FlakeVerdict } from '../flaky/detector.js';
 

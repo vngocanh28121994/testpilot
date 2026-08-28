@@ -1,7 +1,8 @@
-import { useState } from 'react';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useEffect, useState } from 'react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { Link, useNavigate } from '@tanstack/react-router';
 import { toast } from 'sonner';
-import { FileText, Play, Plus, Save, Trash2, X } from 'lucide-react';
+import { ArrowRight, FileText, Play, Plus, Save, Trash2, X } from 'lucide-react';
 import { AppShell } from '@/components/layout/AppShell';
 import { CheckRow } from '@/components/CheckRow';
 import { Field } from '@/components/Field';
@@ -15,11 +16,23 @@ import { api } from '@/api/client';
 import { ROUTES, STREAM_ROUTES } from '@/api/routes';
 import { useAppState } from '@/hooks/useAppState';
 import { useStreamJob } from '@/hooks/useStreamJob';
-import type { StateResponse, StudioForm, StudioSaveResponse } from '@core/ui/contracts.js';
+import { StageList } from '@/components/StageList';
+import { WORKFLOW_IDLE_STAGES } from '@/lib/stages';
+import { EnvEditor } from './EnvEditor';
+import type { ModelsResponse, StateResponse, StudioForm, StudioSaveResponse } from '@core/ui/contracts.js';
 
 const PAGE_DESCRIPTION = 'Từ tài liệu nguồn tới kịch bản đã duyệt và chạy tự động.';
 
 const PLATFORMS = ['web', 'android', 'ios'] as const;
+
+/**
+ * Lượt chạy đã được dẫn sang màn Kịch bản rồi.
+ *
+ * Ở module scope chứ không phải `useRef`, cùng lý do jobStore sống ngoài vòng
+ * đời component: `useRef` mất sạch khi Studio unmount, nên quay lại Studio là
+ * bị đá sang /scenarios lần nữa và không ở lại được trang này.
+ */
+const routed = new Set<string>();
 
 export default function StudioPanel() {
   const state = useAppState((s) => s);
@@ -49,6 +62,7 @@ export default function StudioPanel() {
 
 function StudioFormPanel({ state }: { state: StateResponse }) {
   const client = useQueryClient();
+  const navigate = useNavigate();
   const cfg = state.config;
   const [sources, setSources] = useState(() => cfg.sources);
   const [source, setSource] = useState('');
@@ -70,8 +84,33 @@ function StudioFormPanel({ state }: { state: StateResponse }) {
   );
   const [farm, setFarm] = useState(cfg.workflow.deviceFarm?.platform ?? '');
   const [workflowEnv, setWorkflowEnv] = useState(cfg.workflow.env ?? cfg.defaultEnv);
+  const [environments, setEnvironments] = useState<NonNullable<StudioForm['environments']>>(() => cfg.environments);
+  const [defaultEnv, setDefaultEnv] = useState(cfg.defaultEnv);
   const [headed, setHeaded] = useState(cfg.workflow.headed);
   const job = useStreamJob('studio-workflow', STREAM_ROUTES.gen);
+  const models = useQuery({ queryKey: ['models'], queryFn: () => api.get<ModelsResponse>(ROUTES.models), staleTime: 60_000 });
+
+  // Khung `run` cuối cùng của stream. `waiting_review` nghĩa là workflow đã
+  // dừng lại chờ người — và cái nó chờ nằm ở màn Kịch bản, không phải ở đây.
+  const waiting = job.run?.status === 'waiting_review' ? job.run : null;
+
+  /**
+   * Dẫn sang Workflow Gate ngay khi sinh xong — hành vi của app.js:903.
+   *
+   * Thiếu bước này thì pipeline đứt ở giữa: log báo "chờ duyệt" rồi dừng, và
+   * không có gì trên màn hình nói phải đi đâu tiếp.
+   *
+   * `file` đi kèm `runId` để bảng kịch bản thu về đúng file vừa sinh, thay vì
+   * để người dùng duyệt nhầm kịch bản của một feature khác (app.js:1806).
+   */
+  useEffect(() => {
+    if (job.status !== 'done' || !waiting || routed.has(waiting.id)) return;
+    routed.add(waiting.id);
+    void navigate({
+      to: '/scenarios',
+      search: { runId: waiting.id, file: waiting.generatedFile },
+    });
+  }, [job.status, waiting, navigate]);
 
   const makeForm = (): StudioForm => ({
     sources,
@@ -91,6 +130,8 @@ function StudioFormPanel({ state }: { state: StateResponse }) {
     workflowEnv,
     workflowHeaded: headed,
     workflowDeviceFarm: farm ? { platform: farm as 'android' | 'ios' } : null,
+    environments,
+    defaultEnv,
   });
 
   const save = useMutation({
@@ -277,6 +318,13 @@ function StudioFormPanel({ state }: { state: StateResponse }) {
           </CardContent>
         </Card>
 
+        <EnvEditor
+          environments={environments}
+          defaultEnv={defaultEnv}
+          accounts={accounts.filter((account) => account.label.trim())}
+          onChange={(next, nextDefault) => { setEnvironments(next); setDefaultEnv(nextDefault); if (!workflowEnv || workflowEnv === defaultEnv) setWorkflowEnv(nextDefault); }}
+        />
+
         <section className="grid gap-4">
           <GroupHeading title="Sinh và chạy">
             Model dùng để sinh kịch bản, và những gì chạy tự động ngay sau khi được duyệt.
@@ -289,8 +337,13 @@ function StudioFormPanel({ state }: { state: StateResponse }) {
               </CardHeader>
               <CardContent className="flex flex-col gap-4">
                 <Field label="Model">
-                  <Input value={model} onChange={(e) => setModel(e.target.value)} />
+                  <select className="input mt-0" value={model} onChange={(e) => setModel(e.target.value)}>
+                    <option value="auto">auto — {models.data?.auto ?? 'server chọn model'}</option>
+                    {model !== 'auto' && !models.data?.models.some((item) => item.id === model) && <option value={model}>{model}</option>}
+                    {models.data?.models.map((item) => <option key={item.id} value={item.id}>{item.display_name ?? item.id}</option>)}
+                  </select>
                 </Field>
+                <p className="text-muted-foreground -mt-2 text-xs">{models.isPending ? 'Đang lấy danh sách từ nhà cung cấp…' : models.data?.live ? 'Danh sách lấy trực tiếp từ nhà cung cấp.' : `Đang dùng danh sách mặc định${models.data?.reason ? ` — ${models.data.reason}` : '.'}`}</p>
                 <Field label="Additional Note">
                   <Textarea
                     className="min-h-20"
@@ -346,10 +399,10 @@ function StudioFormPanel({ state }: { state: StateResponse }) {
                   >
                     {/* Config chưa khai môi trường nào thì select rỗng trơ ra như
                         đang hỏng; nói thẳng ra vẫn hơn. */}
-                    {Object.keys(cfg.environments).length === 0 && (
+                    {Object.keys(environments).length === 0 && (
                       <option value="">— chưa cấu hình môi trường —</option>
                     )}
-                    {Object.keys(cfg.environments).map((item) => (
+                    {Object.keys(environments).map((item) => (
                       <option key={item}>{item}</option>
                     ))}
                   </select>
@@ -376,14 +429,39 @@ function StudioFormPanel({ state }: { state: StateResponse }) {
           </div>
         </section>
 
-        {job.logs.length > 0 && (
+        {(job.logs.length > 0 || job.status === 'running') && (
           <Card aria-labelledby="progress-title">
             <CardHeader>
               <CardTitle id="progress-title">Tiến trình workflow</CardTitle>
-              <CardDescription>Log trực tiếp từ lượt chạy đang diễn ra.</CardDescription>
+              <CardDescription>
+                {job.status === 'running'
+                  ? 'Log trực tiếp từ lượt chạy đang diễn ra.'
+                  : 'Lượt chạy gần nhất từ màn này.'}
+              </CardDescription>
             </CardHeader>
-            <CardContent>
-              <pre className="console mt-0">{job.logs.join('\n')}</pre>
+            <CardContent className="flex flex-col gap-4">
+              <StageList stages={job.run?.stages} idle={WORKFLOW_IDLE_STAGES} />
+
+              {/* Lối vào thứ hai tới gate. Điều hướng tự động ở trên chỉ chạy
+                  một lần cho mỗi lượt; ai bấm Back về đây vẫn phải quay lại
+                  được chỗ workflow đang đợi mình. */}
+              {waiting && (
+                <Link
+                  to="/scenarios"
+                  search={{ runId: waiting.id, file: waiting.generatedFile }}
+                  className="text-primary inline-flex items-center gap-1.5 text-sm underline"
+                >
+                  Workflow đang chờ duyệt kịch bản — mở màn Kịch bản
+                  <ArrowRight className="size-3.5" />
+                </Link>
+              )}
+
+              {job.logs.length > 0 && (
+                <pre className="console mt-0">
+                  {job.logs.join('\n')}
+                  {job.error ? `\n❌ ${job.error}` : ''}
+                </pre>
+              )}
             </CardContent>
           </Card>
         )}

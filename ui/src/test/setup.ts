@@ -49,6 +49,17 @@ if (!window.matchMedia) {
 // là nhiễu che mất output thật.
 Object.defineProperty(window, 'scrollTo', { configurable: true, value: () => {} });
 
+// Radix Select đo vị trí popover bằng ResizeObserver; jsdom không có API này.
+// Stub rỗng là đủ cho unit test vì không assertion nào phụ thuộc layout pixel.
+if (!globalThis.ResizeObserver) {
+  class ResizeObserverStub {
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+  }
+  Object.defineProperty(globalThis, 'ResizeObserver', { configurable: true, value: ResizeObserverStub });
+}
+
 // 'error' chứ không phải 'warn' như sen. Một request không có handler nghĩa là
 // test đang lặng lẽ gọi ra mạng thật — ở đây thì nó fail và không ai thấy,
 // còn ở CI thì nó treo. Cứ để nó đỏ ngay.

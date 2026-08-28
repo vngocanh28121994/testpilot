@@ -1,25 +1,38 @@
-import { Fragment, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { Link, useNavigate } from '@tanstack/react-router';
+import { useNavigate } from '@tanstack/react-router';
 import { toast } from 'sonner';
-import { Check, FileCode, Filter, Pencil, X } from 'lucide-react';
+import { Check, FileCode, Pencil, Plus, Search, Trash2, X } from 'lucide-react';
 import { AppShell } from '@/components/layout/AppShell';
-import { Field } from '@/components/Field';
 import { Pagination } from '@/components/Pagination';
 import { StatusPill } from '@/components/StatusPill';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
-import { Textarea } from '@/components/ui/textarea';
+import { FilterChip } from '@/components/FilterChip';
+import { TagFilter } from '@/components/TagFilter';
+import {
+  AlertDialog,
+  AlertDialogActionButton,
+  AlertDialogCancelButton,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { api } from '@/api/client';
 import { ROUTES } from '@/api/routes';
 import { useAppState } from '@/hooks/useAppState';
+import { WorkflowGate } from './WorkflowGate';
+import { ScenarioEditor } from './ScenarioEditor';
+import { removeScenario } from './gherkin';
 import type {
   FeatureMutationResponse,
   FeatureReviewBulkRequest,
   FeatureReviewRequest,
-  FeatureSaveRequest,
+  FeatureSummary,
   StateResponse,
 } from '@core/ui/contracts.js';
 
@@ -29,6 +42,14 @@ export interface ScenarioSearch {
   status?: 'pending' | 'approved' | 'rejected';
   tags?: string[];
   page?: number;
+  /**
+   * Lượt workflow mà Workflow Gate đang nói tới.
+   *
+   * Studio điền vào đây sau khi sinh xong (`panels/Studio`), giống hệt
+   * `navigate('scenario-review', runId)` của bản cũ (app.js:903). Bỏ trống thì
+   * gate tự chọn lượt đang tạm dừng gần nhất.
+   */
+  runId?: string;
 }
 
 const PAGE_SIZE = 25;
@@ -52,13 +73,18 @@ function ReviewBody({ state, search }: { state: StateResponse; search: ScenarioS
   const navigate = useNavigate({ from: '/scenarios' });
   const client = useQueryClient();
   const [selected, setSelected] = useState<string[]>([]);
-  const [editing, setEditing] = useState<string | null>(null);
-  const [draft, setDraft] = useState('');
+  // Ô từ khoá là ô DUY NHẤT giữ state cục bộ: gõ mỗi ký tự mà đẩy thẳng vào URL
+  // thì mỗi phím là một lượt điều hướng. Mọi bộ lọc còn lại áp ngay, vì chúng
+  // đổi theo cú bấm chứ không theo nhịp gõ.
+  const [draftQuery, setDraftQuery] = useState(search.q ?? '');
+  const [editor, setEditor] = useState<{ mode: 'create' } | { mode: 'edit'; feature: FeatureSummary; scenarioName: string } | null>(null);
+  const [deleting, setDeleting] = useState<Array<{ feature: FeatureSummary; scenarioName: string }>>([]);
   const refresh = () => void client.invalidateQueries({ queryKey: ['state'] });
   const review = useMutation({
     mutationFn: (body: FeatureReviewRequest) =>
       api.post<FeatureMutationResponse>(ROUTES.featureReview, body),
-    onSuccess: () => {
+    onSuccess: (data) => {
+      showPomWarnings(data);
       toast.success('Đã lưu quyết định.');
       refresh();
     },
@@ -69,21 +95,41 @@ function ReviewBody({ state, search }: { state: StateResponse; search: ScenarioS
       api.post<FeatureMutationResponse>(ROUTES.featureReviewBulk, body),
     onSuccess: (data) => {
       setSelected([]);
+      showPomWarnings(data);
       toast.success(`Đã duyệt ${data.reviewed ?? 0} kịch bản.`);
       refresh();
     },
     onError: (error) => toast.error((error as Error).message),
   });
-  const save = useMutation({
-    mutationFn: (body: FeatureSaveRequest) =>
-      api.put<FeatureMutationResponse>(ROUTES.feature, body),
-    onSuccess: () => {
-      setEditing(null);
-      toast.success('Đã lưu feature; kịch bản cần được duyệt lại.');
+  const deleteScenarios = useMutation({
+    mutationFn: async (items: Array<{ feature: FeatureSummary; scenarioName: string }>) => {
+      const byFeature = new Map<string, { feature: FeatureSummary; names: string[] }>();
+      for (const item of items) {
+        const found = byFeature.get(item.feature.name) ?? { feature: item.feature, names: [] };
+        found.names.push(item.scenarioName);
+        byFeature.set(item.feature.name, found);
+      }
+      return Promise.all([...byFeature.values()].map(({ feature, names }) =>
+        api.put<FeatureMutationResponse>(ROUTES.feature, {
+          filename: feature.name,
+          content: names.reduce((content, name) => removeScenario(content, name), feature.content),
+          baseRevision: feature.revision,
+        }),
+      ));
+    },
+    onSuccess: (responses) => {
+      setSelected([]);
+      setDeleting([]);
+      responses.forEach(showPomWarnings);
+      toast.success('Đã xoá kịch bản; các kịch bản còn lại cần được duyệt lại.');
       refresh();
     },
     onError: (error) => toast.error((error as Error).message),
   });
+  const showPomWarnings = (data: FeatureMutationResponse) => {
+    for (const warning of data.pomWarnings ?? []) toast.message(warning);
+    if (data.pomWarning) toast.message(data.pomWarning);
+  };
 
   const rows = useMemo(
     () =>
@@ -122,19 +168,38 @@ function ReviewBody({ state, search }: { state: StateResponse; search: ScenarioS
     setSelected((items) =>
       items.includes(id) ? items.filter((item) => item !== id) : [...items, id],
     );
-  const applyFilters = (form: HTMLFormElement) => {
-    const data = new FormData(form);
-    const tag = String(data.get('tag') || '');
+  /**
+   * Áp một thay đổi bộ lọc vào URL.
+   *
+   * `replace: true` để mười lần chỉnh bộ lọc không thành mười mục lịch sử mà
+   * người dùng phải bấm Back qua. `page: undefined` vì kết quả đã khác đi —
+   * giữ nguyên trang 4 sau khi lọc là cách chắc chắn nhất để nhận về bảng rỗng.
+   */
+  const patch = (next: Partial<ScenarioSearch>) =>
     void navigate({
-      search: {
-        q: String(data.get('q') || '') || undefined,
-        file: String(data.get('file') || '') || undefined,
-        status: (String(data.get('status') || '') || undefined) as ScenarioSearch['status'],
-        tags: tag ? [tag] : undefined,
-        page: undefined,
+      replace: true,
+      // Dạng hàm, KHÔNG phải `{ ...search, ...next }`. `search` là ảnh chụp của
+      // lần render này; hai cú bấm nhanh hơn một lượt điều hướng thì cú thứ hai
+      // đọc phải state cũ và ghi đè cú thứ nhất — tick hai tag liên tiếp trong
+      // popover là mất một tag.
+      search: (prev: ScenarioSearch) => ({ ...prev, page: undefined, ...next }),
+    });
+
+  /** Sửa danh sách tag trên state MỚI NHẤT của router — xem chú thích ở TagFilter. */
+  const patchTags = (update: (prev: string[]) => string[]) =>
+    void navigate({
+      replace: true,
+      search: (prev: ScenarioSearch) => {
+        const tags = update(prev.tags ?? []);
+        return { ...prev, page: undefined, tags: tags.length ? tags : undefined };
       },
     });
-  };
+
+  const activeCount =
+    (search.q ? 1 : 0) +
+    (search.file ? 1 : 0) +
+    (search.status ? 1 : 0) +
+    (search.tags?.length ?? 0);
   const selectPage = (checked: boolean) =>
     setSelected((items) =>
       checked
@@ -157,64 +222,140 @@ function ReviewBody({ state, search }: { state: StateResponse; search: ScenarioS
       title="Kịch bản"
       description={PAGE_DESCRIPTION}
       actions={
-        <Link to="/scenarios" search={{}} className="text-xs underline">
-          Xoá bộ lọc
-        </Link>
+        <Button size="sm" onClick={() => setEditor({ mode: 'create' })}>
+          <Plus className="size-4" /> Thêm kịch bản
+        </Button>
       }
     >
       <section aria-label="Duyệt kịch bản" className="flex flex-1 flex-col gap-6">
-        <Card aria-labelledby="filter-title">
-          <CardHeader>
-            <CardTitle id="filter-title">Bộ lọc</CardTitle>
-            <CardDescription>Các điều kiện dưới đây được AND với nhau.</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <form
-              className="grid items-end gap-4 md:grid-cols-5"
-              onSubmit={(event) => {
-                event.preventDefault();
-                applyFilters(event.currentTarget);
-              }}
+        {/* Đứng TRÊN bộ lọc: nó là lý do người dùng đang ở màn này. */}
+        <WorkflowGate state={state} runId={search.runId} />
+
+        {/* Thanh công cụ, KHÔNG phải một thẻ có tiêu đề.
+            Bộ lọc là thứ người ta liếc qua rồi chỉnh, không phải một mục nội
+            dung cần được giới thiệu — hai dòng tiêu đề + mô tả ở trên bốn ô
+            nhập là chi phí chrome cao hơn giá trị nó mang lại. */}
+        <search
+          aria-label="Bộ lọc kịch bản"
+          className="flex flex-col gap-3"
+        >
+          <div className="flex flex-wrap items-center gap-2">
+            {/* Ô tìm chiếm phần co giãn: nó là bộ lọc được dùng nhiều nhất, và
+                nội dung của nó dài không đoán trước được — khác ba ô còn lại,
+                vốn có tập giá trị hữu hạn và vừa trong bề rộng cố định. */}
+            <div className="relative min-w-56 flex-1">
+              <Search className="text-muted-foreground pointer-events-none absolute start-3 top-1/2 size-4 -translate-y-1/2" />
+              <Input
+                className="h-9 ps-9"
+                value={draftQuery}
+                aria-label="Tìm kịch bản"
+                placeholder="Tìm theo tên kịch bản, feature file hoặc tag…"
+                onChange={(event) => setDraftQuery(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter') patch({ q: draftQuery.trim() || undefined });
+                  if (event.key === 'Escape') {
+                    setDraftQuery('');
+                    patch({ q: undefined });
+                  }
+                }}
+                // Áp khi rời ô hoặc khi bấm Enter, không áp theo từng phím gõ.
+                // Debounce theo nhịp gõ nghe hiện đại hơn, nhưng nó làm bảng
+                // nhảy dưới tay người đang gõ dở một từ tiếng Việt có dấu.
+                onBlur={() => patch({ q: draftQuery.trim() || undefined })}
+              />
+            </div>
+
+            <select
+              aria-label="Lọc theo feature file"
+              className="input mt-0 h-9 w-auto min-w-40 max-w-56"
+              value={search.file ?? ''}
+              onChange={(event) => patch({ file: event.target.value || undefined })}
             >
-              <Field label="Từ khoá">
-                <Input name="q" defaultValue={search.q} placeholder="Tìm kịch bản…" />
-              </Field>
-              <Field label="Feature file">
-                <select name="file" defaultValue={search.file ?? ''} className="input mt-0">
-                  <option value="">Tất cả file</option>
-                  {state.features.map((feature) => (
-                    <option key={feature.name}>{feature.name}</option>
-                  ))}
-                </select>
-              </Field>
-              <Field label="Trạng thái">
-                <select name="status" defaultValue={search.status ?? ''} className="input mt-0">
-                  <option value="">Tất cả trạng thái</option>
-                  <option value="pending">Chờ duyệt</option>
-                  <option value="approved">Đã duyệt</option>
-                  <option value="rejected">Không duyệt</option>
-                </select>
-              </Field>
-              <Field label="Tag">
-                <select
-                  name="tag"
-                  defaultValue={search.tags?.[0] ?? ''}
-                  aria-label="Lọc theo tag"
-                  className="input mt-0"
+              <option value="">Tất cả file</option>
+              {state.features.map((feature) => (
+                <option key={feature.name}>{feature.name}</option>
+              ))}
+            </select>
+
+            <select
+              aria-label="Lọc theo trạng thái duyệt"
+              className="input mt-0 h-9 w-auto min-w-36"
+              value={search.status ?? ''}
+              onChange={(event) =>
+                patch({ status: (event.target.value || undefined) as ScenarioSearch['status'] })
+              }
+            >
+              <option value="">Mọi trạng thái</option>
+              <option value="pending">Chờ duyệt</option>
+              <option value="approved">Đã duyệt</option>
+              <option value="rejected">Không duyệt</option>
+            </select>
+
+            <TagFilter
+              value={search.tags ?? []}
+              onChange={patchTags}
+              taxonomy={state.tagTaxonomy}
+              options={tagOptions}
+            />
+
+          </div>
+
+          {/* Hàng chip tóm tắt: sau khi lọc xong, thứ đang có hiệu lực phải đọc
+              được ở một chỗ. Nếu không, "bảng trống" và "bộ lọc quá hẹp" trông
+              giống hệt nhau. */}
+          {activeCount > 0 && (
+            <ul className="flex flex-wrap items-center gap-1.5">
+              {search.q && (
+                <FilterChip label={`Từ khoá: ${search.q}`} onRemove={() => { setDraftQuery(''); patch({ q: undefined }); }} />
+              )}
+              {search.file && (
+                <FilterChip label={search.file} onRemove={() => patch({ file: undefined })} />
+              )}
+              {search.status && (
+                <FilterChip
+                  label={STATUS_LABELS[search.status]}
+                  onRemove={() => patch({ status: undefined })}
+                />
+              )}
+              {(search.tags ?? []).map((tag) => (
+                <FilterChip
+                  key={tag}
+                  label={tag}
+                  onRemove={() => patchTags((prev) => prev.filter((item) => item !== tag))}
+                />
+              ))}
+              {/* Nút xoá tất cả đi CÙNG hàng chip, không nằm trên thanh lọc.
+                  Ở trên thanh lọc nó phải ẩn/hiện theo trạng thái, và mỗi lần
+                  bật tắt bộ lọc là cả hàng control nhảy ngang một đoạn. Hàng
+                  chip vốn đã xuất hiện và biến mất nguyên khối, nên nút đi cùng
+                  nó thì thanh lọc đứng yên. */}
+              {/* `ms-auto`: dồn nút về sát mép phải hàng chip. Chip mọc từ trái
+                  sang và số lượng thay đổi liên tục, nên nếu nút đi liền sau
+                  chip cuối thì vị trí của nó nhảy theo mỗi lần thêm bớt — dính
+                  mép phải là chỗ duy nhất nó đứng yên. */}
+              <li className="ms-auto">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 px-2 text-xs"
+                  onClick={() => {
+                    setDraftQuery('');
+                    void navigate({
+                      replace: true,
+                      // `runId` không phải bộ lọc: xoá lọc không được làm
+                      // Workflow Gate biến mất.
+                      search: { runId: search.runId },
+                    });
+                  }}
                 >
-                  <option value="">Tất cả tag</option>
-                  {tagOptions.map((tag) => (
-                    <option key={tag}>{tag}</option>
-                  ))}
-                </select>
-              </Field>
-              <Button type="submit">
-                <Filter className="size-4" />
-                Lọc
-              </Button>
-            </form>
-          </CardContent>
-        </Card>
+                  <X className="size-3.5" />
+                  Xoá lọc ({activeCount})
+                </Button>
+              </li>
+            </ul>
+          )}
+        </search>
 
         <Card aria-labelledby="scenarios-title">
           <CardHeader>
@@ -244,6 +385,18 @@ function ReviewBody({ state, search }: { state: StateResponse; search: ScenarioS
                   >
                     <X className="size-4" />
                     Không duyệt đã chọn
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="destructive"
+                    disabled={deleteScenarios.isPending}
+                    onClick={() => setDeleting(selectedItems.flatMap((item) => {
+                      const feature = state.features.find((entry) => entry.name === item.filename);
+                      return feature ? [{ feature, scenarioName: item.scenarioName }] : [];
+                    }))}
+                  >
+                    <Trash2 className="size-4" />
+                    Xoá đã chọn ({selectedItems.length})
                   </Button>
                 </div>
               </div>
@@ -286,8 +439,7 @@ function ReviewBody({ state, search }: { state: StateResponse; search: ScenarioS
                   {pageRows.map(({ feature, scenario }) => {
                     const id = idFor(feature.name, scenario.name);
                     return (
-                      <Fragment key={id}>
-                        <tr className="border-t">
+                        <tr key={id} className="border-t">
                           <td className="p-2">
                             <input
                               aria-label={`Chọn ${scenario.name}`}
@@ -360,49 +512,24 @@ function ReviewBody({ state, search }: { state: StateResponse; search: ScenarioS
                                 size="sm"
                                 variant="ghost"
                                 onClick={() => {
-                                  setEditing(id);
-                                  setDraft(feature.content);
+                                  setEditor({ mode: 'edit', feature, scenarioName: scenario.name });
                                 }}
                               >
                                 <Pencil className="size-4" />
-                                Sửa file
+                                Sửa kịch bản
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                className="text-destructive hover:text-destructive"
+                                onClick={() => setDeleting([{ feature, scenarioName: scenario.name }])}
+                              >
+                                <Trash2 className="size-4" />
+                                <span className="sr-only">Xoá {scenario.name}</span>
                               </Button>
                             </div>
                           </td>
                         </tr>
-                        {/* Ô soạn thảo khoá theo id của HÀNG, không theo tên file:
-                            một file có nhiều kịch bản, khoá theo tên file thì một
-                            cú bấm mở ô ở mọi hàng của file đó. */}
-                        {editing === id && (
-                          <tr className="border-t">
-                            <td colSpan={7} className="bg-muted/50 p-3">
-                              <Textarea
-                                className="h-72 font-mono text-xs"
-                                value={draft}
-                                onChange={(event) => setDraft(event.target.value)}
-                              />
-                              <div className="mt-2 flex gap-2">
-                                <Button
-                                  size="sm"
-                                  disabled={save.isPending}
-                                  onClick={() =>
-                                    save.mutate({
-                                      filename: feature.name,
-                                      content: draft,
-                                      baseRevision: feature.revision,
-                                    })
-                                  }
-                                >
-                                  {save.isPending ? 'Đang lưu…' : 'Lưu feature'}
-                                </Button>
-                                <Button size="sm" variant="outline" onClick={() => setEditing(null)}>
-                                  Huỷ
-                                </Button>
-                              </div>
-                            </td>
-                          </tr>
-                        )}
-                      </Fragment>
                     );
                   })}
                 </tbody>
@@ -412,10 +539,47 @@ function ReviewBody({ state, search }: { state: StateResponse; search: ScenarioS
             <Pagination page={page} pageCount={pageCount} onPageChange={goToPage} />
           </CardContent>
         </Card>
+        {editor && (
+          <ScenarioEditor
+            mode={editor.mode}
+            target={editor.mode === 'edit' ? { feature: editor.feature, scenarioName: editor.scenarioName } : null}
+            features={state.features}
+            onClose={() => setEditor(null)}
+          />
+        )}
+        <AlertDialog open={deleting.length > 0} onOpenChange={(open) => !open && setDeleting([])}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Xoá {deleting.length} kịch bản?</AlertDialogTitle>
+              <AlertDialogDescription>
+                Các kịch bản bị xoá sẽ không thể khôi phục từ màn này. Thao tác sẽ ghi lại feature và đưa các kịch bản còn lại về chờ duyệt.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancelButton disabled={deleteScenarios.isPending}>Huỷ</AlertDialogCancelButton>
+              <AlertDialogActionButton disabled={deleteScenarios.isPending} onClick={(event) => { event.preventDefault(); deleteScenarios.mutate(deleting); }}>
+                {deleteScenarios.isPending ? 'Đang xoá…' : 'Xoá kịch bản'}
+              </AlertDialogActionButton>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </section>
     </AppShell>
   );
 }
+
+/**
+ * Khoá là union hữu hạn chứ không phải `string`.
+ *
+ * `Record<string, …>` là index signature, và `noUncheckedIndexedAccess` khiến
+ * mọi lần tra cứu trả về `| undefined` — kể cả khi khoá đã được thu hẹp. Ba
+ * khoá viết thẳng ra thì phép tra cứu là toàn phần.
+ */
+const STATUS_LABELS: Record<NonNullable<ScenarioSearch['status']>, string> = {
+  pending: 'Chờ duyệt',
+  approved: 'Đã duyệt',
+  rejected: 'Không duyệt',
+};
 
 function idFor(filename: string, scenarioName: string): string {
   return `${filename}::${scenarioName}`;

@@ -72,6 +72,10 @@
   --sidebar-foreground: var(--foreground);
   --sidebar-primary: oklch(0.527 0.154 150.069);
   --sidebar-primary-foreground: oklch(0.982 0.018 155.826);
+  /* Sắc brand đậm hơn một nấc, dành cho chữ nhỏ cần bám mắt (tiêu đề nhóm ở
+     sidebar). --sidebar-primary được chỉnh cho MẢNG nền và viền; đặt nguyên
+     nó lên chữ 14px thì nhạt. Nền sáng: giảm L, tăng chroma. */
+  --sidebar-primary-strong: oklch(0.46 0.176 150.069);
   --sidebar-accent: oklch(0.968 0.007 247.896);
   --sidebar-accent-foreground: oklch(0.208 0.042 265.755);
   --sidebar-border: oklch(0.929 0.013 255.508);
@@ -121,6 +125,8 @@
   --sidebar-foreground: oklch(0.984 0.003 247.858);
   --sidebar-primary: oklch(0.627 0.194 149.214);
   --sidebar-primary-foreground: oklch(0.982 0.018 155.826);
+  /* Nền tối thì ngược lại: tăng L cho chữ bật lên, vẫn tăng chroma. */
+  --sidebar-primary-strong: oklch(0.74 0.214 149.214);
   --sidebar-accent: oklch(0.279 0.041 260.031);
   --sidebar-accent-foreground: oklch(0.984 0.003 247.858);
   --sidebar-border: oklch(1 0 0 / 10%);
@@ -170,6 +176,7 @@
   --color-sidebar-foreground: var(--sidebar-foreground);
   --color-sidebar-primary: var(--sidebar-primary);
   --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary-strong: var(--sidebar-primary-strong);
   --color-sidebar-accent: var(--sidebar-accent);
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
   --color-sidebar-border: var(--sidebar-border);
