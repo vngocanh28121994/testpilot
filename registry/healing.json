@@ -315,7 +315,12 @@
     "2026-08-27T06-47-07Z-android-sm-s938b": "2026-08-27T06:51:11.163Z",
     "2026-08-27T06-53-25Z-android-sm-s938b": "2026-08-27T06:59:01.687Z",
     "2026-08-27T07-51-34Z-android-sm-s938b": "2026-08-27T07:58:26.272Z",
-    "2026-08-27T08-19-02Z-android-sm-s938b": "2026-08-27T08:23:29.562Z"
+    "2026-08-27T08-19-02Z-android-sm-s938b": "2026-08-27T08:23:29.562Z",
+    "2026-08-27T16-48-08Z-android-sm-s938b": "2026-08-27T16:56:57.542Z",
+    "2026-08-27T17-26-24Z-android-sm-s938b": "2026-08-27T17:30:42.401Z",
+    "2026-08-28T02-07-52Z-android-sm-s938b": "2026-08-28T02:17:49.000Z",
+    "2026-08-28T02-32-14Z-android-sm-s938b": "2026-08-28T02:36:15.382Z",
+    "2026-08-28T03-25-33Z-android-sm-s938b": "2026-08-28T03:28:52.029Z"
   },
   "entries": {
     "home.totalAssets::android::6dbfe0a6bf0ea4c4": {
@@ -570,7 +575,7 @@
         "weight": 0.8,
         "origin": "llm"
       },
-      "successes": 91,
+      "successes": 120,
       "runIds": [
         "2026-08-27T03-19-48Z-android-sm-s938b",
         "2026-08-27T03-27-17Z-android-sm-s938b",
@@ -579,12 +584,16 @@
         "2026-08-27T06-47-07Z-android-sm-s938b",
         "2026-08-27T06-53-25Z-android-sm-s938b",
         "2026-08-27T07-51-34Z-android-sm-s938b",
-        "2026-08-27T08-19-02Z-android-sm-s938b"
+        "2026-08-27T08-19-02Z-android-sm-s938b",
+        "2026-08-27T16-48-08Z-android-sm-s938b",
+        "2026-08-27T17-26-24Z-android-sm-s938b",
+        "2026-08-28T02-32-14Z-android-sm-s938b",
+        "2026-08-28T03-25-33Z-android-sm-s938b"
       ],
       "firstSeen": "2026-08-27T03:25:37.779Z",
-      "lastSeen": "2026-08-27T08:23:29.562Z",
+      "lastSeen": "2026-08-28T03:28:52.029Z",
       "devices": {
-        "SM_S938B": 91
+        "SM_S938B": 120
       }
     },
     "transfer.submitButton::android::242f72750d7e5084": {
@@ -603,7 +612,7 @@
         "weight": 0.8,
         "origin": "llm"
       },
-      "successes": 44,
+      "successes": 65,
       "runIds": [
         "2026-08-27T03-19-48Z-android-sm-s938b",
         "2026-08-27T03-27-17Z-android-sm-s938b",
@@ -612,12 +621,16 @@
         "2026-08-27T06-47-07Z-android-sm-s938b",
         "2026-08-27T06-53-25Z-android-sm-s938b",
         "2026-08-27T07-51-34Z-android-sm-s938b",
-        "2026-08-27T08-19-02Z-android-sm-s938b"
+        "2026-08-27T08-19-02Z-android-sm-s938b",
+        "2026-08-27T17-26-24Z-android-sm-s938b",
+        "2026-08-28T02-07-52Z-android-sm-s938b",
+        "2026-08-28T02-32-14Z-android-sm-s938b",
+        "2026-08-28T03-25-33Z-android-sm-s938b"
       ],
       "firstSeen": "2026-08-27T03:25:37.779Z",
-      "lastSeen": "2026-08-27T08:23:29.562Z",
+      "lastSeen": "2026-08-28T03:28:52.029Z",
       "devices": {
-        "SM_S938B": 44
+        "SM_S938B": 65
       }
     },
     "transferConfirm.confirmButton::android::27f0ee8803c93757": {
@@ -636,18 +649,22 @@
         "weight": 0.8,
         "origin": "llm"
       },
-      "successes": 10,
+      "successes": 19,
       "runIds": [
         "2026-08-27T06-31-18Z-android-sm-s938b",
         "2026-08-27T06-47-07Z-android-sm-s938b",
         "2026-08-27T06-53-25Z-android-sm-s938b",
         "2026-08-27T07-51-34Z-android-sm-s938b",
-        "2026-08-27T08-19-02Z-android-sm-s938b"
+        "2026-08-27T08-19-02Z-android-sm-s938b",
+        "2026-08-27T17-26-24Z-android-sm-s938b",
+        "2026-08-28T02-07-52Z-android-sm-s938b",
+        "2026-08-28T02-32-14Z-android-sm-s938b",
+        "2026-08-28T03-25-33Z-android-sm-s938b"
       ],
       "firstSeen": "2026-08-27T06:37:53.431Z",
-      "lastSeen": "2026-08-27T08:23:29.562Z",
+      "lastSeen": "2026-08-28T03:28:52.029Z",
       "devices": {
-        "SM_S938B": 10
+        "SM_S938B": 19
       }
     },
     "transfer.thongBao::android::d902c01a3180a982": {
@@ -666,18 +683,21 @@
         "weight": 0.8,
         "origin": "crawler"
       },
-      "successes": 9,
+      "successes": 17,
       "runIds": [
         "2026-08-27T06-31-18Z-android-sm-s938b",
         "2026-08-27T06-47-07Z-android-sm-s938b",
         "2026-08-27T06-53-25Z-android-sm-s938b",
         "2026-08-27T07-51-34Z-android-sm-s938b",
-        "2026-08-27T08-19-02Z-android-sm-s938b"
+        "2026-08-27T08-19-02Z-android-sm-s938b",
+        "2026-08-27T17-26-24Z-android-sm-s938b",
+        "2026-08-28T02-32-14Z-android-sm-s938b",
+        "2026-08-28T03-25-33Z-android-sm-s938b"
       ],
       "firstSeen": "2026-08-27T06:37:53.431Z",
-      "lastSeen": "2026-08-27T08:23:29.562Z",
+      "lastSeen": "2026-08-28T03:28:52.029Z",
       "devices": {
-        "SM_S938B": 9
+        "SM_S938B": 17
       }
     },
     "transferConfirm.backButton::android::24518db0f6df5d7d": {
@@ -696,13 +716,42 @@
         "weight": 0.8,
         "origin": "llm"
       },
-      "successes": 2,
+      "successes": 5,
       "runIds": [
         "2026-08-27T06-53-25Z-android-sm-s938b",
-        "2026-08-27T08-19-02Z-android-sm-s938b"
+        "2026-08-27T08-19-02Z-android-sm-s938b",
+        "2026-08-27T17-26-24Z-android-sm-s938b",
+        "2026-08-28T02-32-14Z-android-sm-s938b",
+        "2026-08-28T03-25-33Z-android-sm-s938b"
       ],
       "firstSeen": "2026-08-27T06:59:01.687Z",
-      "lastSeen": "2026-08-27T08:23:29.562Z",
+      "lastSeen": "2026-08-28T03:28:52.029Z",
+      "devices": {
+        "SM_S938B": 5
+      }
+    },
+    "home.searchFirstResult::android::94e6c4fc8969bbf5": {
+      "elementId": "home.searchFirstResult",
+      "platform": "android",
+      "from": {
+        "strategy": "css",
+        "value": ".searched-feature-block .feature-item:first-child .title",
+        "weight": 0.9,
+        "origin": "authored"
+      },
+      "to": {
+        "strategy": "css",
+        "value": ".searched-feature-block .feature-item",
+        "weight": 0.75,
+        "origin": "authored"
+      },
+      "successes": 2,
+      "runIds": [
+        "2026-08-28T02-32-14Z-android-sm-s938b",
+        "2026-08-28T03-25-33Z-android-sm-s938b"
+      ],
+      "firstSeen": "2026-08-28T02:36:15.382Z",
+      "lastSeen": "2026-08-28T03:28:52.029Z",
       "devices": {
         "SM_S938B": 2
       }

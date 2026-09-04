@@ -22,6 +22,12 @@ const cdpSource = readFileSync('src/drivers/WebViewCdpDriver.ts', 'utf8');
 const GUARD = /this\.inWebview \|\| this\.cdpConnected/;
 
 describe('WebView delegation in the native driver', () => {
+  // Handle-taking operations only. A method that takes a `UiHandle` must check
+  // that the handle is a WebView one before delegating, which is what the guard
+  // below asserts; a plain forwarder like `saidSince` takes no handle and needs
+  // no such check — the "CDP implements everything native forwards" test below
+  // is what covers those.
+  //
   // Native method → the CDP method it hands off to. Mostly the same name;
   // `input` is spelled `fill` on the Playwright side, which is why this is a
   // table rather than an assumption.

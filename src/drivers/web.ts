@@ -784,17 +784,45 @@ export class WebUiDriver implements UiDriver {
    * The native path stays first because when it applies it is atomic and
    * cannot half-happen.
    */
+  saidSince(since: number): string | undefined {
+    return this.popupInterceptor.saidSince(since);
+  }
+
+  /**
+   * Closes whatever overlay panel is open, without choosing anything.
+   *
+   * Escape is how a user dismisses a Material select, and it selects nothing —
+   * clicking the backdrop would land a click at whatever sits underneath. The
+   * fallback exists because a panel that ignores Escape must still not be left
+   * covering the screen for the next step.
+   */
+  private async closeOpenPanel(page: Page): Promise<void> {
+    await page.keyboard.press('Escape').catch(() => {});
+    await page
+      .waitForFunction(() => !document.querySelector('.cdk-overlay-backdrop'), undefined, { timeout: 1500 })
+      .catch(async () => {
+        await page.locator('.cdk-overlay-backdrop').first().click({ timeout: 800 }).catch(() => {});
+      });
+  }
+
   async listOptions(h: UiHandle): Promise<string[] | undefined> {
     const handle = h as WebHandle;
     const expanded = await handle.locator
       .evaluate((node) => (node as Element).getAttribute('aria-expanded'))
       .catch(() => null);
+    // Closed again below when this call is what opened it. An assertion must
+    // leave the screen as it found it: reading the options of one dropdown used
+    // to leave its panel open, and Material's backdrop then blocked every later
+    // step — the very next line, selecting from a *different* dropdown, could
+    // not be reached.
+    let openedHere = false;
     if (expanded !== 'true') {
       // See the driver interface: opening is part of the contract, because a
       // closed dropdown reads as zero choices and would make "not among the
       // choices" pass without checking anything.
       await this.clearOverlays(protectedSelectors([handle.candidate]));
       await handle.locator.click();
+      openedHere = true;
     }
     // Waited until the list stops growing, not until it first has anything in
     // it. A Material panel renders its options progressively, so the first
@@ -808,11 +836,17 @@ export class WebUiDriver implements UiDriver {
     let previous = -1;
     while (Date.now() < deadline) {
       const now = await this.p.evaluate(openOptionLabels).catch(() => []);
-      if (now.length > 0 && now.length === previous) return now;
+      if (now.length > 0 && now.length === previous) {
+        if (openedHere) await this.closeOpenPanel(this.p);
+        return now;
+      }
       previous = now.length;
       seen = now;
       await this.p.waitForTimeout(200);
     }
+    // Empty after opening and waiting is a real answer for a dropdown with no
+    // choices; `undefined` is reserved for "this driver cannot tell".
+    if (openedHere) await this.closeOpenPanel(this.p);
     return seen;
   }
 

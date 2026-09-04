@@ -13,10 +13,19 @@ const renderSidebar = () =>
     </SidebarProvider>,
   );
 
-/** Mở mục cha "Inprogress"; Radix unmount phần con khi đóng nên phải bấm thật. */
+/**
+ * Mở mục cha "Inprogress"; Radix unmount phần con khi đóng nên phải bấm thật.
+ *
+ * Chờ một mục con xuất hiện rồi mới trả về. Bấm xong không có nghĩa là phần con
+ * đã nằm trong DOM — Radix mount nó ở lần render sau, nên một khẳng định đồng
+ * bộ ngay sau `click` thỉnh thoảng chạy trước lúc đó và đỏ ngẫu nhiên (đã bắt
+ * gặp một lần: "chưa nối" đếm được 0 thay vì 6). Chờ ở đây thay vì ở từng test
+ * để mọi nơi gọi đều được bảo vệ như nhau.
+ */
 async function expandInProgress() {
   const user = userEvent.setup();
   await user.click(screen.getByRole('button', { name: /Inprogress/ }));
+  await screen.findByRole('link', { name: /Zephyr/ });
 }
 
 /**

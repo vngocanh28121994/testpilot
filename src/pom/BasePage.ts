@@ -80,12 +80,23 @@ export class BasePage {
   }
 
   /** Opens the exact named business feature instead of clicking result #1. */
+  /**
+   * Opens a feature by searching for it and taking the first result.
+   *
+   * The result is clicked through the same locator this waits on, not by
+   * looking for the query text. Searching "Chuyển tiền" leaves that phrase in
+   * seven visible places — the header, the home grid behind the dialog, the
+   * screen title — and a text lookup returned all seven, clicking whichever
+   * happened to come first in the DOM. It worked only for as long as that was
+   * the right one; a change to the home screen behind the dialog was enough to
+   * break it. `home.searchFirstResult` matches exactly one node.
+   */
   async openFeatureFromSearch(query: string): Promise<void> {
     this.contextAnchor = undefined;
     await this.tap('home.searchBox');
     await this.input('home.searchInput', query);
     await this.waitFor('home.searchFirstResult');
-    await this.tap('home.dynamicText', { text: query });
+    await this.tap('home.searchFirstResult');
   }
 
   async tap(elementId: string, locatorParams?: Record<string, string>): Promise<void> {
