@@ -115,6 +115,15 @@ export interface UiDriver {
    * as a failure rather than read as "no options".
    */
   listOptions?(handle: UiHandle): Promise<string[] | undefined>;
+  /**
+   * What the application said since `since`, if anything.
+   *
+   * Asked after an action whose expected outcome did not arrive. A message
+   * means the application received the interaction and answered — the locator
+   * found the right control, and hunting for a better one is pointless and, on
+   * a live account, unsafe.
+   */
+  saidSince?(since: number): string | undefined;
   clear(handle: UiHandle): Promise<void>;
   selectOption(handle: UiHandle, option: string): Promise<void>;
   scrollIntoView(handle: UiHandle): Promise<void>;

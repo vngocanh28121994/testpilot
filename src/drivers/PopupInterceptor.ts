@@ -34,11 +34,34 @@ export class PopupInterceptor {
   private negativeUntil = 0;
   private negativePage?: Page;
   private negativeProtectKey = '';
+  /**
+   * What the application last said, and when.
+   *
+   * Retained rather than only logged, because dismissing a dialog destroys the
+   * one piece of evidence that separates two very different failures: a step
+   * that clicked the wrong element, and a step that clicked the right one and
+   * was told no. Both look identical afterwards — an expected screen that never
+   * arrived — and healing, unable to tell them apart, blamed the locator and
+   * went hunting through other candidates on a live account.
+   */
+  private lastSaid?: { text: string; at: number };
 
   constructor(
     private readonly rules: PopupRule[] = [],
     private readonly log: (message: string) => void = console.log,
   ) {}
+
+  /**
+   * What the application said since `since`, if anything.
+   *
+   * The caller asks after an action whose expected outcome did not arrive. A
+   * message here means the application received the interaction and answered —
+   * so the locator found the right control, and looking for a better one is
+   * both pointless and, on a live account, unsafe.
+   */
+  saidSince(since: number): string | undefined {
+    return this.lastSaid && this.lastSaid.at >= since ? this.lastSaid.text : undefined;
+  }
 
   async clear(
     page: Page,
@@ -105,6 +128,7 @@ export class PopupInterceptor {
       .catch(() => null) as PopupDismissResult | null;
     if (semantic) {
       this.clearNegativeCache();
+      if (semantic.text) this.lastSaid = { text: semantic.text, at: Date.now() };
       this.log(
         `[popup] closed top ${semantic.root} via ${semantic.control}`
         + (semantic.text ? `\n[popup]   nội dung: "${semantic.text}"` : ''),

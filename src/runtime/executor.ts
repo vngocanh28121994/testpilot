@@ -1022,11 +1022,15 @@ export class Executor {
         remember(await this.execute({ kind: 'input', element: 'home.searchInput', text: query }));
         remember(await this.execute({ kind: 'waitFor', element: 'home.searchFirstResult' }));
         const beforeResultUrl = await this.driver.currentUrl?.().catch(() => '') ?? '';
-        remember(await this.execute({
-          kind: 'tap',
-          element: 'home.dynamicText',
-          locatorParams: { text: query },
-        }));
+        // Clicked through the same locator this just waited on, not by the
+        // query text. Searching "Chuyển tiền" leaves that phrase in seven
+        // visible places on this app — the header toolbox, the home grid behind
+        // the dialog, the screen title — and the text lookup returned all
+        // seven, clicking whichever came first in the DOM. That was the right
+        // one until the home screen changed behind the dialog, and then eight
+        // scenarios in one run failed on this single step.
+        // `home.searchFirstResult` matches exactly one node.
+        remember(await this.execute({ kind: 'tap', element: 'home.searchFirstResult' }));
         if (await this.featureNavigationSucceeded(beforeResultUrl, expectation)) {
           return firstHeal;
         }
@@ -1127,6 +1131,9 @@ export class Executor {
     let lastOutcomeError: Error | undefined;
 
     for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      // Marks the point after which anything the application says is a reply to
+      // this attempt, and not left over from before it.
+      const attemptStartedAt = Date.now();
       let resolved: Awaited<ReturnType<typeof withElement>>;
       try {
         phaseStarted = Date.now();
@@ -1287,6 +1294,29 @@ export class Executor {
         return heal;
       } catch (err) {
         lastOutcomeError = err as Error;
+
+        // The application answered, so the locator is not the suspect.
+        //
+        // Healing exists to find a better locator when the current one missed.
+        // It cannot tell "I clicked the wrong thing" from "I clicked the right
+        // thing and was told no" — both end with the expected screen absent —
+        // so it treated a refusal as a bad locator and went hunting through
+        // other candidates, clicking them, on a live account. One run produced
+        // 216 lines of that while the reason sat in the line above:
+        //
+        //   [popup] nội dung: "TIỀN CHUYỂN + PHÍ VƯỢT QUÁ SỐ TIỀN CÓ THỂ CHUYỂN"
+        //
+        // A message means the interaction landed. Stop, and report what the
+        // application said rather than blaming the element that delivered it.
+        const said = this.driver.saidSince?.(attemptStartedAt);
+        if (said) {
+          throw new Error(
+            `"${actionLabel}" đã bấm thành công nhưng app từ chối: "${said}"\n`
+            + `Không phải lỗi locator — bước sau ("${expectation?.source ?? 'kết quả mong đợi'}") `
+            + 'không xảy ra vì app trả lời như trên.',
+          );
+        }
+
         this.resolver.rejectResolution(elementId, r);
         excluded.add(candidateKey(r.candidate));
         if (!retryable || attempt >= maxAttempts) break;

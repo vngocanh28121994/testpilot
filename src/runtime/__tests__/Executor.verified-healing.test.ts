@@ -76,7 +76,11 @@ describe('Executor — verified action healing', () => {
       },
       tap: async (target) => {
         if (target.candidate.value === 'submit') loggedIn = true;
-        if (target.candidate.value === 'Hiệu quả đầu tư') opened = true;
+        // Clicking the first search result is what opens the feature — the
+        // step no longer clicks an element found by the query text, because on
+        // the real app that phrase appears in seven places outside the result
+        // list and the wrong one won.
+        if (target.candidate.value === 'first-result') opened = true;
       },
       longPress: async () => {},
       input: async (target, text) => {
@@ -156,7 +160,9 @@ describe('Executor — verified action healing', () => {
         return handle(candidate, candidate.value);
       },
       tap: async (target) => {
-        if (target.candidate.value === 'Bảng giá cổ phiếu') {
+        // The route changes when the first search result is clicked; see the
+        // note in the flow above for why the step no longer clicks by text.
+        if (target.candidate.value === 'first-result') {
           url = 'https://example.test/tc-price?table=1';
         }
       },

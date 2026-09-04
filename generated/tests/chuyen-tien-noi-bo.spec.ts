@@ -5,7 +5,7 @@ import { TransferPage } from '../pages/TransferPage.js';
 import { TransferConfirmPage } from '../pages/TransferConfirmPage.js';
 
 describe("Chuyển tiền nội bộ", () => {
-  test("Chuyển tiền thành công từ tài khoản Thường sang Ký Quỹ", async () => {
+  test("Chuyển tiền từ TK Thường sang TK Ký Quỹ thành công", async () => {
     const ctx = await createPageContext();
     try {
       const transferPage = new TransferPage(ctx);
@@ -16,7 +16,7 @@ describe("Chuyển tiền nội bộ", () => {
       await ctx.openFeatureFromSearch("Chuyển tiền");
       await transferPage.selectSourceAccount("TK Thường");
       await transferPage.selectChonTkNhanTien("TK Ký Quỹ");
-      await transferPage.enterSoTien("1000");
+      await transferPage.enterSoTien("1,000");
       await transferPage.tapSubmitButton();
       await transferConfirmPage.assertOrderInfoText("Chuyển tiền");
       await transferConfirmPage.assertSourceAccountText("Thường");
@@ -29,7 +29,7 @@ describe("Chuyển tiền nội bộ", () => {
     }
   });
 
-  test("Chuyển tiền thành công từ tài khoản Ký Quỹ sang Thường", async () => {
+  test("Chuyển tiền từ TK Ký Quỹ sang TK Thường thành công", async () => {
     const ctx = await createPageContext();
     try {
       const transferPage = new TransferPage(ctx);
@@ -122,7 +122,7 @@ describe("Chuyển tiền nội bộ", () => {
     }
   });
 
-  test("Số tiền hợp lệ chuyển sang màn hình xác nhận", async () => {
+  test("Nhập số tiền hợp lệ chuyển sang màn xác nhận", async () => {
     const ctx = await createPageContext();
     try {
       const transferPage = new TransferPage(ctx);
@@ -133,15 +133,18 @@ describe("Chuyển tiền nội bộ", () => {
       await ctx.openFeatureFromSearch("Chuyển tiền");
       await transferPage.selectSourceAccount("TK Thường");
       await transferPage.selectChonTkNhanTien("TK Ký Quỹ");
-      await transferPage.enterSoTien("1000");
+      await transferPage.enterSoTien("1,000");
       await transferPage.tapSubmitButton();
       await transferConfirmPage.assertOrderInfoText("Chuyển tiền");
+      await transferConfirmPage.assertSourceAccountText("Thường");
+      await transferPage.assertChonTkNhanTienText("Ký Quỹ");
+      await transferPage.assertTienChuyenPhi0Text("1,000");
     } finally {
       await ctx.close();
     }
   });
 
-  test("Quay lại từ màn hình xác nhận trở về màn hình Chuyển tiền", async () => {
+  test("Bấm Quay lại trở về màn hình Chuyển tiền", async () => {
     const ctx = await createPageContext();
     try {
       const transferPage = new TransferPage(ctx);
@@ -152,18 +155,16 @@ describe("Chuyển tiền nội bộ", () => {
       await ctx.openFeatureFromSearch("Chuyển tiền");
       await transferPage.selectSourceAccount("TK Thường");
       await transferPage.selectChonTkNhanTien("TK Ký Quỹ");
-      await transferPage.enterSoTien("1000");
+      await transferPage.enterSoTien("1,000");
       await transferPage.tapSubmitButton();
       await transferConfirmPage.tapBackButton();
-      await transferConfirmPage.assertSourceAccountVisible();
-      await transferPage.assertChonTkNhanTienVisible();
-      await transferPage.assertSoTienVisible();
+      await transferPage.assertSubmitButtonVisible();
     } finally {
       await ctx.close();
     }
   });
 
-  test("Số tiền được chuyển giảm tương ứng sau khi chuyển thành công", async () => {
+  test("Số tiền được chuyển giảm sau khi chuyển tiền thành công", async () => {
     const ctx = await createPageContext();
     try {
       const transferPage = new TransferPage(ctx);
@@ -173,9 +174,9 @@ describe("Chuyển tiền nội bộ", () => {
       await ctx.ensureLoggedIn("tcbs");
       await ctx.openFeatureFromSearch("Chuyển tiền");
       await transferPage.selectSourceAccount("TK Thường");
-      await transferPage.doAvailableAmount();
       await transferPage.selectChonTkNhanTien("TK Ký Quỹ");
-      await transferPage.enterSoTien("1000");
+      await transferPage.doAvailableAmount();
+      await transferPage.enterSoTien("1,000");
       await transferPage.tapSubmitButton();
       await transferConfirmPage.tapConfirmButton();
       await transferPage.assertThongBaoText("Chuyển tiền thành công");

@@ -1082,6 +1082,21 @@ export class NativeUiDriver implements UiDriver {
         throw new Error('The "relative" strategy is WebView-only and has no native equivalent.');
       case 'css':
         throw new Error('The "css" strategy is web-only and has no native equivalent.');
+      default:
+        // Throwing, not falling out with `undefined`.
+        //
+        // Discovery and healing type their strategy as a plain string, so a
+        // locator can arrive naming something this switch has never heard of.
+        // Returning nothing sent `undefined` all the way to WebDriverIO, which
+        // answered `The selector "undefined" used with strategy "undefined" is
+        // invalid!` — a message that names neither the element nor the strategy
+        // that caused it. The resolver already treats a driver-level throw as
+        // "this candidate did not match", so throwing here skips the bad
+        // candidate and keeps the run going, while saying what was wrong.
+        throw new Error(
+          `Strategy "${String((c as LocatorCandidate).strategy)}" không dựng được selector native `
+          + `(value: ${String(c.value)}).`,
+        );
     }
   }
 
@@ -1249,6 +1264,16 @@ export class NativeUiDriver implements UiDriver {
    * `undefined` — "cannot tell" — which the executor must surface as a failure
    * rather than read as an empty list of choices.
    */
+  /**
+   * Routed to the WebView, where the interceptor that captured the message
+   * lives. Outside a WebView there is nothing to report, and the caller must
+   * read that as "no message", not as "no answer possible" — a native run
+   * simply keeps the old behaviour.
+   */
+  saidSince(since: number): string | undefined {
+    return this.cdpDriver?.saidSince(since);
+  }
+
   async listOptions(h: UiHandle): Promise<string[] | undefined> {
     if ((this.inWebview || this.cdpConnected) && this.cdpDriver && h instanceof WebViewCdpHandle) {
       return this.cdpDriver.listOptions(h);
@@ -1502,6 +1527,14 @@ export function domSelector(c: LocatorCandidate): string {
         throw new Error(
           'Chiến lược "predicate" là của native iOS, không dùng được trong WebView. ' +
             'Dùng css hoặc xpath cho app hybrid.',
+        );
+
+      default:
+        // See toSelector: a strategy this switch does not know must be refused
+        // by name, not returned as `undefined`.
+        throw new Error(
+          `Strategy "${String((c as LocatorCandidate).strategy)}" không dựng được selector DOM `
+          + `(value: ${String(c.value)}).`,
         );
     }
 }

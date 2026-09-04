@@ -688,18 +688,46 @@ export class WebViewCdpDriver {
     });
   }
 
+  saidSince(since: number): string | undefined {
+    return this.popupInterceptor.saidSince(since);
+  }
+
+  /**
+   * Closes whatever overlay panel is open, without choosing anything.
+   *
+   * Escape is how a user dismisses a Material select, and it selects nothing —
+   * clicking the backdrop would land a click at whatever sits underneath. The
+   * fallback exists because a panel that ignores Escape must still not be left
+   * covering the screen for the next step.
+   */
+  private async closeOpenPanel(page: Page): Promise<void> {
+    await page.keyboard.press('Escape').catch(() => {});
+    await page
+      .waitForFunction(() => !document.querySelector('.cdk-overlay-backdrop'), undefined, { timeout: 1500 })
+      .catch(async () => {
+        await page.locator('.cdk-overlay-backdrop').first().click({ timeout: 800 }).catch(() => {});
+      });
+  }
+
   async listOptions(handle: WebViewCdpHandle): Promise<string[] | undefined> {
     const page = handle.page;
     const expanded = await handle
       .locator()
       .evaluate((node) => (node as Element).getAttribute('aria-expanded'))
       .catch(() => null);
+    // Closed again below when this call is what opened it. An assertion must
+    // leave the screen as it found it: reading the options of one dropdown used
+    // to leave its panel open, and Material's backdrop then blocked every later
+    // step — the very next line, selecting from a *different* dropdown, could
+    // not be reached.
+    let openedHere = false;
     if (expanded !== 'true') {
       // Opened here rather than left to the scenario: a closed dropdown reads
       // as zero choices, and "not among the choices" would then pass having
       // checked nothing.
       await this.popupInterceptor.clear(page, await keep(handle)).catch(() => {});
       await handle.locator().click({ timeout: 5000 });
+      openedHere = true;
     }
     // The list animates in, so the first look is too early. Poll rather than
     // sleep: a fast device should not pay for a slow one.
@@ -715,13 +743,17 @@ export class WebViewCdpDriver {
     let previous = -1;
     while (Date.now() < deadline) {
       const now = await page.evaluate(openOptionLabels).catch(() => []);
-      if (now.length > 0 && now.length === previous) return now;
+      if (now.length > 0 && now.length === previous) {
+        if (openedHere) await this.closeOpenPanel(page);
+        return now;
+      }
       previous = now.length;
       seen = now;
       await sleep(200);
     }
     // Empty after opening and waiting is a real answer for a dropdown with no
     // choices; `undefined` is reserved for "this driver cannot tell".
+    if (openedHere) await this.closeOpenPanel(page);
     return seen;
   }
 

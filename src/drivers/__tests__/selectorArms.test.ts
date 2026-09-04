@@ -89,7 +89,10 @@ describe('reading the options of a dropdown', () => {
       const source = readFileSync(file, 'utf8');
       const at = source.indexOf('async listOptions(');
       assert.ok(at > 0, `${file} has no listOptions()`);
-      const body = source.slice(at, at + 1600);
+      // Wide enough to reach the poll loop: the method carries a paragraph of
+      // comment explaining why it waits, and a tight window silently stopped
+      // covering the assertion it was written for.
+      const body = source.slice(at, at + 3000);
       // Returning on the first non-empty poll is the bug; a stable count is
       // the fix, so the comparison against the previous reading must be there.
       assert.match(body, /=== previous/, 'returns before the list has settled');
