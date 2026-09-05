@@ -12,6 +12,8 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { api, qs } from '@/api/client';
 import { ROUTES, STREAM_ROUTES } from '@/api/routes';
+import { DevicePicker } from '@/components/DevicePicker';
+import { PrereqCard } from './PrereqCard';
 import { useAppState } from '@/hooks/useAppState';
 import { useStreamJob } from '@/hooks/useStreamJob';
 import { when } from '@/lib/datetime';
@@ -27,10 +29,18 @@ export default function RunnerPanel() {
   const [headed, setHeaded] = useState(false);
   const [quarantined, setQuarantined] = useState(false);
   const [env, setEnv] = useState('');
+  /**
+   * Máy đã chọn, khi nhiều máy cùng cắm. Rỗng nghĩa là để preflight tự quyết —
+   * đúng đường cũ, vì một máy duy nhất thì không có gì phải hỏi.
+   */
+  const [device, setDevice] = useState('');
   const job = useStreamJob('local-run', STREAM_ROUTES.run);
   const preflight = useQuery({
-    queryKey: ['preflight', platform],
-    queryFn: () => api.get<PreflightResponse>(`${ROUTES.preflight}${qs({ platform })}`),
+    // Máy đang chọn nằm trong khoá cache: chọn máy khác là một câu hỏi khác,
+    // và câu trả lời cũ không được phép ghi đè câu trả lời mới.
+    queryKey: ['preflight', platform, device],
+    queryFn: () =>
+      api.get<PreflightResponse>(`${ROUTES.preflight}${qs({ platform, device: device || undefined })}`),
     enabled: Boolean(state.data),
   });
   const tags = useMemo(
@@ -55,7 +65,10 @@ export default function RunnerPanel() {
       headed,
       includeQuarantined: quarantined,
       ...(env ? { env } : {}),
-      ...(preflight.data.device ? { devices: [`${platform}:${preflight.data.device}`] } : {}),
+      ...(() => {
+        const picked = device || preflight.data.device;
+        return picked ? { devices: [`${platform}:${picked}`] } : {};
+      })(),
     });
   };
   const stop = async () => {
@@ -152,11 +165,15 @@ export default function RunnerPanel() {
             </CardContent>
           </Card>
 
+          <PrereqCard platform={platform} />
+
           <PreflightCard
             result={preflight.data}
             pending={preflight.isPending}
             error={preflight.error}
             onRefresh={() => void preflight.refetch()}
+            chosen={device}
+            onPick={setDevice}
           />
         </div>
 
@@ -172,11 +189,15 @@ function PreflightCard({
   pending,
   error,
   onRefresh,
+  chosen,
+  onPick,
 }: {
   result: PreflightResponse | undefined;
   pending: boolean;
   error: Error | null;
   onRefresh: () => void;
+  chosen: string;
+  onPick: (id: string) => void;
 }) {
   return (
     <Card aria-labelledby="preflight-title">
@@ -228,11 +249,22 @@ function PreflightCard({
               ))}
             </ul>
 
-            {result.device && (
-              <div className="bg-muted/50 flex items-center gap-2 rounded-lg border px-3 py-2 text-sm">
-                <Smartphone className="text-muted-foreground size-4 shrink-0" />
-                <span className="min-w-0 truncate">Sẽ dùng thiết bị: {result.device}</span>
-              </div>
+            {/* Nhiều máy cùng cắm thì phải hỏi, chứ không phải im lặng chặn
+                lượt chạy rồi bắt người dùng đi sửa file config. */}
+            {(result.candidates?.length ?? 0) > 1 ? (
+              <DevicePicker
+                name="runner"
+                candidates={result.candidates!}
+                chosen={chosen || result.device}
+                onPick={onPick}
+              />
+            ) : (
+              result.device && (
+                <div className="bg-muted/50 flex items-center gap-2 rounded-lg border px-3 py-2 text-sm">
+                  <Smartphone className="text-muted-foreground size-4 shrink-0" />
+                  <span className="min-w-0 truncate">Sẽ dùng thiết bị: {result.device}</span>
+                </div>
+              )
             )}
           </>
         )}

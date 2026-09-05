@@ -29,6 +29,24 @@ const testLocalStorage = createMemoryStorage();
 Object.defineProperty(window, 'localStorage', { configurable: true, value: testLocalStorage });
 Object.defineProperty(globalThis, 'localStorage', { configurable: true, value: testLocalStorage });
 
+/**
+ * ResizeObserver, thứ jsdom không có.
+ *
+ * Radix đo phần tử bằng nó trong mọi thành phần dựng trên Popper — dropdown,
+ * select, tooltip. Thiếu nó thì `PopperContent` ném ngay lúc mount, error
+ * boundary nuốt cả cây, và test chỉ thấy một màn hình trống: không phải "nút
+ * bấm không ăn" mà là "không còn gì để bấm". Đúng thứ đã làm test sidebar đỏ
+ * ngẫu nhiên khoảng một lần trong mười lăm, tuỳ theo lần render đó rơi vào
+ * nhánh thu gọn (dropdown) hay nhánh mở (collapsible).
+ */
+if (!globalThis.ResizeObserver) {
+  globalThis.ResizeObserver = class {
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+  };
+}
+
 // ThemeProvider gọi matchMedia; jsdom không cài đặt nó.
 if (!window.matchMedia) {
   Object.defineProperty(window, 'matchMedia', {

@@ -26,11 +26,13 @@
 
 import type { TestPilotConfig } from '../config.js';
 import type { Platform, ScenarioSpec, RunReport, LocatorCandidate } from '../core/types.js';
-import type { WorkflowRun } from '../core/history.js';
+import type { WorkflowQuestion, WorkflowRun } from '../core/history.js';
+import type { AnswerSubmission } from '../core/questions.js';
 import type { HealingRecord } from '../healing/HealingStore.js';
 import type { LocatorQuality } from '../core/locatorQuality.js';
-import type { PreflightResult } from '../core/preflight.js';
+import type { DeviceCandidate, PreflightResult } from '../core/preflight.js';
 import type { TagTaxonomyView } from '../core/tagTaxonomy.js';
+import type { LearnedActionDef } from '../actions/ActionRegistry.js';
 import type { ScenarioReviewEntry } from '../core/scenarioReview.js';
 
 export type {
@@ -40,10 +42,14 @@ export type {
   RunReport,
   LocatorCandidate,
   WorkflowRun,
+  WorkflowQuestion,
+  AnswerSubmission,
   HealingRecord,
   LocatorQuality,
   PreflightResult,
+  DeviceCandidate,
   TagTaxonomyView,
+  LearnedActionDef,
   ScenarioReviewEntry,
 };
 
@@ -400,19 +406,153 @@ export interface PreflightQuery {
 }
 
 /* ------------------------------------------------------------------ */
-/* GET /api/vocabulary                                                 */
+/* GET /api/vocabulary — bảng cú pháp cạnh ô sửa kịch bản              */
 /* ------------------------------------------------------------------ */
 
 export interface VocabularyForm {
   id: string;
-  group: string;
+  group: 'Thao tác' | 'Nhập liệu' | 'Di chuyển' | 'Kiểm tra' | 'Khác';
+  /** Mẫu câu phải gõ. */
   doc: string;
-  hint?: string;
+  /** Khi nào thì dùng tới nó. */
+  hint: string;
 }
 
 export interface VocabularyResponse {
   forms: VocabularyForm[];
-  actions: unknown[];
+  /** Chỉ những action đã được duyệt — cái chưa duyệt thì chưa gõ được. */
+  actions: Array<{
+    id: string;
+    label: string;
+    phraseTemplate: string;
+    parameters: unknown[];
+  }>;
+  elements: Array<{ id: string; label: string; screen: string }>;
+}
+
+/* ------------------------------------------------------------------ */
+/* POST /api/feature/normalize                                         */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Kết quả chuẩn hoá một bản nháp .feature.
+ *
+ * server.ts dùng đúng kiểu này (DraftNormalization) chứ không khai lại, để hai
+ * đầu không thể trôi ra hai hình dạng khác nhau mà tsc vẫn im.
+ */
+export interface FeatureNormalizeResponse {
+  content: string;
+  changes: Array<{ line: number; from: string; to: string; reason: string }>;
+  /** Những câu vẫn chưa ánh xạ được sang dạng chạy được. */
+  unresolved: Array<{ line: number; text: string }>;
+  valid: boolean;
+  error?: string;
+  usedAi: boolean;
+  discoveredLater: Array<{ id: string; label: string; screen: string }>;
+  /** Action do máy đề xuất, chờ người duyệt. */
+  actionProposals: LearnedActionDef[];
+  appliedActions: Array<{ id: string; label: string; line: number }>;
+  actionAnalysis: { available: boolean; attempted: boolean; reason?: string };
+}
+
+/* ------------------------------------------------------------------ */
+/* POST /api/actions/review                                            */
+/* ------------------------------------------------------------------ */
+
+export interface ActionReviewRequest {
+  id: string;
+  decision: 'approve' | 'reject';
+}
+
+export interface ActionReviewResponse {
+  action: LearnedActionDef;
+  actions: LearnedActionDef[];
+}
+
+/* ------------------------------------------------------------------ */
+/* GET /api/prereq/*                                                   */
+/* ------------------------------------------------------------------ */
+
+export interface PrereqAndroidDevice {
+  id: string;
+  state: string;
+  manufacturer?: string;
+  model?: string;
+  androidVersion?: string;
+  kind: 'physical' | 'emulator';
+}
+
+export interface PrereqAdbResponse {
+  devices: PrereqAndroidDevice[];
+}
+
+export interface PrereqXcodeResponse {
+  ok: boolean;
+  version?: string;
+  path?: string;
+  sdk?: string;
+  /** Vì sao chưa dùng được, viết cho người sẽ đi sửa nó. */
+  reason?: string;
+}
+
+export interface PrereqIosDevicesResponse {
+  /** Nguyên văn `xcrun xctrace list devices`, gồm cả tiêu đề mục. */
+  devices: string[];
+  /** Máy thật đang cắm, đã lọc khỏi phần simulator. */
+  attached: string[];
+}
+
+export interface PrereqAppiumStatusResponse {
+  running: boolean;
+  /** true khi chính TestPilot đã bật tiến trình này, không phải người dùng. */
+  managed: boolean;
+}
+
+/* ------------------------------------------------------------------ */
+/* GET /api/models                                                     */
+/* ------------------------------------------------------------------ */
+
+export interface ModelChoice {
+  id: string;
+  display_name?: string;
+}
+
+export interface ModelsResponse {
+  models: ModelChoice[];
+  /** true khi danh sách lấy thẳng từ nhà cung cấp, false khi là danh sách mặc định. */
+  live: boolean;
+  /** Vì sao phải dùng danh sách mặc định. Chỉ có khi `live` là false. */
+  reason?: string;
+  /** "auto" trên máy chủ này thực ra là model nào. */
+  auto?: string;
+}
+
+/* ------------------------------------------------------------------ */
+/* Cổng duyệt workflow                                                 */
+/* ------------------------------------------------------------------ */
+
+/** GET /api/workflow/questions?runId= */
+export interface WorkflowQuestionsResponse {
+  status: WorkflowRun['status'];
+  questions: WorkflowQuestion[];
+  /** Số câu còn chờ người trả lời. 0 nghĩa là workflow chạy tiếp được. */
+  pending: number;
+}
+
+/** POST /api/workflow/answers */
+export interface WorkflowAnswersRequest {
+  runId: string;
+  answers: AnswerSubmission[];
+}
+
+export interface WorkflowAnswersResponse {
+  remaining: number;
+  status: WorkflowRun['status'];
+}
+
+/** POST /api/workflow/complete */
+export interface WorkflowCompleteRequest {
+  runId: string;
 }
 
 /* ------------------------------------------------------------------ */

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { FileText, Play, Plus, Save, Trash2, X } from 'lucide-react';
 import { AppShell } from '@/components/layout/AppShell';
@@ -14,8 +14,14 @@ import { Textarea } from '@/components/ui/textarea';
 import { api } from '@/api/client';
 import { ROUTES, STREAM_ROUTES } from '@/api/routes';
 import { useAppState } from '@/hooks/useAppState';
+import { WorkflowPreflight, type NativePlatform } from './WorkflowPreflight';
 import { useStreamJob } from '@/hooks/useStreamJob';
-import type { StateResponse, StudioForm, StudioSaveResponse } from '@core/ui/contracts.js';
+import type {
+  ModelsResponse,
+  StateResponse,
+  StudioForm,
+  StudioSaveResponse,
+} from '@core/ui/contracts.js';
 
 const PAGE_DESCRIPTION = 'Từ tài liệu nguồn tới kịch bản đã duyệt và chạy tự động.';
 
@@ -69,9 +75,27 @@ function StudioFormPanel({ state }: { state: StateResponse }) {
     () => new Set(cfg.workflow.platforms),
   );
   const [farm, setFarm] = useState(cfg.workflow.deviceFarm?.platform ?? '');
+  /**
+   * Máy đã chọn cho mỗi nền tảng, theo `id` trong config, giữ ở đây từ lúc chọn
+   * tới lúc lưu. Chỉ có giá trị khi nhiều hơn một máy trong config đang cắm.
+   */
+  const [devices, setDevices] = useState<Partial<Record<NativePlatform, string>>>(
+    () => ({ ...cfg.workflow.devices }),
+  );
   const [workflowEnv, setWorkflowEnv] = useState(cfg.workflow.env ?? cfg.defaultEnv);
   const [headed, setHeaded] = useState(cfg.workflow.headed);
   const job = useStreamJob('studio-workflow', STREAM_ROUTES.gen);
+  /**
+   * Danh sách model, hỏi thẳng nhà cung cấp.
+   *
+   * Gõ tay tên model thì gõ sai đến lúc chạy mới biết — sau khi đã đọc tài liệu
+   * và gọi model một lần. `auto` là lựa chọn duy nhất luôn có, vì nó phân giải
+   * ở phía server theo key mà server thực sự có.
+   */
+  const models = useQuery({
+    queryKey: ['models'],
+    queryFn: () => api.get<ModelsResponse>(ROUTES.models),
+  });
 
   const makeForm = (): StudioForm => ({
     sources,
@@ -91,6 +115,9 @@ function StudioFormPanel({ state }: { state: StateResponse }) {
     workflowEnv,
     workflowHeaded: headed,
     workflowDeviceFarm: farm ? { platform: farm as 'android' | 'ios' } : null,
+    // Gửi cả khi rỗng, để bỏ tick nền tảng nhiều máy cuối cùng thì xoá luôn cái
+    // ghim cũ, thay vì để lượt chạy nhắm vào một máy không ai dùng nữa.
+    workflowDevices: devices,
   });
 
   const save = useMutation({
@@ -288,8 +315,44 @@ function StudioFormPanel({ state }: { state: StateResponse }) {
                 <CardDescription>Model và ghi chú kèm theo mỗi lần sinh.</CardDescription>
               </CardHeader>
               <CardContent className="flex flex-col gap-4">
-                <Field label="Model">
-                  <Input value={model} onChange={(e) => setModel(e.target.value)} />
+                <Field
+                  label="Model"
+                  hint={
+                    models.data
+                      ? `auto = ${models.data.auto ?? 'claude-opus-5'}. ` +
+                        (models.data.live
+                          ? 'Danh sách lấy trực tiếp từ nhà cung cấp.'
+                          : `Đang dùng danh sách mặc định${
+                              models.data.reason ? ` — ${models.data.reason}` : ''
+                            }.`)
+                      : undefined
+                  }
+                >
+                  {/* Danh sách chưa về thì vẫn cho gõ tay, không khoá ô lại:
+                      không hỏi được nhà cung cấp không phải lý do để chặn một
+                      cấu hình đã đúng sẵn từ trước. */}
+                  {models.data ? (
+                    <select
+                      className="input mt-0"
+                      value={model}
+                      onChange={(e) => setModel(e.target.value)}
+                    >
+                      <option value="auto">auto</option>
+                      {/* Model đang lưu mà không còn trong danh sách vẫn phải
+                          hiện ra, nếu không cái <select> lặng lẽ đổi cấu hình
+                          sang mục đầu tiên ngay khi mở trang. */}
+                      {!models.data.models.some((m) => m.id === model) && model !== 'auto' && (
+                        <option value={model}>{model} (không còn trong danh sách)</option>
+                      )}
+                      {models.data.models.map((m) => (
+                        <option key={m.id} value={m.id}>
+                          {m.display_name ?? m.id}
+                        </option>
+                      ))}
+                    </select>
+                  ) : (
+                    <Input value={model} onChange={(e) => setModel(e.target.value)} />
+                  )}
                 </Field>
                 <Field label="Additional Note">
                   <Textarea
@@ -324,6 +387,14 @@ function StudioFormPanel({ state }: { state: StateResponse }) {
                     onChange={(checked) => setFarm(checked ? 'android' : '')}
                   />
                 </div>
+
+                <WorkflowPreflight
+                  platforms={[...platforms].filter(
+                    (item): item is NativePlatform => item !== 'web',
+                  )}
+                  devices={devices}
+                  onPick={(platform, id) => setDevices((all) => ({ ...all, [platform]: id }))}
+                />
 
                 {farm && (
                   <Field label="Hệ điều hành trên Device Farm">

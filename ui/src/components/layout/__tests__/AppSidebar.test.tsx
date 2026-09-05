@@ -16,11 +16,12 @@ const renderSidebar = () =>
 /**
  * Mở mục cha "Inprogress"; Radix unmount phần con khi đóng nên phải bấm thật.
  *
- * Chờ một mục con xuất hiện rồi mới trả về. Bấm xong không có nghĩa là phần con
- * đã nằm trong DOM — Radix mount nó ở lần render sau, nên một khẳng định đồng
- * bộ ngay sau `click` thỉnh thoảng chạy trước lúc đó và đỏ ngẫu nhiên (đã bắt
- * gặp một lần: "chưa nối" đếm được 0 thay vì 6). Chờ ở đây thay vì ở từng test
- * để mọi nơi gọi đều được bảo vệ như nhau.
+ * Chờ một mục con xuất hiện rồi mới trả về: bấm xong không có nghĩa là phần con
+ * đã nằm trong DOM, Radix mount nó ở lần render sau.
+ *
+ * Cái chờ này KHÔNG phải thứ đã sửa lần đỏ ngẫu nhiên trước đó — nguyên nhân
+ * thật là jsdom thiếu ResizeObserver, xem test/setup.ts. Giữ lại vì nó vẫn
+ * đúng, và vì chờ ở một chỗ thì mọi nơi gọi đều được bảo vệ như nhau.
  */
 async function expandInProgress() {
   const user = userEvent.setup();

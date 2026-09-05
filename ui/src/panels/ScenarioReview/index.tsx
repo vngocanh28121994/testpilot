@@ -15,6 +15,9 @@ import { Textarea } from '@/components/ui/textarea';
 import { api } from '@/api/client';
 import { ROUTES } from '@/api/routes';
 import { useAppState } from '@/hooks/useAppState';
+import { NormalizePanel } from './NormalizePanel';
+import { SyntaxHelp } from './SyntaxHelp';
+import { WorkflowGate } from './WorkflowGate';
 import type {
   FeatureMutationResponse,
   FeatureReviewBulkRequest,
@@ -163,6 +166,10 @@ function ReviewBody({ state, search }: { state: StateResponse; search: ScenarioS
       }
     >
       <section aria-label="Duyệt kịch bản" className="flex flex-1 flex-col gap-6">
+        {/* Trên cùng, không dưới bảng: một workflow đang dừng là việc cần làm
+            ngay, còn bộ lọc thì lúc nào cũng ở đó. */}
+        <WorkflowGate runs={state.runs} />
+
         <Card aria-labelledby="filter-title">
           <CardHeader>
             <CardTitle id="filter-title">Bộ lọc</CardTitle>
@@ -398,6 +405,13 @@ function ReviewBody({ state, search }: { state: StateResponse; search: ScenarioS
                                 <Button size="sm" variant="outline" onClick={() => setEditing(null)}>
                                   Huỷ
                                 </Button>
+                              </div>
+                              {/* Chuẩn hoá đứng cạnh ô soạn, không nằm ở trang
+                                  khác: câu sai cú pháp phải lộ ra trước khi bấm
+                                  Lưu, chứ không phải lúc chạy. */}
+                              <div className="mt-3 flex flex-col gap-3">
+                                <NormalizePanel content={draft} onApply={setDraft} />
+                                <SyntaxHelp />
                               </div>
                             </td>
                           </tr>

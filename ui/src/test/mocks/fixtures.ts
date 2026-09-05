@@ -30,7 +30,14 @@ export const stateFixture: StateResponse = {
     environments: {},
     defaultEnv: '',
     farm: {},
-    llm: {},
+    llm: { model: 'auto', note: '' },
+    // Studio đọc ba nhánh này ngay khi mở trang. Thiếu chúng thì panel ném
+    // "Cannot read properties of undefined (reading 'platforms')" và mọi test
+    // render Studio đều thấy màn hình lỗi thay vì thấy trang — đúng thứ đã xảy
+    // ra, và cái ép kiểu bên dưới là lý do tsc không hề kêu.
+    sources: [],
+    targetFeature: '',
+    workflow: { platforms: ['web'], devices: {}, env: '', headed: false },
   } as unknown as StateResponse['config'],
   configError: null,
   configFile: '/tmp/testpilot.config.json',

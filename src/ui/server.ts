@@ -21,6 +21,7 @@ import type {
   HistoryResponse,
   RunHistoryEntry,
   StateResponse,
+  FeatureNormalizeResponse,
 } from './contracts.js';
 import { Registry } from '../core/registry.js';
 import { ScenarioReviewStore, scenarioBlocks } from '../core/scenarioReview.js';
@@ -1284,19 +1285,13 @@ const NORMALIZE_EXAMPLES: Array<{
   },
 ];
 
-interface DraftNormalization {
-  content: string;
-  changes: Array<{ line: number; from: string; to: string; reason: string }>;
-  unresolved: Array<{ line: number; text: string }>;
-  valid: boolean;
-  error?: string;
-  usedAi: boolean;
-  discoveredLater: Array<{ id: string; label: string; screen: string }>;
-  actionProposals: LearnedActionDef[];
-  appliedActions: Array<{ id: string; label: string; line: number }>;
-  actionAnalysis: { available: boolean; attempted: boolean; reason?: string };
-  scenarioPlan: ScenarioPlan;
-}
+/**
+ * Kết quả chuẩn hoá, đúng hình dạng mà trình duyệt nhận.
+ *
+ * Lấy thẳng từ contracts thay vì khai lại: hai bản khai song song là cách một
+ * field bị đổi ở đây mà giao diện vẫn tưởng nó còn nguyên.
+ */
+type DraftNormalization = FeatureNormalizeResponse & { scenarioPlan: ScenarioPlan }
 
 /**
  * Converts editor-friendly wording into the small executable language. The
