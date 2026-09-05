@@ -21,21 +21,45 @@ describe('Studio — chọn model', () => {
     expect(screen.getByText(/lấy trực tiếp từ nhà cung cấp/)).toBeInTheDocument();
   });
 
-  it('nói rõ khi đang dùng danh sách mặc định và vì sao', async () => {
+  it('nói rõ khi đang đoán vì không gọi được nhà cung cấp', async () => {
     server.use(
       http.get(ROUTES.models, () =>
         HttpResponse.json({
           models: [{ id: 'claude-opus-5' }],
           live: false,
-          reason: 'Server chưa có ANTHROPIC_API_KEY.',
+          reason: 'connect ETIMEDOUT',
           auto: 'claude-opus-5',
         }),
       ),
     );
     await renderWithRouter(<StudioPanel />, { path: '/studio' });
     expect(
-      await screen.findByText(/danh sách mặc định — Server chưa có ANTHROPIC_API_KEY./),
+      await screen.findByText(/đang đoán — connect ETIMEDOUT/),
     ).toBeInTheDocument();
+  });
+
+  /**
+   * Không có key nào thì đừng dựng <select>: một danh sách Anthropic hiện ra
+   * cho người đang chạy DeepSeek là sai theo cả hai chiều, và một <select> chỉ
+   * có mỗi "auto" thì khoá họ khỏi chính model họ đang dùng. Gõ tay, kèm lý do.
+   */
+  it('quay về ô gõ tay và nói thiếu key khi không hỏi được model nào', async () => {
+    server.use(
+      http.get(ROUTES.models, () =>
+        HttpResponse.json({
+          models: [],
+          live: false,
+          reason: 'Server chưa có DEEPSEEK_API_KEY hoặc ANTHROPIC_API_KEY.',
+          auto: 'deepseek-chat',
+        }),
+      ),
+    );
+    await renderWithRouter(<StudioPanel />, { path: '/studio' });
+    expect(
+      await screen.findByText(/Chưa hỏi được model nào — Server chưa có DEEPSEEK_API_KEY/),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole('combobox', { name: 'Model' })).not.toBeInTheDocument();
+    expect(screen.getByRole('textbox', { name: 'Model' })).toBeInTheDocument();
   });
 
   /**

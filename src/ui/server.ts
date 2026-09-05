@@ -105,7 +105,16 @@ const execFileAsync = promisify(execFile);
 const PORT = Number(process.env.TESTPILOT_UI_PORT ?? 4300);
 const CONFIG_FILE = process.env.TESTPILOT_CONFIG ?? 'testpilot.config.json';
 
-/** Shown when the Models API is unreachable (no key, offline, restricted org). */
+/**
+ * Shown when the Anthropic Models API cannot be reached despite a key being
+ * present — offline, a restricted org, a transient 5xx.
+ *
+ * Deliberately NOT shown when there is no key at all. A server with no key can
+ * run none of these, and offering them tells someone whose config pins a
+ * DeepSeek model that their model has disappeared and four Anthropic ones have
+ * arrived — a list that is wrong in both directions. Silence plus the reason is
+ * the honest answer there.
+ */
 const FALLBACK_MODELS = [
   { id: 'claude-opus-5', display_name: 'Claude Opus 5' },
   { id: 'claude-sonnet-5', display_name: 'Claude Sonnet 5' },
@@ -1170,9 +1179,11 @@ async function models() {
   // The browser shows what "auto" resolves to, which depends on the keys this
   // server has, not on a constant the page could hardcode.
   const auto = pickModel('auto');
-  return result.models.length > 0
-    ? { ...result, auto }
-    : { ...result, auto, models: FALLBACK_MODELS };
+  if (result.models.length > 0) return { ...result, auto };
+  // A key exists but the list did not arrive: guessing is better than nothing,
+  // because those models are the ones the key can actually run.
+  if (llmAvailable()) return { ...result, auto, models: FALLBACK_MODELS };
+  return { ...result, auto, reason: result.reason ?? missingKeyHint() };
 }
 
 /**

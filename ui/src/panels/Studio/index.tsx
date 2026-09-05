@@ -27,6 +27,30 @@ const PAGE_DESCRIPTION = 'Từ tài liệu nguồn tới kịch bản đã duy�
 
 const PLATFORMS = ['web', 'android', 'ios'] as const;
 
+/**
+ * Câu chú thích dưới ô Model.
+ *
+ * Ba trạng thái khác hẳn nhau và trước đây bị gộp làm hai: danh sách thật,
+ * danh sách đoán (có key nhưng không gọi được), và không có key nào cả. Trường
+ * hợp thứ ba từng hiện ra một danh sách Anthropic cho người đang dùng DeepSeek
+ * — sai theo cả hai chiều, và không hề nói rằng nguyên nhân là thiếu key.
+ */
+function modelHint(data: ModelsResponse | undefined): string | undefined {
+  if (!data) return undefined;
+  const auto = `auto = ${data.auto ?? 'chưa xác định'}.`;
+  // missingKeyHint() đã tự kết thúc bằng dấu chấm, còn một thông báo lỗi mạng
+  // thì không. Nối thẳng vào là ra "ETIMEDOUT." hoặc "ANTHROPIC_API_KEY..",
+  // tuỳ nguồn — nên cắt dấu chấm cuối rồi tự đặt lại.
+  const why = data.reason?.replace(/\.\s*$/, '');
+  if (data.live) return `${auto} Danh sách lấy trực tiếp từ nhà cung cấp.`;
+  if (data.models.length > 0) {
+    return `${auto} Không hỏi được nhà cung cấp nên đang đoán${why ? ` — ${why}` : ''}.`;
+  }
+  return `${auto} Chưa hỏi được model nào${
+    why ? ` — ${why}` : ''
+  }. Gõ tay tên model, hoặc thêm API key ở trang Cấu hình.`;
+}
+
 export default function StudioPanel() {
   const state = useAppState((s) => s);
 
@@ -317,21 +341,12 @@ function StudioFormPanel({ state }: { state: StateResponse }) {
               <CardContent className="flex flex-col gap-4">
                 <Field
                   label="Model"
-                  hint={
-                    models.data
-                      ? `auto = ${models.data.auto ?? 'claude-opus-5'}. ` +
-                        (models.data.live
-                          ? 'Danh sách lấy trực tiếp từ nhà cung cấp.'
-                          : `Đang dùng danh sách mặc định${
-                              models.data.reason ? ` — ${models.data.reason}` : ''
-                            }.`)
-                      : undefined
-                  }
+                  hint={modelHint(models.data)}
                 >
-                  {/* Danh sách chưa về thì vẫn cho gõ tay, không khoá ô lại:
-                      không hỏi được nhà cung cấp không phải lý do để chặn một
-                      cấu hình đã đúng sẵn từ trước. */}
-                  {models.data ? (
+                  {/* Không hỏi được nhà cung cấp thì quay về ô gõ tay, chứ
+                      không dựng một <select> chỉ có mỗi "auto": khoá người dùng
+                      khỏi chính model họ đang chạy là tệ hơn là để họ gõ. */}
+                  {models.data && models.data.models.length > 0 ? (
                     <select
                       className="input mt-0"
                       value={model}
