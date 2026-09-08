@@ -14,6 +14,7 @@
  */
 
 import { completeJson, llmAvailable, pickModel } from '../../llm/client.js';
+import { firstJsonObject } from '../../llm/json.js';
 import type { ElementIntent } from '../ElementIntent.js';
 import type { ObservedElement, UiObservation } from '../UiObservation.js';
 import type { LlmProvider, SemanticDiscoveryResponse } from './AiDiscoveryTypes.js';
@@ -187,10 +188,16 @@ interface Choice { index: number; confidence: number; reason: string }
  * stray "Here you go:" turns a usable answer into a failed lookup.
  */
 function parseChoice(raw: string): Choice | undefined {
-  const match = /\{[\s\S]*\}/.exec(raw);
-  if (!match) return undefined;
+  // Cùng bộ tách với genspec. Chỗ này hỏng còn lặng lẽ hơn: nó trả undefined,
+  // nên "model trả hai JSON" trông y hệt "model không tìm được element nào".
+  let text: string;
   try {
-    const parsed = JSON.parse(match[0]) as Partial<Choice>;
+    text = firstJsonObject(raw);
+  } catch {
+    return undefined;
+  }
+  try {
+    const parsed = JSON.parse(text) as Partial<Choice>;
     if (typeof parsed.index !== 'number') return undefined;
     return {
       index: parsed.index,

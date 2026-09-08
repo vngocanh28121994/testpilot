@@ -1,4 +1,5 @@
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
+import { firstJsonObject } from '../llm/json.js';
 import net from 'node:net';
 import os from 'node:os';
 import { execFile, spawn } from 'node:child_process';
@@ -1776,9 +1777,9 @@ function safeJson<T>(value: string): T | undefined {
   try {
     return JSON.parse(value) as T;
   } catch {
-    const match = value.match(/\{[\s\S]*\}/);
-    if (!match) return undefined;
-    try { return JSON.parse(match[0]) as T; } catch { return undefined; }
+    // Cùng bộ tách với genspec: lấy từ `{` đầu tới `}` cuối là ôm luôn cả hai
+    // đối tượng khi có hai, rồi hỏng đúng lúc lẽ ra vẫn cứu được.
+    try { return JSON.parse(firstJsonObject(value)) as T; } catch { return undefined; }
   }
 }
 

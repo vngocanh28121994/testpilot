@@ -1,4 +1,5 @@
 import Anthropic from '@anthropic-ai/sdk';
+import { firstJsonObject } from '../llm/json.js';
 import { DEFAULT_LLM_MODEL } from '../config.js';
 import type { SourceDoc, SourceVisual } from '../ingest/types.js';
 import { confluenceFetch } from '../ingest/confluenceMedia.js';
@@ -336,9 +337,7 @@ Chỉ trả JSON đúng cấu trúc:
 }
 
 function parseFindings(raw: string): VisualFinding[] {
-  const match = raw.match(/\{[\s\S]*\}/);
-  if (!match) throw new Error('AI vision trả về dữ liệu không phải JSON.');
-  const parsed = JSON.parse(match[0]) as { assets?: Array<Record<string, unknown>> };
+  const parsed = JSON.parse(firstJsonObject(raw)) as { assets?: Array<Record<string, unknown>> };
   return (parsed.assets ?? [])
     .filter((item) => typeof item.id === 'string')
     .map((item) => ({

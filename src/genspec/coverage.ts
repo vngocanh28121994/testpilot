@@ -1,4 +1,5 @@
 import type { ElementDef } from '../core/types.js';
+import { firstJsonObject } from '../llm/json.js';
 import type { SourceDoc } from '../ingest/types.js';
 import { completeJson, completeText } from '../llm/client.js';
 import { FEATURE_SYSTEM, documentContext } from './prompt.js';
@@ -380,11 +381,7 @@ function requirementLine(requirement: CoverageRequirement): string {
 }
 
 function parseJsonObject(raw: string): Record<string, unknown> {
-  const cleaned = raw.trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '');
-  const start = cleaned.indexOf('{');
-  const end = cleaned.lastIndexOf('}');
-  if (start < 0 || end < start) throw new Error('Coverage model không trả JSON object hợp lệ.');
-  return JSON.parse(cleaned.slice(start, end + 1)) as Record<string, unknown>;
+  return JSON.parse(firstJsonObject(raw)) as Record<string, unknown>;
 }
 
 function stripFences(value: string): string {

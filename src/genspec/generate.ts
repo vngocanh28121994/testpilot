@@ -2,6 +2,7 @@ import Anthropic from '@anthropic-ai/sdk';
 import type { ElementDef, LocatorCandidate, ScreenDef } from '../core/types.js';
 import type { SourceDoc } from '../ingest/types.js';
 import { completeJson, completeText, providerOf } from '../llm/client.js';
+import { firstJsonObject } from '../llm/json.js';
 import { coveragePromptBlock, type CoverageRequirement } from './coverage.js';
 import {
   FEATURE_SYSTEM,
@@ -174,7 +175,7 @@ export async function generateModel(
     raw = firstText(message);
   }
 
-  const parsed = JSON.parse(extractJson(raw)) as unknown;
+  const parsed = JSON.parse(firstJsonObject(raw)) as unknown;
   const source = docs[0]
     ? ({ kind: docs[0].kind, ref: docs[0].ref } as const)
     : undefined;
@@ -428,8 +429,4 @@ function stripFences(s: string): string {
   return s.replace(/^```(?:gherkin|cucumber)?\n/, '').replace(/\n```$/, '');
 }
 
-function extractJson(raw: string): string {
-  const match = /\{[\s\S]*\}/.exec(raw);
-  if (!match) throw new Error('The model returned no JSON object.');
-  return match[0];
-}
+
