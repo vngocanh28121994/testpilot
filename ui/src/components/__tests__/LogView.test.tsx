@@ -171,3 +171,28 @@ describe('LogView', () => {
     expect(screen.getByText(/Đã ẩn 120 dòng đầu/)).toBeInTheDocument();
   });
 });
+
+/**
+ * Known issue là kịch bản đỏ vì SẢN PHẨM chưa đáp ứng, không phải vì test hỏng.
+ * Gộp nó vào con số fail thì hoặc người ta xoá kịch bản đúng để suite xanh,
+ * hoặc quen dần với một suite luôn đỏ rồi thôi không đọc nữa.
+ */
+describe('LogView — dòng tổng kết có Known issue', () => {
+  it('đếm riêng, không cộng vào fail', () => {
+    render(<LogView logs={['[run:summary] 8✓ 0✗ 0~ 0⊘ 0✎ 1⚠']} />);
+    expect(screen.getByText('8 pass')).toBeInTheDocument();
+    expect(screen.getByText('0 fail')).toBeInTheDocument();
+    expect(screen.getByText('1 known issue')).toBeInTheDocument();
+  });
+
+  it('vẫn đọc được dòng tổng kết cũ, không có phần ⚠', () => {
+    render(<LogView logs={['[run:summary] 3✓ 4✗ 0~ 6⊘ 4✎']} />);
+    expect(screen.getByText('3 pass')).toBeInTheDocument();
+    expect(screen.queryByText(/known issue/)).not.toBeInTheDocument();
+  });
+
+  it('không chiếm chỗ khi không có known issue nào', () => {
+    render(<LogView logs={['[run:summary] 9✓ 0✗ 0~ 0⊘ 0✎ 0⚠']} />);
+    expect(screen.queryByText(/known issue/)).not.toBeInTheDocument();
+  });
+});

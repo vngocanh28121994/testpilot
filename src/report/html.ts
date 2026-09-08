@@ -109,6 +109,9 @@ function render(report: RunReport, verdicts: FlakeVerdict[], outDir: string): st
   .tiles { display:flex; gap:.75rem; flex-wrap:wrap; margin-bottom:2rem; }
   .tile { border:1px solid var(--line); border-radius:10px; padding:.75rem 1.1rem; background:var(--card); }
   .tile b { display:block; font-size:1.6rem; line-height:1.2; }
+  .ki{margin-left:.5rem;font:inherit;font-size:.75rem;padding:.1rem .5rem;border:1px solid currentColor;
+      border-radius:999px;background:none;color:var(--flake);cursor:pointer}
+  .ki[disabled]{opacity:.6;cursor:default}
   .passed b{color:var(--pass)} .failed b{color:var(--fail)} .flaky b{color:var(--flake)}
   h2 { font-size:1.05rem; margin:2rem 0 .75rem; }
   table { width:100%; border-collapse:collapse; font-size:.875rem; }
@@ -195,7 +198,7 @@ ${unverified(report)}
 
 <h2>Câu hỏi lượt chạy chưa tự quyết được</h2>
 ${openQuestions(report)}
-</main></body></html>`;
+</main>${KNOWN_ISSUE_SCRIPT}</body></html>`;
 }
 
 /**
@@ -250,8 +253,15 @@ ${rows
 function row(r: ScenarioResult, v?: FlakeVerdict): string {
   const rate = v ? `${Math.round(v.flakeRate * 100)}% of ${v.runs}` : '—';
   const note = v?.brokenNotFlaky ? ' <span class="tag">broken, not flaky</span>' : '';
+  // Nút gắn nhãn đứng ngay cạnh kịch bản đỏ, vì ĐÂY là chỗ người ta phát hiện
+  // ra nó. Biết trước lúc sinh kịch bản thì đã không cần nhãn; cái người ta
+  // biết sau khi đọc report mà phải đi tìm màn hình khác để ghi lại thì phần
+  // lớn sẽ không ai ghi.
+  const mark = r.verdict === 'failed'
+    ? ` <button class="ki" data-scenario="${esc(r.scenario.id)}" type="button">Known issue</button>`
+    : '';
   return `<tr>
-  <td>${esc(r.scenario.name)}${note}</td>
+  <td>${esc(r.scenario.name)}${note}${mark}</td>
   <td>${esc(r.platform)}</td>
   <td>${esc(r.device)}</td>
   <td class="v-${r.verdict}">${r.verdict}</td>
@@ -474,3 +484,45 @@ function esc(s: string): string {
     (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!,
   );
 }
+
+/**
+ * Gắn nhãn Known issue ngay từ report.
+ *
+ * Report là chỗ người ta PHÁT HIỆN ra một kịch bản đỏ vì sản phẩm chứ không
+ * phải vì test hỏng — biết trước lúc sinh kịch bản thì đã không cần nhãn. Bắt
+ * họ nhớ tên kịch bản rồi đi tìm màn hình khác để ghi lại nghĩa là phần lớn sẽ
+ * không ai ghi.
+ *
+ * File này cũng được mở trực tiếp từ đĩa (file://), nơi không có server nào để
+ * gọi. Trường hợp đó phải nói ra, không được im lặng như thể đã lưu.
+ */
+const KNOWN_ISSUE_SCRIPT = `<script>
+document.addEventListener('click', async (event) => {
+  const button = event.target.closest('.ki');
+  if (!button) return;
+  if (location.protocol === 'file:') {
+    button.textContent = 'Mở report qua TestPilot để gắn nhãn';
+    button.disabled = true;
+    return;
+  }
+  const note = window.prompt('Vì sao kịch bản này đỏ do sản phẩm chưa đáp ứng?');
+  if (!note || !note.trim()) return;
+  button.disabled = true;
+  button.textContent = 'Đang lưu…';
+  try {
+    const res = await fetch('/api/feature/known-issue', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ scenarioId: button.dataset.scenario, note }),
+    });
+    const body = await res.json();
+    if (!res.ok) throw new Error(body.error || 'Không lưu được.');
+    button.textContent = '⚠ Known issue';
+  } catch (err) {
+    // Nói ra lỗi ngay trên nút: một nút quay về trạng thái cũ trông y hệt một
+    // nút chưa bấm, và người dùng sẽ tin là đã lưu xong.
+    button.textContent = 'Lỗi: ' + err.message;
+    button.disabled = false;
+  }
+});
+</script>`;

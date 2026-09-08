@@ -26,6 +26,7 @@ export const ROUTES = {
   feature: '/api/feature',
   featureNormalize: '/api/feature/normalize',
   featureReview: '/api/feature/review',
+  featureKnownIssue: '/api/feature/known-issue',
   featureReviewBulk: '/api/feature/review-bulk',
   studioSave: '/api/studio/save',
   workflowQuestions: '/api/workflow/questions',

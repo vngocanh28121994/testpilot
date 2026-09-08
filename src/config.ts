@@ -164,6 +164,8 @@ const Paths = z.object({
   actionsDb: z.string().default('registry/actions.json'),
   /** Approval is bound to the exact hash of each generated/edited scenario. */
   scenarioReviewDb: z.string().default('registry/scenario-review.json'),
+  /** Kịch bản đỏ vì sản phẩm chưa đáp ứng — đếm riêng, không tính là fail. */
+  knownIssuesDb: z.string().default('registry/known-issues.json'),
   /** Which environment's build is installed on each handset. */
   deviceEnvDb: z.string().default('registry/device-env.json'),
   docs: z.string().default('docs'),

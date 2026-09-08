@@ -24,6 +24,7 @@ import type {
   FeatureNormalizeResponse,
 } from './contracts.js';
 import { Registry } from '../core/registry.js';
+import { KnownIssueStore } from '../core/knownIssues.js';
 import { ScenarioReviewStore, scenarioBlocks } from '../core/scenarioReview.js';
 import { listRuns } from '../core/runstore.js';
 import {
@@ -490,6 +491,55 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
           pomWarning: `Đã lưu quyết định duyệt nhưng chưa đồng bộ POM: ${(err as Error).message}`,
         });
       }
+    }
+
+    /**
+     * Gắn hoặc gỡ nhãn Known issue cho một kịch bản.
+     *
+     * Chỉ con người mới gắn được — không có đường nào cho máy tự gắn, và đó là
+     * chủ ý: một nhãn tự động sẽ biến thành cách để suite tự làm mình xanh.
+     */
+    /**
+     * Gắn hoặc gỡ nhãn Known issue cho một kịch bản.
+     *
+     * Khoá theo `scenarioId`, không theo tên file + tên kịch bản. Lý do rất
+     * thực tế: người ta biết một kịch bản là Known issue SAU KHI đọc report,
+     * mà report chỉ có id — nó không mang theo tên file. Khoá theo id thì cả
+     * bảng Kịch bản lẫn report đều gọi được cùng một endpoint.
+     *
+     * Chỉ con người mới gắn được — không có đường nào cho máy tự gắn, và đó là
+     * chủ ý: một nhãn tự động sẽ biến thành cách để suite tự làm mình xanh.
+     */
+    case 'POST /api/feature/known-issue': {
+      const body = await readJson<{ scenarioId: string; note?: string; remove?: boolean }>(req);
+      if (!body.scenarioId) return json(res, 400, { error: 'Thiếu scenarioId.' });
+
+      const cfg = await loadConfig(CONFIG_FILE);
+      const known = await KnownIssueStore.load(cfg.paths.knownIssuesDb);
+      if (body.remove) {
+        const removed = known.unmark(body.scenarioId);
+        await known.save();
+        return json(res, 200, { ok: true, removed });
+      }
+
+      const note = (body.note ?? '').trim();
+      if (!note) {
+        // Một nhãn không kèm lý do thì năm sau không ai giải thích được vì sao
+        // kịch bản này được miễn.
+        return json(res, 400, { error: 'Hãy ghi lý do vì sao sản phẩm chưa đáp ứng.' });
+      }
+
+      const found = await findScenarioById(cfg, body.scenarioId);
+      if (!found) return json(res, 404, { error: 'Không tìm thấy kịch bản nào mang id đó.' });
+      const issue = known.mark({
+        id: body.scenarioId,
+        filename: found.filename,
+        scenarioName: found.name,
+        contentHash: found.contentHash,
+        note,
+      });
+      await known.save();
+      return json(res, 200, { ok: true, issue });
     }
 
     case 'POST /api/feature/review-bulk': {
@@ -1014,11 +1064,42 @@ function coverageView(record: FeatureCoverageRecord | null) {
   };
 }
 
+/**
+ * Tìm một kịch bản theo id, trả về kèm tên file và hash nội dung hiện tại.
+ *
+ * Id là khoá duy nhất đi xuyên toàn hệ thống — report, registry, POM đều dùng
+ * nó — nên đây là chỗ duy nhất cần biết id nằm trong file nào.
+ */
+async function findScenarioById(
+  cfg: TestPilotConfig,
+  scenarioId: string,
+): Promise<{ filename: string; name: string; contentHash: string } | null> {
+  if (!existsSync(cfg.paths.features)) return null;
+  const files = (await readdir(cfg.paths.features)).filter((f) => f.endsWith('.feature')).sort();
+  const registry = await Registry.load(cfg.paths.registry);
+  for (const filename of files) {
+    const uri = path.join(cfg.paths.features, filename);
+    const content = await readFile(uri, 'utf8');
+    try {
+      const spec = parseFeature(uri, content, registry);
+      const scenario = spec.scenarios.find((item) => item.id === scenarioId);
+      if (!scenario) continue;
+      const block = scenarioBlocks(content).find((b) => b.name === scenario.name);
+      if (!block) return null;
+      return { filename, name: scenario.name, contentHash: block.contentHash };
+    } catch {
+      // File không parse được thì bỏ qua: nó đã hiện lỗi ở chỗ khác rồi.
+    }
+  }
+  return null;
+}
+
 async function listFeatures(cfg: TestPilotConfig) {
   if (!existsSync(cfg.paths.features)) return [];
   const files = (await readdir(cfg.paths.features)).filter((f) => f.endsWith('.feature')).sort();
   const registry = await Registry.load(cfg.paths.registry);
   const reviews = await ScenarioReviewStore.load(cfg.paths.scenarioReviewDb);
+  const known = await KnownIssueStore.load(cfg.paths.knownIssuesDb);
   const result = await Promise.all(
     files.map(async (name) => {
       const uri = path.join(cfg.paths.features, name);
@@ -1034,6 +1115,8 @@ async function listFeatures(cfg: TestPilotConfig) {
           source: 'legacy',
         });
         const byName = new Map(review.map((item) => [item.scenarioName, item]));
+        // Hash của từng khối, để biết nhãn Known issue còn hiệu lực hay đã cũ.
+        const hashes = new Map(scenarioBlocks(content).map((b) => [b.name, b.contentHash]));
         return {
           name,
           content,
@@ -1041,12 +1124,18 @@ async function listFeatures(cfg: TestPilotConfig) {
           feature: spec.name,
           background: spec.background.map((s) => `${s.keyword} ${s.text}`),
           scenarios: spec.scenarios.map((s) => ({
+            id: s.id,
             name: s.name,
             tags: s.tags,
             platforms: s.platforms,
             steps: s.steps.length,
             stepTexts: s.steps.map((st) => `${st.keyword} ${st.text}`),
             review: byName.get(s.name) ?? null,
+            // Nhãn chỉ được coi là còn hiệu lực khi nội dung chưa đổi; nếu đã
+            // đổi thì trả về `stale` để màn hình mời người ta xem lại thay vì
+            // lặng lẽ bỏ nhãn.
+            knownIssue: known.active(s.id, hashes.get(s.name) ?? '') ?? null,
+            knownIssueStale: Boolean(known.stale(s.id, hashes.get(s.name) ?? '')),
           })),
           coverage,
           error: null as string | null,

@@ -2,7 +2,8 @@ import { Fragment, useEffect, useRef, type ReactNode } from 'react';
 import { cn } from '@/lib/utils';
 
 const VERDICT = /^\[run:(passed|failed|flaky|skip|running|unapproved|abort)\]\s*(.*)$/;
-const SUMMARY = /^\[run:summary\]\s*(\d+)✓\s*(\d+)✗\s*(\d+)~\s*(\d+)⊘(?:\s*(\d+)✎)?$/;
+const SUMMARY =
+  /^\[run:summary\]\s*(\d+)✓\s*(\d+)✗\s*(\d+)~\s*(\d+)⊘(?:\s*(\d+)✎)?(?:\s*(\d+)⚠)?$/;
 const URL_PART = /(https?:\/\/\S+)/g;
 
 const TONE: Record<string, string> = {
@@ -150,7 +151,7 @@ function Line({ kind, text }: { kind: string | null; text: string }) {
 }
 
 function Summary({ counts }: { counts: RegExpExecArray }) {
-  const [, pass, fail, flaky, skip, unapproved] = counts;
+  const [, pass, fail, flaky, skip, unapproved, known] = counts;
   return (
     <>
       <span className="text-(--log-muted) block">{'─'.repeat(40)}</span>
@@ -174,6 +175,13 @@ function Summary({ counts }: { counts: RegExpExecArray }) {
           <>
             {'  '}
             <span className="text-status-flaky">{unapproved} chưa duyệt</span>
+          </>
+        )}
+        {Number(known) > 0 && (
+          <>
+            {'  '}
+            {/* Đếm riêng khỏi fail: đây là chuyện của sản phẩm, không phải của test. */}
+            <span className="text-status-flaky">{known} known issue</span>
           </>
         )}
       </span>

@@ -11,6 +11,7 @@ import {
 } from '../config.js';
 import { Registry } from '../core/registry.js';
 import { ScenarioReviewStore, scenarioBlocks } from '../core/scenarioReview.js';
+import { KnownIssueStore } from '../core/knownIssues.js';
 import { adoptStoredApiKeys, Secrets, accountVariables, secretEnvName } from '../core/secrets.js';
 import { DeviceEnvLog, needsReinstall } from '../core/deviceEnv.js';
 import { canonicalTag } from '../core/tagTaxonomy.js';
@@ -292,23 +293,72 @@ async function main(): Promise<void> {
 
   const out = await writeHtmlReport(report, verdicts, runDir);
 
+  // Kịch bản đỏ vì sản phẩm chưa đáp ứng, không phải vì test hỏng.
+  //
+  // Nhãn gắn với đúng nội dung kịch bản lúc người ta xem xét, nên một kịch bản
+  // đã bị sửa sẽ không còn được nhãn cũ bảo lãnh — nó quay về đỏ thật.
+  const known = await KnownIssueStore.load(cfg.paths.knownIssuesDb);
+  const isKnown = (r: (typeof results)[number]) =>
+    r.verdict === 'failed'
+    && Boolean(r.scenario.contentHash)
+    && Boolean(known.active(r.scenario.id, r.scenario.contentHash!));
+
+  // Nhãn đã cũ thì nói ra, đừng lặng lẽ bỏ qua: người gắn nó cần biết vì sao
+  // kịch bản của mình đột nhiên đỏ trở lại.
+  for (const r of results) {
+    const stale = r.scenario.contentHash
+      ? known.stale(r.scenario.id, r.scenario.contentHash)
+      : undefined;
+    if (stale) {
+      console.log(
+        `[run] "${r.scenario.name}" từng được gắn Known issue, nhưng nội dung kịch bản đã đổi `
+        + 'kể từ đó nên nhãn hết hiệu lực. Xem lại rồi gắn lại nếu vẫn đúng.',
+      );
+    }
+  }
+
+  // Xanh trở lại thì mời gỡ nhãn. Một nhãn không ai gỡ sẽ che mất đúng cái ngày
+  // sản phẩm được sửa xong.
+  for (const r of results) {
+    if (r.verdict !== 'passed' || !r.scenario.contentHash) continue;
+    if (known.active(r.scenario.id, r.scenario.contentHash)) {
+      console.log(
+        `[run] "${r.scenario.name}" đang mang nhãn Known issue nhưng đã PASS. `
+        + 'Nếu sản phẩm đã sửa xong thì gỡ nhãn đi.',
+      );
+    }
+  }
+
   // Summary table ─ parsed by the UI to render a result block
+  const knownIssues = results.filter(isKnown);
   const passed = results.filter((r) => r.verdict === 'passed').length;
-  const failed = results.filter((r) => r.verdict === 'failed').length;
+  const failed = results.filter((r) => r.verdict === 'failed' && !isKnown(r)).length;
   const flaky  = results.filter((r) => r.verdict === 'flaky').length;
   // The unapproved count is part of the headline, not a footnote: without a
   // denominator "6✓ 0✗" reads the same whether one scenario was skipped or none
   // existed at all.
   console.log(
     `[run:summary] ${passed}✓ ${failed}✗ ${flaky}~ ${quarantined.length}⊘`
-    + (unapproved.length > 0 ? ` ${unapproved.length}✎` : ''),
+    + (unapproved.length > 0 ? ` ${unapproved.length}✎` : '')
+    // ⚠ đứng cuối và chỉ hiện khi có: hai bộ phân tích dòng này đều neo vào
+    // phần đầu, nên chèn vào giữa sẽ làm chúng ngừng đọc được cả dòng.
+    + (knownIssues.length > 0 ? ` ${knownIssues.length}⚠` : ''),
   );
 
   console.log(`[run] report -> ${out}`);
 
   // Flaky does not fail the build; a real failure does. Conflating the two is
   // how teams end up ignoring the whole suite.
-  const realFailures = results.filter((r) => r.verdict === 'failed');
+  // Known issue không làm hỏng lượt chạy: nó là chuyện của sản phẩm, và một
+  // suite đỏ vĩnh viễn là một suite không ai còn đọc.
+  const realFailures = results.filter((r) => r.verdict === 'failed' && !isKnown(r));
+  if (knownIssues.length > 0) {
+    console.log(`[run] ${knownIssues.length} kịch bản đỏ vì sản phẩm chưa đáp ứng (Known issue):`);
+    for (const r of knownIssues) {
+      const note = known.active(r.scenario.id, r.scenario.contentHash!)?.note;
+      console.log(`  ⚠ ${r.scenario.name}${note ? ` — ${note}` : ''}`);
+    }
+  }
 
   // Approved features define the reusable API; a successful local execution
   // confirms the runtime registry behind that API. Incremental generation only
@@ -817,15 +867,17 @@ async function loadFeatures(
       const feature = parseFeature(uri, content, registry);
       reviews.syncFile(f, content, { defaultStatus: 'approved', source: 'legacy' });
       const hashes = new Map(scenarioBlocks(content).map((block) => [block.name, block.contentHash]));
-      const approved = feature.scenarios.filter((scenario) =>
-        reviews.isApproved(f, scenario.name, hashes.get(scenario.name)));
+      const approved = feature.scenarios
+        .filter((scenario) => reviews.isApproved(f, scenario.name, hashes.get(scenario.name)))
+        .map((scenario) => ({ ...scenario, contentHash: hashes.get(scenario.name) }));
       // Names of what was dropped, not just how many. A scenario that silently
       // leaves the run is indistinguishable from one that passed, and the ones
       // that get dropped are exactly the ones just edited — the likeliest to be
       // broken. The caller prints these so the summary can never imply a
       // scenario ran when it did not.
+      const approvedNames = new Set(approved.map((scenario) => scenario.name));
       const unapproved = feature.scenarios
-        .filter((scenario) => !approved.includes(scenario))
+        .filter((scenario) => !approvedNames.has(scenario.name))
         .map((scenario) => scenario.name);
       return { ...feature, scenarios: approved, unapproved };
     }),

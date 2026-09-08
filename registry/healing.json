@@ -320,7 +320,11 @@
     "2026-08-27T17-26-24Z-android-sm-s938b": "2026-08-27T17:30:42.401Z",
     "2026-08-28T02-07-52Z-android-sm-s938b": "2026-08-28T02:17:49.000Z",
     "2026-08-28T02-32-14Z-android-sm-s938b": "2026-08-28T02:36:15.382Z",
-    "2026-08-28T03-25-33Z-android-sm-s938b": "2026-08-28T03:28:52.029Z"
+    "2026-08-28T03-25-33Z-android-sm-s938b": "2026-08-28T03:28:52.029Z",
+    "2026-09-08T04-40-13Z-android-feature-chuyen-tien-noi-bo-sm-s938b": "2026-09-08T04:44:29.614Z",
+    "2026-09-08T04-49-55Z-android-feature-chuyen-tien-noi-bo-sm-s938b": "2026-09-08T04:50:56.704Z",
+    "2026-09-08T04-55-34Z-android-feature-chuyen-tien-noi-bo-sm-s938b": "2026-09-08T05:00:39.112Z",
+    "2026-09-08T05-03-19Z-android-feature-chuyen-tien-noi-bo-sm-s938b": "2026-09-08T05:07:21.522Z"
   },
   "entries": {
     "home.totalAssets::android::6dbfe0a6bf0ea4c4": {
@@ -575,7 +579,7 @@
         "weight": 0.8,
         "origin": "llm"
       },
-      "successes": 120,
+      "successes": 131,
       "runIds": [
         "2026-08-27T03-19-48Z-android-sm-s938b",
         "2026-08-27T03-27-17Z-android-sm-s938b",
@@ -588,12 +592,15 @@
         "2026-08-27T16-48-08Z-android-sm-s938b",
         "2026-08-27T17-26-24Z-android-sm-s938b",
         "2026-08-28T02-32-14Z-android-sm-s938b",
-        "2026-08-28T03-25-33Z-android-sm-s938b"
+        "2026-08-28T03-25-33Z-android-sm-s938b",
+        "2026-09-08T04-40-13Z-android-feature-chuyen-tien-noi-bo-sm-s938b",
+        "2026-09-08T04-55-34Z-android-feature-chuyen-tien-noi-bo-sm-s938b",
+        "2026-09-08T05-03-19Z-android-feature-chuyen-tien-noi-bo-sm-s938b"
       ],
       "firstSeen": "2026-08-27T03:25:37.779Z",
-      "lastSeen": "2026-08-28T03:28:52.029Z",
+      "lastSeen": "2026-09-08T05:07:21.522Z",
       "devices": {
-        "SM_S938B": 120
+        "SM_S938B": 131
       }
     },
     "transfer.submitButton::android::242f72750d7e5084": {
@@ -612,7 +619,7 @@
         "weight": 0.8,
         "origin": "llm"
       },
-      "successes": 65,
+      "successes": 73,
       "runIds": [
         "2026-08-27T03-19-48Z-android-sm-s938b",
         "2026-08-27T03-27-17Z-android-sm-s938b",
@@ -625,12 +632,14 @@
         "2026-08-27T17-26-24Z-android-sm-s938b",
         "2026-08-28T02-07-52Z-android-sm-s938b",
         "2026-08-28T02-32-14Z-android-sm-s938b",
-        "2026-08-28T03-25-33Z-android-sm-s938b"
+        "2026-08-28T03-25-33Z-android-sm-s938b",
+        "2026-09-08T04-55-34Z-android-feature-chuyen-tien-noi-bo-sm-s938b",
+        "2026-09-08T05-03-19Z-android-feature-chuyen-tien-noi-bo-sm-s938b"
       ],
       "firstSeen": "2026-08-27T03:25:37.779Z",
-      "lastSeen": "2026-08-28T03:28:52.029Z",
+      "lastSeen": "2026-09-08T05:07:21.522Z",
       "devices": {
-        "SM_S938B": 65
+        "SM_S938B": 73
       }
     },
     "transferConfirm.confirmButton::android::27f0ee8803c93757": {
@@ -649,7 +658,7 @@
         "weight": 0.8,
         "origin": "llm"
       },
-      "successes": 19,
+      "successes": 23,
       "runIds": [
         "2026-08-27T06-31-18Z-android-sm-s938b",
         "2026-08-27T06-47-07Z-android-sm-s938b",
@@ -659,12 +668,14 @@
         "2026-08-27T17-26-24Z-android-sm-s938b",
         "2026-08-28T02-07-52Z-android-sm-s938b",
         "2026-08-28T02-32-14Z-android-sm-s938b",
-        "2026-08-28T03-25-33Z-android-sm-s938b"
+        "2026-08-28T03-25-33Z-android-sm-s938b",
+        "2026-09-08T04-55-34Z-android-feature-chuyen-tien-noi-bo-sm-s938b",
+        "2026-09-08T05-03-19Z-android-feature-chuyen-tien-noi-bo-sm-s938b"
       ],
       "firstSeen": "2026-08-27T06:37:53.431Z",
-      "lastSeen": "2026-08-28T03:28:52.029Z",
+      "lastSeen": "2026-09-08T05:07:21.522Z",
       "devices": {
-        "SM_S938B": 19
+        "SM_S938B": 23
       }
     },
     "transfer.thongBao::android::d902c01a3180a982": {
@@ -683,7 +694,7 @@
         "weight": 0.8,
         "origin": "crawler"
       },
-      "successes": 17,
+      "successes": 19,
       "runIds": [
         "2026-08-27T06-31-18Z-android-sm-s938b",
         "2026-08-27T06-47-07Z-android-sm-s938b",
@@ -692,12 +703,13 @@
         "2026-08-27T08-19-02Z-android-sm-s938b",
         "2026-08-27T17-26-24Z-android-sm-s938b",
         "2026-08-28T02-32-14Z-android-sm-s938b",
-        "2026-08-28T03-25-33Z-android-sm-s938b"
+        "2026-08-28T03-25-33Z-android-sm-s938b",
+        "2026-09-08T05-03-19Z-android-feature-chuyen-tien-noi-bo-sm-s938b"
       ],
       "firstSeen": "2026-08-27T06:37:53.431Z",
-      "lastSeen": "2026-08-28T03:28:52.029Z",
+      "lastSeen": "2026-09-08T05:07:21.522Z",
       "devices": {
-        "SM_S938B": 17
+        "SM_S938B": 19
       }
     },
     "transferConfirm.backButton::android::24518db0f6df5d7d": {
@@ -716,18 +728,19 @@
         "weight": 0.8,
         "origin": "llm"
       },
-      "successes": 5,
+      "successes": 6,
       "runIds": [
         "2026-08-27T06-53-25Z-android-sm-s938b",
         "2026-08-27T08-19-02Z-android-sm-s938b",
         "2026-08-27T17-26-24Z-android-sm-s938b",
         "2026-08-28T02-32-14Z-android-sm-s938b",
-        "2026-08-28T03-25-33Z-android-sm-s938b"
+        "2026-08-28T03-25-33Z-android-sm-s938b",
+        "2026-09-08T05-03-19Z-android-feature-chuyen-tien-noi-bo-sm-s938b"
       ],
       "firstSeen": "2026-08-27T06:59:01.687Z",
-      "lastSeen": "2026-08-28T03:28:52.029Z",
+      "lastSeen": "2026-09-08T05:07:21.522Z",
       "devices": {
-        "SM_S938B": 5
+        "SM_S938B": 6
       }
     },
     "home.searchFirstResult::android::94e6c4fc8969bbf5": {
@@ -745,15 +758,17 @@
         "weight": 0.75,
         "origin": "authored"
       },
-      "successes": 2,
+      "successes": 4,
       "runIds": [
         "2026-08-28T02-32-14Z-android-sm-s938b",
-        "2026-08-28T03-25-33Z-android-sm-s938b"
+        "2026-08-28T03-25-33Z-android-sm-s938b",
+        "2026-09-08T04-40-13Z-android-feature-chuyen-tien-noi-bo-sm-s938b",
+        "2026-09-08T05-03-19Z-android-feature-chuyen-tien-noi-bo-sm-s938b"
       ],
       "firstSeen": "2026-08-28T02:36:15.382Z",
-      "lastSeen": "2026-08-28T03:28:52.029Z",
+      "lastSeen": "2026-09-08T05:07:21.522Z",
       "devices": {
-        "SM_S938B": 2
+        "SM_S938B": 4
       }
     }
   }

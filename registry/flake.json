@@ -904,6 +904,10 @@
     "chuyen-tien-noi-bo-tieu-khoan-a-chon-o-nguon-khong-xuat-hien-o-dropdown-ich::android::SM_S938B": {
       "outcomes": [
         "p",
+        "s",
+        "s",
+        "s",
+        "p",
         "p",
         "f",
         "p",
@@ -916,12 +920,16 @@
         "f",
         "f"
       ],
-      "lastSeen": "2026-08-28T03:28:52.028Z",
+      "lastSeen": "2026-09-08T05:07:21.521Z",
       "quarantinedSince": "2026-08-27T06:59:01.687Z"
     },
     "chuyen-tien-noi-bo-tieu-khoan-a-chon-o-ich-khong-xuat-hien-o-dropdown-nguon::android::SM_S938B": {
       "outcomes": [
         "f",
+        "s",
+        "s",
+        "s",
+        "f",
         "f",
         "f",
         "f",
@@ -932,12 +940,16 @@
         "f",
         "f"
       ],
-      "lastSeen": "2026-08-28T03:28:52.028Z",
+      "lastSeen": "2026-09-08T05:07:21.521Z",
       "quarantinedSince": "2026-08-27T06:59:01.687Z"
     },
     "chuyen-tien-noi-bo-so-tien-uoc-chuyen-thay-oi-theo-tieu-khoan-nguon::android::SM_S938B": {
       "outcomes": [
         "p",
+        "s",
+        "s",
+        "s",
+        "p",
         "p",
         "f",
         "p",
@@ -951,12 +963,16 @@
         "p",
         "f"
       ],
-      "lastSeen": "2026-08-28T03:28:52.028Z",
+      "lastSeen": "2026-09-08T05:07:21.521Z",
       "quarantinedSince": "2026-08-27T16:56:57.540Z"
     },
     "chuyen-tien-noi-bo-nhap-so-tien-vuot-qua-so-tien-uoc-chuyen::android::SM_S938B": {
       "outcomes": [
         "p",
+        "s",
+        "s",
+        "s",
+        "p",
         "p",
         "f",
         "p",
@@ -969,12 +985,16 @@
         "f",
         "f"
       ],
-      "lastSeen": "2026-08-28T03:28:52.028Z",
+      "lastSeen": "2026-09-08T05:07:21.521Z",
       "quarantinedSince": "2026-08-27T07:58:26.271Z"
     },
     "chuyen-tien-noi-bo-nhap-so-tien-hop-le-chuyen-sang-man-xac-nhan::android::SM_S938B": {
       "outcomes": [
         "p",
+        "s",
+        "s",
+        "s",
+        "p",
         "p",
         "p",
         "p",
@@ -982,7 +1002,7 @@
         "f",
         "f"
       ],
-      "lastSeen": "2026-08-28T03:28:52.028Z",
+      "lastSeen": "2026-09-08T05:07:21.521Z",
       "quarantinedSince": "2026-08-27T06:51:11.162Z"
     },
     "chuyen-tien-noi-bo-quay-lai-tu-man-xac-nhan-tro-ve-man-hinh-chuyen-tien::android::SM_S938B": {
@@ -1069,23 +1089,38 @@
     "chuyen-tien-noi-bo-so-tien-uoc-chuyen-giam-sau-khi-chuyen-tien-thanh-cong::android::SM_S938B": {
       "outcomes": [
         "p",
+        "f",
+        "f",
+        "f",
+        "p",
         "f"
       ],
-      "lastSeen": "2026-08-28T03:28:52.028Z"
+      "lastSeen": "2026-09-08T05:07:21.521Z",
+      "quarantinedSince": "2026-09-08T05:00:39.111Z"
     },
     "chuyen-tien-noi-bo-chuyen-tien-tu-tk-thuong-sang-tk-ky-quy-thanh-cong::android::SM_S938B": {
       "outcomes": [
         "p",
+        "f",
+        "f",
+        "f",
+        "p",
         "p"
       ],
-      "lastSeen": "2026-08-28T03:28:52.028Z"
+      "lastSeen": "2026-09-08T05:07:21.521Z",
+      "quarantinedSince": "2026-09-08T05:00:39.111Z"
     },
     "chuyen-tien-noi-bo-chuyen-tien-tu-tk-ky-quy-sang-tk-thuong-thanh-cong::android::SM_S938B": {
       "outcomes": [
         "p",
+        "f",
+        "f",
+        "f",
+        "p",
         "p"
       ],
-      "lastSeen": "2026-08-28T03:28:52.028Z"
+      "lastSeen": "2026-09-08T05:07:21.521Z",
+      "quarantinedSince": "2026-09-08T05:00:39.111Z"
     },
     "chuyen-tien-noi-bo-so-tien-hop-le-chuyen-sang-man-xac-nhan::android::SM_S938B": {
       "outcomes": [
@@ -1097,10 +1132,15 @@
     "chuyen-tien-noi-bo-bam-quay-lai-tro-ve-man-hinh-chuyen-tien::android::SM_S938B": {
       "outcomes": [
         "p",
+        "s",
+        "f",
+        "f",
+        "p",
         "p",
         "p"
       ],
-      "lastSeen": "2026-08-28T03:28:52.028Z"
+      "lastSeen": "2026-09-08T05:07:21.521Z",
+      "quarantinedSince": "2026-09-08T04:50:56.704Z"
     },
     "chuyen-tien-noi-bo-chon-tieu-khoan-nguon-va-ich-cho-giao-dich-chuyen-tien::android::SM_S938B": {
       "outcomes": [

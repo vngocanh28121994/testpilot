@@ -2,7 +2,7 @@ import { Fragment, useMemo, useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Link, useNavigate } from '@tanstack/react-router';
 import { toast } from 'sonner';
-import { Check, FileCode, Filter, Pencil, Plus, X } from 'lucide-react';
+import { Check, FileCode, Filter, Pencil, Plus, TriangleAlert, X } from 'lucide-react';
 import { AppShell } from '@/components/layout/AppShell';
 import { Dropdown } from '@/components/Dropdown';
 import { Field } from '@/components/Field';
@@ -26,6 +26,8 @@ import {
   scenarioNames,
 } from '@/lib/gherkin';
 import type {
+  KnownIssueRequest,
+  KnownIssueResponse,
   FeatureMutationResponse,
   FeatureReviewBulkRequest,
   FeatureReviewRequest,
@@ -93,6 +95,20 @@ function ReviewBody({ state, search }: { state: StateResponse; search: ScenarioS
     },
     onError: (error) => toast.error((error as Error).message),
   });
+  /**
+   * Nhãn Known issue: kịch bản đỏ vì sản phẩm chưa đáp ứng, không phải vì test
+   * hỏng. Chỉ con người gắn được — không có đường nào cho máy tự gắn.
+   */
+  const knownIssue = useMutation({
+    mutationFn: (body: KnownIssueRequest) =>
+      api.post<KnownIssueResponse>(ROUTES.featureKnownIssue, body),
+    onSuccess: (data) => {
+      toast.success(data.removed ? 'Đã gỡ nhãn Known issue.' : 'Đã gắn nhãn Known issue.');
+      refresh();
+    },
+    onError: (error) => toast.error((error as Error).message),
+  });
+
   const save = useMutation({
     mutationFn: (body: FeatureSaveRequest) =>
       api.put<FeatureMutationResponse>(ROUTES.feature, body),
@@ -411,6 +427,45 @@ function ReviewBody({ state, search }: { state: StateResponse; search: ScenarioS
                                 }
                               >
                                 Không duyệt
+                              </Button>
+                              {scenario.knownIssue && (
+                                <span
+                                  title={scenario.knownIssue.note}
+                                  className="bg-status-flaky/15 text-status-flaky flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium"
+                                >
+                                  <TriangleAlert className="size-3" />
+                                  Known issue
+                                </span>
+                              )}
+                              {scenario.knownIssueStale && (
+                                <span className="text-muted-foreground text-xs">
+                                  Nhãn Known issue đã cũ — kịch bản đã đổi
+                                </span>
+                              )}
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                disabled={knownIssue.isPending}
+                                onClick={() => {
+                                  if (scenario.knownIssue) {
+                                    knownIssue.mutate({
+                                      scenarioId: scenario.id,
+                                      remove: true,
+                                    });
+                                    return;
+                                  }
+                                  // Lý do là bắt buộc: một nhãn không kèm lý do
+                                  // thì năm sau không ai giải thích được vì sao
+                                  // kịch bản này được miễn.
+                                  const note = window.prompt(
+                                    `Vì sao "${scenario.name}" đỏ do sản phẩm chưa đáp ứng?`,
+                                  );
+                                  if (!note?.trim()) return;
+                                  knownIssue.mutate({ scenarioId: scenario.id, note });
+                                }}
+                              >
+                                <TriangleAlert className="size-4" />
+                                {scenario.knownIssue ? 'Gỡ Known issue' : 'Known issue'}
                               </Button>
                               <Button
                                 size="sm"

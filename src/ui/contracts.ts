@@ -39,6 +39,7 @@ import type {
 import type { TagTaxonomyView } from '../core/tagTaxonomy.js';
 import type { LearnedActionDef } from '../actions/ActionRegistry.js';
 import type { ScenarioReviewEntry } from '../core/scenarioReview.js';
+import type { KnownIssue } from '../core/knownIssues.js';
 
 export type {
   TestPilotConfig,
@@ -58,6 +59,7 @@ export type {
   TagTaxonomyView,
   LearnedActionDef,
   ScenarioReviewEntry,
+  KnownIssue,
 };
 
 /* ------------------------------------------------------------------ */
@@ -115,12 +117,21 @@ export interface CoverageView {
 }
 
 export interface ScenarioSummary {
+  /** Khoá đi xuyên hệ thống: report, registry và POM đều gọi kịch bản bằng id này. */
+  id: string;
   name: string;
   tags: string[];
   platforms: Platform[];
   steps: number;
   stepTexts: string[];
   review: ScenarioReviewEntry | null;
+  /** Nhãn "sản phẩm chưa đáp ứng", còn hiệu lực với đúng nội dung hiện tại. */
+  knownIssue: KnownIssue | null;
+  /**
+   * Từng gắn nhãn, nhưng nội dung kịch bản đã đổi kể từ đó nên nhãn hết hiệu
+   * lực. Nói ra thay vì lặng lẽ bỏ, để người gắn hiểu vì sao nó đỏ trở lại.
+   */
+  knownIssueStale: boolean;
 }
 
 /**
@@ -603,3 +614,20 @@ export type JobFrame =
   | { type: 'run'; run: WorkflowRun }
   | { type: 'error'; message: string }
   | { type: 'done'; ok: boolean };
+
+/* ------------------------------------------------------------------ */
+/* POST /api/feature/known-issue                                       */
+/* ------------------------------------------------------------------ */
+
+export interface KnownIssueRequest {
+  scenarioId: string;
+  /** Bắt buộc khi gắn; bỏ qua khi gỡ. */
+  note?: string;
+  remove?: boolean;
+}
+
+export interface KnownIssueResponse {
+  ok: true;
+  issue?: KnownIssue;
+  removed?: boolean;
+}

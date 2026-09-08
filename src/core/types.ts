@@ -314,6 +314,14 @@ export interface ScenarioSpec {
   steps: StepSpec[];
   /** Platforms this scenario is allowed to run on, derived from @web/@android/@ios tags. */
   platforms: Platform[];
+  /**
+   * Băm nội dung khối Gherkin của kịch bản này, gắn lúc nạp feature.
+   *
+   * Cổng duyệt và nhãn Known issue đều gắn với đúng nội dung chứ không gắn với
+   * cái tên, nên cả hai cần con số này ở nơi kết quả được phân loại — chứ không
+   * chỉ ở nơi file được đọc.
+   */
+  contentHash?: string;
 }
 
 export interface FeatureSpec {
