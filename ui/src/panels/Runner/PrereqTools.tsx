@@ -116,11 +116,15 @@ function XcodeRow() {
         Command Line Tools là không đủ — cần Xcode đầy đủ.
       </span>
       {xcode.data && (
-        <pre className="console mt-0 max-h-32 overflow-auto text-xs">
-          {xcode.data.ok
-            ? [xcode.data.version, xcode.data.path, xcode.data.sdk].filter(Boolean).join('\n')
-            : (xcode.data.reason ?? 'Chưa dùng được.')}
-        </pre>
+        <LogView
+          className="max-h-32"
+          label="Kết quả kiểm tra Xcode"
+          logs={
+            xcode.data.ok
+              ? [xcode.data.version, xcode.data.path, xcode.data.sdk].filter(Boolean).join('\n')
+              : (xcode.data.reason ?? 'Chưa dùng được.')
+          }
+        />
       )}
     </div>
   );

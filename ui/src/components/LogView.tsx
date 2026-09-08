@@ -82,12 +82,21 @@ export function LogView({
   className,
   label = 'Log',
 }: {
-  logs: string[];
+  /**
+   * Chuỗi cũng nhận được, không chỉ mảng.
+   *
+   * Log đến từ hai nguồn có hình dạng khác nhau — luồng đang chạy đưa từng dòng,
+   * còn report đã lưu và network log là một khối chữ. Bắt mỗi chỗ gọi tự tách
+   * dòng là cách để vài chỗ quên mất, rồi lại mọc ra một kiểu hiển thị log thứ hai.
+   */
+  logs: string[] | string;
   dropped?: number;
   error?: string | null;
   className?: string;
   label?: string;
 }) {
+  const lines = typeof logs === 'string' ? logs.split('\n') : logs;
+  const rowCount = lines.length;
   const box = useRef<HTMLPreElement>(null);
   // Người đọc đang ở cuối hay đã cuộn lên. Giữ ngoài state vì nó chỉ được đọc
   // trong effect; đưa vào state sẽ render lại mỗi lần cuộn mà không đổi gì.
@@ -103,9 +112,9 @@ export function LogView({
     // Thiếu bước này thì khung cuộn đúng nhưng vẫn nằm ngoài tầm mắt.
     const overshoot = el.getBoundingClientRect().bottom - window.innerHeight + 8;
     if (overshoot > 0) window.scrollBy({ top: overshoot, behavior: 'instant' });
-  }, [logs.length, error]);
+  }, [rowCount, error]);
 
-  const rows = toRows(logs);
+  const rows = toRows(lines);
 
   return (
     <div className="flex flex-col gap-1">

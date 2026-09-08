@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
 import { AppShell } from '@/components/layout/AppShell';
+import { LogView } from '@/components/LogView';
 import { useStreamJob } from '@/hooks/useStreamJob';
 import { useJobStore } from '@/stores/jobStore';
 import { STREAM_ROUTES } from '@/api/routes';
@@ -48,12 +49,11 @@ export default function StreamProbePanel() {
         <b data-testid="count">{job.logs.length}</b>
       </p>
 
-      <pre
-        data-testid="log"
-        className="border-border bg-muted mt-3 max-h-96 overflow-auto rounded-md border p-3 text-xs whitespace-pre-wrap"
-      >
-        {job.logs.join('\n')}
-      </pre>
+      {/* Dùng chung LogView như mọi chỗ hiển thị log khác. `data-testid` giữ
+          trên vỏ ngoài để không phải mở thêm API cho một trang tạm. */}
+      <div data-testid="log">
+        <LogView logs={job.logs} className="mt-3 max-h-96" label="Log probe" />
+      </div>
     </AppShell>
   );
 }
