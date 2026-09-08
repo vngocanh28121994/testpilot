@@ -146,3 +146,44 @@ describe('Studio — không đá người dùng ra khi họ quay lại', () => {
     expect(router.state.location.pathname).toBe('/studio');
   });
 });
+
+/**
+ * Log sinh kịch bản và log chạy test là CÙNG một workflow, người đọc theo dõi
+ * nó theo thời gian. Tách làm hai khối cạnh nhau thì phải tự ghép lại trong
+ * đầu, và khối cũ — đông cứng ở bước "Chờ duyệt" với vòng quay — trông như vẫn
+ * đang chạy trong khi log kia đã báo có report.
+ */
+describe('Studio — log nối tiếp thành một dòng', () => {
+  it('chỉ có MỘT khung log, chứa cả hai giai đoạn', async () => {
+    server.use(
+      http.post(STREAM_ROUTES.gen, () =>
+        sse([
+          ['log', 'Sinh bộ testcase…'],
+          ['run', { id: 'run-1', status: 'passed', stages: [] }],
+          ['done', { ok: true }],
+        ]),
+      ),
+    );
+    await start();
+
+    await screen.findByText('Sinh bộ testcase…');
+    // Một khung duy nhất, không phải hai khối đặt cạnh nhau.
+    expect(screen.getAllByRole('log')).toHaveLength(1);
+  });
+
+  /**
+   * Id không trùng lượt chạy nào trong state, nên không có nguồn nào khác để
+   * rơi về — đúng tình huống "thật sự chưa có bước nào".
+   */
+  it('không dựng danh sách bước khi không nguồn nào biết bước là gì', async () => {
+    server.use(
+      http.post(STREAM_ROUTES.gen, () =>
+        sse([['log', 'x'], ['run', { id: 'khong-co-trong-state', status: 'passed' }], ['done', { ok: true }]]),
+      ),
+    );
+    await start();
+
+    await screen.findByText('x');
+    expect(screen.queryByRole('list', { name: 'Các bước của workflow' })).not.toBeInTheDocument();
+  });
+});

@@ -433,10 +433,10 @@
         ]
       },
       "health": {
-        "resolutions": 714,
+        "resolutions": 723,
         "heals": 1,
         "winners": {
-          "css:div.search-box": 713,
+          "css:div.search-box": 722,
           "placeholder:Tìm kiếm": 1
         },
         "lastHealedAt": "2026-08-14T07:18:31.972Z"
@@ -471,10 +471,10 @@
         ]
       },
       "health": {
-        "resolutions": 747,
+        "resolutions": 756,
         "heals": 0,
         "winners": {
-          "placeholder:Tìm tính năng, mã CK...": 747
+          "placeholder:Tìm tính năng, mã CK...": 756
         }
       },
       "typeDelay": 100
@@ -508,10 +508,10 @@
         ]
       },
       "health": {
-        "resolutions": 834,
+        "resolutions": 852,
         "heals": 6,
         "winners": {
-          "css:.searched-feature-block .feature-item:first-child .title": 828,
+          "css:.searched-feature-block .feature-item:first-child .title": 846,
           "placeholder:Tìm kiếm": 2,
           "css:.searched-feature-block .feature-item": 4
         },
@@ -759,10 +759,10 @@
         ]
       },
       "health": {
-        "resolutions": 801,
+        "resolutions": 810,
         "heals": 1,
         "winners": {
-          "label:Tổng tài sản": 793,
+          "label:Tổng tài sản": 802,
           "predicate:new UiSelector().textContains(\"Tổng tài sản\").className(\"android.widget.TextView\")": 7,
           "predicate:new UiSelector().textContains(\"Tổng tài sản\")": 1
         },
@@ -2410,10 +2410,10 @@
       },
       "provenance": "generated",
       "health": {
-        "resolutions": 280,
+        "resolutions": 283,
         "heals": 139,
         "winners": {
-          "role:combobox": 141,
+          "role:combobox": 144,
           "label:Chuyển từ": 139
         },
         "lastHealedAt": "2026-09-08T05:07:01.296Z"
@@ -2451,10 +2451,10 @@
       },
       "provenance": "generated",
       "health": {
-        "resolutions": 109,
+        "resolutions": 112,
         "heals": 0,
         "winners": {
-          "label:Được chuyển": 109
+          "label:Được chuyển": 112
         }
       }
     },
@@ -2497,10 +2497,10 @@
       },
       "provenance": "generated",
       "health": {
-        "resolutions": 149,
+        "resolutions": 150,
         "heals": 85,
         "winners": {
-          "role:button": 64,
+          "role:button": 65,
           "label:CHUYỂN": 85
         },
         "lastHealedAt": "2026-09-08T05:07:14.595Z"
@@ -2697,10 +2697,10 @@
       },
       "provenance": "generated",
       "health": {
-        "resolutions": 292,
+        "resolutions": 300,
         "heals": 0,
         "winners": {
-          "label:Chọn TK nhận tiền": 292
+          "label:Chọn TK nhận tiền": 300
         }
       }
     },
@@ -2721,10 +2721,10 @@
       },
       "provenance": "generated",
       "health": {
-        "resolutions": 176,
+        "resolutions": 182,
         "heals": 0,
         "winners": {
-          "label:Số tiền": 176
+          "label:Số tiền": 182
         }
       }
     },

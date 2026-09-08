@@ -16,10 +16,10 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Textarea } from '@/components/ui/textarea';
 import { api } from '@/api/client';
 import { ROUTES, STREAM_ROUTES } from '@/api/routes';
-import { useAppState } from '@/hooks/useAppState';
+import { useAppState, useRecentRuns } from '@/hooks/useAppState';
 import { StatusBanner } from '@/components/StatusBanner';
 import { WorkflowStages } from '@/components/WorkflowStages';
-import { WorkflowCompletion } from '@/components/WorkflowCompletion';
+import { WorkflowCompletion, useWorkflowCompletion } from '@/components/WorkflowCompletion';
 import { WorkflowPreflight, type NativePlatform } from './WorkflowPreflight';
 import { useStreamJob } from '@/hooks/useStreamJob';
 import type {
@@ -115,6 +115,29 @@ function StudioFormPanel({ state }: { state: StateResponse }) {
   const [workflowEnv, setWorkflowEnv] = useState(cfg.workflow.env ?? cfg.defaultEnv);
   const [headed, setHeaded] = useState(cfg.workflow.headed);
   const job = useStreamJob('studio-workflow', STREAM_ROUTES.gen);
+  const completion = useWorkflowCompletion();
+  const runs = useRecentRuns();
+
+  /**
+   * Danh sách bước lấy từ nguồn TƯƠI NHẤT, không phải từ luồng đã kết thúc.
+   *
+   * Luồng sinh kịch bản để lại một ảnh chụp đông cứng đúng lúc nó dừng: bước
+   * "Chờ duyệt" đang quay, năm bước sau còn chờ. Workflow rồi chạy tiếp và xong
+   * hẳn, nhưng ảnh chụp ấy không biết — nên màn hình nói workflow vẫn đang chờ
+   * duyệt trong khi log ngay bên trên đã báo test chạy xong và có report.
+   *
+   * Thứ tự ưu tiên: luồng nào ĐANG chạy thì nó tươi nhất; không luồng nào chạy
+   * thì state của server là nguồn đúng, vì nó được làm mới sau mỗi lần xong.
+   */
+  const liveRun =
+    completion.status === 'running'
+      ? completion.run
+      : job.status === 'running'
+        ? job.run
+        : null;
+  const runId = liveRun?.id ?? completion.run?.id ?? job.run?.id;
+  const stagesRun =
+    liveRun ?? (runs.data ?? []).find((item) => item.id === runId) ?? completion.run ?? job.run;
   const navigate = useNavigate();
 
   /**
@@ -127,11 +150,17 @@ function StudioFormPanel({ state }: { state: StateResponse }) {
    * Studio trở thành trang không vào được, và cái vòng "Hoàn thành rồi quay về
    * Studio" thì quay về đúng chỗ cũ.
    */
-  const wasRunning = useRef(job.status === 'running');
+  //
+  // Cách nhận biết: luồng đã kết thúc SẴN từ lúc mở trang thì bỏ qua; chỉ luồng
+  // kết thúc trong lúc người dùng đang ngồi ở đây mới được chuyển màn.
+  //
+  // Không so với trạng thái "đang chạy" của lần render trước: một luồng nhanh
+  // có thể không bao giờ được render ở trạng thái đó — React gộp các lần cập
+  // nhật — và khi ấy cú chuyển màn lặng lẽ không xảy ra.
+  const alreadyFinished = useRef(job.status === 'done' || job.status === 'error');
   useEffect(() => {
-    const justFinished = wasRunning.current && job.status === 'done';
-    wasRunning.current = job.status === 'running';
-    if (!justFinished) return;
+    if (job.status !== 'done' || alreadyFinished.current) return;
+    alreadyFinished.current = true;
 
     const status = job.run?.status;
     if (status !== 'waiting_review' && status !== 'waiting_input') return;
@@ -514,11 +543,18 @@ function StudioFormPanel({ state }: { state: StateResponse }) {
         */}
         <WorkflowCompletion />
 
-        {job.logs.length > 0 && (
+        {job.logs.length + completion.logs.length > 0 && (
           <Card aria-labelledby="progress-title">
             <CardHeader>
               <CardTitle id="progress-title">Tiến trình workflow</CardTitle>
-              <CardDescription>Log trực tiếp từ lượt chạy đang diễn ra.</CardDescription>
+              <CardDescription>
+                {/* Đừng nói "đang diễn ra" khi nó đã xong: chính câu này, cộng
+                    với vòng quay ở bước cuối, làm màn hình khẳng định workflow
+                    còn đang chạy trong khi log ngay dưới đã báo có report. */}
+                {job.status === 'running' || completion.status === 'running'
+                  ? 'Log trực tiếp từ lượt chạy đang diễn ra.'
+                  : 'Log của lượt chạy gần nhất.'}
+              </CardDescription>
             </CardHeader>
             <CardContent className="flex flex-col gap-4">
               {/*
@@ -544,8 +580,17 @@ function StudioFormPanel({ state }: { state: StateResponse }) {
                   detail="Xem log bên dưới để biết bước nào hỏng."
                 />
               )}
-              {job.run && <WorkflowStages stages={job.run.stages} />}
-              <LogView logs={job.logs} dropped={job.dropped} error={job.error} label="Log sinh kịch bản" />
+              {stagesRun?.stages?.length ? <WorkflowStages stages={stagesRun.stages} /> : null}
+              {/* MỘT dòng log liên tục: log sinh kịch bản, rồi log chạy test
+                  nối ngay sau. Đó là cùng một workflow và người đọc theo dõi nó
+                  theo thời gian; tách làm hai khối cạnh nhau thì phải tự ghép
+                  lại trong đầu, và khối cũ trông như vẫn đang chạy. */}
+              <LogView
+                logs={[...job.logs, ...completion.logs]}
+                dropped={job.dropped + completion.dropped}
+                error={completion.error ?? job.error}
+                label="Log workflow"
+              />
             </CardContent>
           </Card>
         )}

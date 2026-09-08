@@ -2,9 +2,7 @@ import { useEffect } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
 import { Button } from '@/components/ui/button';
-import { LogView } from '@/components/LogView';
 import { StatusBanner } from '@/components/StatusBanner';
-import { WorkflowStages } from '@/components/WorkflowStages';
 import { useStreamJob } from '@/hooks/useStreamJob';
 import { STREAM_ROUTES } from '@/api/routes';
 
@@ -22,13 +20,18 @@ export function useWorkflowCompletion() {
 }
 
 /**
- * Tiến trình và kết cục của lượt chạy sau khi duyệt.
+ * Kết cục của lượt chạy sau khi duyệt.
+ *
+ * Chỉ băng kết quả — log KHÔNG nằm ở đây. Log của lượt chạy tiếp phải nối vào
+ * đuôi log sinh kịch bản thành một dòng chảy liên tục, chứ không phải một khối
+ * thứ hai đặt cạnh: đó là cùng một workflow, và người đọc theo dõi nó theo thời
+ * gian. Nơi duy nhất ghép được hai nguồn ấy là màn hình chứa cả hai.
  *
  * Dùng ở cả màn duyệt lẫn App Studio. Trước đây chỉ màn duyệt có, nên bấm
  * "Hoàn thành kịch bản" rồi quay về Studio là thấy một khung log đã chết từ
  * bước sinh kịch bản, trong khi test đang chạy thật.
  */
-export function WorkflowCompletion({ label = 'Log chạy test' }: { label?: string }) {
+export function WorkflowCompletion() {
   const job = useWorkflowCompletion();
   const client = useQueryClient();
 
@@ -84,13 +87,6 @@ export function WorkflowCompletion({ label = 'Log chạy test' }: { label?: stri
         />
       )}
 
-      {/* Đang ở bước nào và còn mấy bước — hai câu người ta thật sự hỏi khi
-          ngồi đợi, mà một khung log không trả lời được. */}
-      {job.run && <WorkflowStages stages={job.run.stages} />}
-
-      {job.logs.length > 0 && (
-        <LogView logs={job.logs} dropped={job.dropped} error={job.error} label={label} />
-      )}
     </div>
   );
 }

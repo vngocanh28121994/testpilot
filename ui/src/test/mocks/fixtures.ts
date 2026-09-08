@@ -84,7 +84,9 @@ export const stateFixture: StateResponse = {
   elements: 106,
   reports: [],
   runs: [
-    { id: 'run-1', status: 'passed', stagesDone: 4 },
+    // `stages` có mặt vì dữ liệu thật luôn có: một run không stages từng làm
+    // danh sách bước vỡ, và fixture là chỗ duy nhất tạo ra được tình huống đó.
+    { id: 'run-1', status: 'passed', stagesDone: 4, stages: [{ name: 'Đọc tài liệu', status: 'done' }] },
     { id: 'run-2', status: 'failed', stagesDone: 2 },
     { id: 'run-3', status: 'failed', stagesDone: 1 },
   ] as unknown as StateResponse['runs'],
