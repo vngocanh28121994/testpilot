@@ -21,6 +21,7 @@ import { StatusBanner } from '@/components/StatusBanner';
 import { ReportAction } from '@/components/ReportAction';
 import { WorkflowStages } from '@/components/WorkflowStages';
 import { WorkflowCompletion, useWorkflowCompletion } from '@/components/WorkflowCompletion';
+import { RecentWorkflows } from './RecentWorkflows';
 import { WorkflowPreflight, type NativePlatform } from './WorkflowPreflight';
 import { useStreamJob } from '@/hooks/useStreamJob';
 import type {
@@ -597,6 +598,11 @@ function StudioFormPanel({ state }: { state: StateResponse }) {
             </CardContent>
           </Card>
         )}
+
+        {/* Lịch sử workflow đứng ngay trên trang đã khởi động chúng — bản cũ đặt
+            đúng chỗ này, và trang lịch sử đầy đủ của bản React thì không có lối
+            nào dẫn tới cho tới giờ. */}
+        <RecentWorkflows />
       </section>
     </AppShell>
   );
