@@ -52,7 +52,17 @@ export function WorkflowCompletion() {
   if (job.status === 'idle' && job.logs.length === 0) return null;
 
   return (
-    <div className="flex flex-col gap-3">
+    <div
+      className="flex flex-col gap-3"
+      // Kéo kết cục vào tầm nhìn đúng lúc nó xuất hiện. Một lượt chạy dài vài
+      // phút thì người ta không ngồi nhìn màn hình suốt, và khung log vừa cuộn
+      // xuống đáy có thể đẩy băng này ra ngay dưới mép dưới.
+      ref={(node) => {
+        if (node && (job.status === 'done' || job.status === 'error')) {
+          node.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+        }
+      }}
+    >
       {job.status === 'running' && (
         <StatusBanner tone="unknown" title="Đang chạy test" detail="Kịch bản đã duyệt đang chạy." />
       )}

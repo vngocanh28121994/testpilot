@@ -532,17 +532,6 @@ function StudioFormPanel({ state }: { state: StateResponse }) {
           </div>
         </section>
 
-        {/*
-          Tiến trình và log của lượt chạy test sau khi duyệt.
-          Đứng NGOÀI thẻ log sinh kịch bản, và không phụ thuộc vào việc thẻ đó có
-          hiện hay không: người dùng quay về đây từ màn duyệt, nơi log sinh kịch
-          bản của phiên trước có thể đã không còn.
-
-          Không có mục "kịch bản chờ duyệt" ở đây: workflow đã tự đưa người dùng
-          sang màn duyệt rồi, nên nhắc lại ở chỗ họ vừa rời đi chỉ là tiếng ồn.
-        */}
-        <WorkflowCompletion />
-
         {job.logs.length + completion.logs.length > 0 && (
           <Card aria-labelledby="progress-title">
             <CardHeader>
@@ -557,6 +546,19 @@ function StudioFormPanel({ state }: { state: StateResponse }) {
               </CardDescription>
             </CardHeader>
             <CardContent className="flex flex-col gap-4">
+              {stagesRun?.stages?.length ? (
+                <WorkflowStages stages={stagesRun.stages} runStatus={stagesRun.status} />
+              ) : null}
+              {/* MỘT dòng log liên tục: log sinh kịch bản, rồi log chạy test
+                  nối ngay sau. Đó là cùng một workflow và người đọc theo dõi nó
+                  theo thời gian; tách làm hai khối cạnh nhau thì phải tự ghép
+                  lại trong đầu, và khối cũ trông như vẫn đang chạy. */}
+              <LogView
+                logs={[...job.logs, ...completion.logs]}
+                dropped={job.dropped + completion.dropped}
+                error={completion.error ?? job.error}
+                label="Log workflow"
+              />
               {/*
                 Kết cục của chính lượt sinh kịch bản.
                 Nó chỉ dừng để duyệt khi có kịch bản mới; còn lại thì chạy thẳng
@@ -580,19 +582,11 @@ function StudioFormPanel({ state }: { state: StateResponse }) {
                   detail="Xem log bên dưới để biết bước nào hỏng."
                 />
               )}
-              {stagesRun?.stages?.length ? (
-                <WorkflowStages stages={stagesRun.stages} runStatus={stagesRun.status} />
-              ) : null}
-              {/* MỘT dòng log liên tục: log sinh kịch bản, rồi log chạy test
-                  nối ngay sau. Đó là cùng một workflow và người đọc theo dõi nó
-                  theo thời gian; tách làm hai khối cạnh nhau thì phải tự ghép
-                  lại trong đầu, và khối cũ trông như vẫn đang chạy. */}
-              <LogView
-                logs={[...job.logs, ...completion.logs]}
-                dropped={job.dropped + completion.dropped}
-                error={completion.error ?? job.error}
-                label="Log workflow"
-              />
+              {/* Kết cục nằm NGAY SAU log, không phải phía trên nó.
+                  Log tự cuộn xuống đáy trong lúc chạy, nên mắt người đọc ở cuối
+                  khung — đặt kết quả lên đầu thẻ nghĩa là ai không kéo ngược lên
+                  thì không biết là đã xong. */}
+              <WorkflowCompletion />
             </CardContent>
           </Card>
         )}

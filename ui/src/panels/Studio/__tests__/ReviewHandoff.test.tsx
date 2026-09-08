@@ -187,3 +187,21 @@ describe('Studio — log nối tiếp thành một dòng', () => {
     expect(screen.queryByRole('list', { name: 'Các bước của workflow' })).not.toBeInTheDocument();
   });
 });
+
+/**
+ * Log tự cuộn xuống đáy trong lúc chạy, nên mắt người đọc ở cuối khung. Đặt kết
+ * quả lên đầu thẻ nghĩa là ai không kéo ngược lên thì không biết là đã xong.
+ */
+describe('Studio — kết cục nằm sau log, không phải trước', () => {
+  it('băng kết quả đứng sau khung log trong thứ tự tài liệu', async () => {
+    server.use(genEnds('passed'));
+    await start();
+
+    const banner = await screen.findByText('Workflow đã hoàn tất');
+    const log = screen.getByRole('log');
+    // compareDocumentPosition: FOLLOWING nghĩa là banner đứng sau log.
+    // eslint-disable-next-line no-console
+    console.log('POS=', log.compareDocumentPosition(banner), 'logParent=', log.parentElement?.className);
+    expect(log.compareDocumentPosition(banner) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+});
