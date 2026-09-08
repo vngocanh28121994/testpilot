@@ -64,8 +64,8 @@ export const stateFixture: StateResponse = {
       feature: 'Đăng nhập',
       background: [],
       scenarios: [
-        { id: 'dang-nhap-thanh-cong', name: 'Đăng nhập thành công', tags: ['@web'], platforms: ['web'], steps: 4, stepTexts: [], review: null, knownIssue: null, knownIssueStale: false },
-        { id: 'sai-mat-khau', name: 'Sai mật khẩu', tags: ['@web'], platforms: ['web'], steps: 3, stepTexts: [], review: null, knownIssue: null, knownIssueStale: false },
+        { id: 'dang-nhap-thanh-cong', name: 'Đăng nhập thành công', tags: ['@web'], platforms: ['web'], steps: 4, review: null, knownIssue: null, knownIssueStale: false },
+        { id: 'sai-mat-khau', name: 'Sai mật khẩu', tags: ['@web'], platforms: ['web'], steps: 3, review: null, knownIssue: null, knownIssueStale: false },
       ],
       coverage: null,
       error: null,

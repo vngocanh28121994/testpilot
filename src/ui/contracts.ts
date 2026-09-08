@@ -123,7 +123,6 @@ export interface ScenarioSummary {
   tags: string[];
   platforms: Platform[];
   steps: number;
-  stepTexts: string[];
   review: ScenarioReviewEntry | null;
   /** Nhãn "sản phẩm chưa đáp ứng", còn hiệu lực với đúng nội dung hiện tại. */
   knownIssue: KnownIssue | null;

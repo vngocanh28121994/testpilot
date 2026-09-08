@@ -1150,7 +1150,6 @@ async function listFeatures(cfg: TestPilotConfig) {
             tags: s.tags,
             platforms: s.platforms,
             steps: s.steps.length,
-            stepTexts: s.steps.map((st) => `${st.keyword} ${st.text}`),
             review: byName.get(s.name) ?? null,
             // Nhãn chỉ được coi là còn hiệu lực khi nội dung chưa đổi; nếu đã
             // đổi thì trả về `stale` để màn hình mời người ta xem lại thay vì
