@@ -7,6 +7,10 @@ import { AppShell } from '@/components/layout/AppShell';
 import { CheckRow } from '@/components/CheckRow';
 import { Dropdown } from '@/components/Dropdown';
 import { PreflightChecks } from '@/components/PreflightChecks';
+import type { DateRange } from 'react-day-picker';
+import { DateRangePicker } from '@/components/DateRangePicker';
+import { Pagination } from '@/components/Pagination';
+import { inRange } from '@/lib/datetime';
 import { LogView } from '@/components/LogView';
 import { Field } from '@/components/Field';
 import { StatusPill } from '@/components/StatusPill';
@@ -287,7 +291,34 @@ function JobLog({
   );
 }
 
+const HISTORY_PAGE_SIZE = 10;
+
 function History({ reports }: { reports: ReportView[] }) {
+  const [range, setRange] = useState<DateRange>();
+  const [platform, setPlatform] = useState('');
+  const [page, setPage] = useState(1);
+
+  const filtered = useMemo(
+    () =>
+      reports.filter(
+        (report) =>
+          inRange(report.startedAt, range) && (!platform || report.platform === platform),
+      ),
+    [reports, range, platform],
+  );
+
+  const pageCount = Math.max(1, Math.ceil(filtered.length / HISTORY_PAGE_SIZE));
+  // Lọc xong mà đang đứng ở trang 5 thì bảng rỗng dù có kết quả — kẹp lại thay
+  // vì để người dùng tự đoán là phải bấm về trang 1.
+  const current = Math.min(page, pageCount);
+  const shown = filtered.slice((current - 1) * HISTORY_PAGE_SIZE, current * HISTORY_PAGE_SIZE);
+
+  // Nói rõ đang lọc gì, để "không có kết quả" không bị đọc thành "chưa chạy bao giờ".
+  const active = [
+    range?.from ? 'khoảng thời gian đã chọn' : '',
+    platform ? `platform ${platform}` : '',
+  ].filter(Boolean);
+
   return (
     <Card aria-labelledby="run-history-title">
       <CardHeader>
@@ -295,6 +326,48 @@ function History({ reports }: { reports: ReportView[] }) {
         <CardDescription>Report sinh ra từ máy này.</CardDescription>
       </CardHeader>
       <CardContent>
+        <div className="mb-3 flex flex-wrap items-end gap-3">
+          <label className="text-sm">
+            Khoảng thời gian
+            <DateRangePicker
+              value={range}
+              onChange={(next) => {
+                setRange(next);
+                setPage(1);
+              }}
+            />
+          </label>
+          <Field label="Platform">
+            <Dropdown
+              className="mt-0 w-40"
+              aria-label="Lọc theo platform"
+              value={platform}
+              onChange={(next) => {
+                setPlatform(next);
+                setPage(1);
+              }}
+              options={[
+                { value: '', label: 'Tất cả' },
+                { value: 'web', label: 'web' },
+                { value: 'android', label: 'android' },
+                { value: 'ios', label: 'ios' },
+              ]}
+            />
+          </Field>
+          {active.length > 0 && (
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => {
+                setRange(undefined);
+                setPlatform('');
+                setPage(1);
+              }}
+            >
+              Xoá bộ lọc
+            </Button>
+          )}
+        </div>
         <div className="overflow-x-auto rounded-lg border">
           <table className="w-full text-sm">
             <thead>
@@ -308,14 +381,16 @@ function History({ reports }: { reports: ReportView[] }) {
               </tr>
             </thead>
             <tbody>
-              {reports.length === 0 && (
+              {shown.length === 0 && (
                 <tr className="border-t">
                   <td colSpan={6} className="text-muted-foreground p-6 text-center">
-                    Chưa có lần chạy local nào.
+                    {reports.length === 0
+                      ? 'Chưa có lần chạy local nào.'
+                      : `Không có lần chạy nào khớp ${active.join(' và ')}.`}
                   </td>
                 </tr>
               )}
-              {reports.map((report) => (
+              {shown.map((report) => (
                 <tr key={report.id} className="border-t">
                   <td className="p-2 whitespace-nowrap">{when(report.startedAt)}</td>
                   <td className="p-2">
@@ -352,6 +427,7 @@ function History({ reports }: { reports: ReportView[] }) {
             </tbody>
           </table>
         </div>
+        <Pagination page={current} pageCount={pageCount} onPageChange={setPage} />
       </CardContent>
     </Card>
   );

@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { endOfDay, startOfDay } from 'date-fns';
 import type { DateRange } from 'react-day-picker';
 import { AppShell } from '@/components/layout/AppShell';
 import { LogView } from '@/components/LogView';
@@ -7,7 +6,7 @@ import { DateRangePicker } from '@/components/DateRangePicker';
 import { Pagination } from '@/components/Pagination';
 import { StatusPill } from '@/components/StatusPill';
 import { useAppState } from '@/hooks/useAppState';
-import { when } from '@/lib/datetime';
+import { inRange, when } from '@/lib/datetime';
 
 const PAGE_SIZE = 10;
 
@@ -50,10 +49,3 @@ export default function HistoryPanel({ focusId }: { focusId?: string }) {
   );
 }
 
-function inRange(iso: string | undefined, range: DateRange | undefined): boolean {
-  if (!range?.from) return true;
-  const time = Date.parse(iso ?? '');
-  if (Number.isNaN(time)) return false;
-  return time >= startOfDay(range.from).getTime()
-    && time <= endOfDay(range.to ?? range.from).getTime();
-}
