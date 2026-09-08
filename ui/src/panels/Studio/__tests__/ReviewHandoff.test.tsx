@@ -205,3 +205,33 @@ describe('Studio — kết cục nằm sau log, không phải trước', () => {
     expect(log.compareDocumentPosition(banner) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 });
+
+/**
+ * "Xem report" mà mở ra report của lượt chạy KHÁC là kiểu sai khó phát hiện
+ * nhất: nó trông y như thật. Xảy ra khi lượt chạy dừng trước lúc kịp ghi report
+ * — link không mang id nào, và trang chi tiết rơi về lượt mới nhất.
+ */
+describe('Studio — chỉ mời xem report khi thật sự có report', () => {
+  const endsWith = (run: Record<string, unknown>) =>
+    http.post(STREAM_ROUTES.gen, () =>
+      sse([['log', 'xong'], ['run', run], ['done', { ok: true }]]),
+    );
+
+  it('có report thì link mang đúng id của lượt chạy đó', async () => {
+    server.use(
+      endsWith({ id: 'wf-1', status: 'passed', stages: [], runDirs: ['2026-09-08T12-00-00Z-web'] }),
+    );
+    await start();
+
+    const link = await screen.findByRole('link', { name: 'Xem report' });
+    expect(link.getAttribute('href')).toContain('runId=2026-09-08T12-00-00Z-web');
+  });
+
+  it('không sinh được report thì nói thẳng, không mời bấm', async () => {
+    server.use(endsWith({ id: 'wf-1', status: 'failed', stages: [], runDirs: [] }));
+    await start();
+
+    expect(await screen.findByText('Lượt chạy này không sinh được report.')).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Xem report' })).not.toBeInTheDocument();
+  });
+});

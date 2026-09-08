@@ -1,7 +1,6 @@
 import { useEffect } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { Link } from '@tanstack/react-router';
-import { Button } from '@/components/ui/button';
+import { ReportAction } from '@/components/ReportAction';
 import { StatusBanner } from '@/components/StatusBanner';
 import { useStreamJob } from '@/hooks/useStreamJob';
 import { STREAM_ROUTES } from '@/api/routes';
@@ -76,18 +75,7 @@ export function WorkflowCompletion() {
               : 'Workflow hoàn tất nhưng có testcase fail'
           }
           detail="Report, ảnh và video đã sẵn sàng."
-          actions={
-            <Button asChild size="sm" variant="outline">
-              {/* Mở ĐÚNG report của lượt chạy vừa xong. `runDirs` là thư mục
-                  report mà chính lượt chạy này sinh ra; không truyền nó thì
-                  trang chi tiết mở report mới nhất — và "mới nhất" không nhất
-                  thiết là "vừa rồi", nhất là khi lượt vừa rồi chết trước lúc
-                  kịp ghi report. */}
-              <Link to="/runner/history" search={{ runId: job.run?.runDirs?.[0] }}>
-                Xem report
-              </Link>
-            </Button>
-          }
+          actions={<ReportAction runDirs={job.run?.runDirs} />}
         />
       )}
 

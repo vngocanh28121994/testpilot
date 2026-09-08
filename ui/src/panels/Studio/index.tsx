@@ -18,6 +18,7 @@ import { api } from '@/api/client';
 import { ROUTES, STREAM_ROUTES } from '@/api/routes';
 import { useAppState, useRecentRuns } from '@/hooks/useAppState';
 import { StatusBanner } from '@/components/StatusBanner';
+import { ReportAction } from '@/components/ReportAction';
 import { WorkflowStages } from '@/components/WorkflowStages';
 import { WorkflowCompletion, useWorkflowCompletion } from '@/components/WorkflowCompletion';
 import { WorkflowPreflight, type NativePlatform } from './WorkflowPreflight';
@@ -573,13 +574,19 @@ function StudioFormPanel({ state }: { state: StateResponse }) {
                 />
               )}
               {job.status === 'done' && job.run?.status === 'passed' && (
-                <StatusBanner tone="pass" title="Workflow đã hoàn tất" detail="Không có bước nào cần duyệt." />
+                <StatusBanner
+                  tone="pass"
+                  title="Workflow đã hoàn tất"
+                  detail="Không có bước nào cần duyệt."
+                  actions={<ReportAction runDirs={job.run?.runDirs} />}
+                />
               )}
               {job.status === 'done' && job.run?.status === 'failed' && (
                 <StatusBanner
                   tone="warn"
                   title="Workflow kết thúc với lỗi"
                   detail="Xem log bên dưới để biết bước nào hỏng."
+                  actions={<ReportAction runDirs={job.run?.runDirs} />}
                 />
               )}
               {/* Kết cục nằm NGAY SAU log, không phải phía trên nó.
