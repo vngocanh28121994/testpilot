@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { DateRange } from 'react-day-picker';
 import { AppShell } from '@/components/layout/AppShell';
+import { Link } from '@tanstack/react-router';
 import { LogView } from '@/components/LogView';
+import { WorkflowStages } from '@/components/WorkflowStages';
 import { DateRangePicker } from '@/components/DateRangePicker';
 import { Pagination } from '@/components/Pagination';
 import { StatusPill } from '@/components/StatusPill';
@@ -36,9 +38,53 @@ export default function HistoryPanel({ focusId }: { focusId?: string }) {
           const runReports = reports.filter((report) => Boolean(run.runDirs?.includes(report.id)));
           return <div key={run.id} ref={run.id === focusId ? focus : undefined} className="border-border rounded-lg border p-4">
             <div className="flex flex-wrap items-center gap-2"><b>{run.feature}</b><StatusPill status={run.status}/><span className="text-muted-foreground text-xs">{run.stagesDone}/{run.stages.length} stages · {when(run.startedAt)}</span></div>
-            {run.stages.some((s) => s.status !== 'pending') && <p className="text-muted-foreground mt-2 text-sm">{run.stages.filter((s) => s.status !== 'pending').map((s) => `${s.status === 'done' ? '✓' : s.status === 'failed' ? '✕' : '…'} ${s.name}`).join(' · ')}</p>}
+            {/* Dùng chung danh sách bước với App Studio thay vì nối một dòng
+                chữ: cùng một dữ liệu thì không nên có hai cách đọc. */}
+            {run.stages.length > 0 && (
+              <div className="mt-3">
+                <WorkflowStages stages={run.stages} runStatus={run.status} />
+              </div>
+            )}
             {run.generatedFile && <p className="mt-2 font-mono text-xs">{run.generatedFile}</p>}
-            {runReports.map((report) => report.url ? <a key={report.id} href={report.url} target="_blank" rel="noreferrer" className="mt-2 inline-block text-sm underline">Xem report {report.platform ?? ''}</a> : null)}
+            {/*
+              Hai lối khác nhau, không phải một.
+
+              "Chi tiết" mở trang trong app: ảnh khi fail, video, network log,
+              log lượt chạy — thứ người ta thật sự cần khi đi tìm nguyên nhân.
+              "Report gốc" mở đúng file HTML, thứ để gửi đi hoặc lưu lại.
+
+              Và khi lượt chạy không sinh được report nào thì NÓI ra, thay vì để
+              một khoảng trống mà người đọc phải tự đoán là chưa có hay đã mất.
+            */}
+            <div className="mt-3 flex flex-wrap items-center gap-3">
+              {runReports.length === 0 ? (
+                <span className="text-muted-foreground text-sm">
+                  Lượt chạy này không sinh được report.
+                </span>
+              ) : (
+                runReports.map((report) => (
+                  <span key={report.id} className="flex items-center gap-2 text-sm">
+                    <Link
+                      to="/runner/history"
+                      search={{ runId: report.id }}
+                      className="text-primary underline"
+                    >
+                      Chi tiết{report.platform ? ` (${report.platform})` : ''}
+                    </Link>
+                    {report.url && (
+                      <a
+                        href={report.url}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-muted-foreground underline"
+                      >
+                        Report gốc
+                      </a>
+                    )}
+                  </span>
+                ))
+              )}
+            </div>
             {run.error && <p className="text-destructive mt-2 text-sm">{run.error}</p>}
             {run.log.length > 0 && <details className="mt-2"><summary className="cursor-pointer text-sm">Log ({run.log.length} dòng)</summary><LogView logs={run.log} className="mt-2 max-h-80" label="Log lượt chạy" /></details>}
           </div>;
