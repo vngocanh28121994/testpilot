@@ -26,7 +26,7 @@
 
 import type { TestPilotConfig } from '../config.js';
 import type { Platform, ScenarioSpec, RunReport, LocatorCandidate } from '../core/types.js';
-import type { WorkflowQuestion, WorkflowRun } from '../core/history.js';
+import type { WorkflowQuestion, WorkflowRun, WorkflowStage } from '../core/history.js';
 import type { AnswerSubmission } from '../core/questions.js';
 import type { HealingRecord } from '../healing/HealingStore.js';
 import type { LocatorQuality } from '../core/locatorQuality.js';
@@ -48,6 +48,7 @@ export type {
   RunReport,
   LocatorCandidate,
   WorkflowRun,
+  WorkflowStage,
   WorkflowQuestion,
   AnswerSubmission,
   HealingRecord,

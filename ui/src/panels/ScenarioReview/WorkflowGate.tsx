@@ -1,16 +1,14 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { PlayCircle } from 'lucide-react';
-import { LogView } from '@/components/LogView';
-import { StatusBanner } from '@/components/StatusBanner';
-import { Link } from '@tanstack/react-router';
+import { useNavigate } from '@tanstack/react-router';
+import { WorkflowCompletion, useWorkflowCompletion } from '@/components/WorkflowCompletion';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { api } from '@/api/client';
-import { ROUTES, STREAM_ROUTES } from '@/api/routes';
-import { useStreamJob } from '@/hooks/useStreamJob';
+import { ROUTES } from '@/api/routes';
 import type {
   RunHistoryEntry,
   WorkflowAnswersResponse,
@@ -40,7 +38,8 @@ export function WorkflowGate({ runs }: { runs: RunHistoryEntry[] }) {
 function Gate({ run }: { run: RunHistoryEntry }) {
   const client = useQueryClient();
   const [answers, setAnswers] = useState<Record<string, string[]>>({});
-  const job = useStreamJob('workflow-complete', STREAM_ROUTES.workflowComplete);
+  const job = useWorkflowCompletion();
+  const navigate = useNavigate();
 
   const questions = useQuery({
     queryKey: ['workflow-questions', run.id],
@@ -68,27 +67,6 @@ function Gate({ run }: { run: RunHistoryEntry }) {
   });
 
   const pending = questions.data?.questions.filter((q) => !q.answeredAt) ?? [];
-
-  /**
-   * Chạy xong thì phải có kết cục, không phải đứng im.
-   *
-   * Trước đây bấm "Hoàn thành kịch bản" xong là log chạy hết rồi dừng, và mọi
-   * thứ khác giữ nguyên: thẻ này vẫn nằm đó như thể còn đang chờ duyệt, không
-   * ai nói kết quả ra sao, không có đường nào tới report. Người dùng không biết
-   * mình đã xong hay còn phải làm gì.
-   *
-   * Làm mới state để thẻ tự biến mất — lượt chạy không còn ở trạng thái chờ nữa
-   * — và tuỳ kết quả mà báo cho đúng.
-   */
-  useEffect(() => {
-    if (job.status !== 'done' && job.status !== 'error') return;
-    void client.invalidateQueries({ queryKey: ['state'] });
-    if (job.status === 'error') return;
-    const passed = job.run?.status === 'passed';
-    if (passed) toast.success('Workflow đã hoàn tất. Report, ảnh và video đã sẵn sàng.');
-    else toast.warning('Workflow hoàn tất nhưng có testcase fail. Xem report để biết chi tiết.');
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [job.status]);
 
   return (
     <Card aria-labelledby="workflow-gate-title">
@@ -134,7 +112,14 @@ function Gate({ run }: { run: RunHistoryEntry }) {
               <Button
                 size="sm"
                 disabled={job.status === 'running'}
-                onClick={() => job.start({ runId: run.id })}
+                onClick={() => {
+                  job.start({ runId: run.id });
+                  // Quay về Studio để cả luồng khép kín tại một chỗ: chính từ
+                  // đó người dùng khởi động workflow, và log chạy test hiện
+                  // tiếp ngay dưới log sinh kịch bản. Luồng không bị gián đoạn
+                  // vì job store là toàn cục — đổi trang không dừng nó.
+                  void navigate({ to: '/studio' });
+                }}
               >
                 <PlayCircle className="size-4" />
                 {job.status === 'running'
@@ -142,39 +127,7 @@ function Gate({ run }: { run: RunHistoryEntry }) {
                   : 'Hoàn thành kịch bản và tiếp tục chạy'}
               </Button>
             </div>
-            {job.error && (
-              <p role="alert" className="text-destructive text-sm">
-                {job.error}
-              </p>
-            )}
-            {job.logs.length > 0 && (
-              <LogView
-                logs={job.logs}
-                dropped={job.dropped}
-                error={job.error}
-                label="Log hoàn tất workflow"
-              />
-            )}
-
-            {/* Kết cục nói ra ngay tại chỗ, kèm đường đi tiếp. Một toast biến
-                mất sau vài giây; người vừa rời máy đi pha cà phê trong lúc chạy
-                sẽ quay lại đúng lúc nó đã tắt. */}
-            {job.status === 'done' && (
-              <StatusBanner
-                tone={job.run?.status === 'passed' ? 'pass' : 'warn'}
-                title={
-                  job.run?.status === 'passed'
-                    ? 'Workflow đã hoàn tất'
-                    : 'Workflow hoàn tất nhưng có testcase fail'
-                }
-                detail="Report, ảnh và video đã sẵn sàng."
-                actions={
-                  <Button asChild size="sm" variant="outline">
-                    <Link to="/runner/history" search={{ runId: undefined }}>Xem report</Link>
-                  </Button>
-                }
-              />
-            )}
+            <WorkflowCompletion />
           </div>
         )}
       </CardContent>

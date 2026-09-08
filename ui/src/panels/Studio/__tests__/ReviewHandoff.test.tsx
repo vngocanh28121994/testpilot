@@ -27,7 +27,7 @@ describe('Studio — bàn giao sang màn duyệt', () => {
     http.post(STREAM_ROUTES.gen, () =>
       sse([
         ['log', 'Workflow tạm dừng để review 8 testcase.'],
-        ['run', { id: 'run-1', status, stages: [] }],
+        ['run', { id: 'run-1', status, stages: [], generatedFile: 'chuyen-tien-noi-bo.feature' }],
         ['done', { ok: true }],
       ]),
     );
@@ -43,6 +43,22 @@ describe('Studio — bàn giao sang màn duyệt', () => {
     server.use(genEnds('waiting_review'));
     const router = await start();
     await waitFor(() => expect(router.state.location.pathname).toBe('/scenarios'));
+  });
+
+  /**
+   * Màn Kịch bản liệt kê MỌI kịch bản của mọi feature — hàng chục cái đã duyệt
+   * từ trước. Mở ra mà không lọc thì mấy kịch bản vừa sinh nằm lẫn trong đó, và
+   * người duyệt phải tự tìm xem cái nào là cái mới.
+   */
+  it('lọc sẵn đúng file vừa sinh và chỉ những kịch bản chờ duyệt', async () => {
+    server.use(genEnds('waiting_review'));
+    const router = await start();
+    await waitFor(() =>
+      expect(router.state.location.search).toMatchObject({
+        file: 'chuyen-tien-noi-bo.feature',
+        status: 'pending',
+      }),
+    );
   });
 
   /** Dừng chờ trả lời câu hỏi cũng là một lần dừng chờ người, chỉ khác câu hỏi. */

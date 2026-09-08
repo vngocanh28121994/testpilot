@@ -17,6 +17,8 @@ import { Textarea } from '@/components/ui/textarea';
 import { api } from '@/api/client';
 import { ROUTES, STREAM_ROUTES } from '@/api/routes';
 import { useAppState } from '@/hooks/useAppState';
+import { WorkflowStages } from '@/components/WorkflowStages';
+import { PendingWorkflow } from './PendingWorkflow';
 import { WorkflowPreflight, type NativePlatform } from './WorkflowPreflight';
 import { useStreamJob } from '@/hooks/useStreamJob';
 import type {
@@ -130,7 +132,15 @@ function StudioFormPanel({ state }: { state: StateResponse }) {
     if (status !== 'waiting_review' && status !== 'waiting_input') return;
     // Làm mới trước khi chuyển: cổng duyệt tìm run đang chờ trong state, nên
     // sang tới nơi mà state còn cũ thì màn hình trống trơn.
-    void client.invalidateQueries({ queryKey: ['state'] }).then(() => navigate({ to: '/scenarios' }));
+    // Lọc sẵn theo đúng file vừa sinh và theo trạng thái chờ duyệt: màn Kịch
+    // bản liệt kê mọi kịch bản của mọi feature, nên mở ra mà không lọc thì mấy
+    // kịch bản mới nằm lẫn giữa hàng chục cái đã duyệt từ trước.
+    const generatedFile = job.run?.generatedFile;
+    void client
+      .invalidateQueries({ queryKey: ['state'] })
+      .then(() =>
+        navigate({ to: '/scenarios', search: { file: generatedFile, status: 'pending' } }),
+      );
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [job.status, job.run?.status]);
   /**
@@ -494,8 +504,13 @@ function StudioFormPanel({ state }: { state: StateResponse }) {
               <CardTitle id="progress-title">Tiến trình workflow</CardTitle>
               <CardDescription>Log trực tiếp từ lượt chạy đang diễn ra.</CardDescription>
             </CardHeader>
-            <CardContent>
+            <CardContent className="flex flex-col gap-4">
+              {job.run && <WorkflowStages stages={job.run.stages} />}
               <LogView logs={job.logs} dropped={job.dropped} error={job.error} label="Log sinh kịch bản" />
+              {/* Workflow là MỘT việc: log sinh kịch bản, rồi lần dừng chờ
+                  duyệt, rồi log chạy test — nối tiếp nhau ở cùng một chỗ đã
+                  khởi động nó, thay vì bỏ người dùng lại với một khung log đã chết. */}
+              <PendingWorkflow />
             </CardContent>
           </Card>
         )}

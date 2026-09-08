@@ -81,7 +81,12 @@ describe('WorkflowGate', () => {
     ).not.toBeInTheDocument();
   });
 
-  it('cho chạy tiếp khi kịch bản đã duyệt xong và gửi đúng runId', async () => {
+  /**
+   * Bấm xong là rời màn duyệt: cả luồng khép kín ở App Studio, nơi người dùng
+   * đã khởi động nó. Log chạy test hiện tiếp ngay dưới log sinh kịch bản, và
+   * luồng không đứt vì job store là toàn cục.
+   */
+  it('gửi đúng runId rồi quay về App Studio', async () => {
     let sent: unknown = null;
     server.use(
       questions(0),
@@ -90,50 +95,13 @@ describe('WorkflowGate', () => {
         return sse([['log', 'Đang chạy các testcase đã duyệt…'], ['done', { ok: true }]]);
       }),
     );
-    await renderWithRouter(<WorkflowGate runs={[run({ status: 'waiting_review' })]} />);
-    const button = await screen.findByRole('button', { name: /Hoàn thành kịch bản/ });
-    await userEvent.click(button);
+    const { router } = await renderWithRouter(
+      <WorkflowGate runs={[run({ status: 'waiting_review' })]} />,
+      { path: '/scenarios' },
+    );
+    await userEvent.click(await screen.findByRole('button', { name: /Hoàn thành kịch bản/ }));
+
     await waitFor(() => expect(sent).toEqual({ runId: 'wf-1' }));
-    expect(await screen.findByText(/Đang chạy các testcase đã duyệt/)).toBeInTheDocument();
-  });
-});
-
-/**
- * Chạy xong thì phải có kết cục, không phải đứng im.
- *
- * Trước đây bấm "Hoàn thành kịch bản" xong là log chạy hết rồi dừng, và mọi thứ
- * khác giữ nguyên: thẻ này vẫn nằm đó như thể còn đang chờ duyệt, không ai nói
- * kết quả ra sao, không có đường nào tới report.
- */
-describe('WorkflowGate — sau khi chạy xong', () => {
-  const finishes = (status: string) =>
-    http.post(STREAM_ROUTES.workflowComplete, () =>
-      sse([
-        ['log', '[run:summary] 8✓ 1✗ 0~ 0⊘'],
-        ['run', { id: 'run-1', status, stages: [] }],
-        ['done', { ok: true }],
-      ]),
-    );
-
-  const runTo = async (status: string) => {
-    server.use(finishes(status));
-    const user = userEvent.setup();
-    await renderWithRouter(<WorkflowGate runs={[run({ status: 'waiting_review' })]} />);
-    await user.click(
-      await screen.findByRole('button', { name: /Hoàn thành kịch bản và tiếp tục chạy/ }),
-    );
-  };
-
-  it('nói đã hoàn tất và chỉ đường tới report', async () => {
-    await runTo('passed');
-    expect(await screen.findByText('Workflow đã hoàn tất')).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Xem report' })).toBeInTheDocument();
-  });
-
-  it('có testcase fail thì nói ra, không báo xanh', async () => {
-    await runTo('failed');
-    expect(
-      await screen.findByText('Workflow hoàn tất nhưng có testcase fail'),
-    ).toBeInTheDocument();
+    await waitFor(() => expect(router.state.location.pathname).toBe('/studio'));
   });
 });
