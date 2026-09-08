@@ -51,6 +51,26 @@ async function farmGet<T>(path: string): Promise<T> {
   return response.data;
 }
 
+/**
+ * Còn bao lâu nữa thì credential hết hạn.
+ *
+ * Đây là thứ DUY NHẤT thật sự đổi sau một lần đăng nhập thành công: nếu đang
+ * kết nối được rồi thì huy hiệu vẫn xanh trước và sau, và màn hình trông y hệt
+ * — đúng như báo cáo "đăng nhập xong mà không thấy gì thay đổi".
+ */
+function credentialLife(aws: AwsStatus): string {
+  if (aws.expiresInMinutes === undefined) return 'không hết hạn (IAM role hoặc access key)';
+  if (aws.expiresInMinutes < 0) return 'đã hết hạn';
+  if (aws.expiresInMinutes < 90) return `còn ${aws.expiresInMinutes} phút`;
+  const hours = Math.floor(aws.expiresInMinutes / 60);
+  return `còn ${hours} giờ ${aws.expiresInMinutes % 60} phút`;
+}
+
+/** 15 phút là mức mà một lượt chạy farm nhiều khả năng sống lâu hơn credential của nó. */
+function expiringSoon(aws: AwsStatus): boolean {
+  return aws.expiresInMinutes !== undefined && aws.expiresInMinutes < 15;
+}
+
 export default function FarmPanel() {
   const state = useAppState((s) => ({ config: s.config, appBuilds: s.appBuilds, runs: s.runs }));
   const saved = state.data?.config.farm;
@@ -176,9 +196,13 @@ export default function FarmPanel() {
               <CardContent className="flex flex-col gap-4">
                 <div className="flex flex-wrap items-center gap-2">
                   {aws?.ok ? (
-                    <Badge>
-                      <ShieldCheck />
-                      Kết nối được
+                    // Sắp hết hạn là một trạng thái riêng, không phải "kết nối
+                    // được". 15 phút là đúng mức mà lượt chạy nhiều khả năng
+                    // sống lâu hơn credential của chính nó.
+                    <Badge variant={expiringSoon(aws) ? 'outline' : 'default'}
+                      className={expiringSoon(aws) ? 'text-status-flaky' : undefined}>
+                      {expiringSoon(aws) ? <ShieldAlert /> : <ShieldCheck />}
+                      {expiringSoon(aws) ? 'Sắp hết hạn' : 'Kết nối được'}
                     </Badge>
                   ) : (
                     <Badge variant="outline" className="text-muted-foreground">
@@ -188,7 +212,7 @@ export default function FarmPanel() {
                   )}
                   <span className="text-muted-foreground text-sm">
                     {aws?.ok
-                      ? `Nguồn: ${aws.source}`
+                      ? `Nguồn: ${aws.source}${aws.keyHint ? `, key ${aws.keyHint}…` : ''}, ${credentialLife(aws)}`
                       : (aws?.reason ?? 'Đang kiểm tra credential…')}
                   </span>
                   <div className="ms-auto flex flex-wrap gap-2">
