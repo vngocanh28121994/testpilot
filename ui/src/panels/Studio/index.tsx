@@ -1,5 +1,6 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useNavigate } from '@tanstack/react-router';
 import { toast } from 'sonner';
 import { FileText, Play, Plus, Save, Trash2, X } from 'lucide-react';
 import { AppShell } from '@/components/layout/AppShell';
@@ -111,6 +112,27 @@ function StudioFormPanel({ state }: { state: StateResponse }) {
   const [workflowEnv, setWorkflowEnv] = useState(cfg.workflow.env ?? cfg.defaultEnv);
   const [headed, setHeaded] = useState(cfg.workflow.headed);
   const job = useStreamJob('studio-workflow', STREAM_ROUTES.gen);
+  const navigate = useNavigate();
+
+  /**
+   * Workflow dừng lại chờ người duyệt thì đưa thẳng sang màn duyệt.
+   *
+   * Đây là một điểm DỪNG có chủ ý, không phải kết thúc: log nói "Workflow tạm
+   * dừng để review 8 testcase… bấm Hoàn thành kịch bản", nhưng cái nút ấy nằm ở
+   * màn hình khác. Ở lại Studio thì người dùng đọc xong câu đó rồi ngồi nhìn
+   * một khung log không còn chạy nữa, và phải tự suy ra là phải đi đâu.
+   *
+   * `waiting_input` cũng vậy: cùng là một lần dừng chờ người, chỉ khác câu hỏi.
+   */
+  useEffect(() => {
+    const status = job.run?.status;
+    if (job.status !== 'done') return;
+    if (status !== 'waiting_review' && status !== 'waiting_input') return;
+    // Làm mới trước khi chuyển: cổng duyệt tìm run đang chờ trong state, nên
+    // sang tới nơi mà state còn cũ thì màn hình trống trơn.
+    void client.invalidateQueries({ queryKey: ['state'] }).then(() => navigate({ to: '/scenarios' }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [job.status, job.run?.status]);
   /**
    * Danh sách model, hỏi thẳng nhà cung cấp.
    *
