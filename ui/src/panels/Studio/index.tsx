@@ -19,7 +19,7 @@ import { ROUTES, STREAM_ROUTES } from '@/api/routes';
 import { useAppState } from '@/hooks/useAppState';
 import { StatusBanner } from '@/components/StatusBanner';
 import { WorkflowStages } from '@/components/WorkflowStages';
-import { PendingWorkflow } from './PendingWorkflow';
+import { WorkflowCompletion } from '@/components/WorkflowCompletion';
 import { WorkflowPreflight, type NativePlatform } from './WorkflowPreflight';
 import { useStreamJob } from '@/hooks/useStreamJob';
 import type {
@@ -504,13 +504,15 @@ function StudioFormPanel({ state }: { state: StateResponse }) {
         </section>
 
         {/*
-          Đứng NGOÀI thẻ log, và không phụ thuộc vào việc có log hay không.
-          Trạng thái chờ duyệt là của lượt chạy, không phải của phiên làm việc:
-          quay lại Studio sau khi tải lại trang, hay từ máy khác, thì log không
-          còn nhưng việc phải làm thì vẫn còn nguyên. Nhét nó vào trong thẻ log
-          nghĩa là đúng lúc người dùng quay lại thì không thấy gì cả.
+          Tiến trình và log của lượt chạy test sau khi duyệt.
+          Đứng NGOÀI thẻ log sinh kịch bản, và không phụ thuộc vào việc thẻ đó có
+          hiện hay không: người dùng quay về đây từ màn duyệt, nơi log sinh kịch
+          bản của phiên trước có thể đã không còn.
+
+          Không có mục "kịch bản chờ duyệt" ở đây: workflow đã tự đưa người dùng
+          sang màn duyệt rồi, nên nhắc lại ở chỗ họ vừa rời đi chỉ là tiếng ồn.
         */}
-        <PendingWorkflow />
+        <WorkflowCompletion />
 
         {job.logs.length > 0 && (
           <Card aria-labelledby="progress-title">

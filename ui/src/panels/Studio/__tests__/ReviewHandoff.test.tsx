@@ -140,8 +140,9 @@ describe('Studio — không đá người dùng ra khi họ quay lại', () => {
     );
     const { router } = await renderWithRouter(<StudioPanel />, { path: '/studio' });
 
-    // Chờ hẳn một nhịp để effect nào định chạy thì đã chạy.
-    expect(await screen.findByText('Kịch bản chờ duyệt')).toBeInTheDocument();
+    // Chờ trang dựng xong hẳn để effect nào định chạy thì đã chạy. Mốc chờ là
+    // một thứ luôn có ở Studio, không phải một băng có thể bị bỏ đi.
+    await screen.findByRole('button', { name: 'Bắt đầu chạy workflow' });
     expect(router.state.location.pathname).toBe('/studio');
   });
 });

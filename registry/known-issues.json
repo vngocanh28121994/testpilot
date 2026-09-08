@@ -1,13 +1,4 @@
 {
   "version": 1,
-  "entries": {
-    "chuyen-tien-noi-bo-tieu-khoan-a-chon-o-ich-khong-xuat-hien-o-dropdown-nguon": {
-      "id": "chuyen-tien-noi-bo-tieu-khoan-a-chon-o-ich-khong-xuat-hien-o-dropdown-nguon",
-      "filename": "chuyen-tien-noi-bo.feature",
-      "scenarioName": "Tiểu khoản đã chọn ở đích không xuất hiện ở dropdown nguồn",
-      "contentHash": "4c6a11e6e918e8ae72ed4f68785b2926e9664257c0bcc00c2390407dc92b1371",
-      "note": "App chỉ loại tiểu khoản theo chiều nguồn→đích, không làm chiều ngược lại.",
-      "markedAt": "2026-09-08T05:22:54.881Z"
-    }
-  }
+  "entries": {}
 }
