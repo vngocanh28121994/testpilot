@@ -24,8 +24,10 @@ describe('WorkflowPreflight', () => {
       <WorkflowPreflight platforms={['android']} devices={{}} onPick={vi.fn()} />,
     );
     expect(await screen.findByText(/Android — sẵn sàng/)).toBeInTheDocument();
-    expect(screen.getByText('Thiết bị')).toBeInTheDocument();
-    expect(screen.getByText('pixel-7 (emulator-5554)')).toBeInTheDocument();
+    // Tên nằm trong <b>, chi tiết là text node bên cạnh — getByText chỉ đọc
+    // text con trực tiếp nên phải hỏi riêng từng phần.
+    expect(screen.getByText('Thiết bị:')).toBeInTheDocument();
+    expect(screen.getByText(/pixel-7 \(emulator-5554\)/)).toBeInTheDocument();
   });
 
   it('nói "chưa chạy được" và nêu lý do khi môi trường chưa đủ', async () => {

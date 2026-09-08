@@ -6,6 +6,7 @@ import { CheckCircle2, Play, RefreshCw, Smartphone, Square, XCircle } from 'luci
 import { AppShell } from '@/components/layout/AppShell';
 import { CheckRow } from '@/components/CheckRow';
 import { Dropdown } from '@/components/Dropdown';
+import { PreflightChecks } from '@/components/PreflightChecks';
 import { Field } from '@/components/Field';
 import { StatusPill } from '@/components/StatusPill';
 import { Badge } from '@/components/ui/badge';
@@ -232,20 +233,7 @@ function PreflightCard({
               </Button>
             </div>
 
-            <ul className="flex flex-col divide-y">
-              {result.checks.map((check) => (
-                <li key={check.name} className="flex items-start gap-2 py-2 first:pt-0 last:pb-0">
-                  {check.ok ? (
-                    <CheckCircle2 className="text-status-pass mt-0.5 size-4 shrink-0" />
-                  ) : (
-                    <XCircle className="text-destructive mt-0.5 size-4 shrink-0" />
-                  )}
-                  <span className="text-sm">
-                    <b>{check.name}:</b> {check.detail}
-                  </span>
-                </li>
-              ))}
-            </ul>
+            <PreflightChecks checks={result.checks} />
 
             {/* Nhiều máy cùng cắm thì phải hỏi, chứ không phải im lặng chặn
                 lượt chạy rồi bắt người dùng đi sửa file config. */}

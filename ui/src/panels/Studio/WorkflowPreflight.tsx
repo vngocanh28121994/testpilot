@@ -1,5 +1,6 @@
 import { useQueries } from '@tanstack/react-query';
 import { DevicePicker } from '@/components/DevicePicker';
+import { PreflightChecks } from '@/components/PreflightChecks';
 import { api } from '@/api/client';
 import { ROUTES } from '@/api/routes';
 import type { PreflightResponse } from '@core/ui/contracts.js';
@@ -73,25 +74,7 @@ export function WorkflowPreflight({
             <div className="text-sm font-medium">
               {LABEL[platform]} — {result.ok ? 'sẵn sàng' : 'chưa chạy được'}
             </div>
-            {result.checks.map((check) => (
-              <div key={check.name} className="flex items-start gap-2 text-xs">
-                <span
-                  aria-hidden="true"
-                  className={check.ok ? 'text-status-pass' : 'text-status-fail'}
-                >
-                  {check.ok ? '✓' : '✗'}
-                </span>
-                {/* Tên và chi tiết chung một ô để chi tiết xuống dòng theo cả
-                    chiều rộng, thay vì bị bó vào cột hẹp bằng tên dài nhất. */}
-                <span className="flex flex-col gap-0.5">
-                  <span className="font-medium">
-                    <span className="sr-only">{check.ok ? 'Đạt: ' : 'Chưa đạt: '}</span>
-                    {check.name}
-                  </span>
-                  <span className="text-muted-foreground">{check.detail}</span>
-                </span>
-              </div>
-            ))}
+            <PreflightChecks checks={result.checks} />
             {/* Câu hỏi được hỏi ngay tại chỗ phát hiện ra nó. Đẩy người dùng đi
                 sửa file config để trả lời một câu mà màn hình đã biết là cách
                 giữ cho một lượt chạy bị chặn cứ bị chặn mãi. */}

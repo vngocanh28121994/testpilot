@@ -22,10 +22,21 @@ import type { Platform } from './types.js';
  * afternoon from "chưa cắm máy nào".
  */
 
+/**
+ * Việc mà giao diện tự làm được để chữa một mục kiểm tra hỏng.
+ *
+ * Là một mã, không phải câu chữ: câu chữ đã nằm ở `detail`, còn cái này để giao
+ * diện gắn đúng cái nút. Bảo người dùng "chạy `appium` ở một terminal khác"
+ * trong khi chính công cụ bật được Appium là đẩy việc của mình sang cho họ.
+ */
+export type PreflightFix = 'appium';
+
 export interface PreflightCheck {
   /** What was checked, in the operator's language. */
   name: string;
   ok: boolean;
+  /** Có mặt khi giao diện tự chữa được mục này. */
+  fix?: PreflightFix;
   /**
    * What was found, and when it is wrong, what to do about it. Written for
    * someone who is not going to read the source to find out what failed.
@@ -160,7 +171,12 @@ async function checkAppium(): Promise<PreflightCheck> {
   try {
     const res = await fetch(url, { signal: AbortSignal.timeout(PROBE_TIMEOUT_MS) });
     if (!res.ok) {
-      return { name, ok: false, detail: `${url} trả về HTTP ${res.status}. Appium đang chạy nhưng không khoẻ.` };
+      return {
+        name,
+        ok: false,
+        fix: 'appium',
+        detail: `${url} trả về HTTP ${res.status}. Appium đang chạy nhưng không khoẻ.`,
+      };
     }
     const body = (await res.json()) as { value?: { build?: { version?: string } } };
     const version = body.value?.build?.version;
@@ -169,7 +185,8 @@ async function checkAppium(): Promise<PreflightCheck> {
     return {
       name,
       ok: false,
-      detail: `Không kết nối được tới ${url}. Chạy \`appium\` ở một terminal khác, hoặc đặt TESTPILOT_APPIUM_HOST/PORT nếu nó ở chỗ khác.`,
+      fix: 'appium',
+      detail: `Chưa chạy ở ${host}:${port}. Đặt TESTPILOT_APPIUM_HOST/PORT nếu nó đang ở chỗ khác.`,
     };
   }
 }

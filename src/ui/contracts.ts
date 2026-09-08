@@ -30,7 +30,12 @@ import type { WorkflowQuestion, WorkflowRun } from '../core/history.js';
 import type { AnswerSubmission } from '../core/questions.js';
 import type { HealingRecord } from '../healing/HealingStore.js';
 import type { LocatorQuality } from '../core/locatorQuality.js';
-import type { DeviceCandidate, PreflightResult } from '../core/preflight.js';
+import type {
+  DeviceCandidate,
+  PreflightCheck,
+  PreflightFix,
+  PreflightResult,
+} from '../core/preflight.js';
 import type { TagTaxonomyView } from '../core/tagTaxonomy.js';
 import type { LearnedActionDef } from '../actions/ActionRegistry.js';
 import type { ScenarioReviewEntry } from '../core/scenarioReview.js';
@@ -48,6 +53,8 @@ export type {
   LocatorQuality,
   PreflightResult,
   DeviceCandidate,
+  PreflightCheck,
+  PreflightFix,
   TagTaxonomyView,
   LearnedActionDef,
   ScenarioReviewEntry,
