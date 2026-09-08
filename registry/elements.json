@@ -101,10 +101,10 @@
         ]
       },
       "health": {
-        "resolutions": 496,
+        "resolutions": 497,
         "heals": 24,
         "winners": {
-          "placeholder:Email / Số tài khoản / Điện thoại": 462,
+          "placeholder:Email / Số tài khoản / Điện thoại": 463,
           "predicate:new UiSelector().className(\"android.widget.EditText\").instance(0)": 10,
           "css:input[type='text']": 24
         },
@@ -140,10 +140,10 @@
         ]
       },
       "health": {
-        "resolutions": 460,
+        "resolutions": 461,
         "heals": 0,
         "winners": {
-          "placeholder:Mật khẩu": 452,
+          "placeholder:Mật khẩu": 453,
           "predicate:new UiSelector().className(\"android.widget.EditText\").instance(1)": 8
         }
       }
@@ -190,12 +190,12 @@
         ]
       },
       "health": {
-        "resolutions": 438,
+        "resolutions": 439,
         "heals": 1,
         "winners": {
           "role:button": 50,
           "predicate:new UiSelector().className(\"android.widget.Button\").text(\"ĐĂNG NHẬP\")": 8,
-          "css:button.btn-login": 379,
+          "css:button.btn-login": 380,
           "css:section.header-content button.btn-login": 1
         },
         "lastHealedAt": "2026-08-14T07:18:24.612Z"
@@ -433,10 +433,10 @@
         ]
       },
       "health": {
-        "resolutions": 733,
+        "resolutions": 740,
         "heals": 1,
         "winners": {
-          "css:div.search-box": 732,
+          "css:div.search-box": 739,
           "placeholder:Tìm kiếm": 1
         },
         "lastHealedAt": "2026-08-14T07:18:31.972Z"
@@ -471,10 +471,10 @@
         ]
       },
       "health": {
-        "resolutions": 766,
+        "resolutions": 773,
         "heals": 0,
         "winners": {
-          "placeholder:Tìm tính năng, mã CK...": 766
+          "placeholder:Tìm tính năng, mã CK...": 773
         }
       },
       "typeDelay": 100
@@ -508,10 +508,10 @@
         ]
       },
       "health": {
-        "resolutions": 872,
+        "resolutions": 886,
         "heals": 6,
         "winners": {
-          "css:.searched-feature-block .feature-item:first-child .title": 866,
+          "css:.searched-feature-block .feature-item:first-child .title": 880,
           "placeholder:Tìm kiếm": 2,
           "css:.searched-feature-block .feature-item": 4
         },
@@ -759,10 +759,10 @@
         ]
       },
       "health": {
-        "resolutions": 820,
+        "resolutions": 827,
         "heals": 1,
         "winners": {
-          "label:Tổng tài sản": 812,
+          "label:Tổng tài sản": 819,
           "predicate:new UiSelector().textContains(\"Tổng tài sản\").className(\"android.widget.TextView\")": 7,
           "predicate:new UiSelector().textContains(\"Tổng tài sản\")": 1
         },
@@ -2410,10 +2410,10 @@
       },
       "provenance": "generated",
       "health": {
-        "resolutions": 293,
+        "resolutions": 299,
         "heals": 139,
         "winners": {
-          "role:combobox": 154,
+          "role:combobox": 160,
           "label:Chuyển từ": 139
         },
         "lastHealedAt": "2026-09-08T05:07:01.296Z"
@@ -2451,10 +2451,10 @@
       },
       "provenance": "generated",
       "health": {
-        "resolutions": 116,
+        "resolutions": 121,
         "heals": 0,
         "winners": {
-          "label:Được chuyển": 116
+          "label:Được chuyển": 121
         }
       }
     },
@@ -2497,10 +2497,10 @@
       },
       "provenance": "generated",
       "health": {
-        "resolutions": 150,
+        "resolutions": 155,
         "heals": 85,
         "winners": {
-          "role:button": 65,
+          "role:button": 70,
           "label:CHUYỂN": 85
         },
         "lastHealedAt": "2026-09-08T05:07:14.595Z"
@@ -2538,10 +2538,10 @@
       },
       "provenance": "generated",
       "health": {
-        "resolutions": 102,
+        "resolutions": 105,
         "heals": 0,
         "winners": {
-          "label:Lệnh": 102
+          "label:Lệnh": 105
         }
       }
     },
@@ -2577,10 +2577,10 @@
       },
       "provenance": "generated",
       "health": {
-        "resolutions": 70,
+        "resolutions": 73,
         "heals": 0,
         "winners": {
-          "label:Chuyển từ": 70
+          "label:Chuyển từ": 73
         }
       }
     },
@@ -2671,10 +2671,10 @@
       },
       "provenance": "generated",
       "health": {
-        "resolutions": 42,
+        "resolutions": 45,
         "heals": 26,
         "winners": {
-          "role:button": 16,
+          "role:button": 19,
           "label:XÁC NHẬN": 26
         },
         "lastHealedAt": "2026-09-08T05:07:17.149Z"
@@ -2697,10 +2697,10 @@
       },
       "provenance": "generated",
       "health": {
-        "resolutions": 309,
+        "resolutions": 319,
         "heals": 0,
         "winners": {
-          "label:Chọn TK nhận tiền": 309
+          "label:Chọn TK nhận tiền": 319
         }
       }
     },
@@ -2721,10 +2721,10 @@
       },
       "provenance": "generated",
       "health": {
-        "resolutions": 187,
+        "resolutions": 192,
         "heals": 0,
         "winners": {
-          "label:Số tiền": 187
+          "label:Số tiền": 192
         }
       }
     },
@@ -2745,10 +2745,10 @@
       },
       "provenance": "generated",
       "health": {
-        "resolutions": 41,
+        "resolutions": 44,
         "heals": 0,
         "winners": {
-          "label:Tiền chuyển (Phí = 0)": 41
+          "label:Tiền chuyển (Phí = 0)": 44
         }
       }
     },
@@ -2782,13 +2782,13 @@
       },
       "provenance": "discovered",
       "health": {
-        "resolutions": 53,
-        "heals": 20,
+        "resolutions": 55,
+        "heals": 21,
         "winners": {
-          "css:.msg-row-wraper .label-content": 29,
-          "css:.subtitle-dialog-common": 24
+          "css:.msg-row-wraper .label-content": 30,
+          "css:.subtitle-dialog-common": 25
         },
-        "lastHealedAt": "2026-09-08T10:00:13.712Z"
+        "lastHealedAt": "2026-09-08T18:10:27.906Z"
       }
     },
     "transfer.nutDong": {

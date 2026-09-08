@@ -1,7 +1,7 @@
 {
   "version": 1,
   "featureFile": "chuyen-tien-noi-bo.feature",
-  "generatedAt": "2026-09-08T12:44:54.821Z",
+  "generatedAt": "2026-09-08T17:47:11.773Z",
   "repaired": false,
   "sourceUnits": 11,
   "classifiedSources": 11,
@@ -19,7 +19,7 @@
       "id": "REQ-002",
       "sourceId": "SRC-002",
       "priority": "P0",
-      "rule": "Chuyển tiền từ Ký Quỹ sang tiểu khoản Thường",
+      "rule": "Chuyển tiền từ tiểu khoản Ký Quỹ sang Thường",
       "sourceQuote": "Mục tiêu: Chuyển được tiền từ Ký Quỹ → tiểu khoản Thường",
       "expectedResult": "Chuyển tiền thành công từ Ký Quỹ sang Thường",
       "sourceRef": "https://digital-horus.atlassian.net/wiki/spaces/SD/pages/983041/Ch+c+n+ng+Chuy+n+ti+n+n+i+b"
@@ -37,9 +37,9 @@
       "id": "REQ-004",
       "sourceId": "SRC-005",
       "priority": "P1",
-      "rule": "Tiểu khoản đã chọn ở nguồn hoặc đích không xuất hiện ở dropdown còn lại",
+      "rule": "Khi đã chọn tiểu khoản ở nguồn hoặc đích, tiểu khoản đó không xuất hiện ở dropdown còn lại",
       "sourceQuote": "Chú ý: Khi đã chọn 1 tiểu khoản ở nguồn hoặc đích, thì tiểu khoản đó sẽ không xuất hiện ở dropdown list còn lại",
-      "expectedResult": "Dropdown còn lại không hiển thị tiểu khoản đã chọn",
+      "expectedResult": "Dropdown còn lại không chứa tiểu khoản đã chọn",
       "sourceRef": "https://digital-horus.atlassian.net/wiki/spaces/SD/pages/983041/Ch+c+n+ng+Chuy+n+ti+n+n+i+b"
     },
     {
@@ -48,16 +48,16 @@
       "priority": "P1",
       "rule": "Khi thay đổi tiểu khoản nguồn, số tiền được chuyển thay đổi theo",
       "sourceQuote": "Khi thay đổi tiểu khoản nguồn, số tiền được chuyển sẽ thay đổi theo tiểu khoản đã chọn",
-      "expectedResult": "Số tiền được chuyển hiển thị tương ứng với tiểu khoản nguồn mới",
+      "expectedResult": "Số tiền được chuyển hiển thị tương ứng với tiểu khoản nguồn",
       "sourceRef": "https://digital-horus.atlassian.net/wiki/spaces/SD/pages/983041/Ch+c+n+ng+Chuy+n+ti+n+n+i+b"
     },
     {
       "id": "REQ-006",
       "sourceId": "SRC-007",
       "priority": "P1",
-      "rule": "Nếu nhập số tiền vượt quá số tiền được chuyển, validate không cho chuyển",
+      "rule": "Nếu nhập số tiền vượt quá số tiền được chuyển, hiển thị lỗi 'Tiền chuyển + phí vượt quá số tiền có thể chuyển'",
       "sourceQuote": "Nếu nhập số tiền vượt quá số tiền được chuyển, validate không cho chuyển: “Tiền chuyển + phí vượt quá số tiền có thể chuyển&quot;",
-      "expectedResult": "Hiển thị thông báo 'Tiền chuyển + phí vượt quá số tiền có thể chuyển'",
+      "expectedResult": "Hiển thị thông báo lỗi và không cho chuyển",
       "sourceRef": "https://digital-horus.atlassian.net/wiki/spaces/SD/pages/983041/Ch+c+n+ng+Chuy+n+ti+n+n+i+b"
     },
     {
@@ -91,7 +91,7 @@
       "id": "REQ-010",
       "sourceId": "SRC-011",
       "priority": "P1",
-      "rule": "Sau khi chuyển tiền thành công, quay lại màn hình Chuyển tiền và số tiền được chuyển thay đổi tương ứng",
+      "rule": "Sau khi chuyển thành công, quay lại màn hình Chuyển tiền và số tiền được chuyển thay đổi tương ứng",
       "sourceQuote": "Và quay lại màn hình Chuyển tiền, số tiền được chuyển cũng thay đổi tương ứng theo số tiền vừa chuyển",
       "expectedResult": "Số tiền được chuyển giảm đi đúng số tiền vừa chuyển",
       "sourceRef": "https://digital-horus.atlassian.net/wiki/spaces/SD/pages/983041/Ch+c+n+ng+Chuy+n+ti+n+n+i+b"
@@ -109,9 +109,10 @@
         "evidence": [
           "When I select \"TK Thường\" from \"Chuyển từ\"",
           "And I select \"TK Ký Quỹ\" from \"Chọn TK nhận tiền\"",
-          "Then \"Thông báo\" shows \"Chuyển tiền thành công\""
+          "Then \"Thông báo\" shows \"Chuyển tiền thành công\"",
+          "And \"Được chuyển\" decreased by \"1000\" from \"availableBefore\""
         ],
-        "reason": "Scenario explicitly transfers from Thường to Ký Quỹ and asserts success message."
+        "reason": "Scenario covers transfer from Thường to Ký Quỹ with success message and balance decrease."
       },
       {
         "requirementId": "REQ-002",
@@ -122,23 +123,25 @@
         "evidence": [
           "When I select \"TK Ký Quỹ\" from \"Chuyển từ\"",
           "And I select \"TK Thường\" from \"Chọn TK nhận tiền\"",
-          "Then \"Thông báo\" shows \"Chuyển tiền thành công\""
+          "Then \"Thông báo\" shows \"Chuyển tiền thành công\"",
+          "And \"Được chuyển\" decreased by \"500\" from \"availableBefore\""
         ],
-        "reason": "Scenario explicitly transfers from Ký Quỹ to Thường and asserts success message."
+        "reason": "Scenario covers transfer from Ký Quỹ to Thường with success message and balance decrease."
       },
       {
         "requirementId": "REQ-003",
         "status": "covered",
         "scenarios": [
-          "Chọn tiểu khoản nguồn và đích"
+          "Chuyển tiền thành công từ TK Thường sang TK Ký Quỹ",
+          "Chuyển tiền thành công từ TK Ký Quỹ sang TK Thường"
         ],
         "evidence": [
           "When I select \"TK Thường\" from \"Chuyển từ\"",
-          "Then \"Chuyển từ\" shows \"TK Thường\"",
-          "When I select \"TK Ký Quỹ\" from \"Chọn TK nhận tiền\"",
-          "Then \"Chọn TK nhận tiền\" shows \"TK Ký Quỹ\""
+          "And I select \"TK Ký Quỹ\" from \"Chọn TK nhận tiền\"",
+          "When I select \"TK Ký Quỹ\" from \"Chuyển từ\"",
+          "And I select \"TK Thường\" from \"Chọn TK nhận tiền\""
         ],
-        "reason": "Scenario selects both source and destination and asserts they are displayed."
+        "reason": "Both scenarios demonstrate selecting source and destination accounts."
       },
       {
         "requirementId": "REQ-004",
@@ -148,10 +151,12 @@
           "Tiểu khoản đã chọn ở đích không xuất hiện ở dropdown nguồn"
         ],
         "evidence": [
+          "When I select \"TK Thường\" from \"Chuyển từ\"",
           "Then \"TK Thường\" is not an option in \"Chọn TK nhận tiền\"",
+          "When I select \"TK Ký Quỹ\" from \"Chọn TK nhận tiền\"",
           "Then \"TK Ký Quỹ\" is not an option in \"Chuyển từ\""
         ],
-        "reason": "Both directions of the rule are covered: source selection excludes from destination, and destination selection excludes from source."
+        "reason": "Both directions of exclusion are tested."
       },
       {
         "requirementId": "REQ-005",
@@ -161,11 +166,11 @@
         ],
         "evidence": [
           "When I select \"TK Thường\" from \"Chuyển từ\"",
-          "And I remember \"Được chuyển\" as \"amount_thuong\"",
+          "And I remember \"Được chuyển\" as \"availableThuong\"",
           "When I select \"TK Ký Quỹ\" from \"Chuyển từ\"",
-          "Then \"Được chuyển\" changed from \"amount_thuong\""
+          "Then \"Được chuyển\" changed from \"availableThuong\""
         ],
-        "reason": "Scenario changes source and asserts the available amount changes accordingly."
+        "reason": "Scenario verifies that available amount changes when source account changes."
       },
       {
         "requirementId": "REQ-006",
@@ -175,9 +180,10 @@
         ],
         "evidence": [
           "And I enter \"999999999\" into \"Số tiền\"",
+          "And I click \"Nút CHUYỂN\"",
           "Then \"Thông báo\" shows \"Tiền chuyển + phí vượt quá số tiền có thể chuyển\""
         ],
-        "reason": "Scenario enters an excessive amount and asserts the exact validation message."
+        "reason": "Scenario enters amount exceeding available and asserts error message."
       },
       {
         "requirementId": "REQ-007",
@@ -188,9 +194,12 @@
         "evidence": [
           "And I enter \"1000\" into \"Số tiền\"",
           "And I click \"Nút CHUYỂN\"",
-          "Then \"Lệnh\" shows \"Chuyển tiền\""
+          "Then \"Lệnh\" shows \"Chuyển tiền\"",
+          "And \"Chuyển từ\" shows \"Thường\"",
+          "And \"Chọn TK nhận tiền\" shows \"Ký Quỹ\"",
+          "And \"Tiền chuyển (Phí = 0)\" shows \"1,000\""
         ],
-        "reason": "Scenario enters a valid amount and asserts navigation to confirmation screen by checking the order details."
+        "reason": "Scenario enters valid amount and asserts navigation to confirmation screen."
       },
       {
         "requirementId": "REQ-008",
@@ -205,7 +214,7 @@
           "And \"Số tiền\" is visible",
           "And \"Nút CHUYỂN\" is visible"
         ],
-        "reason": "Scenario clicks back and asserts the transfer screen elements are visible again."
+        "reason": "Scenario clicks back and asserts transfer screen elements are visible."
       },
       {
         "requirementId": "REQ-009",
@@ -217,7 +226,7 @@
         "evidence": [
           "Then \"Thông báo\" shows \"Chuyển tiền thành công\""
         ],
-        "reason": "Both success scenarios assert the success message after confirmation."
+        "reason": "Both success scenarios assert the success message."
       },
       {
         "requirementId": "REQ-010",
@@ -227,13 +236,13 @@
           "Chuyển tiền thành công từ TK Ký Quỹ sang TK Thường"
         ],
         "evidence": [
-          "And \"Được chuyển\" decreased by \"1000\" from \"available_before\"",
-          "And \"Được chuyển\" decreased by \"500\" from \"available_before\""
+          "And \"Được chuyển\" decreased by \"1000\" from \"availableBefore\"",
+          "And \"Được chuyển\" decreased by \"500\" from \"availableBefore\""
         ],
-        "reason": "Both success scenarios assert the available amount decreases by the transferred amount after returning to the transfer screen."
+        "reason": "Both success scenarios assert the available amount decreases by the transferred amount."
       }
     ],
     "missingRequirementIds": []
   },
-  "auditedAt": "2026-09-08T12:53:45.605Z"
+  "auditedAt": "2026-09-08T17:49:53.732Z"
 }

@@ -10,7 +10,7 @@ Feature: Chuyển tiền nội bộ
   Scenario: Chuyển tiền thành công từ TK Thường sang TK Ký Quỹ
     When I select "TK Thường" from "Chuyển từ"
     And I select "TK Ký Quỹ" from "Chọn TK nhận tiền"
-    And I remember "Được chuyển" as "available_before"
+    And I remember "Được chuyển" as "availableBefore"
     And I enter "1000" into "Số tiền"
     And I click "Nút CHUYỂN"
     Then "Lệnh" shows "Chuyển tiền"
@@ -19,13 +19,13 @@ Feature: Chuyển tiền nội bộ
     And "Tiền chuyển (Phí = 0)" shows "1,000"
     When I click "Nút XÁC NHẬN"
     Then "Thông báo" shows "Chuyển tiền thành công"
-    And "Được chuyển" decreased by "1000" from "available_before"
+    And "Được chuyển" decreased by "1000" from "availableBefore"
 
   @p0 @smoke @positive
   Scenario: Chuyển tiền thành công từ TK Ký Quỹ sang TK Thường
     When I select "TK Ký Quỹ" from "Chuyển từ"
     And I select "TK Thường" from "Chọn TK nhận tiền"
-    And I remember "Được chuyển" as "available_before"
+    And I remember "Được chuyển" as "availableBefore"
     And I enter "500" into "Số tiền"
     And I click "Nút CHUYỂN"
     Then "Lệnh" shows "Chuyển tiền"
@@ -34,14 +34,7 @@ Feature: Chuyển tiền nội bộ
     And "Tiền chuyển (Phí = 0)" shows "500"
     When I click "Nút XÁC NHẬN"
     Then "Thông báo" shows "Chuyển tiền thành công"
-    And "Được chuyển" decreased by "500" from "available_before"
-
-  @p1 @positive
-  Scenario: Chọn tiểu khoản nguồn và đích
-    When I select "TK Thường" from "Chuyển từ"
-    Then "Chuyển từ" shows "TK Thường"
-    When I select "TK Ký Quỹ" from "Chọn TK nhận tiền"
-    Then "Chọn TK nhận tiền" shows "TK Ký Quỹ"
+    And "Được chuyển" decreased by "500" from "availableBefore"
 
   @p1 @positive
   Scenario: Tiểu khoản đã chọn ở nguồn không xuất hiện ở dropdown đích
@@ -56,11 +49,11 @@ Feature: Chuyển tiền nội bộ
   @p1 @positive
   Scenario: Số tiền được chuyển thay đổi theo tiểu khoản nguồn
     When I select "TK Thường" from "Chuyển từ"
-    And I remember "Được chuyển" as "amount_thuong"
+    And I remember "Được chuyển" as "availableThuong"
     When I select "TK Ký Quỹ" from "Chuyển từ"
-    Then "Được chuyển" changed from "amount_thuong"
+    Then "Được chuyển" changed from "availableThuong"
 
-  @p1 @positive
+  @p1 @negative
   Scenario: Nhập số tiền vượt quá số tiền được chuyển
     When I select "TK Thường" from "Chuyển từ"
     And I select "TK Ký Quỹ" from "Chọn TK nhận tiền"

@@ -291,6 +291,12 @@ async function main(): Promise<void> {
     quarantined,
   };
 
+  // Kịch bản đỏ vì sản phẩm chưa đáp ứng, không phải vì test hỏng.
+  //
+  // Nhãn gắn với đúng nội dung kịch bản lúc người ta xem xét, nên một kịch bản
+  // đã bị sửa sẽ không còn được nhãn cũ bảo lãnh — nó quay về đỏ thật.
+  const known = await KnownIssueStore.load(cfg.paths.knownIssuesDb);
+
   // Nhãn đi vào report để nó phân biệt được "đã gắn" với "gắn được": không có
   // dữ liệu này thì lời mời gắn nhãn trông y hệt một cái nhãn đã gắn.
   const knownById = new Map(
@@ -305,11 +311,6 @@ async function main(): Promise<void> {
   );
   const out = await writeHtmlReport(report, verdicts, runDir, knownById);
 
-  // Kịch bản đỏ vì sản phẩm chưa đáp ứng, không phải vì test hỏng.
-  //
-  // Nhãn gắn với đúng nội dung kịch bản lúc người ta xem xét, nên một kịch bản
-  // đã bị sửa sẽ không còn được nhãn cũ bảo lãnh — nó quay về đỏ thật.
-  const known = await KnownIssueStore.load(cfg.paths.knownIssuesDb);
   const isKnown = (r: (typeof results)[number]) =>
     r.verdict === 'failed'
     && Boolean(r.scenario.contentHash)

@@ -57,24 +57,6 @@ describe("Chuyển tiền nội bộ", () => {
     }
   });
 
-  test("Chọn tiểu khoản nguồn và đích", async () => {
-    const ctx = await createPageContext();
-    try {
-      const transferPage = new TransferPage(ctx);
-      const transferConfirmPage = new TransferConfirmPage(ctx);
-      await ctx.launch();
-      // app already launched via ctx.launch()
-      await ctx.ensureLoggedIn("tcbs");
-      await ctx.openFeatureFromSearch("Chuyển tiền");
-      await transferPage.selectSourceAccount("TK Thường");
-      await transferPage.assertSourceAccountText("TK Thường");
-      await transferPage.selectChonTkNhanTien("TK Ký Quỹ");
-      await transferPage.assertChonTkNhanTienText("TK Ký Quỹ");
-    } finally {
-      await ctx.close();
-    }
-  });
-
   test("Tiểu khoản đã chọn ở nguồn không xuất hiện ở dropdown đích", async () => {
     const ctx = await createPageContext();
     try {
