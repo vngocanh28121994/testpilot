@@ -73,6 +73,17 @@ export function WorkflowCompletion({ label = 'Log chạy test' }: { label?: stri
         />
       )}
 
+      {/* Hỏng giữa chừng cũng là một kết cục, và là kết cục cần chú ý nhất.
+          Trước đây nhánh này không có băng nào: lỗi chỉ nằm ở dòng cuối khung
+          log, đúng chỗ dễ trôi khỏi tầm mắt nhất. */}
+      {job.status === 'error' && (
+        <StatusBanner
+          tone="fail"
+          title="Workflow dừng giữa chừng"
+          detail={job.error ?? 'Không rõ lý do — xem log bên dưới.'}
+        />
+      )}
+
       {/* Đang ở bước nào và còn mấy bước — hai câu người ta thật sự hỏi khi
           ngồi đợi, mà một khung log không trả lời được. */}
       {job.run && <WorkflowStages stages={job.run.stages} />}

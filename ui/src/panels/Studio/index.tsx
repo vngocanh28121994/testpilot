@@ -17,6 +17,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { api } from '@/api/client';
 import { ROUTES, STREAM_ROUTES } from '@/api/routes';
 import { useAppState } from '@/hooks/useAppState';
+import { StatusBanner } from '@/components/StatusBanner';
 import { WorkflowStages } from '@/components/WorkflowStages';
 import { PendingWorkflow } from './PendingWorkflow';
 import { WorkflowPreflight, type NativePlatform } from './WorkflowPreflight';
@@ -505,6 +506,29 @@ function StudioFormPanel({ state }: { state: StateResponse }) {
               <CardDescription>Log trực tiếp từ lượt chạy đang diễn ra.</CardDescription>
             </CardHeader>
             <CardContent className="flex flex-col gap-4">
+              {/*
+                Kết cục của chính lượt sinh kịch bản.
+                Nó chỉ dừng để duyệt khi có kịch bản mới; còn lại thì chạy thẳng
+                tới hết — và khi đó, trước đây, log đơn giản là ngừng chảy.
+                Không ai nói đã xong hay đã hỏng.
+              */}
+              {job.status === 'error' && (
+                <StatusBanner
+                  tone="fail"
+                  title="Workflow dừng giữa chừng"
+                  detail={job.error ?? 'Không rõ lý do — xem log bên dưới.'}
+                />
+              )}
+              {job.status === 'done' && job.run?.status === 'passed' && (
+                <StatusBanner tone="pass" title="Workflow đã hoàn tất" detail="Không có bước nào cần duyệt." />
+              )}
+              {job.status === 'done' && job.run?.status === 'failed' && (
+                <StatusBanner
+                  tone="warn"
+                  title="Workflow kết thúc với lỗi"
+                  detail="Xem log bên dưới để biết bước nào hỏng."
+                />
+              )}
               {job.run && <WorkflowStages stages={job.run.stages} />}
               <LogView logs={job.logs} dropped={job.dropped} error={job.error} label="Log sinh kịch bản" />
               {/* Workflow là MỘT việc: log sinh kịch bản, rồi lần dừng chờ

@@ -16,29 +16,29 @@ import StudioPanel from '@/panels/Studio';
  * đó rồi ngồi nhìn một khung log không còn chạy nữa, và phải tự suy ra là phải
  * đi đâu.
  */
+/**
+ * Đúng bộ khung mà server thật gửi: log, rồi `run` mang trạng thái mới nhất,
+ * rồi `done`. Nhét run vào payload của `done` là kiểu test tự bịa giao thức —
+ * store chỉ đọc run từ khung `run`, nên bản đầu tiên của test này đỏ vì chính
+ * nó sai, không phải vì component sai.
+ */
+const genEnds = (status: string) =>
+  http.post(STREAM_ROUTES.gen, () =>
+    sse([
+      ['log', 'Workflow tạm dừng để review 8 testcase.'],
+      ['run', { id: 'run-1', status, stages: [], generatedFile: 'chuyen-tien-noi-bo.feature' }],
+      ['done', { ok: true }],
+    ]),
+  );
+
+const start = async () => {
+  const user = userEvent.setup();
+  const { router } = await renderWithRouter(<StudioPanel />, { path: '/studio' });
+  await user.click(await screen.findByRole('button', { name: 'Bắt đầu chạy workflow' }));
+  return router;
+};
+
 describe('Studio — bàn giao sang màn duyệt', () => {
-  /**
-   * Đúng bộ khung mà server thật gửi: log, rồi `run` mang trạng thái mới nhất,
-   * rồi `done`. Nhét run vào payload của `done` là kiểu test tự bịa giao thức —
-   * store chỉ đọc run từ khung `run`, nên bản đầu tiên của test này đỏ vì chính
-   * nó sai, không phải vì component sai.
-   */
-  const genEnds = (status: string) =>
-    http.post(STREAM_ROUTES.gen, () =>
-      sse([
-        ['log', 'Workflow tạm dừng để review 8 testcase.'],
-        ['run', { id: 'run-1', status, stages: [], generatedFile: 'chuyen-tien-noi-bo.feature' }],
-        ['done', { ok: true }],
-      ]),
-    );
-
-  const start = async () => {
-    const user = userEvent.setup();
-    const { router } = await renderWithRouter(<StudioPanel />, { path: '/studio' });
-    await user.click(await screen.findByRole('button', { name: 'Bắt đầu chạy workflow' }));
-    return router;
-  };
-
   it('chuyển sang màn duyệt khi workflow dừng chờ review', async () => {
     server.use(genEnds('waiting_review'));
     const router = await start();
@@ -73,5 +73,37 @@ describe('Studio — bàn giao sang màn duyệt', () => {
     const router = await start();
     await waitFor(() => expect(screen.queryByText(/Đang chạy workflow/)).not.toBeInTheDocument());
     expect(router.state.location.pathname).toBe('/studio');
+  });
+});
+
+/**
+ * Workflow chỉ dừng để duyệt khi có kịch bản mới. Còn lại nó chạy thẳng tới hết
+ * — và khi đó, trước đây, log đơn giản là ngừng chảy: không ai nói đã xong hay
+ * đã hỏng. "Chạy xong thì đứng im" đúng nghĩa đen.
+ */
+describe('Studio — kết cục của lượt sinh kịch bản', () => {
+  it('chạy hết mà không cần duyệt thì nói là đã hoàn tất', async () => {
+    server.use(genEnds('passed'));
+    await start();
+    expect(await screen.findByText('Workflow đã hoàn tất')).toBeInTheDocument();
+  });
+
+  it('kết thúc với lỗi thì nói ra, không im', async () => {
+    server.use(genEnds('failed'));
+    await start();
+    expect(await screen.findByText('Workflow kết thúc với lỗi')).toBeInTheDocument();
+  });
+
+  /** Hỏng giữa chừng là kết cục cần chú ý nhất, nên không được chỉ nằm ở dòng cuối log. */
+  it('luồng gãy giữa chừng thì có băng đỏ, không chỉ một dòng trong log', async () => {
+    server.use(
+      http.post(STREAM_ROUTES.gen, () =>
+        sse([['log', 'đang chạy'], ['error', 'Confluence trả 401'], ['done', { ok: false }]]),
+      ),
+    );
+    await start();
+    expect(await screen.findByText('Workflow dừng giữa chừng')).toBeInTheDocument();
+    // Xuất hiện hai chỗ là đúng: băng tóm tắt lý do, log giữ nguyên dòng gốc.
+    expect(screen.getAllByText(/Confluence trả 401/).length).toBeGreaterThan(0);
   });
 });
