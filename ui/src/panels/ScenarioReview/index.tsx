@@ -15,7 +15,7 @@ import {
 import { Field } from '@/components/Field';
 import { Pagination } from '@/components/Pagination';
 import { StatusPill } from '@/components/StatusPill';
-import { Badge } from '@/components/ui/badge';
+import { TagChip } from '@/components/TagChip';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -387,13 +387,7 @@ function ReviewBody({ state, search }: { state: StateResponse; search: ScenarioS
                             {scenario.tags.length > 0 ? (
                               <span className="flex flex-wrap gap-1">
                                 {scenario.tags.map((tag) => (
-                                  <Badge
-                                    key={tag}
-                                    variant="outline"
-                                    className="text-muted-foreground"
-                                  >
-                                    {tag}
-                                  </Badge>
+                                  <TagChip key={tag} tag={tag} />
                                 ))}
                               </span>
                             ) : (

@@ -95,7 +95,19 @@ export const stateFixture: StateResponse = {
   appBuilds: { android: null, ios: null },
   deviceEnv: {},
   envBuilds: {},
-  tagTaxonomy: { version: 1, definitions: [], featurePattern: '@feature-<ten-chuc-nang>' } as unknown as StateResponse['tagTaxonomy'],
+  // Định nghĩa thật, không phải mảng rỗng: chip tag tra chính bảng này để nói ra
+  // nghĩa của @p0, nên một taxonomy rỗng làm test đó thành vô nghĩa.
+  tagTaxonomy: {
+    version: 1,
+    definitions: [
+      { name: '@p0', category: 'priority', label: 'P0 · Luồng trọng yếu', description: 'Happy path hoặc mục tiêu nghiệp vụ quan trọng nhất.' },
+      { name: '@p1', category: 'priority', label: 'P1 · Quy tắc quan trọng', description: 'Validation, nhánh, biên, lỗi hoặc quy tắc nghiệp vụ có ý nghĩa.' },
+      { name: '@smoke', category: 'suite', label: 'Smoke', description: 'Tập kiểm tra nhanh cho mục tiêu chính.' },
+      { name: '@web', category: 'platform', label: 'Web', description: 'Chạy trên trình duyệt.' },
+    ],
+    featurePattern: '@feature-<ten-chuc-nang>',
+    aliases: {},
+  } as unknown as StateResponse['tagTaxonomy'],
 };
 
 import type { HealingRecordView } from '@core/ui/contracts.js';
