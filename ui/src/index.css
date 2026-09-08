@@ -84,6 +84,17 @@
   --status-skip: oklch(0.554 0.046 257.417);
   --status-running: oklch(0.55 0.14 250);
 
+  /* Tô màu Gherkin. Cùng họ với --chart-*, nhưng đặt tên theo vai trò trong cú
+     pháp: đọc CSS của ô soạn mà thấy `--gk-step` thì biết ngay nó tô cái gì. */
+  --gk-heading: oklch(0.45 0.15 265);
+  --gk-step: oklch(0.5 0.16 300);
+  --gk-tag: oklch(0.5 0.13 200);
+  --gk-string: oklch(0.47 0.13 150);
+  --gk-param: oklch(0.52 0.15 60);
+  --gk-comment: oklch(0.62 0.02 257);
+  --gk-number: oklch(0.5 0.14 30);
+  --gk-table: oklch(0.6 0.03 257);
+
   --sans: system-ui, 'Segoe UI', Roboto, sans-serif;
   --mono: ui-monospace, Consolas, monospace;
 }
@@ -131,6 +142,17 @@
   --status-flaky: oklch(0.8 0.15 80);
   --status-skip: oklch(0.65 0.03 257);
   --status-running: oklch(0.75 0.14 250);
+
+  /* Nền tối cần độ sáng cao hơn hẳn, không phải cùng màu chỉ đổi nền: mã màu
+     đủ tương phản trên nền trắng thì trên nền tối đọc như màu xám. */
+  --gk-heading: oklch(0.78 0.13 265);
+  --gk-step: oklch(0.8 0.14 300);
+  --gk-tag: oklch(0.8 0.11 200);
+  --gk-string: oklch(0.8 0.13 150);
+  --gk-param: oklch(0.83 0.14 70);
+  --gk-comment: oklch(0.6 0.02 257);
+  --gk-number: oklch(0.8 0.12 35);
+  --gk-table: oklch(0.55 0.03 257);
 }
 
 @theme inline {

@@ -3,7 +3,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet';
-import { Textarea } from '@/components/ui/textarea';
+import { GherkinEditor } from '@/components/GherkinEditor';
 import { NormalizePanel } from './NormalizePanel';
 import { SyntaxHelp } from './SyntaxHelp';
 import { featureFileName, tagsOf, withTags } from '@/lib/gherkin';
@@ -239,12 +239,11 @@ export function ScenarioEditor({
               <span className="text-sm font-medium">Gherkin</span>
               <span className="text-muted-foreground text-xs">Tab thụt lề · Shift+Tab bỏ thụt lề</span>
             </div>
-            <Textarea
-              ref={editor}
-              className="h-80 font-mono text-xs"
-              spellCheck={false}
+            <GherkinEditor
+              textareaRef={editor}
+              className="h-80"
               value={draft}
-              onChange={(event) => setDraft(event.target.value)}
+              onChange={setDraft}
               onKeyDown={onKeyDown}
               aria-label="Nội dung kịch bản"
             />
