@@ -2,7 +2,7 @@ import { Fragment, useMemo, useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Link, useNavigate } from '@tanstack/react-router';
 import { toast } from 'sonner';
-import { Check, FileCode, Filter, Pencil, X } from 'lucide-react';
+import { Check, FileCode, Filter, Pencil, Plus, X } from 'lucide-react';
 import { AppShell } from '@/components/layout/AppShell';
 import { Field } from '@/components/Field';
 import { Pagination } from '@/components/Pagination';
@@ -15,8 +15,15 @@ import { api } from '@/api/client';
 import { ROUTES } from '@/api/routes';
 import { useAppState } from '@/hooks/useAppState';
 import { WorkflowGate } from './WorkflowGate';
-import { ScenarioEditor } from './ScenarioEditor';
-import { extractScenario, replaceScenario } from '@/lib/gherkin';
+import { ScenarioEditor, type CreateTarget } from './ScenarioEditor';
+import {
+  appendScenario,
+  extractScenario,
+  featureFileName,
+  newFeatureContent,
+  replaceScenario,
+  scenarioNames,
+} from '@/lib/gherkin';
 import type {
   FeatureMutationResponse,
   FeatureReviewBulkRequest,
@@ -63,6 +70,8 @@ function ReviewBody({ state, search }: { state: StateResponse; search: ScenarioS
     scenarioName: string;
     block: string;
   } | null>(null);
+  /** Chỉ khác null khi đang thêm kịch bản mới. */
+  const [creating, setCreating] = useState<{ block: string; target: CreateTarget } | null>(null);
   const refresh = () => void client.invalidateQueries({ queryKey: ['state'] });
   const review = useMutation({
     mutationFn: (body: FeatureReviewRequest) =>
@@ -88,6 +97,7 @@ function ReviewBody({ state, search }: { state: StateResponse; search: ScenarioS
       api.put<FeatureMutationResponse>(ROUTES.feature, body),
     onSuccess: () => {
       setEditing(null);
+      setCreating(null);
       toast.success('Đã lưu kịch bản; nó cần được duyệt lại.');
       refresh();
     },
@@ -231,10 +241,30 @@ function ReviewBody({ state, search }: { state: StateResponse; search: ScenarioS
 
         <Card aria-labelledby="scenarios-title">
           <CardHeader>
-            <CardTitle id="scenarios-title">Kịch bản</CardTitle>
-            <CardDescription>
-              {rows.length} kịch bản khớp bộ lọc. Sửa file thì cả file phải được duyệt lại.
-            </CardDescription>
+            <div className="flex flex-wrap items-start justify-between gap-2">
+              <div className="flex flex-col gap-1.5">
+                <CardTitle id="scenarios-title">Kịch bản</CardTitle>
+                <CardDescription>
+                  {rows.length} kịch bản khớp bộ lọc. Sửa kịch bản thì nó phải được duyệt lại.
+                </CardDescription>
+              </div>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() =>
+                  setCreating({
+                    block: ['  Scenario: Nhập tên kịch bản', '    Given I open the app'].join('\n'),
+                    target: {
+                      filename: state.features[0]?.name ?? '',
+                      newTitle: '',
+                    },
+                  })
+                }
+              >
+                <Plus className="size-4" />
+                Thêm kịch bản
+              </Button>
+            </div>
           </CardHeader>
           <CardContent className="flex flex-col gap-4">
             {selectedItems.length > 0 && (
@@ -400,6 +430,54 @@ function ReviewBody({ state, search }: { state: StateResponse; search: ScenarioS
           </CardContent>
         </Card>
       </section>
+
+      {creating && (
+        <ScenarioEditor
+          open
+          title="Thêm kịch bản"
+          filename={
+            creating.target.filename ||
+            featureFileName(creating.target.newTitle) ||
+            'Feature mới'
+          }
+          block={creating.block}
+          tagSuggestions={(state.tagTaxonomy?.definitions ?? []).map((item) => item.name)}
+          saving={save.isPending}
+          featureNames={state.features.map((item) => item.name)}
+          target={creating.target}
+          onTargetChange={(target) => setCreating((prev) => (prev ? { ...prev, target } : prev))}
+          onClose={() => setCreating(null)}
+          onSave={(block) => {
+            const { filename, newTitle } = creating.target;
+            const existing = state.features.find((item) => item.name === filename);
+            const name = scenarioNames(block)[0]?.trim() ?? '';
+            if (!name || name === 'Nhập tên kịch bản') {
+              toast.error('Hãy nhập tên kịch bản cụ thể trước khi lưu.');
+              return;
+            }
+            // Tên trùng thì kịch bản mới không thay thế kịch bản cũ mà nằm cạnh
+            // nó, và từ đó mọi thứ gọi kịch bản theo tên đều mơ hồ.
+            const taken = scenarioNames(existing?.content ?? '');
+            if (taken.some((item) => item.toLowerCase() === name.toLowerCase())) {
+              toast.error(`Feature này đã có kịch bản “${name}”.`);
+              return;
+            }
+            const target = filename || featureFileName(newTitle);
+            if (!target) {
+              toast.error('Hãy đặt tên cho feature mới trước khi lưu.');
+              return;
+            }
+            const base = existing ? existing.content : newFeatureContent(newTitle.trim());
+            save.mutate({
+              filename: target,
+              content: appendScenario(base, block),
+              // File mới chưa có revision nào để so; gửi một chuỗi rỗng là nói
+              // dối server rằng ta đang sửa một file đã tồn tại.
+              ...(existing ? { baseRevision: existing.revision } : {}),
+            });
+          }}
+        />
+      )}
 
       {editing && (
         <ScenarioEditor

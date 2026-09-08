@@ -102,3 +102,76 @@ describe('ScenarioReviewPanel — sửa kịch bản', () => {
     expect(screen.queryByRole('textbox', { name: 'Nội dung kịch bản' })).not.toBeInTheDocument();
   });
 });
+
+describe('ScenarioReviewPanel — thêm kịch bản', () => {
+  const editor = () =>
+    screen.getByRole<HTMLTextAreaElement>('textbox', { name: 'Nội dung kịch bản' });
+
+  it('mở panel với khung kịch bản trống và ô chọn feature đích', async () => {
+    const user = userEvent.setup();
+    await render();
+    await screen.findByText('Đăng nhập thành công');
+
+    await user.click(screen.getByRole('button', { name: 'Thêm kịch bản' }));
+
+    expect(editor().value).toContain('Scenario: Nhập tên kịch bản');
+    expect(screen.getByLabelText('Thêm vào feature')).toBeInTheDocument();
+  });
+
+  /**
+   * Tên file phải hiện ra TRƯỚC khi ghi, không phải sau: đặt tên có dấu rồi mới
+   * biết file thành gì là lúc đã có một file sai tên nằm trong repo.
+   */
+  it('nói trước file mới sẽ tên gì, bỏ dấu tiếng Việt', async () => {
+    const user = userEvent.setup();
+    await render();
+    await screen.findByText('Đăng nhập thành công');
+
+    await user.click(screen.getByRole('button', { name: 'Thêm kịch bản' }));
+    await user.selectOptions(screen.getByLabelText('Thêm vào feature'), '＋ Feature mới…');
+    await user.type(screen.getByLabelText('Tên feature mới'), 'Đăng ký tài khoản');
+
+    expect(screen.getByText('File sẽ là dang-ky-tai-khoan.feature.')).toBeInTheDocument();
+  });
+
+  it('cảnh báo khi tên feature mới trùng file đã có', async () => {
+    const user = userEvent.setup();
+    await render();
+    await screen.findByText('Đăng nhập thành công');
+
+    await user.click(screen.getByRole('button', { name: 'Thêm kịch bản' }));
+    await user.selectOptions(screen.getByLabelText('Thêm vào feature'), '＋ Feature mới…');
+    await user.type(screen.getByLabelText('Tên feature mới'), 'dang nhap');
+
+    expect(screen.getByText(/Đã có dang-nhap.feature/)).toBeInTheDocument();
+  });
+
+  it('không cho lưu khi tên kịch bản vẫn là chỗ trống mặc định', async () => {
+    const user = userEvent.setup();
+    await render();
+    await screen.findByText('Đăng nhập thành công');
+
+    await user.click(screen.getByRole('button', { name: 'Thêm kịch bản' }));
+    await user.click(screen.getByRole('button', { name: 'Lưu thay đổi' }));
+
+    expect(await screen.findByText('Hãy nhập tên kịch bản cụ thể trước khi lưu.')).toBeInTheDocument();
+  });
+
+  /**
+   * Trùng tên thì kịch bản mới không thay thế kịch bản cũ mà nằm cạnh nó, và từ
+   * đó mọi thứ gọi kịch bản theo tên đều mơ hồ.
+   */
+  it('chặn tên kịch bản trùng trong cùng feature', async () => {
+    const user = userEvent.setup();
+    await render();
+    await screen.findByText('Đăng nhập thành công');
+
+    await user.click(screen.getByRole('button', { name: 'Thêm kịch bản' }));
+    const area = editor();
+    await user.clear(area);
+    await user.type(area, '  Scenario: Sai mật khẩu');
+    await user.click(screen.getByRole('button', { name: 'Lưu thay đổi' }));
+
+    expect(await screen.findByText(/đã có kịch bản/)).toBeInTheDocument();
+  });
+});

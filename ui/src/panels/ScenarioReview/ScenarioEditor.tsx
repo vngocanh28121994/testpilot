@@ -6,8 +6,25 @@ import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '
 import { Textarea } from '@/components/ui/textarea';
 import { NormalizePanel } from './NormalizePanel';
 import { SyntaxHelp } from './SyntaxHelp';
-import { tagsOf, withTags } from '@/lib/gherkin';
+import { featureFileName, tagsOf, withTags } from '@/lib/gherkin';
 import { X } from 'lucide-react';
+
+const NEW_FEATURE = '\u0000new';
+
+/**
+ * Cho biết file sẽ được đặt tên gì, hoặc vì sao chưa đặt được — nói trước khi
+ * có gì được ghi ra đĩa, chứ không để lỗi nổ ra lúc bấm Lưu.
+ */
+function newFileHint(title: string, taken: string[]): string {
+  const trimmed = title.trim();
+  if (!trimmed) return 'Nhập tên feature — file sẽ được đặt tên theo đó.';
+  const file = featureFileName(trimmed);
+  if (!file) return 'Tên này không tạo được tên file hợp lệ.';
+  if (taken.some((name) => name.toLowerCase() === file.toLowerCase())) {
+    return `Đã có ${file}. Chọn feature đó ở trên, hoặc đặt tên khác.`;
+  }
+  return `File sẽ là ${file}.`;
+}
 
 /**
  * Sửa MỘT kịch bản, trong một panel bên.
@@ -18,6 +35,13 @@ import { X } from 'lucide-react';
  * là xoá luôn kịch bản bên cạnh. Ở đây chỉ khối của kịch bản đó được đưa ra;
  * phần còn lại của file không đi qua tay ai.
  */
+export interface CreateTarget {
+  /** Tên file đã có, hoặc chuỗi rỗng khi người dùng đang tạo file mới. */
+  filename: string;
+  /** Tiêu đề feature mới; chỉ có nghĩa khi `filename` rỗng. */
+  newTitle: string;
+}
+
 export function ScenarioEditor({
   open,
   title,
@@ -25,6 +49,9 @@ export function ScenarioEditor({
   block,
   tagSuggestions,
   saving,
+  featureNames,
+  target,
+  onTargetChange,
   onSave,
   onClose,
 }: {
@@ -34,6 +61,10 @@ export function ScenarioEditor({
   block: string;
   tagSuggestions: string[];
   saving: boolean;
+  /** Chỉ truyền khi đang tạo kịch bản mới: các feature có thể thêm vào. */
+  featureNames?: string[];
+  target?: CreateTarget;
+  onTargetChange?: (target: CreateTarget) => void;
   onSave: (block: string) => void;
   onClose: () => void;
 }) {
@@ -115,6 +146,47 @@ export function ScenarioEditor({
         </SheetHeader>
 
         <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-auto px-4">
+          {/* Chỉ hiện khi đang thêm mới: sửa một kịch bản có sẵn thì file đích
+              đã biết rồi, đưa ra một ô chọn ở đó chỉ mời người ta chuyển nhầm. */}
+          {target && onTargetChange && (
+            <div className="flex flex-col gap-2">
+              <label className="flex flex-col gap-1.5">
+                <span className="text-sm font-medium">Thêm vào feature</span>
+                <select
+                  className="input mt-0"
+                  value={target.filename || NEW_FEATURE}
+                  onChange={(event) =>
+                    onTargetChange({
+                      ...target,
+                      filename: event.target.value === NEW_FEATURE ? '' : event.target.value,
+                    })
+                  }
+                >
+                  {(featureNames ?? []).map((name) => (
+                    <option key={name} value={name}>
+                      {name}
+                    </option>
+                  ))}
+                  <option value={NEW_FEATURE}>＋ Feature mới…</option>
+                </select>
+              </label>
+              {!target.filename && (
+                <div className="flex flex-col gap-1">
+                  <Input
+                    value={target.newTitle}
+                    onChange={(event) => onTargetChange({ ...target, newTitle: event.target.value })}
+                    placeholder="Tên feature mới, vd: Đăng ký tài khoản"
+                    aria-label="Tên feature mới"
+                  />
+                  {/* Nói trước file sẽ tên gì, trước khi có gì được ghi ra đĩa. */}
+                  <span className="text-muted-foreground text-xs">
+                    {newFileHint(target.newTitle, featureNames ?? [])}
+                  </span>
+                </div>
+              )}
+            </div>
+          )}
+
           <div className="flex flex-col gap-2">
             <span className="text-sm font-medium">Tags</span>
             <div className="flex flex-wrap items-center gap-1.5">

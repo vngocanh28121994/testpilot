@@ -97,3 +97,42 @@ export function withTags(block: string, tags: string[]): string {
   const body = lines.slice(i).join('\n');
   return tags.length > 0 ? `${tags.join(' ')}\n${body}` : body;
 }
+
+/**
+ * Tên file suy ra từ tiêu đề feature.
+ *
+ * Bỏ dấu tiếng Việt thay vì để nguyên: tên file có dấu vẫn tạo được trên máy
+ * này nhưng là nguồn rắc rối ở mọi chỗ khác — git trên máy khác, CI chạy Linux,
+ * và cả `--grep` trên dòng lệnh.
+ */
+export function featureFileName(title: string): string {
+  const slug = String(title ?? '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[đĐ]/g, 'd')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/-{2,}/g, '-')
+    .replace(/^-+|-+$/g, '');
+  return slug ? `${slug}.feature` : '';
+}
+
+/**
+ * Khung một file feature mới.
+ *
+ * Có Feature và Background ngay từ đầu: nối một kịch bản trần vào chuỗi rỗng ra
+ * một file Gherkin không parse được.
+ */
+export function newFeatureContent(title: string): string {
+  return `Feature: ${title}\n\n  Background:\n    Given I open the app\n`;
+}
+
+/** Tên các kịch bản có trong nội dung, theo thứ tự xuất hiện. */
+export function scenarioNames(content: string): string[] {
+  const out: string[] = [];
+  for (const line of content.split('\n')) {
+    const match = line.trim().match(SCENARIO_LINE);
+    if (match) out.push(match[1]!.trim());
+  }
+  return out;
+}

@@ -89,3 +89,30 @@ describe('cắt ghép Gherkin', () => {
     expect(findScenarioBounds(lines, 'X')).toEqual({ start: 0, end: 2 });
   });
 });
+
+describe('tạo feature mới', () => {
+  it('bỏ dấu tiếng Việt khi đặt tên file', async () => {
+    const { featureFileName } = await import('../gherkin');
+    expect(featureFileName('Đăng ký tài khoản')).toBe('dang-ky-tai-khoan.feature');
+  });
+
+  it('không đẻ ra tên file khi tiêu đề không còn ký tự nào dùng được', async () => {
+    const { featureFileName } = await import('../gherkin');
+    expect(featureFileName('!!!')).toBe('');
+    expect(featureFileName('')).toBe('');
+  });
+
+  /**
+   * Nối một kịch bản trần vào chuỗi rỗng ra một file Gherkin không parse được,
+   * nên file mới phải có sẵn Feature và Background.
+   */
+  it('file mới có sẵn Feature và Background', async () => {
+    const { newFeatureContent } = await import('../gherkin');
+    expect(newFeatureContent('Đăng ký')).toBe('Feature: Đăng ký\n\n  Background:\n    Given I open the app\n');
+  });
+
+  it('đọc được tên mọi kịch bản trong file, để bắt trùng tên', async () => {
+    const { scenarioNames } = await import('../gherkin');
+    expect(scenarioNames(FILE)).toEqual(['Chuyển tiền thành công', 'Số dư không đủ']);
+  });
+});
