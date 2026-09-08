@@ -994,6 +994,22 @@ export class NativeUiDriver implements UiDriver {
       }
     }
 
+    // CDP is inside the WebView; this Appium session is not.
+    //
+    // `platform` reports 'web' when EITHER inWebview or cdpConnected, so the
+    // resolver hands over web candidates — css, label. But toSelector() picks
+    // its branch on inWebview ALONE, so in the state `cdpConnected && !inWebview`
+    // it compiles those web candidates for the native world: a label becomes
+    // `android=new UiSelector().text("Tổng tài sản")`, which the session then
+    // refuses. Two conditions for one decision, drifted apart.
+    //
+    // The fall-through exists for chromedriver, which needs Appium to be IN the
+    // WebView context. Without that, there is nothing for it to ask: CDP already
+    // answered "not in the DOM", and this second lookup can only fail. One run
+    // produced 81 of those, once per polling tick, every one swallowed by a
+    // `.catch()` — noise that costs a round trip per tick and buries real errors.
+    if (this.cdpConnected && !this.inWebview) return null;
+
     // Selectors such as :has-text() and :text() are Playwright extensions, not
     // browser CSS. If CDP did not find them, sending them to Chromedriver only
     // produces a noisy "invalid selector" server error and cannot succeed.
