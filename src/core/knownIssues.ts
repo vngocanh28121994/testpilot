@@ -93,6 +93,21 @@ export class KnownIssueStore {
     return entry;
   }
 
+  /**
+   * Gỡ mọi nhãn thuộc một file feature. Trả về số nhãn đã gỡ.
+   *
+   * Dùng khi file được sinh lại: cả đợt trở thành bản nháp mới, nên những quyết
+   * định của con người về nội dung cũ không được phép đi theo.
+   */
+  forgetFile(filename: string): number {
+    const ids = Object.entries(this.db.entries)
+      .filter(([, entry]) => entry.filename === filename)
+      .map(([id]) => id);
+    for (const id of ids) delete this.db.entries[id];
+    if (ids.length > 0) this.dirty = true;
+    return ids.length;
+  }
+
   unmark(id: string): boolean {
     if (!this.db.entries[id]) return false;
     delete this.db.entries[id];

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from '@tanstack/react-router';
 import { toast } from 'sonner';
@@ -118,18 +118,22 @@ function StudioFormPanel({ state }: { state: StateResponse }) {
   const navigate = useNavigate();
 
   /**
-   * Workflow dừng lại chờ người duyệt thì đưa thẳng sang màn duyệt.
+   * Workflow vừa dừng lại chờ người duyệt thì đưa thẳng sang màn duyệt.
    *
-   * Đây là một điểm DỪNG có chủ ý, không phải kết thúc: log nói "Workflow tạm
-   * dừng để review 8 testcase… bấm Hoàn thành kịch bản", nhưng cái nút ấy nằm ở
-   * màn hình khác. Ở lại Studio thì người dùng đọc xong câu đó rồi ngồi nhìn
-   * một khung log không còn chạy nữa, và phải tự suy ra là phải đi đâu.
-   *
-   * `waiting_input` cũng vậy: cùng là một lần dừng chờ người, chỉ khác câu hỏi.
+   * Chỉ chuyển khi luồng CHUYỂN từ đang-chạy sang xong, không phải hễ thấy nó
+   * đang ở trạng thái xong. Khác biệt đó là tất cả: effect chạy lại mỗi lần
+   * Studio được mount, nên bản đầu tiên đá người dùng ra khỏi Studio mỗi lần họ
+   * quay lại — kể cả khi tự bấm vào menu — chừng nào còn một lượt chờ duyệt.
+   * Studio trở thành trang không vào được, và cái vòng "Hoàn thành rồi quay về
+   * Studio" thì quay về đúng chỗ cũ.
    */
+  const wasRunning = useRef(job.status === 'running');
   useEffect(() => {
+    const justFinished = wasRunning.current && job.status === 'done';
+    wasRunning.current = job.status === 'running';
+    if (!justFinished) return;
+
     const status = job.run?.status;
-    if (job.status !== 'done') return;
     if (status !== 'waiting_review' && status !== 'waiting_input') return;
     // Làm mới trước khi chuyển: cổng duyệt tìm run đang chờ trong state, nên
     // sang tới nơi mà state còn cũ thì màn hình trống trơn.
@@ -499,6 +503,15 @@ function StudioFormPanel({ state }: { state: StateResponse }) {
           </div>
         </section>
 
+        {/*
+          Đứng NGOÀI thẻ log, và không phụ thuộc vào việc có log hay không.
+          Trạng thái chờ duyệt là của lượt chạy, không phải của phiên làm việc:
+          quay lại Studio sau khi tải lại trang, hay từ máy khác, thì log không
+          còn nhưng việc phải làm thì vẫn còn nguyên. Nhét nó vào trong thẻ log
+          nghĩa là đúng lúc người dùng quay lại thì không thấy gì cả.
+        */}
+        <PendingWorkflow />
+
         {job.logs.length > 0 && (
           <Card aria-labelledby="progress-title">
             <CardHeader>
@@ -531,10 +544,6 @@ function StudioFormPanel({ state }: { state: StateResponse }) {
               )}
               {job.run && <WorkflowStages stages={job.run.stages} />}
               <LogView logs={job.logs} dropped={job.dropped} error={job.error} label="Log sinh kịch bản" />
-              {/* Workflow là MỘT việc: log sinh kịch bản, rồi lần dừng chờ
-                  duyệt, rồi log chạy test — nối tiếp nhau ở cùng một chỗ đã
-                  khởi động nó, thay vì bỏ người dùng lại với một khung log đã chết. */}
-              <PendingWorkflow />
             </CardContent>
           </Card>
         )}

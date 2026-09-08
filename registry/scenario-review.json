@@ -219,81 +219,91 @@
       "id": "chuyen-tien-noi-bo.feature::Số tiền được chuyển thay đổi theo tiểu khoản nguồn",
       "filename": "chuyen-tien-noi-bo.feature",
       "scenarioName": "Số tiền được chuyển thay đổi theo tiểu khoản nguồn",
-      "contentHash": "fc2a1ac32d2340e05c5d68c87b90593ec0a6ae89f166218a2d51ceee165c0086",
+      "contentHash": "be005dd174acdf67d802ec95666cf35894ce19cbb7b62df8823ea910229aae9f",
       "status": "approved",
       "source": "generated",
-      "updatedAt": "2026-09-08T09:58:31.979Z",
-      "reviewedAt": "2026-09-08T09:58:31.979Z"
+      "updatedAt": "2026-09-08T10:50:02.482Z",
+      "reviewedAt": "2026-09-08T10:50:02.482Z"
     },
     "chuyen-tien-noi-bo.feature::Tiểu khoản đã chọn ở nguồn không xuất hiện ở dropdown đích": {
       "id": "chuyen-tien-noi-bo.feature::Tiểu khoản đã chọn ở nguồn không xuất hiện ở dropdown đích",
       "filename": "chuyen-tien-noi-bo.feature",
       "scenarioName": "Tiểu khoản đã chọn ở nguồn không xuất hiện ở dropdown đích",
-      "contentHash": "de03ef4faf48990fb713435827ea079064b96f8f476e5430f3e9f9f6ebb04fe2",
+      "contentHash": "7cc838381ba8c96d445eb3548acf32a63ad12d15a0eaea4c94970ec6d06686bd",
       "status": "approved",
       "source": "generated",
-      "updatedAt": "2026-09-08T09:58:31.979Z",
-      "reviewedAt": "2026-09-08T09:58:31.979Z"
+      "updatedAt": "2026-09-08T10:50:02.482Z",
+      "reviewedAt": "2026-09-08T10:50:02.482Z"
     },
     "chuyen-tien-noi-bo.feature::Nhập số tiền vượt quá số tiền được chuyển": {
       "id": "chuyen-tien-noi-bo.feature::Nhập số tiền vượt quá số tiền được chuyển",
       "filename": "chuyen-tien-noi-bo.feature",
       "scenarioName": "Nhập số tiền vượt quá số tiền được chuyển",
-      "contentHash": "fc366dc2ba1274af8eb1d624feee8f5ea0cee8ef9175f4ff39052ef36d21113a",
+      "contentHash": "4650af51043fe19c9d7f5c85325ab122546616c3d0a6dff234971eecb48efd44",
       "status": "approved",
       "source": "generated",
-      "updatedAt": "2026-09-08T09:58:31.979Z",
-      "reviewedAt": "2026-09-08T09:58:31.979Z"
+      "updatedAt": "2026-09-08T10:50:02.483Z",
+      "reviewedAt": "2026-09-08T10:50:02.483Z"
     },
     "chuyen-tien-noi-bo.feature::Tiểu khoản đã chọn ở đích không xuất hiện ở dropdown nguồn": {
       "id": "chuyen-tien-noi-bo.feature::Tiểu khoản đã chọn ở đích không xuất hiện ở dropdown nguồn",
       "filename": "chuyen-tien-noi-bo.feature",
       "scenarioName": "Tiểu khoản đã chọn ở đích không xuất hiện ở dropdown nguồn",
-      "contentHash": "26f93f0db5b7cfa5187985b5061468dd14cef749d698da3f1424daeb03c78d29",
+      "contentHash": "4c6a11e6e918e8ae72ed4f68785b2926e9664257c0bcc00c2390407dc92b1371",
       "status": "approved",
       "source": "generated",
-      "updatedAt": "2026-09-08T09:58:31.979Z",
-      "reviewedAt": "2026-09-08T09:58:31.979Z"
+      "updatedAt": "2026-09-08T10:50:02.482Z",
+      "reviewedAt": "2026-09-08T10:50:02.482Z"
     },
     "chuyen-tien-noi-bo.feature::Chuyển tiền thành công từ TK Thường sang TK Ký Quỹ": {
       "id": "chuyen-tien-noi-bo.feature::Chuyển tiền thành công từ TK Thường sang TK Ký Quỹ",
       "filename": "chuyen-tien-noi-bo.feature",
       "scenarioName": "Chuyển tiền thành công từ TK Thường sang TK Ký Quỹ",
-      "contentHash": "cd594b899544f6f9aaa4aba89a2e3cfd3f58035f71f2af7257dbe69220b694fd",
+      "contentHash": "91c84a22438d2f7aad5f3f34e8e718add2484a97199ac321735ccf34fa44c3d3",
       "status": "approved",
       "source": "generated",
-      "updatedAt": "2026-09-08T09:58:31.979Z",
-      "reviewedAt": "2026-09-08T09:58:31.979Z"
+      "updatedAt": "2026-09-08T10:50:02.482Z",
+      "reviewedAt": "2026-09-08T10:50:02.482Z"
     },
     "chuyen-tien-noi-bo.feature::Chuyển tiền thành công từ TK Ký Quỹ sang TK Thường": {
       "id": "chuyen-tien-noi-bo.feature::Chuyển tiền thành công từ TK Ký Quỹ sang TK Thường",
       "filename": "chuyen-tien-noi-bo.feature",
       "scenarioName": "Chuyển tiền thành công từ TK Ký Quỹ sang TK Thường",
-      "contentHash": "bc7e691f8c86c4e0f5992dd08c3460025d96e679f084fb04418accc299e96960",
+      "contentHash": "b6bce9e13c4c84a5db22b55e5c6137604e54e15e89329f625c0b66a892870e81",
       "status": "approved",
       "source": "generated",
-      "updatedAt": "2026-09-08T09:58:31.979Z",
-      "reviewedAt": "2026-09-08T09:58:31.979Z"
+      "updatedAt": "2026-09-08T10:50:02.482Z",
+      "reviewedAt": "2026-09-08T10:50:02.482Z"
     },
     "chuyen-tien-noi-bo.feature::Số tiền hợp lệ chuyển sang màn hình xác nhận": {
       "id": "chuyen-tien-noi-bo.feature::Số tiền hợp lệ chuyển sang màn hình xác nhận",
       "filename": "chuyen-tien-noi-bo.feature",
       "scenarioName": "Số tiền hợp lệ chuyển sang màn hình xác nhận",
-      "contentHash": "57ea12342059680414c7e4206c8e785a315ec0ab659a24149b9b2ec662412bcc",
+      "contentHash": "978feecc59cf4b77c037742585ab336442671a4a720e4d552734278bdd8cfcb8",
       "status": "approved",
       "source": "generated",
-      "updatedAt": "2026-09-08T09:58:31.979Z",
-      "reviewedAt": "2026-09-08T09:58:31.979Z"
+      "updatedAt": "2026-09-08T10:50:02.484Z",
+      "reviewedAt": "2026-09-08T10:50:02.484Z"
     },
-    "chuyen-tien-noi-bo.feature::Quay lại từ màn hình xác nhận trở về màn hình Chuyển tiền": {
-      "id": "chuyen-tien-noi-bo.feature::Quay lại từ màn hình xác nhận trở về màn hình Chuyển tiền",
+    "chuyen-tien-noi-bo.feature::Bấm Quay lại từ màn hình xác nhận trở về màn hình Chuyển tiền": {
+      "id": "chuyen-tien-noi-bo.feature::Bấm Quay lại từ màn hình xác nhận trở về màn hình Chuyển tiền",
       "filename": "chuyen-tien-noi-bo.feature",
-      "scenarioName": "Quay lại từ màn hình xác nhận trở về màn hình Chuyển tiền",
-      "contentHash": "8cced9471716cb6c3c963984994dd75597afe57ef98b02fb1ca3b4b0e458d308",
+      "scenarioName": "Bấm Quay lại từ màn hình xác nhận trở về màn hình Chuyển tiền",
+      "contentHash": "8db016222528f104ee88a853b8565f079b7a40a20cbb1dcf832efeb05357cbef",
       "status": "approved",
       "source": "generated",
-      "updatedAt": "2026-09-08T09:58:31.980Z",
-      "reviewedAt": "2026-09-08T09:58:31.980Z"
+      "updatedAt": "2026-09-08T10:50:02.484Z",
+      "reviewedAt": "2026-09-08T10:50:02.484Z"
+    },
+    "chuyen-tien-noi-bo.feature::Số tiền được chuyển giảm sau khi chuyển tiền thành công": {
+      "id": "chuyen-tien-noi-bo.feature::Số tiền được chuyển giảm sau khi chuyển tiền thành công",
+      "filename": "chuyen-tien-noi-bo.feature",
+      "scenarioName": "Số tiền được chuyển giảm sau khi chuyển tiền thành công",
+      "contentHash": "e940a050ff838154f90132d9be8b7a1e8994df5182d05dcb672453335a994037",
+      "status": "approved",
+      "source": "generated",
+      "updatedAt": "2026-09-08T10:50:02.484Z",
+      "reviewedAt": "2026-09-08T10:50:02.484Z"
     }
   }
 }

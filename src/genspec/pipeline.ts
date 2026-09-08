@@ -3,6 +3,7 @@ import path from 'node:path';
 import { resolveModel, type TestPilotConfig } from '../config.js';
 import { Registry } from '../core/registry.js';
 import { ScenarioReviewStore } from '../core/scenarioReview.js';
+import { KnownIssueStore } from '../core/knownIssues.js';
 import { adoptStoredApiKeys } from '../core/secrets.js';
 import type { StageStatus } from '../core/history.js';
 import { applyGeneratedTagPolicy } from '../core/tagTaxonomy.js';
@@ -314,6 +315,24 @@ export async function runGenPipeline(
       forcePending: true,
     });
     await reviews.save();
+
+    // Nhãn Known issue cũng là một quyết định của con người về kịch bản, nên nó
+    // rơi theo cùng một nguyên tắc với việc duyệt: sinh lại là một đợt bản nháp
+    // mới, kể cả khi chữ giống hệt.
+    //
+    // Không làm điều này thì một kịch bản vừa sinh ra đã mang sẵn nhãn "sản phẩm
+    // chưa đáp ứng" — nhãn ấy nói về một lần chạy và một phiên bản app của quá
+    // khứ, chưa ai kiểm lại nó còn đúng không, mà nó đã kịp miễn cho kịch bản đó
+    // khỏi bị tính là fail.
+    const known = await KnownIssueStore.load(cfg.paths.knownIssuesDb);
+    const cleared = known.forgetFile(path.basename(file));
+    if (cleared > 0) {
+      await known.save();
+      ev.log(
+        `${cleared} nhãn Known issue đã được gỡ vì kịch bản vừa được sinh lại — `
+        + 'gắn lại nếu sản phẩm vẫn chưa đáp ứng.',
+      );
+    }
   });
 
   await step(6, async () => {

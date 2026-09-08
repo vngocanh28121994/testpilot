@@ -105,3 +105,38 @@ describe('KnownIssueStore', () => {
     assert.equal(await readFile(file, 'utf8'), before);
   });
 });
+
+/**
+ * Sinh lại một feature là một đợt bản nháp MỚI, kể cả khi chữ giống hệt — chính
+ * cổng duyệt cũng theo nguyên tắc đó (forcePending). Nhãn Known issue là một
+ * quyết định của con người về kịch bản, nên nó rơi theo cùng nguyên tắc.
+ *
+ * Không làm vậy thì một kịch bản vừa sinh ra đã mang sẵn nhãn "sản phẩm chưa đáp
+ * ứng" — nhãn nói về một lần chạy và một phiên bản app của quá khứ, chưa ai kiểm
+ * lại còn đúng không, mà đã kịp miễn cho kịch bản đó khỏi bị tính là fail.
+ */
+describe('sinh lại feature thì gỡ nhãn của chính file đó', () => {
+  it('gỡ hết nhãn của file được sinh lại', async () => {
+    const { file } = await store();
+    const s = await KnownIssueStore.load(file);
+    s.mark(issue());
+    assert.equal(s.forgetFile('chuyen-tien-noi-bo.feature'), 1);
+    assert.equal(s.active('chuyen-tien-tieu-khoan-dich', 'hash-1'), undefined);
+  });
+
+  it('không đụng tới nhãn của file khác', async () => {
+    const { file } = await store();
+    const s = await KnownIssueStore.load(file);
+    s.mark(issue());
+    s.mark(issue({ id: 'khac', filename: 'dang-nhap.feature' }));
+
+    assert.equal(s.forgetFile('chuyen-tien-noi-bo.feature'), 1);
+    assert.ok(s.active('khac', 'hash-1'), 'nhãn của file khác phải còn nguyên');
+  });
+
+  it('không có gì để gỡ thì trả về 0 và không ghi lại file', async () => {
+    const { file } = await store();
+    const s = await KnownIssueStore.load(file);
+    assert.equal(s.forgetFile('khong-co.feature'), 0);
+  });
+});

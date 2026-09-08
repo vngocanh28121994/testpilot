@@ -1,10 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import userEvent from '@testing-library/user-event';
 import { screen, waitFor } from '@testing-library/react';
-import { http } from 'msw';
+import { http, HttpResponse } from 'msw';
 import { renderWithRouter } from '@/test/utils';
 import { server } from '@/test/mocks/server';
-import { STREAM_ROUTES } from '@/api/routes';
+import { stateFixture } from '@/test/mocks/fixtures';
+import { ROUTES, STREAM_ROUTES } from '@/api/routes';
 import { sse } from '@/test/mocks/sse';
 import StudioPanel from '@/panels/Studio';
 
@@ -105,5 +106,42 @@ describe('Studio — kết cục của lượt sinh kịch bản', () => {
     expect(await screen.findByText('Workflow dừng giữa chừng')).toBeInTheDocument();
     // Xuất hiện hai chỗ là đúng: băng tóm tắt lý do, log giữ nguyên dòng gốc.
     expect(screen.getAllByText(/Confluence trả 401/).length).toBeGreaterThan(0);
+  });
+});
+
+/**
+ * Chỉ chuyển khi luồng VỪA chuyển từ đang-chạy sang xong — không phải hễ thấy
+ * nó đang ở trạng thái xong.
+ *
+ * Effect chạy lại mỗi lần Studio được mount. Bản đầu tiên vì thế đá người dùng
+ * ra khỏi Studio mỗi lần họ quay lại — kể cả khi tự bấm vào menu — chừng nào
+ * còn một lượt chờ duyệt. Studio thành trang không vào được, và cái vòng
+ * "Hoàn thành rồi quay về Studio" thì quay về đúng chỗ cũ.
+ */
+describe('Studio — không đá người dùng ra khi họ quay lại', () => {
+  it('mở Studio trong lúc đang có lượt chờ duyệt thì ở nguyên đó', async () => {
+    server.use(
+      http.get(ROUTES.state, () =>
+        HttpResponse.json({
+          ...stateFixture,
+          runs: [
+            {
+              id: 'wf-1',
+              status: 'waiting_review',
+              startedAt: '2026-09-08T04:00:00.000Z',
+              stages: [],
+              stagesDone: 0,
+              generatedFile: 'chuyen-tien-noi-bo.feature',
+              generated: { scenarios: 8 },
+            },
+          ],
+        }),
+      ),
+    );
+    const { router } = await renderWithRouter(<StudioPanel />, { path: '/studio' });
+
+    // Chờ hẳn một nhịp để effect nào định chạy thì đã chạy.
+    expect(await screen.findByText('Kịch bản chờ duyệt')).toBeInTheDocument();
+    expect(router.state.location.pathname).toBe('/studio');
   });
 });
