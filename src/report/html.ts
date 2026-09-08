@@ -124,12 +124,15 @@ function render(
   .tile b { display:block; font-size:1.6rem; line-height:1.2; }
   /* Nút MỜI gắn nhãn: viền đứt và chữ mờ, để không bị đọc nhầm thành một nhãn
      đã gắn. Nhãn thật thì tô nền đặc. */
-  .ki{margin-left:.5rem;font:inherit;font-size:.72rem;padding:.1rem .5rem;
+  /* Cột riêng cho nhãn: bám sau tên kịch bản thì mỗi dòng một vị trí, vì tên
+     dài ngắn khác nhau — mắt không quét được cột nào cả. */
+  .ki-col{white-space:nowrap}
+  .ki{font:inherit;font-size:.72rem;padding:.1rem .5rem;
       border:1px dashed var(--line);border-radius:999px;background:none;
       color:var(--muted);cursor:pointer}
   .ki:hover{color:var(--flake);border-color:var(--flake)}
   .ki[disabled]{opacity:.6;cursor:default}
-  .ki-on{margin-left:.5rem;font-size:.72rem;padding:.1rem .5rem;border-radius:999px;
+  .ki-on{font-size:.72rem;padding:.1rem .5rem;border-radius:999px;
          background:#fdf6e3;color:#9a6b00;border:1px solid #e5d7a3;white-space:nowrap}
   .passed b{color:var(--pass)} .failed b{color:var(--fail)} .flaky b{color:var(--flake)}
   h2 { font-size:1.05rem; margin:2rem 0 .75rem; }
@@ -196,7 +199,7 @@ function render(
 
 <h2>Scenarios</h2>
 <div class="wrap"><table>
-<thead><tr><th>Scenario</th><th>Platform</th><th>Device</th><th>Verdict</th><th>Flake rate</th><th>Attempts</th></tr></thead>
+<thead><tr><th>Scenario</th><th>Known issue</th><th>Platform</th><th>Device</th><th>Verdict</th><th>Flake rate</th><th>Attempts</th></tr></thead>
 <tbody>
 ${report.results
   .map((r) =>
@@ -286,12 +289,13 @@ function row(r: ScenarioResult, v?: FlakeVerdict, knownIssueNote?: string): stri
   // như đang mang nhãn dù chưa ai đánh dấu gì — bảy dòng "Known issue" trong khi
   // thực tế mới có một. Nút mời gắn nay có dấu cộng và chữ khác hẳn.
   const mark = knownIssueNote !== undefined
-    ? ` <span class="ki-on" title="${esc(knownIssueNote)}">⚠ Known issue</span>`
+    ? `<span class="ki-on" title="${esc(knownIssueNote)}">⚠ Known issue</span>`
     : r.verdict === 'failed'
-      ? ` <button class="ki" data-scenario="${esc(r.scenario.id)}" type="button">+ Đánh dấu Known issue</button>`
+      ? `<button class="ki" data-scenario="${esc(r.scenario.id)}" type="button">+ Đánh dấu</button>`
       : '';
   return `<tr>
-  <td>${esc(r.scenario.name)}${flakeTag}${mark}</td>
+  <td>${esc(r.scenario.name)}${flakeTag}</td>
+  <td class="ki-col">${mark}</td>
   <td>${esc(r.platform)}</td>
   <td>${esc(r.device)}</td>
   <td class="v-${r.verdict}">${r.verdict}</td>

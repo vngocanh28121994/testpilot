@@ -27,7 +27,16 @@ describe('report — nút Known issue', () => {
   it('phân biệt nhãn ĐÃ gắn với lời MỜI gắn', () => {
     assert.match(html, /knownIssueNote !== undefined/, 'không đọc nhãn đã gắn');
     assert.match(html, /⚠ Known issue<\/span>/, 'nhãn đã gắn phải là một span, không phải nút');
-    assert.match(html, /\+ Đánh dấu Known issue<\/button>/, 'lời mời phải nói rõ là hành động');
+    assert.match(html, /\+ Đánh dấu<\/button>/, 'lời mời phải nói rõ là hành động');
+  });
+
+  /**
+   * Cột riêng, không bám sau tên kịch bản: tên dài ngắn khác nhau nên nhãn mỗi
+   * dòng một vị trí, mắt không quét được thành cột.
+   */
+  it('nhãn nằm ở cột riêng để thẳng hàng', () => {
+    assert.match(html, /<th>Known issue<\/th>/);
+    assert.match(html, /<td class="ki-col">\$\{mark\}<\/td>/);
   });
 
   it('nhãn đã gắn mang theo lý do', () => {
