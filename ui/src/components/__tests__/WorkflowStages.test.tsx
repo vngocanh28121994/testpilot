@@ -52,3 +52,39 @@ describe('WorkflowStages', () => {
     expect(container).toBeEmptyDOMElement();
   });
 });
+
+/**
+ * Server đánh dấu bước hiện tại là `running` kể cả khi nó đang chờ người duyệt
+ * — với server thì đó vẫn là bước đang mở. Nhưng vòng quay nghĩa là "đang xử
+ * lý, cứ đợi", nên nó quay mãi ở một bước sẽ không bao giờ tự xong: người dùng
+ * ngồi đợi một thứ đang đợi chính họ.
+ */
+describe('WorkflowStages — chờ máy hay chờ người', () => {
+  const atReview = [
+    { name: 'Sinh bộ testcase', status: 'done' as const },
+    { name: 'Chờ duyệt / chỉnh sửa testcase', status: 'running' as const },
+    { name: 'Chạy các kịch bản đã duyệt', status: 'pending' as const },
+  ];
+
+  it('workflow chờ người thì bước đó nói "đang chờ bạn", không quay', () => {
+    render(<WorkflowStages stages={atReview} runStatus="waiting_review" />);
+    expect(screen.getByLabelText('đang chờ bạn')).toBeInTheDocument();
+    expect(screen.queryByLabelText('đang chạy')).not.toBeInTheDocument();
+  });
+
+  it('workflow đang chạy thật thì vẫn quay như cũ', () => {
+    render(<WorkflowStages stages={atReview} runStatus="running" />);
+    expect(screen.getByLabelText('đang chạy')).toBeInTheDocument();
+    expect(screen.queryByLabelText('đang chờ bạn')).not.toBeInTheDocument();
+  });
+
+  it('chờ trả lời câu hỏi cũng là chờ người', () => {
+    render(<WorkflowStages stages={atReview} runStatus="waiting_input" />);
+    expect(screen.getByLabelText('đang chờ bạn')).toBeInTheDocument();
+  });
+
+  it('không biết trạng thái lượt chạy thì giữ nguyên cách cũ', () => {
+    render(<WorkflowStages stages={atReview} />);
+    expect(screen.getByLabelText('đang chạy')).toBeInTheDocument();
+  });
+});

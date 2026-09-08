@@ -580,7 +580,9 @@ function StudioFormPanel({ state }: { state: StateResponse }) {
                   detail="Xem log bên dưới để biết bước nào hỏng."
                 />
               )}
-              {stagesRun?.stages?.length ? <WorkflowStages stages={stagesRun.stages} /> : null}
+              {stagesRun?.stages?.length ? (
+                <WorkflowStages stages={stagesRun.stages} runStatus={stagesRun.status} />
+              ) : null}
               {/* MỘT dòng log liên tục: log sinh kịch bản, rồi log chạy test
                   nối ngay sau. Đó là cùng một workflow và người đọc theo dõi nó
                   theo thời gian; tách làm hai khối cạnh nhau thì phải tự ghép

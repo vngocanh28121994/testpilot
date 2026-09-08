@@ -1,4 +1,4 @@
-import { CheckCircle2, Circle, Loader2, MinusCircle, XCircle } from 'lucide-react';
+import { CheckCircle2, Circle, Loader2, MinusCircle, PauseCircle, XCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { WorkflowStage } from '@core/ui/contracts.js';
 
@@ -13,9 +13,24 @@ import type { WorkflowStage } from '@core/ui/contracts.js';
  * ("Đọc và xác thực tài liệu", "Sinh bộ testcase") — nên ở đây không dịch lại,
  * và một bước mới thêm ở backend sẽ tự hiện ra mà không phải sửa gì.
  */
-export function WorkflowStages({ stages }: { stages: WorkflowStage[] }) {
+export function WorkflowStages({
+  stages,
+  runStatus,
+}: {
+  stages: WorkflowStage[];
+  /**
+   * Trạng thái của cả lượt chạy, để phân biệt "máy đang làm" với "đang chờ bạn".
+   *
+   * Server đánh dấu bước hiện tại là `running` dù nó đang chờ người duyệt — với
+   * server thì đó vẫn là bước đang mở. Nhưng vòng quay nghĩa là "đang xử lý,
+   * cứ đợi", nên nó quay mãi ở một bước sẽ không bao giờ tự xong: người dùng
+   * ngồi đợi một thứ đang đợi chính họ.
+   */
+  runStatus?: string;
+}) {
   if (stages.length === 0) return null;
   const done = stages.filter((s) => s.status === 'done' || s.status === 'skipped').length;
+  const waitingOnUser = runStatus === 'waiting_review' || runStatus === 'waiting_input';
 
   return (
     <div className="flex flex-col gap-2">
@@ -28,7 +43,10 @@ export function WorkflowStages({ stages }: { stages: WorkflowStage[] }) {
       <ol aria-label="Các bước của workflow" className="flex flex-col gap-1.5">
         {stages.map((stage) => (
           <li key={stage.name} className="flex items-start gap-2 text-sm">
-            <StageIcon status={stage.status} />
+            <StageIcon
+              status={stage.status}
+              waitingOnUser={waitingOnUser && stage.status === 'running'}
+            />
             <span
               className={cn(
                 stage.status === 'pending' && 'text-muted-foreground',
@@ -38,6 +56,9 @@ export function WorkflowStages({ stages }: { stages: WorkflowStage[] }) {
               )}
             >
               {stage.name}
+              {waitingOnUser && stage.status === 'running' && (
+                <span className="text-status-flaky ms-2 text-xs font-normal">đang chờ bạn</span>
+              )}
             </span>
           </li>
         ))}
@@ -46,7 +67,21 @@ export function WorkflowStages({ stages }: { stages: WorkflowStage[] }) {
   );
 }
 
-function StageIcon({ status }: { status: WorkflowStage['status'] }) {
+function StageIcon({
+  status,
+  waitingOnUser,
+}: {
+  status: WorkflowStage['status'];
+  waitingOnUser: boolean;
+}) {
+  // Chờ người thì không quay: vòng quay nói "đang xử lý", mà ở đây không có gì
+  // đang xử lý cả — nó đợi một cú bấm.
+  if (waitingOnUser) {
+    return (
+      <PauseCircle aria-label="đang chờ bạn" className="text-status-flaky mt-0.5 size-4 shrink-0" />
+    );
+  }
+
   // Icon mang nghĩa, không phải trang trí — nên mỗi cái có nhãn riêng cho trình
   // đọc màn hình, thay vì để người dùng đoán qua màu.
   if (status === 'done') {
