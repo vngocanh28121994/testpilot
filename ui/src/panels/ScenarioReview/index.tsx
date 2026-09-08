@@ -402,7 +402,31 @@ function ReviewBody({ state, search }: { state: StateResponse; search: ScenarioS
                           </td>
                           <td className="p-2 text-right tabular-nums">{scenario.steps}</td>
                           <td className="p-2">
-                            <StatusPill status={scenario.review?.status ?? 'pending'} />
+                            {/* Known issue là một TRẠNG THÁI của kịch bản, nên
+                                nó đứng cạnh trạng thái duyệt chứ không nằm lẫn
+                                trong cột hành động. `whitespace-nowrap` vì hai
+                                chữ bị bẻ làm hai dòng trông như một lỗi hiển
+                                thị, mà cột này vốn hẹp. */}
+                            <div className="flex flex-wrap items-center gap-1">
+                              <StatusPill status={scenario.review?.status ?? 'pending'} />
+                              {scenario.knownIssue && (
+                                <span
+                                  title={scenario.knownIssue.note}
+                                  className="bg-status-flaky/15 text-status-flaky inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium whitespace-nowrap"
+                                >
+                                  <TriangleAlert className="size-3 shrink-0" />
+                                  Known issue
+                                </span>
+                              )}
+                              {scenario.knownIssueStale && (
+                                <span
+                                  title="Kịch bản đã đổi kể từ khi gắn nhãn, nên nhãn hết hiệu lực."
+                                  className="text-muted-foreground text-xs whitespace-nowrap"
+                                >
+                                  nhãn cũ
+                                </span>
+                              )}
+                            </div>
                           </td>
                           <td className="p-2">
                             {/* Một hành động chính, phần còn lại nằm trong menu.
@@ -412,15 +436,6 @@ function ReviewBody({ state, search }: { state: StateResponse; search: ScenarioS
                                 chính nội dung kịch bản. Bản cũ chỉ để nút Duyệt
                                 cộng một nút "⋯". */}
                             <div className="flex items-center justify-end gap-1">
-                              {scenario.knownIssue && (
-                                <span
-                                  title={scenario.knownIssue.note}
-                                  className="bg-status-flaky/15 text-status-flaky flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium"
-                                >
-                                  <TriangleAlert className="size-3" />
-                                  Known issue
-                                </span>
-                              )}
                               <Button
                                 size="sm"
                                 variant="outline"
@@ -489,11 +504,6 @@ function ReviewBody({ state, search }: { state: StateResponse; search: ScenarioS
                                   </DropdownMenuItem>
                                 </DropdownMenuContent>
                               </DropdownMenu>
-                              {scenario.knownIssueStale && (
-                                <span className="text-muted-foreground text-xs">
-                                  Nhãn cũ — kịch bản đã đổi
-                                </span>
-                              )}
                             </div>
                           </td>
                         </tr>
