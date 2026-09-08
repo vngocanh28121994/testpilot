@@ -103,8 +103,11 @@ describe('Studio — kết cục của lượt sinh kịch bản', () => {
       ),
     );
     await start();
-    expect(await screen.findByText('Workflow dừng giữa chừng')).toBeInTheDocument();
-    // Xuất hiện hai chỗ là đúng: băng tóm tắt lý do, log giữ nguyên dòng gốc.
+    // Băng gọi tên đúng chỗ hỏng thay vì một câu chung cho mọi loại lỗi. 401
+    // của Confluence là token Confluence — bảo người dùng đi xem khoá AI thì
+    // họ tìm sai chỗ, mà câu "Workflow dừng giữa chừng" thì không chỉ đâu cả.
+    expect(await screen.findByText('Confluence từ chối xác thực')).toBeInTheDocument();
+    // Nguyên văn không mất: băng giữ trong phần chi tiết, log giữ dòng gốc.
     expect(screen.getAllByText(/Confluence trả 401/).length).toBeGreaterThan(0);
   });
 });

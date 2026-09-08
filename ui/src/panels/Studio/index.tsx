@@ -18,6 +18,7 @@ import { api } from '@/api/client';
 import { ROUTES, STREAM_ROUTES } from '@/api/routes';
 import { useAppState, useRecentRuns } from '@/hooks/useAppState';
 import { StatusBanner } from '@/components/StatusBanner';
+import { FailureBanner } from '@/components/FailureBanner';
 import { ReportAction } from '@/components/ReportAction';
 import { WorkflowStages } from '@/components/WorkflowStages';
 import { WorkflowCompletion, useWorkflowCompletion } from '@/components/WorkflowCompletion';
@@ -568,11 +569,7 @@ function StudioFormPanel({ state }: { state: StateResponse }) {
                 Không ai nói đã xong hay đã hỏng.
               */}
               {job.status === 'error' && (
-                <StatusBanner
-                  tone="fail"
-                  title="Workflow dừng giữa chừng"
-                  detail={job.error ?? 'Không rõ lý do — xem log bên dưới.'}
-                />
+                <FailureBanner error={job.error} onRetry={() => job.start(makeForm())} />
               )}
               {job.status === 'done' && job.run?.status === 'passed' && (
                 <StatusBanner

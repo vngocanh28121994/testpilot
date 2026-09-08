@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { FailureBanner } from '@/components/FailureBanner';
 import type { DateRange } from 'react-day-picker';
 import { AppShell } from '@/components/layout/AppShell';
 import { Link } from '@tanstack/react-router';
@@ -85,7 +86,7 @@ export default function HistoryPanel({ focusId }: { focusId?: string }) {
                 ))
               )}
             </div>
-            {run.error && <p className="text-destructive mt-2 text-sm">{run.error}</p>}
+            {run.error && <div className="mt-2"><FailureBanner error={run.error} /></div>}
             {run.log.length > 0 && <details className="mt-2"><summary className="cursor-pointer text-sm">Log ({run.log.length} dòng)</summary><LogView logs={run.log} className="mt-2 max-h-80" label="Log lượt chạy" /></details>}
           </div>;
         })}

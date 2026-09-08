@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { ReportAction } from '@/components/ReportAction';
 import { StatusBanner } from '@/components/StatusBanner';
+import { FailureBanner } from '@/components/FailureBanner';
 import { useStreamJob } from '@/hooks/useStreamJob';
 import { STREAM_ROUTES } from '@/api/routes';
 
@@ -82,13 +83,7 @@ export function WorkflowCompletion() {
       {/* Hỏng giữa chừng cũng là một kết cục, và là kết cục cần chú ý nhất.
           Trước đây nhánh này không có băng nào: lỗi chỉ nằm ở dòng cuối khung
           log, đúng chỗ dễ trôi khỏi tầm mắt nhất. */}
-      {job.status === 'error' && (
-        <StatusBanner
-          tone="fail"
-          title="Workflow dừng giữa chừng"
-          detail={job.error ?? 'Không rõ lý do — xem log bên dưới.'}
-        />
-      )}
+      {job.status === 'error' && <FailureBanner error={job.error} />}
 
     </div>
   );
