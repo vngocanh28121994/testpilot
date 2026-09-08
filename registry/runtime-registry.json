@@ -536,11 +536,11 @@
           "source": "runtime-observed",
           "status": "healed",
           "confidence": 0.6,
-          "verifiedAt": "2026-09-08T11:05:16.813Z",
+          "verifiedAt": "2026-09-08T12:59:41.228Z",
           "platform": "web"
         }
       ],
-      "lastUpdatedAt": "2026-09-08T11:05:16.813Z"
+      "lastUpdatedAt": "2026-09-08T12:59:41.228Z"
     },
     "transfer.soTien": {
       "element": "transfer.soTien",
@@ -551,11 +551,11 @@
           "source": "runtime-observed",
           "status": "healed",
           "confidence": 0.6,
-          "verifiedAt": "2026-09-08T11:05:18.191Z",
+          "verifiedAt": "2026-09-08T12:59:42.592Z",
           "platform": "web"
         }
       ],
-      "lastUpdatedAt": "2026-09-08T11:05:18.191Z"
+      "lastUpdatedAt": "2026-09-08T12:59:42.592Z"
     },
     "transfer.tienChuyenPhi0": {
       "element": "transfer.tienChuyenPhi0",

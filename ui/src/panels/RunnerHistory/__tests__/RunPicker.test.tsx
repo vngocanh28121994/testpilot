@@ -13,8 +13,10 @@ import RunnerHistoryPanel from '@/panels/RunnerHistory';
  * chọn cái nào, kể cả sau khi đã bấm.
  */
 const sameDay = [
-  { id: 'r-1', platform: 'android', tag: '@a', status: 'failed', startedAt: '2026-09-08T04:40:00.000Z', counters: { passed: 0, failed: 4 } },
-  { id: 'r-2', platform: 'android', tag: '@a', status: 'passed', startedAt: '2026-09-08T05:03:00.000Z', counters: { passed: 8, failed: 1 } },
+  // `url` có mặt vì dữ liệu thật luôn có: thiếu nó thì thẻ "Mở report" không có
+  // href, không còn là một link, và test hỏi theo vai trò sẽ không thấy gì.
+  { id: 'r-1', platform: 'android', tag: '@a', status: 'failed', url: '/runs/r-1/index.html', startedAt: '2026-09-08T04:40:00.000Z', counters: { passed: 0, failed: 4 } },
+  { id: 'r-2', platform: 'android', tag: '@a', status: 'passed', url: '/runs/r-2/index.html', startedAt: '2026-09-08T05:03:00.000Z', counters: { passed: 8, failed: 1 } },
 ];
 
 const render = async (runId?: string) => {
@@ -83,5 +85,28 @@ describe('Chi tiết lượt chạy — danh sách dài', () => {
     const list = screen.getByRole('list', { name: 'Các lượt chạy' });
     expect(list.className).toMatch(/overflow-auto/);
     expect(list.className).toMatch(/max-h-/);
+  });
+});
+
+/**
+ * Rơi về report mới nhất là cách âm thầm nhất để nói dối: người dùng bấm "Xem
+ * report" của lượt vừa chạy và nhận về một lượt khác, trông y như thật. Xảy ra
+ * thật khi lượt chạy chết trước lúc kịp ghi report.
+ */
+describe('Chi tiết lượt chạy — report không tồn tại', () => {
+  it('nói rõ là lượt chạy đó chưa có report, không mở lượt khác', async () => {
+    server.use(http.get(ROUTES.state, () => HttpResponse.json({ ...stateFixture, reports: sameDay })));
+    renderWithRouter(<RunnerHistoryPanel runId="khong-co-report" />, { path: '/runner/history' });
+
+    expect(await screen.findByText(/Lượt chạy này chưa có report/)).toBeInTheDocument();
+    // Và KHÔNG lặng lẽ hiện report của lượt khác.
+    expect(screen.queryByRole('link', { name: 'Mở report' })).not.toBeInTheDocument();
+  });
+
+  it('không chỉ đích danh lượt nào thì vẫn mở lượt mới nhất như cũ', async () => {
+    server.use(http.get(ROUTES.state, () => HttpResponse.json({ ...stateFixture, reports: sameDay })));
+    renderWithRouter(<RunnerHistoryPanel />, { path: '/runner/history' });
+
+    expect(await screen.findByRole('link', { name: 'Mở report' })).toBeInTheDocument();
   });
 });

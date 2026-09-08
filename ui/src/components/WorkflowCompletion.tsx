@@ -78,7 +78,12 @@ export function WorkflowCompletion() {
           detail="Report, ảnh và video đã sẵn sàng."
           actions={
             <Button asChild size="sm" variant="outline">
-              <Link to="/runner/history" search={{ runId: undefined }}>
+              {/* Mở ĐÚNG report của lượt chạy vừa xong. `runDirs` là thư mục
+                  report mà chính lượt chạy này sinh ra; không truyền nó thì
+                  trang chi tiết mở report mới nhất — và "mới nhất" không nhất
+                  thiết là "vừa rồi", nhất là khi lượt vừa rồi chết trước lúc
+                  kịp ghi report. */}
+              <Link to="/runner/history" search={{ runId: job.run?.runDirs?.[0] }}>
                 Xem report
               </Link>
             </Button>

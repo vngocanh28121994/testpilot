@@ -18,8 +18,16 @@ export default function RunnerHistoryPanel({ runId }: { runId?: string }) {
   // chạy nào cũng mở đúng một lượt. Chỉ coi đây là lựa chọn của người dùng khi
   // họ thật sự bấm; còn lại thì URL là nguồn sự thật.
   const [picked, setPicked] = useState<string | null>(null);
-  const report =
-    reports.find((r) => r.id === (picked ?? runId)) ?? (picked ? undefined : reports[0]);
+  const wanted = picked ?? runId;
+  const report = reports.find((r) => r.id === wanted) ?? (wanted ? undefined : reports[0]);
+  /**
+   * Được chỉ đích danh một lượt chạy mà không tìm thấy report của nó.
+   *
+   * Rơi về report mới nhất là cách âm thầm nhất để nói dối: người dùng bấm "Xem
+   * report" của lượt vừa chạy và nhận về một lượt khác, trông y như thật. Xảy ra
+   * thật khi lượt chạy chết trước lúc kịp ghi report.
+   */
+  const missing = Boolean(wanted) && !report;
 
   return (
     <AppShell title="Chi tiết lượt chạy local">
@@ -79,7 +87,13 @@ export default function RunnerHistoryPanel({ runId }: { runId?: string }) {
           );
         })}
       </ul>
-      {!report && <p className="text-muted-foreground mt-4">Chưa có report.</p>}
+      {missing && (
+        <p className="text-muted-foreground mt-4">
+          Lượt chạy này chưa có report — nhiều khả năng nó dừng giữa chừng trước khi kịp ghi.
+          Chọn một lượt khác ở trên để xem.
+        </p>
+      )}
+      {!report && !missing && <p className="text-muted-foreground mt-4">Chưa có report.</p>}
       {report && <ReportDetail report={report} />}
     </AppShell>
   );
