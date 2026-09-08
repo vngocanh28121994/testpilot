@@ -11,13 +11,12 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
-import { Textarea } from '@/components/ui/textarea';
 import { api } from '@/api/client';
 import { ROUTES } from '@/api/routes';
 import { useAppState } from '@/hooks/useAppState';
-import { NormalizePanel } from './NormalizePanel';
-import { SyntaxHelp } from './SyntaxHelp';
 import { WorkflowGate } from './WorkflowGate';
+import { ScenarioEditor } from './ScenarioEditor';
+import { extractScenario, replaceScenario } from '@/lib/gherkin';
 import type {
   FeatureMutationResponse,
   FeatureReviewBulkRequest,
@@ -55,8 +54,15 @@ function ReviewBody({ state, search }: { state: StateResponse; search: ScenarioS
   const navigate = useNavigate({ from: '/scenarios' });
   const client = useQueryClient();
   const [selected, setSelected] = useState<string[]>([]);
-  const [editing, setEditing] = useState<string | null>(null);
-  const [draft, setDraft] = useState('');
+  /**
+   * Phiên sửa đang mở, hoặc null. Giữ cả tên file và tên kịch bản vì lúc lưu
+   * phải ghép khối đã sửa trở lại đúng chỗ trong nội dung file mới nhất.
+   */
+  const [editing, setEditing] = useState<{
+    filename: string;
+    scenarioName: string;
+    block: string;
+  } | null>(null);
   const refresh = () => void client.invalidateQueries({ queryKey: ['state'] });
   const review = useMutation({
     mutationFn: (body: FeatureReviewRequest) =>
@@ -82,7 +88,7 @@ function ReviewBody({ state, search }: { state: StateResponse; search: ScenarioS
       api.put<FeatureMutationResponse>(ROUTES.feature, body),
     onSuccess: () => {
       setEditing(null);
-      toast.success('Đã lưu feature; kịch bản cần được duyệt lại.');
+      toast.success('Đã lưu kịch bản; nó cần được duyệt lại.');
       refresh();
     },
     onError: (error) => toast.error((error as Error).message),
@@ -366,13 +372,16 @@ function ReviewBody({ state, search }: { state: StateResponse; search: ScenarioS
                               <Button
                                 size="sm"
                                 variant="ghost"
-                                onClick={() => {
-                                  setEditing(id);
-                                  setDraft(feature.content);
-                                }}
+                                onClick={() =>
+                                  setEditing({
+                                    filename: feature.name,
+                                    scenarioName: scenario.name,
+                                    block: extractScenario(feature.content, scenario.name),
+                                  })
+                                }
                               >
                                 <Pencil className="size-4" />
-                                Sửa file
+                                Sửa
                               </Button>
                             </div>
                           </td>
@@ -380,42 +389,6 @@ function ReviewBody({ state, search }: { state: StateResponse; search: ScenarioS
                         {/* Ô soạn thảo khoá theo id của HÀNG, không theo tên file:
                             một file có nhiều kịch bản, khoá theo tên file thì một
                             cú bấm mở ô ở mọi hàng của file đó. */}
-                        {editing === id && (
-                          <tr className="border-t">
-                            <td colSpan={7} className="bg-muted/50 p-3">
-                              <Textarea
-                                className="h-72 font-mono text-xs"
-                                value={draft}
-                                onChange={(event) => setDraft(event.target.value)}
-                              />
-                              <div className="mt-2 flex gap-2">
-                                <Button
-                                  size="sm"
-                                  disabled={save.isPending}
-                                  onClick={() =>
-                                    save.mutate({
-                                      filename: feature.name,
-                                      content: draft,
-                                      baseRevision: feature.revision,
-                                    })
-                                  }
-                                >
-                                  {save.isPending ? 'Đang lưu…' : 'Lưu feature'}
-                                </Button>
-                                <Button size="sm" variant="outline" onClick={() => setEditing(null)}>
-                                  Huỷ
-                                </Button>
-                              </div>
-                              {/* Chuẩn hoá đứng cạnh ô soạn, không nằm ở trang
-                                  khác: câu sai cú pháp phải lộ ra trước khi bấm
-                                  Lưu, chứ không phải lúc chạy. */}
-                              <div className="mt-3 flex flex-col gap-3">
-                                <NormalizePanel content={draft} onApply={setDraft} />
-                                <SyntaxHelp />
-                              </div>
-                            </td>
-                          </tr>
-                        )}
                       </Fragment>
                     );
                   })}
@@ -427,6 +400,30 @@ function ReviewBody({ state, search }: { state: StateResponse; search: ScenarioS
           </CardContent>
         </Card>
       </section>
+
+      {editing && (
+        <ScenarioEditor
+          open
+          title={editing.scenarioName}
+          filename={editing.filename}
+          block={editing.block}
+          tagSuggestions={(state.tagTaxonomy?.definitions ?? []).map((item) => item.name)}
+          saving={save.isPending}
+          onClose={() => setEditing(null)}
+          onSave={(block) => {
+            const feature = state.features.find((item) => item.name === editing.filename);
+            if (!feature) return;
+            // Ghép vào nội dung file MỚI NHẤT từ server, không phải bản đã chụp
+            // lúc mở panel: `baseRevision` đi kèm sẽ chặn nếu file đổi trong lúc
+            // sửa, nhưng ghép vào bản cũ thì diff sẽ gồm cả những dòng không ai đụng.
+            save.mutate({
+              filename: editing.filename,
+              content: replaceScenario(feature.content, editing.scenarioName, block),
+              baseRevision: feature.revision,
+            });
+          }}
+        />
+      )}
     </AppShell>
   );
 }

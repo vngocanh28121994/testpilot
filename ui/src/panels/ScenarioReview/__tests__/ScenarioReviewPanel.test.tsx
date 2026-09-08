@@ -4,12 +4,12 @@ import { screen } from '@testing-library/react';
 import { renderWithRouter } from '@/test/utils';
 import ScenarioReviewPanel from '@/panels/ScenarioReview';
 
-const editButtons = () => screen.getAllByRole('button', { name: 'Sửa file' });
+const editButtons = () => screen.getAllByRole('button', { name: 'Sửa' });
 
 /** `noUncheckedIndexedAccess` bật, nên chỉ số phải được thu hẹp kiểu ở đây. */
 function editButtonAt(index: number): HTMLElement {
   const button = editButtons()[index];
-  if (!button) throw new Error(`Không có nút "Sửa file" thứ ${index}`);
+  if (!button) throw new Error(`Không có nút "Sửa" thứ ${index}`);
   return button;
 }
 
@@ -49,54 +49,56 @@ describe('ScenarioReviewPanel — bộ lọc', () => {
   });
 });
 
-describe('ScenarioReviewPanel — ô sửa file', () => {
+describe('ScenarioReviewPanel — sửa kịch bản', () => {
+  const editor = () =>
+    screen.getByRole<HTMLTextAreaElement>('textbox', { name: 'Nội dung kịch bản' });
+
   /**
    * Bảng liệt kê theo KỊCH BẢN, nên nhiều hàng cùng trỏ về một feature file.
-   * Trạng thái `editing` từng lưu tên file, khiến một cú click mở ô soạn thảo ở
-   * mọi hàng của file đó. Nó phải được khoá theo hàng.
+   * Bản đầu tiên đưa cả nội dung file vào ô soạn: sửa một kịch bản thì kịch bản
+   * bên cạnh cũng nằm trong tầm tay, và một lần chọn-rồi-gõ nhầm là mất nó.
+   * Panel chỉ được nạp khối của đúng kịch bản đã bấm.
    */
-  it('chỉ mở ô soạn thảo ở đúng hàng được click', async () => {
+  it('chỉ đưa ra kịch bản được bấm, không phải cả file', async () => {
     const user = userEvent.setup();
-    const { container } = await render();
+    await render();
     await screen.findByText('Đăng nhập thành công');
 
-    // Hai kịch bản này thuộc cùng dang-nhap.feature.
     expect(editButtons()).toHaveLength(2);
-    expect(container.querySelectorAll('textarea')).toHaveLength(0);
+    expect(screen.queryByRole('textbox', { name: 'Nội dung kịch bản' })).not.toBeInTheDocument();
 
-    const first = editButtonAt(0);
-    await user.click(first);
+    await user.click(editButtonAt(0));
 
-    expect(container.querySelectorAll('textarea')).toHaveLength(1);
-    // Ô soạn thảo nằm ngay dưới hàng vừa click, không phải hàng kia.
-    expect(first.closest('tr')?.nextElementSibling).toContainElement(
-      container.querySelector('textarea'),
+    expect(editor()).toHaveValue(
+      ['@web', '  Scenario: Đăng nhập thành công', '    Given I open the app', '    Then I see "Trang chủ"'].join('\n'),
     );
+    // Kịch bản bên cạnh không đi theo. So trên `.value` chứ không dùng
+    // toHaveValue(stringContaining(…)): toHaveValue không nhận matcher bất đối
+    // xứng, nên phủ định của nó đúng một cách vô nghĩa và test không kiểm gì cả.
+    expect(editor().value).not.toContain('Sai mật khẩu');
   });
 
-  it('click hàng khác thì chuyển ô soạn thảo sang hàng đó', async () => {
+  it('bấm hàng khác thì panel chuyển sang kịch bản đó', async () => {
     const user = userEvent.setup();
-    const { container } = await render();
+    await render();
     await screen.findByText('Sai mật khẩu');
 
     await user.click(editButtonAt(0));
-    const second = editButtonAt(1);
-    await user.click(second);
+    await user.click(screen.getByRole('button', { name: 'Huỷ' }));
+    await user.click(editButtonAt(1));
 
-    expect(container.querySelectorAll('textarea')).toHaveLength(1);
-    expect(second.closest('tr')?.nextElementSibling).toContainElement(
-      container.querySelector('textarea'),
-    );
+    expect(editor().value).toContain('Scenario: Sai mật khẩu');
+    expect(editor().value).not.toContain('Trang chủ');
   });
 
-  it('Huỷ đóng ô soạn thảo', async () => {
+  it('Huỷ đóng panel', async () => {
     const user = userEvent.setup();
-    const { container } = await render();
+    await render();
     await screen.findByText('Đăng nhập thành công');
 
     await user.click(editButtonAt(0));
     await user.click(screen.getByRole('button', { name: 'Huỷ' }));
 
-    expect(container.querySelectorAll('textarea')).toHaveLength(0);
+    expect(screen.queryByRole('textbox', { name: 'Nội dung kịch bản' })).not.toBeInTheDocument();
   });
 });

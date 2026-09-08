@@ -44,7 +44,22 @@ export const stateFixture: StateResponse = {
   features: [
     {
       name: 'dang-nhap.feature',
-      content: '',
+      // Nội dung thật, không phải chuỗi rỗng: ô sửa kịch bản cắt khối của đúng
+      // một kịch bản ra khỏi đây, nên một fixture rỗng làm test đó thành vô nghĩa.
+      content: [
+        'Feature: Đăng nhập',
+        '',
+        '  @web',
+        '  Scenario: Đăng nhập thành công',
+        '    Given I open the app',
+        '    Then I see "Trang chủ"',
+        '',
+        '  @web',
+        '  Scenario: Sai mật khẩu',
+        '    Given I open the app',
+        '    Then I see "Sai mật khẩu"',
+        '',
+      ].join('\n'),
       revision: 'r1',
       feature: 'Đăng nhập',
       background: [],
