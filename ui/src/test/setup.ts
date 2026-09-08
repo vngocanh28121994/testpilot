@@ -83,3 +83,19 @@ afterEach(() => {
 });
 
 afterAll(() => server.close());
+
+/**
+ * Những API trình duyệt mà Radix cần nhưng jsdom không có.
+ *
+ * Dropdown dùng chung dựng trên Radix Select; nó gọi ba thứ này lúc mở danh
+ * sách. Thiếu chúng thì test đỏ với "hasPointerCapture is not a function" —
+ * một thông báo không hề nói rằng nguyên nhân là jsdom, chứ không phải component.
+ */
+if (!Element.prototype.hasPointerCapture) {
+  Element.prototype.hasPointerCapture = () => false;
+  Element.prototype.setPointerCapture = () => {};
+  Element.prototype.releasePointerCapture = () => {};
+}
+if (!Element.prototype.scrollIntoView) {
+  Element.prototype.scrollIntoView = () => {};
+}

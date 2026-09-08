@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import userEvent from '@testing-library/user-event';
 import { screen } from '@testing-library/react';
-import { renderWithRouter } from '@/test/utils';
+import { renderWithRouter , chooseFromDropdown } from '@/test/utils';
 import ScenarioReviewPanel from '@/panels/ScenarioReview';
 
 const editButtons = () => screen.getAllByRole('button', { name: 'Sửa' });
@@ -20,13 +20,11 @@ describe('ScenarioReviewPanel — bộ lọc', () => {
    * Trước đây là `<select multiple>` xổ hết mọi tag ra màn hình. Giờ là dropdown
    * chọn một, cùng hình dáng với hai bộ lọc bên cạnh.
    */
-  it('tag là dropdown chọn một, không phải multi-select', async () => {
+  it('tag là dropdown chọn một, mặc định Tất cả tag', async () => {
     await render();
     await screen.findByText('Đăng nhập thành công');
 
-    const tagSelect = screen.getByLabelText<HTMLSelectElement>('Lọc theo tag');
-    expect(tagSelect.multiple).toBe(false);
-    expect(tagSelect.value).toBe(''); // mặc định: Tất cả tag
+    expect(screen.getByRole('combobox', { name: 'Lọc theo tag' })).toHaveTextContent('Tất cả tag');
   });
 
   it('chọn tag rồi bấm Lọc thì đẩy tag vào URL và lọc bảng', async () => {
@@ -35,7 +33,7 @@ describe('ScenarioReviewPanel — bộ lọc', () => {
     await screen.findByText('Đăng nhập thành công');
     expect(screen.getAllByRole('row')).toHaveLength(3); // tiêu đề + 2 kịch bản
 
-    await user.selectOptions(screen.getByLabelText('Lọc theo tag'), '@web');
+    await chooseFromDropdown('Lọc theo tag', '@web');
     await user.click(screen.getByRole('button', { name: 'Lọc' }));
 
     expect(router.state.location.search).toMatchObject({ tags: ['@web'] });
@@ -128,7 +126,7 @@ describe('ScenarioReviewPanel — thêm kịch bản', () => {
     await screen.findByText('Đăng nhập thành công');
 
     await user.click(screen.getByRole('button', { name: 'Thêm kịch bản' }));
-    await user.selectOptions(screen.getByLabelText('Thêm vào feature'), '＋ Feature mới…');
+    await chooseFromDropdown('Thêm vào feature', '＋ Feature mới…');
     await user.type(screen.getByLabelText('Tên feature mới'), 'Đăng ký tài khoản');
 
     expect(screen.getByText('File sẽ là dang-ky-tai-khoan.feature.')).toBeInTheDocument();
@@ -140,7 +138,7 @@ describe('ScenarioReviewPanel — thêm kịch bản', () => {
     await screen.findByText('Đăng nhập thành công');
 
     await user.click(screen.getByRole('button', { name: 'Thêm kịch bản' }));
-    await user.selectOptions(screen.getByLabelText('Thêm vào feature'), '＋ Feature mới…');
+    await chooseFromDropdown('Thêm vào feature', '＋ Feature mới…');
     await user.type(screen.getByLabelText('Tên feature mới'), 'dang nhap');
 
     expect(screen.getByText(/Đã có dang-nhap.feature/)).toBeInTheDocument();

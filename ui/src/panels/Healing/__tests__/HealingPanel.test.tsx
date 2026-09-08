@@ -3,7 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { http, HttpResponse } from 'msw';
 import { screen, waitFor, within } from '@testing-library/react';
 import { server } from '@/test/mocks/server';
-import { renderWithRouter } from '@/test/utils';
+import { renderWithRouter , chooseFromDropdown } from '@/test/utils';
 import { healingFixture } from '@/test/mocks/fixtures';
 import { ROUTES } from '@/api/routes';
 import HealingPanel from '@/panels/Healing';
@@ -35,28 +35,26 @@ describe('HealingPanel', () => {
   });
 
   it('lọc theo trạng thái và platform, AND với nhau', async () => {
-    const user = userEvent.setup();
     await renderWithRouter(<HealingPanel />);
     await screen.findByText('login.submit');
     expect(rows()).toHaveLength(4);
 
-    await user.selectOptions(screen.getByLabelText('Trạng thái'), 'proposed');
+    await chooseFromDropdown('Trạng thái', 'Chờ duyệt');
     expect(rows()).toHaveLength(2);
 
-    await user.selectOptions(screen.getByLabelText('Platform'), 'android');
+    await chooseFromDropdown('Platform', 'Android');
     expect(rows()).toHaveLength(1);
     expect(screen.getByText('cart.total')).toBeInTheDocument();
 
-    await user.selectOptions(screen.getByLabelText('Platform'), 'web');
+    await chooseFromDropdown('Platform', 'Web');
     expect(rows()).toHaveLength(1);
     expect(screen.getByText('login.submit')).toBeInTheDocument();
   });
 
   it('báo rỗng khi bộ lọc không khớp gì', async () => {
-    const user = userEvent.setup();
     await renderWithRouter(<HealingPanel />);
     await screen.findByText('login.submit');
-    await user.selectOptions(screen.getByLabelText('Trạng thái'), 'rejected');
+    await chooseFromDropdown('Trạng thái', 'Đã từ chối');
     expect(screen.getByText('Không có healing record khớp bộ lọc.')).toBeInTheDocument();
   });
 

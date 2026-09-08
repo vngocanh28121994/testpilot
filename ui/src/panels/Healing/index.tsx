@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { AppShell } from '@/components/layout/AppShell';
+import { Dropdown } from '@/components/Dropdown';
 import { useHealing, useReviewHealing } from './hooks/useHealing';
 import {
   PLATFORM_OPTIONS,
@@ -105,32 +106,22 @@ export default function HealingPanel() {
           <CardContent className="flex flex-col gap-4">
             <div className="grid gap-4 sm:max-w-md sm:grid-cols-2">
               <Field label="Trạng thái">
-                <select
+                <Dropdown
                   aria-label="Trạng thái"
-                  className="input mt-0"
+                  className="mt-0"
                   value={status}
-                  onChange={(e) => setStatus(e.target.value as StatusFilter)}
-                >
-                  {STATUS_OPTIONS.map((o) => (
-                    <option key={o.value} value={o.value}>
-                      {o.label}
-                    </option>
-                  ))}
-                </select>
+                  onChange={(next) => setStatus(next as StatusFilter)}
+                  options={STATUS_OPTIONS.map((o) => ({ value: o.value, label: o.label }))}
+                />
               </Field>
               <Field label="Platform">
-                <select
+                <Dropdown
                   aria-label="Platform"
-                  className="input mt-0"
+                  className="mt-0"
                   value={platform}
-                  onChange={(e) => setPlatform(e.target.value as PlatformFilter)}
-                >
-                  {PLATFORM_OPTIONS.map((o) => (
-                    <option key={o.value} value={o.value}>
-                      {o.label}
-                    </option>
-                  ))}
-                </select>
+                  onChange={(next) => setPlatform(next as PlatformFilter)}
+                  options={PLATFORM_OPTIONS.map((o) => ({ value: o.value, label: o.label }))}
+                />
               </Field>
             </div>
 

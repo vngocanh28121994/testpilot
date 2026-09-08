@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { http, HttpResponse } from 'msw';
 import { screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { renderWithRouter } from '@/test/utils';
 import { server } from '@/test/mocks/server';
+import { stateFixture } from '@/test/mocks/fixtures';
 import { ROUTES } from '@/api/routes';
 import StudioPanel from '../index';
 
@@ -15,7 +17,7 @@ describe('Studio — chọn model', () => {
     await renderWithRouter(<StudioPanel />, { path: '/studio' });
     // Cả tiêu đề thẻ lẫn nhãn ô đều là chữ "Model", nên hỏi theo vai trò.
     const select = await screen.findByRole('combobox', { name: 'Model' });
-    expect(select.tagName).toBe('SELECT');
+    await userEvent.setup().click(select);
     expect(await screen.findByRole('option', { name: 'Claude Opus 5' })).toBeInTheDocument();
     expect(screen.getByText(/auto = claude-opus-5/)).toBeInTheDocument();
     expect(screen.getByText(/lấy trực tiếp từ nhà cung cấp/)).toBeInTheDocument();
@@ -63,19 +65,26 @@ describe('Studio — chọn model', () => {
   });
 
   /**
-   * Model đang lưu mà biến mất khỏi danh sách vẫn phải hiện ra: một <select>
-   * không có giá trị hiện tại sẽ lặng lẽ nhảy về mục đầu, và cú lưu kế tiếp
-   * ghi đè cấu hình bằng thứ người dùng chưa từng chọn.
+   * Model đang lưu mà biến mất khỏi danh sách vẫn phải hiện ra. Một dropdown
+   * không chứa giá trị hiện tại sẽ hiện ra trống hoặc nhảy về mục đầu, và cú
+   * lưu kế tiếp ghi đè cấu hình bằng thứ người dùng chưa từng chọn.
    */
   it('giữ lại model đang lưu dù nó không còn trong danh sách', async () => {
     server.use(
       http.get(ROUTES.models, () =>
         HttpResponse.json({ models: [{ id: 'claude-sonnet-5' }], live: true, auto: 'claude-opus-5' }),
       ),
+      // Ghim một model KHÔNG có trong danh sách trả về ở trên — đó chính là
+      // tình huống cần kiểm, và fixture mặc định ('auto') không dựng ra được nó.
+      http.get(ROUTES.state, () =>
+        HttpResponse.json({
+          ...stateFixture,
+          config: { ...stateFixture.config, llm: { model: 'deepseek-chat', note: '' } },
+        }),
+      ),
     );
     await renderWithRouter(<StudioPanel />, { path: '/studio' });
-    const select = (await screen.findByRole('combobox', { name: 'Model' })) as HTMLSelectElement;
-    const saved = select.value;
-    expect([...select.options].some((o) => o.value === saved)).toBe(true);
+    const select = await screen.findByRole('combobox', { name: 'Model' });
+    expect(select).toHaveTextContent('deepseek-chat (không còn trong danh sách)');
   });
 });

@@ -13,6 +13,7 @@ import {
   Trash2,
 } from 'lucide-react';
 import { AppShell } from '@/components/layout/AppShell';
+import { Dropdown } from '@/components/Dropdown';
 import { Field } from '@/components/Field';
 import { CheckRow } from '@/components/CheckRow';
 import { GroupHeading } from '@/components/GroupHeading';
@@ -197,21 +198,16 @@ export default function FarmPanel() {
                     />
                   </Field>
                   <Field label="Project">
-                    <select
-                      className="input mt-0"
+                    <Dropdown
+                      className="mt-0"
                       value={project}
-                      onChange={(e) => {
-                        setProject(e.target.value);
+                      placeholder="— chọn project —"
+                      onChange={(next) => {
+                        setProject(next);
                         setPool('');
                       }}
-                    >
-                      <option value="">— chọn project —</option>
-                      {projects.map((item) => (
-                        <option key={item.arn} value={item.arn}>
-                          {item.name}
-                        </option>
-                      ))}
-                    </select>
+                      options={projects.map((item) => ({ value: item.arn, label: item.name }))}
+                    />
                   </Field>
                 </div>
 
@@ -248,18 +244,16 @@ export default function FarmPanel() {
                     />
                   </Field>
                   <Field label="Device pool">
-                    <select
-                      className="input mt-0"
+                    <Dropdown
+                      className="mt-0"
                       value={pool}
-                      onChange={(e) => setPool(e.target.value)}
-                    >
-                      <option value="">— chọn pool —</option>
-                      {shownPools.map((item) => (
-                        <option key={item.arn} value={item.arn}>
-                          {item.name} ({item.type})
-                        </option>
-                      ))}
-                    </select>
+                      placeholder="— chọn pool —"
+                      onChange={setPool}
+                      options={shownPools.map((item) => ({
+                        value: item.arn,
+                        label: `${item.name} (${item.type})`,
+                      }))}
+                    />
                   </Field>
                 </div>
 
@@ -531,10 +525,11 @@ function NativeSelect({
   options: string[];
 }): ReactNode {
   return (
-    <select className="input mt-0" value={value} onChange={(e) => onChange(e.target.value)}>
-      {options.map((option) => (
-        <option key={option}>{option}</option>
-      ))}
-    </select>
+    <Dropdown
+      className="mt-0"
+      value={value}
+      onChange={onChange}
+      options={options.map((option) => ({ value: option, label: option }))}
+    />
   );
 }

@@ -1,5 +1,6 @@
 import { useRef, useState } from 'react';
 import { Badge } from '@/components/ui/badge';
+import { Dropdown } from '@/components/Dropdown';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet';
@@ -152,23 +153,17 @@ export function ScenarioEditor({
             <div className="flex flex-col gap-2">
               <label className="flex flex-col gap-1.5">
                 <span className="text-sm font-medium">Thêm vào feature</span>
-                <select
-                  className="input mt-0"
+                <Dropdown
+                  className="mt-0"
                   value={target.filename || NEW_FEATURE}
-                  onChange={(event) =>
-                    onTargetChange({
-                      ...target,
-                      filename: event.target.value === NEW_FEATURE ? '' : event.target.value,
-                    })
+                  onChange={(next) =>
+                    onTargetChange({ ...target, filename: next === NEW_FEATURE ? '' : next })
                   }
-                >
-                  {(featureNames ?? []).map((name) => (
-                    <option key={name} value={name}>
-                      {name}
-                    </option>
-                  ))}
-                  <option value={NEW_FEATURE}>＋ Feature mới…</option>
-                </select>
+                  options={[
+                    ...(featureNames ?? []).map((name) => ({ value: name, label: name })),
+                    { value: NEW_FEATURE, label: '＋ Feature mới…' },
+                  ]}
+                />
               </label>
               {!target.filename && (
                 <div className="flex flex-col gap-1">

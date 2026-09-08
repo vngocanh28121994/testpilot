@@ -9,6 +9,7 @@ import {
   XCircle,
 } from 'lucide-react';
 import { AppShell } from '@/components/layout/AppShell';
+import { Dropdown } from '@/components/Dropdown';
 import type { StateResponse } from '@core/ui/contracts.js';
 import { useAppState } from '@/hooks/useAppState';
 import {
@@ -304,16 +305,17 @@ function SettingsForm({
               </CardHeader>
               <CardContent className="flex flex-col gap-4">
                 <Field label="Transport">
-                  <select
+                  <Dropdown
                     aria-label="Transport"
-                    className="input mt-0"
+                    className="mt-0"
                     value={mcp.transport}
-                    onChange={(e) => set('transport', e.target.value as McpForm['transport'])}
-                  >
-                    <option value="">Không dùng MCP</option>
-                    <option value="stdio">stdio</option>
-                    <option value="http">http</option>
-                  </select>
+                    onChange={(next) => set('transport', next as McpForm['transport'])}
+                    options={[
+                      { value: '', label: 'Không dùng MCP' },
+                      { value: 'stdio', label: 'stdio' },
+                      { value: 'http', label: 'http' },
+                    ]}
+                  />
                 </Field>
 
                 {/* stdio và http mang hai bộ trường loại trừ nhau; hiện cả hai sẽ mời

@@ -4,6 +4,7 @@ import { Link, useNavigate } from '@tanstack/react-router';
 import { toast } from 'sonner';
 import { Check, FileCode, Filter, Pencil, Plus, X } from 'lucide-react';
 import { AppShell } from '@/components/layout/AppShell';
+import { Dropdown } from '@/components/Dropdown';
 import { Field } from '@/components/Field';
 import { Pagination } from '@/components/Pagination';
 import { StatusPill } from '@/components/StatusPill';
@@ -203,33 +204,45 @@ function ReviewBody({ state, search }: { state: StateResponse; search: ScenarioS
                 <Input name="q" defaultValue={search.q} placeholder="Tìm kịch bản…" />
               </Field>
               <Field label="Feature file">
-                <select name="file" defaultValue={search.file ?? ''} className="input mt-0">
-                  <option value="">Tất cả file</option>
-                  {state.features.map((feature) => (
-                    <option key={feature.name}>{feature.name}</option>
-                  ))}
-                </select>
+                <Dropdown
+                  name="file"
+                  aria-label="Feature file"
+                  defaultValue={search.file ?? ''}
+                  className="mt-0"
+                  options={[
+                    { value: '', label: 'Tất cả file' },
+                    ...state.features.map((feature) => ({
+                      value: feature.name,
+                      label: feature.name,
+                    })),
+                  ]}
+                />
               </Field>
               <Field label="Trạng thái">
-                <select name="status" defaultValue={search.status ?? ''} className="input mt-0">
-                  <option value="">Tất cả trạng thái</option>
-                  <option value="pending">Chờ duyệt</option>
-                  <option value="approved">Đã duyệt</option>
-                  <option value="rejected">Không duyệt</option>
-                </select>
+                <Dropdown
+                  name="status"
+                  aria-label="Trạng thái"
+                  defaultValue={search.status ?? ''}
+                  className="mt-0"
+                  options={[
+                    { value: '', label: 'Tất cả trạng thái' },
+                    { value: 'pending', label: 'Chờ duyệt' },
+                    { value: 'approved', label: 'Đã duyệt' },
+                    { value: 'rejected', label: 'Không duyệt' },
+                  ]}
+                />
               </Field>
               <Field label="Tag">
-                <select
+                <Dropdown
                   name="tag"
-                  defaultValue={search.tags?.[0] ?? ''}
                   aria-label="Lọc theo tag"
-                  className="input mt-0"
-                >
-                  <option value="">Tất cả tag</option>
-                  {tagOptions.map((tag) => (
-                    <option key={tag}>{tag}</option>
-                  ))}
-                </select>
+                  defaultValue={search.tags?.[0] ?? ''}
+                  className="mt-0"
+                  options={[
+                    { value: '', label: 'Tất cả tag' },
+                    ...tagOptions.map((tag) => ({ value: tag, label: tag })),
+                  ]}
+                />
               </Field>
               <Button type="submit">
                 <Filter className="size-4" />

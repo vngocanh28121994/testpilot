@@ -5,6 +5,7 @@ import { toast } from 'sonner';
 import { CheckCircle2, Play, RefreshCw, Smartphone, Square, XCircle } from 'lucide-react';
 import { AppShell } from '@/components/layout/AppShell';
 import { CheckRow } from '@/components/CheckRow';
+import { Dropdown } from '@/components/Dropdown';
 import { Field } from '@/components/Field';
 import { StatusPill } from '@/components/StatusPill';
 import { Badge } from '@/components/ui/badge';
@@ -92,42 +93,39 @@ export default function RunnerPanel() {
             <CardContent className="flex flex-col gap-4">
               <div className="grid gap-4 sm:grid-cols-2">
                 <Field label="Platform">
-                  <select
-                    className="input mt-0"
+                  <Dropdown
+                    className="mt-0"
                     value={platform}
-                    onChange={(e) => setPlatform(e.target.value as typeof platform)}
-                  >
-                    <option value="web">web — Playwright</option>
-                    <option value="android">android — Appium</option>
-                    <option value="ios">ios — Appium</option>
-                  </select>
+                    onChange={(next) => setPlatform(next as typeof platform)}
+                    options={[
+                      { value: 'web', label: 'web — Playwright' },
+                      { value: 'android', label: 'android — Appium' },
+                      { value: 'ios', label: 'ios — Appium' },
+                    ]}
+                  />
                 </Field>
                 <Field label="Lọc theo tag">
-                  <select
-                    className="input mt-0"
+                  <Dropdown
+                    className="mt-0"
                     value={tag}
-                    onChange={(e) => setTag(e.target.value)}
-                  >
-                    <option value="">Tất cả tag</option>
-                    {tags.map((item) => (
-                      <option key={item} value={item}>
-                        {item}
-                      </option>
-                    ))}
-                  </select>
+                    onChange={setTag}
+                    options={[
+                      { value: '', label: 'Tất cả tag' },
+                      ...tags.map((item) => ({ value: item, label: item })),
+                    ]}
+                  />
                 </Field>
                 {environments.length > 0 && (
                   <Field label="Môi trường">
-                    <select
-                      className="input mt-0"
+                    <Dropdown
+                      className="mt-0"
                       value={env}
-                      onChange={(e) => setEnv(e.target.value)}
-                    >
-                      <option value="">Mặc định</option>
-                      {environments.map((item) => (
-                        <option key={item}>{item}</option>
-                      ))}
-                    </select>
+                      onChange={setEnv}
+                      options={[
+                        { value: '', label: 'Mặc định' },
+                        ...environments.map((item) => ({ value: item, label: item })),
+                      ]}
+                    />
                   </Field>
                 )}
               </div>

@@ -3,7 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { http, HttpResponse } from 'msw';
 import { screen, waitFor } from '@testing-library/react';
 import { server } from '@/test/mocks/server';
-import { renderWithRouter } from '@/test/utils';
+import { renderWithRouter , chooseFromDropdown } from '@/test/utils';
 import { stateFixture } from '@/test/mocks/fixtures';
 import { ROUTES } from '@/api/routes';
 import SettingsPanel from '@/panels/Settings';
@@ -43,19 +43,18 @@ describe('SettingsPanel', () => {
   });
 
   it('chỉ hiện trường của transport đang chọn', async () => {
-    const user = userEvent.setup();
     await renderWithRouter(<SettingsPanel />);
-    const transport = await ready();
+    await ready();
 
     // Không dùng MCP ⇒ không có trường nào của MCP.
     expect(screen.queryByLabelText('Command')).toBeNull();
     expect(screen.queryByLabelText('URL')).toBeNull();
 
-    await user.selectOptions(transport, 'stdio');
+    await chooseFromDropdown('Transport', 'stdio');
     expect(screen.getByLabelText('Command')).toBeInTheDocument();
     expect(screen.queryByLabelText('URL')).toBeNull();
 
-    await user.selectOptions(transport, 'http');
+    await chooseFromDropdown('Transport', 'http');
     expect(screen.getByLabelText('URL')).toBeInTheDocument();
     expect(screen.queryByLabelText('Command')).toBeNull();
   });
@@ -106,7 +105,7 @@ describe('SettingsPanel', () => {
   it('probe MCP chỉ điền hộ ô còn trống', async () => {
     const user = userEvent.setup();
     await renderWithRouter(<SettingsPanel />);
-    await user.selectOptions(await ready(), 'stdio');
+    await chooseFromDropdown('Transport', 'stdio');
 
     const figma = screen.getByLabelText('Tool: Figma file');
     await user.type(figma, 'toi-tu-dien');

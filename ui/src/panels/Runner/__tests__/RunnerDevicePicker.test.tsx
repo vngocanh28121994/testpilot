@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { http, HttpResponse } from 'msw';
 import userEvent from '@testing-library/user-event';
 import { screen, waitFor } from '@testing-library/react';
-import { renderWithRouter } from '@/test/utils';
+import { renderWithRouter , chooseFromDropdown } from '@/test/utils';
 import { server } from '@/test/mocks/server';
 import { sse } from '@/test/mocks/sse';
 import { ROUTES, STREAM_ROUTES } from '@/api/routes';
@@ -23,10 +23,7 @@ const twoDevices = () =>
   });
 
 async function chooseAndroid() {
-  await userEvent.selectOptions(
-    await screen.findByLabelText('Platform'),
-    'android',
-  );
+  await chooseFromDropdown('Platform', 'android — Appium');
 }
 
 /**

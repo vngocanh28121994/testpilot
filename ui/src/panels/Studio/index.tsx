@@ -4,6 +4,7 @@ import { toast } from 'sonner';
 import { FileText, Play, Plus, Save, Trash2, X } from 'lucide-react';
 import { AppShell } from '@/components/layout/AppShell';
 import { CheckRow } from '@/components/CheckRow';
+import { Dropdown } from '@/components/Dropdown';
 import { Field } from '@/components/Field';
 import { GroupHeading } from '@/components/GroupHeading';
 import { Button } from '@/components/ui/button';
@@ -344,27 +345,27 @@ function StudioFormPanel({ state }: { state: StateResponse }) {
                   hint={modelHint(models.data)}
                 >
                   {/* Không hỏi được nhà cung cấp thì quay về ô gõ tay, chứ
-                      không dựng một <select> chỉ có mỗi "auto": khoá người dùng
+                      không dựng một dropdown chỉ có mỗi "auto": khoá người dùng
                       khỏi chính model họ đang chạy là tệ hơn là để họ gõ. */}
                   {models.data && models.data.models.length > 0 ? (
-                    <select
-                      className="input mt-0"
+                    <Dropdown
+                      className="mt-0"
                       value={model}
-                      onChange={(e) => setModel(e.target.value)}
-                    >
-                      <option value="auto">auto</option>
-                      {/* Model đang lưu mà không còn trong danh sách vẫn phải
-                          hiện ra, nếu không cái <select> lặng lẽ đổi cấu hình
-                          sang mục đầu tiên ngay khi mở trang. */}
-                      {!models.data.models.some((m) => m.id === model) && model !== 'auto' && (
-                        <option value={model}>{model} (không còn trong danh sách)</option>
-                      )}
-                      {models.data.models.map((m) => (
-                        <option key={m.id} value={m.id}>
-                          {m.display_name ?? m.id}
-                        </option>
-                      ))}
-                    </select>
+                      onChange={setModel}
+                      options={[
+                        { value: 'auto', label: 'auto' },
+                        // Model đang lưu mà không còn trong danh sách vẫn phải
+                        // hiện ra, nếu không dropdown lặng lẽ đổi cấu hình sang
+                        // mục đầu tiên ngay khi mở trang.
+                        ...(!models.data.models.some((m) => m.id === model) && model !== 'auto'
+                          ? [{ value: model, label: `${model} (không còn trong danh sách)` }]
+                          : []),
+                        ...models.data.models.map((m) => ({
+                          value: m.id,
+                          label: m.display_name ?? m.id,
+                        })),
+                      ]}
+                    />
                   ) : (
                     <Input value={model} onChange={(e) => setModel(e.target.value)} />
                   )}
@@ -413,32 +414,34 @@ function StudioFormPanel({ state }: { state: StateResponse }) {
 
                 {farm && (
                   <Field label="Hệ điều hành trên Device Farm">
-                    <select
-                      className="input mt-0"
+                    <Dropdown
+                      className="mt-0"
                       value={farm}
-                      onChange={(e) => setFarm(e.target.value)}
-                    >
-                      <option value="android">Android</option>
-                      <option value="ios">iOS</option>
-                    </select>
+                      onChange={setFarm}
+                      options={[
+                        { value: 'android', label: 'Android' },
+                        { value: 'ios', label: 'iOS' },
+                      ]}
+                    />
                   </Field>
                 )}
 
                 <Field label="Môi trường">
-                  <select
-                    className="input mt-0"
+                  <Dropdown
+                    className="mt-0"
                     value={workflowEnv}
-                    onChange={(e) => setWorkflowEnv(e.target.value)}
-                  >
-                    {/* Config chưa khai môi trường nào thì select rỗng trơ ra như
-                        đang hỏng; nói thẳng ra vẫn hơn. */}
-                    {Object.keys(cfg.environments).length === 0 && (
-                      <option value="">— chưa cấu hình môi trường —</option>
-                    )}
-                    {Object.keys(cfg.environments).map((item) => (
-                      <option key={item}>{item}</option>
-                    ))}
-                  </select>
+                    onChange={setWorkflowEnv}
+                    options={
+                      // Config chưa khai môi trường nào thì danh sách rỗng trơ
+                      // ra như đang hỏng; nói thẳng ra vẫn hơn.
+                      Object.keys(cfg.environments).length === 0
+                        ? [{ value: '', label: '— chưa cấu hình môi trường —' }]
+                        : Object.keys(cfg.environments).map((item) => ({
+                            value: item,
+                            label: item,
+                          }))
+                    }
+                  />
                 </Field>
 
                 <CheckRow
