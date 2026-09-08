@@ -15,6 +15,7 @@ export const ROUTES = {
   history: '/api/history',
   healing: '/api/healing',
   healingReview: '/api/healing/review',
+  runLog: '/api/run/log',
   preflight: '/api/preflight',
   vocabulary: '/api/vocabulary',
   actions: '/api/actions',

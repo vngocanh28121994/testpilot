@@ -1,11 +1,11 @@
 import { useState } from 'react';
 import { AppShell } from '@/components/layout/AppShell';
-import { LogView } from '@/components/LogView';
 import { StatusPill } from '@/components/StatusPill';
 import { useAppState } from '@/hooks/useAppState';
 import { when } from '@/lib/datetime';
 import { cn } from '@/lib/utils';
-import { api } from '@/api/client';
+import { LazyLog } from '@/components/LazyLog';
+import { ROUTES } from '@/api/routes';
 import type { ReportView } from '@core/ui/contracts.js';
 
 export default function RunnerHistoryPanel({ runId }: { runId?: string }) {
@@ -84,4 +84,4 @@ export default function RunnerHistoryPanel({ runId }: { runId?: string }) {
   );
 }
 
-function ReportDetail({ report }: { report: ReportView }) { const [network, setNetwork] = useState<string | null>(null); return <section className="mt-4"><div className="flex gap-2"><StatusPill status={report.status}/><a href={report.url} target="_blank" rel="noreferrer" className="text-sm underline">Mở report</a></div><iframe title={`Report ${report.id}`} src={report.url} className="border-border mt-3 h-[550px] w-full rounded border"/>{report.shotUrls && <div className="mt-4 grid grid-cols-2 gap-3 md:grid-cols-4">{report.shotUrls.map((shot) => <a key={shot.url} href={shot.url} target="_blank" rel="noreferrer"><img className="border-border rounded border" src={shot.url} alt={shot.name}/><span className="text-xs">{shot.onFailure ? 'khi fail' : shot.name}</span></a>)}</div>}{report.networkLogUrl && <details className="mt-4" onToggle={(e) => { if ((e.currentTarget as HTMLDetailsElement).open && network === null) void api.getText(report.networkLogUrl!).then(setNetwork).catch((err: Error) => setNetwork(`Không đọc được log: ${err.message}`)); }}><summary>Network log</summary><LogView logs={network ?? 'Đang tải…'} className="mt-2 max-h-72" label="Network log" /></details>}{report.log && <details className="mt-4"><summary>Log</summary><LogView logs={report.log} className="mt-2 max-h-72" label="Log lượt chạy" /></details>}</section>; }
+function ReportDetail({ report }: { report: ReportView }) { return <section className="mt-4"><div className="flex gap-2"><StatusPill status={report.status}/><a href={report.url} target="_blank" rel="noreferrer" className="text-sm underline">Mở report</a></div><iframe title={`Report ${report.id}`} src={report.url} className="border-border mt-3 h-[550px] w-full rounded border"/>{report.shotUrls && <div className="mt-4 grid grid-cols-2 gap-3 md:grid-cols-4">{report.shotUrls.map((shot) => <a key={shot.url} href={shot.url} target="_blank" rel="noreferrer"><img className="border-border rounded border" src={shot.url} alt={shot.name}/><span className="text-xs">{shot.onFailure ? 'khi fail' : shot.name}</span></a>)}</div>}{report.networkLogUrl && <LazyLog url={report.networkLogUrl} summary="Network log" label="Network log" className="max-h-72"/>}{report.hasLog && <LazyLog url={`${ROUTES.runLog}?id=${encodeURIComponent(report.id)}`} label="Log lượt chạy" className="max-h-72"/>}</section>; }

@@ -212,7 +212,11 @@ export interface ReportView {
   tag?: string;
   counters?: { passed: number; failed: number; total: number };
   url: string;
-  log?: string;
+  /**
+   * Lượt chạy này có log không. Nội dung KHÔNG đi kèm — lấy qua /api/run/log
+   * khi người dùng bung ra, vì log là thứ dài nhất mà lại ít được xem nhất.
+   */
+  hasLog: boolean;
   networkLogUrl: string | null;
   videoUrls?: string[];
   shotUrls?: Array<{ name: string; url: string; onFailure: boolean }>;

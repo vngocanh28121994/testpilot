@@ -746,6 +746,27 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
     case 'GET /api/builds':
       return json(res, 200, await buildInventory(await loadConfig(CONFIG_FILE)));
 
+    /**
+     * Nội dung log của một lượt chạy, lấy riêng khi người dùng bung nó ra.
+     *
+     * Tách khỏi /api/state vì log là thứ dài nhất mà lại ít được xem nhất: gửi
+     * kèm nghĩa là trả giá cho nó sau mỗi thao tác trên trang, cho mọi lượt chạy.
+     */
+    case 'GET /api/run/log': {
+      const id = url.searchParams.get('id') ?? '';
+      const cfg = await loadConfig(CONFIG_FILE);
+      // Id đi thẳng vào đường dẫn file, nên phải chặn ../ trước khi chạm đĩa.
+      const dir = path.resolve(cfg.paths.runs, id);
+      if (!id || !dir.startsWith(path.resolve(cfg.paths.runs) + path.sep)) {
+        return json(res, 400, { error: 'Run id không hợp lệ.' });
+      }
+      const file = path.join(dir, 'log.txt');
+      if (!existsSync(file)) return json(res, 404, { error: 'Lượt chạy này không có log.' });
+      res.writeHead(200, { 'content-type': 'text/plain; charset=utf-8' });
+      res.end(await readFile(file, 'utf8'));
+      return;
+    }
+
     case 'GET /api/preflight': {
       // Asked from the Studio the moment a platform is ticked, so the answer
       // arrives while the choice is still being made rather than half an hour
@@ -1175,18 +1196,31 @@ async function countElements(cfg: TestPilotConfig): Promise<number> {
  * With hundreds of runs the interesting question is "what happened on the run
  * that failed", so the list is the runs themselves.
  */
+/**
+ * Số lượt chạy trả về cho màn hình.
+ *
+ * Bằng MAX_RUNS của lịch sử workflow, vì cùng một lý do: danh sách này chỉ dài
+ * thêm chứ không bao giờ ngắn đi, và nó được gửi lại sau MỖI thao tác trên
+ * trang. Ai cần xa hơn thì mở thư mục runs/.
+ */
+const MAX_REPORTS = 50;
+
 async function listReports(cfg: TestPilotConfig) {
   const runs = await listRuns(cfg.paths.runs);
   return Promise.all(
     runs
       .filter((r) => existsSync(path.join(cfg.paths.runs, r.id, 'index.html')))
+      .slice(0, MAX_REPORTS)
       .map(async (r) => {
         const runDir = path.join(cfg.paths.runs, r.id);
 
-        const logFile = path.join(runDir, 'log.txt');
-        const log = existsSync(logFile)
-          ? await readFile(logFile, 'utf8').catch(() => '')
-          : '';
+        // Chỉ nói CÓ log hay không, không gửi kèm nội dung.
+        //
+        // Log của một lượt chạy farm dài hàng nghìn dòng, và trước đây mọi lượt
+        // chạy đều mang trọn log của mình trong mỗi lần gọi /api/state — tức là
+        // sau mỗi thao tác trên trang, cho một thứ mà người dùng chỉ mở ra xem
+        // khi có chuyện. Nội dung lấy riêng qua /api/run/log khi bung ra.
+        const hasLog = existsSync(path.join(runDir, 'log.txt'));
 
         const videoDir = path.join(runDir, 'artifacts', 'video');
         const videoFiles = existsSync(videoDir)
@@ -1243,7 +1277,7 @@ async function listReports(cfg: TestPilotConfig) {
           ...(r.tag ? { tag: r.tag } : {}),
           ...(r.counters ? { counters: r.counters } : {}),
           url: `/${[cfg.paths.runs, r.id, 'index.html'].join('/')}`,
-          ...(log ? { log } : {}),
+          hasLog,
           ...(videoUrls.length > 0 ? { videoUrls } : {}),
           ...(wholeVideoUrls.length > 0 ? { wholeVideoUrls } : {}),
           ...(chapters.length > 0 ? { chapters } : {}),
