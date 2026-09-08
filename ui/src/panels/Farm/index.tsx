@@ -82,6 +82,23 @@ export default function FarmPanel() {
       .then(setAws)
       .catch((error: Error) => toast.error(error.message));
   useEffect(checkAws, [region]);
+
+  /**
+   * Đăng nhập xong thì kiểm tra lại ngay.
+   *
+   * Trạng thái kết nối chỉ được hỏi khi đổi region, nên sau một lần `aws sso
+   * login` thành công màn hình vẫn y nguyên: log nói "Successfully logged into
+   * Start URL" trong khi huy hiệu bên trên vẫn là trạng thái cũ. Người dùng
+   * phải tự đoán ra là phải bấm "Kiểm tra lại" — mà cả điểm của việc đăng nhập
+   * chính là cái trạng thái sau đó.
+   *
+   * Kiểm cả khi hỏng: một lần đăng nhập thất bại cũng có thể đã đổi trạng thái
+   * (hết hạn token, đổi profile), và im lặng ở đó cũng sai y như vậy.
+   */
+  useEffect(() => {
+    if (login.status === 'done' || login.status === 'error') checkAws();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [login.status]);
   const loadProjects = () =>
     void farmGet<FarmProject[]>(`${ROUTES.farmProjects}${qs({ region })}`)
       .then(setProjects)
@@ -180,9 +197,14 @@ export default function FarmPanel() {
                       Kiểm tra lại
                     </Button>
                     {aws?.canLogin && (
-                      <Button variant="outline" size="sm" onClick={() => login.start({ region })}>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        disabled={login.status === 'running'}
+                        onClick={() => login.start({ region })}
+                      >
                         <LogIn className="size-4" />
-                        Đăng nhập AWS
+                        {login.status === 'running' ? 'Đang đăng nhập…' : 'Đăng nhập AWS'}
                       </Button>
                     )}
                   </div>
