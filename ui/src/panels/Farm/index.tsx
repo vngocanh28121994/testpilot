@@ -7,8 +7,6 @@ import {
   Play,
   Plus,
   RefreshCw,
-  ShieldAlert,
-  ShieldCheck,
   Smartphone,
   Trash2,
 } from 'lucide-react';
@@ -18,8 +16,8 @@ import { LogView } from '@/components/LogView';
 import { Field } from '@/components/Field';
 import { CheckRow } from '@/components/CheckRow';
 import { GroupHeading } from '@/components/GroupHeading';
+import { StatusBanner } from '@/components/StatusBanner';
 import { StatusPill } from '@/components/StatusPill';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -194,45 +192,44 @@ export default function FarmPanel() {
                 </CardDescription>
               </CardHeader>
               <CardContent className="flex flex-col gap-4">
-                <div className="flex flex-wrap items-center gap-2">
-                  {aws?.ok ? (
-                    // Sắp hết hạn là một trạng thái riêng, không phải "kết nối
-                    // được". 15 phút là đúng mức mà lượt chạy nhiều khả năng
-                    // sống lâu hơn credential của chính nó.
-                    <Badge variant={expiringSoon(aws) ? 'outline' : 'default'}
-                      className={expiringSoon(aws) ? 'text-status-flaky' : undefined}>
-                      {expiringSoon(aws) ? <ShieldAlert /> : <ShieldCheck />}
-                      {expiringSoon(aws) ? 'Sắp hết hạn' : 'Kết nối được'}
-                    </Badge>
-                  ) : (
-                    <Badge variant="outline" className="text-muted-foreground">
-                      <ShieldAlert />
-                      Chưa kết nối
-                    </Badge>
-                  )}
-                  <span className="text-muted-foreground text-sm">
-                    {aws?.ok
-                      ? `Nguồn: ${aws.source}${aws.keyHint ? `, key ${aws.keyHint}…` : ''}, ${credentialLife(aws)}`
-                      : (aws?.reason ?? 'Đang kiểm tra credential…')}
-                  </span>
-                  <div className="ms-auto flex flex-wrap gap-2">
-                    <Button variant="outline" size="sm" onClick={checkAws}>
-                      <RefreshCw className="size-4" />
-                      Kiểm tra lại
-                    </Button>
-                    {aws?.canLogin && (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        disabled={login.status === 'running'}
-                        onClick={() => login.start({ region })}
-                      >
-                        <LogIn className="size-4" />
-                        {login.status === 'running' ? 'Đang đăng nhập…' : 'Đăng nhập AWS'}
+                <StatusBanner
+                  tone={!aws ? 'unknown' : !aws.ok ? 'fail' : expiringSoon(aws) ? 'warn' : 'pass'}
+                  title={
+                    !aws
+                      ? 'Đang kiểm tra credential…'
+                      : !aws.ok
+                        ? 'Không dùng được credential'
+                        : expiringSoon(aws)
+                          ? 'Sắp hết hạn'
+                          : 'Kết nối được'
+                  }
+                  detail={
+                    aws
+                      ? aws.ok
+                        ? `nguồn: ${aws.source}${aws.keyHint ? `, key ${aws.keyHint}…` : ''}, ${credentialLife(aws)}`
+                        : (aws.reason ?? 'không rõ lý do')
+                      : undefined
+                  }
+                  actions={
+                    <>
+                      <Button variant="outline" size="sm" onClick={checkAws}>
+                        <RefreshCw className="size-4" />
+                        Kiểm tra lại
                       </Button>
-                    )}
-                  </div>
-                </div>
+                      {aws?.canLogin && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          disabled={login.status === 'running'}
+                          onClick={() => login.start({ region })}
+                        >
+                          <LogIn className="size-4" />
+                          {login.status === 'running' ? 'Đang đăng nhập…' : 'Đăng nhập AWS'}
+                        </Button>
+                      )}
+                    </>
+                  }
+                />
 
                 {login.logs.length > 0 && <LogView logs={login.logs} label="Log đăng nhập AWS" />}
 

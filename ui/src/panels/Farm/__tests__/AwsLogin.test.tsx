@@ -40,11 +40,11 @@ describe('Farm — đăng nhập AWS', () => {
     const user = userEvent.setup();
     await renderWithRouter(<FarmPanel />, { path: '/farm' });
 
-    expect(await screen.findByText('Token hết hạn')).toBeInTheDocument();
+    expect(await screen.findByText(/Token hết hạn/)).toBeInTheDocument();
 
     await user.click(await screen.findByRole('button', { name: 'Đăng nhập AWS' }));
 
-    await waitFor(() => expect(screen.queryByText('Token hết hạn')).not.toBeInTheDocument());
+    await waitFor(() => expect(screen.queryByText(/Token hết hạn/)).not.toBeInTheDocument());
   });
 
   it('khoá nút trong lúc đang đăng nhập, để không bấm hai lần', async () => {

@@ -89,6 +89,13 @@
      trong bảng phải là cùng một màu, nếu không người đọc phải học hai bảng màu. */
   --log-muted: oklch(0.554 0.046 257.417);
 
+  /* Băng trạng thái (credential AWS, và bất cứ thứ gì cần một dòng "đang ổn /
+     sắp hỏng / đã hỏng"). Nền rất nhạt cùng tông với chính màu trạng thái, để
+     cả dải mang nghĩa chứ không chỉ một cái huy hiệu bé nằm cạnh chữ xám. */
+  --tint-pass: oklch(0.97 0.03 155);
+  --tint-warn: oklch(0.975 0.035 85);
+  --tint-fail: oklch(0.97 0.025 25);
+
   /* Tô màu Gherkin. Cùng họ với --chart-*, nhưng đặt tên theo vai trò trong cú
      pháp: đọc CSS của ô soạn mà thấy `--gk-step` thì biết ngay nó tô cái gì. */
   --gk-heading: oklch(0.45 0.15 265);
@@ -148,6 +155,11 @@
   --status-skip: oklch(0.65 0.03 257);
   --status-running: oklch(0.75 0.14 250);
   --log-muted: oklch(0.62 0.03 257);
+
+  /* Nền tối: cùng vai trò nhưng phải tối hơn nền trang, không phải sáng hơn. */
+  --tint-pass: oklch(0.24 0.04 155);
+  --tint-warn: oklch(0.25 0.045 85);
+  --tint-fail: oklch(0.24 0.045 25);
 
   /* Nền tối cần độ sáng cao hơn hẳn, không phải cùng màu chỉ đổi nền: mã màu
      đủ tương phản trên nền trắng thì trên nền tối đọc như màu xám. */
