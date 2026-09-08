@@ -1,5 +1,6 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
+import { LogView } from '@/components/LogView';
 import { Button } from '@/components/ui/button';
 import { api } from '@/api/client';
 import { ROUTES, STREAM_ROUTES } from '@/api/routes';
@@ -67,9 +68,11 @@ export function PrereqTools({ platform }: { platform: 'android' | 'ios' }) {
       {platform === 'ios' && <XcodeRow />}
 
       {(restart.logs.length > 0 || install.logs.length > 0) && (
-        <pre className="console mt-0 max-h-40 overflow-auto text-xs">
-          {[...restart.logs, ...install.logs].join('\n')}
-        </pre>
+        <LogView
+          logs={[...restart.logs, ...install.logs]}
+          className="max-h-40"
+          label="Log công cụ"
+        />
       )}
 
       {/* Sau khi sửa xong thì dò lại, để kết luận ở trên tự đổi. */}

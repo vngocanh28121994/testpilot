@@ -84,6 +84,11 @@
   --status-skip: oklch(0.554 0.046 257.417);
   --status-running: oklch(0.55 0.14 250);
 
+  /* Log: chữ trên nền console. Dùng lại chính các token trạng thái ở trên chứ
+     không đặt màu mới — một dòng "✓ passed" trong log và một huy hiệu "passed"
+     trong bảng phải là cùng một màu, nếu không người đọc phải học hai bảng màu. */
+  --log-muted: oklch(0.554 0.046 257.417);
+
   /* Tô màu Gherkin. Cùng họ với --chart-*, nhưng đặt tên theo vai trò trong cú
      pháp: đọc CSS của ô soạn mà thấy `--gk-step` thì biết ngay nó tô cái gì. */
   --gk-heading: oklch(0.45 0.15 265);
@@ -142,6 +147,7 @@
   --status-flaky: oklch(0.8 0.15 80);
   --status-skip: oklch(0.65 0.03 257);
   --status-running: oklch(0.75 0.14 250);
+  --log-muted: oklch(0.62 0.03 257);
 
   /* Nền tối cần độ sáng cao hơn hẳn, không phải cùng màu chỉ đổi nền: mã màu
      đủ tương phản trên nền trắng thì trên nền tối đọc như màu xám. */

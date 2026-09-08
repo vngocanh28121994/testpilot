@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { PlayCircle } from 'lucide-react';
+import { LogView } from '@/components/LogView';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -123,7 +124,14 @@ function Gate({ run }: { run: RunHistoryEntry }) {
                 {job.error}
               </p>
             )}
-            {job.logs.length > 0 && <pre className="console mt-0">{job.logs.join('\n')}</pre>}
+            {job.logs.length > 0 && (
+              <LogView
+                logs={job.logs}
+                dropped={job.dropped}
+                error={job.error}
+                label="Log hoàn tất workflow"
+              />
+            )}
           </div>
         )}
       </CardContent>

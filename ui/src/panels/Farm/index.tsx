@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import { AppShell } from '@/components/layout/AppShell';
 import { Dropdown } from '@/components/Dropdown';
+import { LogView } from '@/components/LogView';
 import { Field } from '@/components/Field';
 import { CheckRow } from '@/components/CheckRow';
 import { GroupHeading } from '@/components/GroupHeading';
@@ -187,7 +188,7 @@ export default function FarmPanel() {
                   </div>
                 </div>
 
-                {login.logs.length > 0 && <pre className="console">{login.logs.join('\n')}</pre>}
+                {login.logs.length > 0 && <LogView logs={login.logs} label="Log đăng nhập AWS" />}
 
                 <div className="grid gap-4 sm:grid-cols-2">
                   <Field label="Region">
@@ -400,7 +401,9 @@ export default function FarmPanel() {
             </CardContent>
           </Card>
 
-          {job.logs.length > 0 && <pre className="console mt-0">{job.logs.join('\n')}</pre>}
+          {job.logs.length > 0 && (
+            <LogView logs={job.logs} dropped={job.dropped} error={job.error} label="Log lượt chạy farm" />
+          )}
         </section>
 
         <Card aria-labelledby="history-title">

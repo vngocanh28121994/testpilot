@@ -7,6 +7,7 @@ import { AppShell } from '@/components/layout/AppShell';
 import { CheckRow } from '@/components/CheckRow';
 import { Dropdown } from '@/components/Dropdown';
 import { PreflightChecks } from '@/components/PreflightChecks';
+import { LogView } from '@/components/LogView';
 import { Field } from '@/components/Field';
 import { StatusPill } from '@/components/StatusPill';
 import { Badge } from '@/components/ui/badge';
@@ -278,15 +279,9 @@ function JobLog({
     <Card aria-labelledby="run-log-title">
       <CardHeader>
         <CardTitle id="run-log-title">Log chạy</CardTitle>
-        {dropped > 0 && (
-          <CardDescription>Đã ẩn {dropped} dòng đầu để giữ trang phản hồi.</CardDescription>
-        )}
       </CardHeader>
       <CardContent>
-        <pre className="console mt-0">
-          {logs.join('\n')}
-          {error ? `\n❌ ${error}` : ''}
-        </pre>
+        <LogView logs={logs} dropped={dropped} error={error} label="Log chạy" />
       </CardContent>
     </Card>
   );

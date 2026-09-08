@@ -5,6 +5,7 @@ import { FileText, Play, Plus, Save, Trash2, X } from 'lucide-react';
 import { AppShell } from '@/components/layout/AppShell';
 import { CheckRow } from '@/components/CheckRow';
 import { Dropdown } from '@/components/Dropdown';
+import { LogView } from '@/components/LogView';
 import { Field } from '@/components/Field';
 import { GroupHeading } from '@/components/GroupHeading';
 import { Button } from '@/components/ui/button';
@@ -472,7 +473,7 @@ function StudioFormPanel({ state }: { state: StateResponse }) {
               <CardDescription>Log trực tiếp từ lượt chạy đang diễn ra.</CardDescription>
             </CardHeader>
             <CardContent>
-              <pre className="console mt-0">{job.logs.join('\n')}</pre>
+              <LogView logs={job.logs} dropped={job.dropped} error={job.error} label="Log sinh kịch bản" />
             </CardContent>
           </Card>
         )}
