@@ -1,8 +1,10 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { PlayCircle } from 'lucide-react';
 import { LogView } from '@/components/LogView';
+import { StatusBanner } from '@/components/StatusBanner';
+import { Link } from '@tanstack/react-router';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -67,6 +69,27 @@ function Gate({ run }: { run: RunHistoryEntry }) {
 
   const pending = questions.data?.questions.filter((q) => !q.answeredAt) ?? [];
 
+  /**
+   * Chạy xong thì phải có kết cục, không phải đứng im.
+   *
+   * Trước đây bấm "Hoàn thành kịch bản" xong là log chạy hết rồi dừng, và mọi
+   * thứ khác giữ nguyên: thẻ này vẫn nằm đó như thể còn đang chờ duyệt, không
+   * ai nói kết quả ra sao, không có đường nào tới report. Người dùng không biết
+   * mình đã xong hay còn phải làm gì.
+   *
+   * Làm mới state để thẻ tự biến mất — lượt chạy không còn ở trạng thái chờ nữa
+   * — và tuỳ kết quả mà báo cho đúng.
+   */
+  useEffect(() => {
+    if (job.status !== 'done' && job.status !== 'error') return;
+    void client.invalidateQueries({ queryKey: ['state'] });
+    if (job.status === 'error') return;
+    const passed = job.run?.status === 'passed';
+    if (passed) toast.success('Workflow đã hoàn tất. Report, ảnh và video đã sẵn sàng.');
+    else toast.warning('Workflow hoàn tất nhưng có testcase fail. Xem report để biết chi tiết.');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [job.status]);
+
   return (
     <Card aria-labelledby="workflow-gate-title">
       <CardHeader>
@@ -130,6 +153,26 @@ function Gate({ run }: { run: RunHistoryEntry }) {
                 dropped={job.dropped}
                 error={job.error}
                 label="Log hoàn tất workflow"
+              />
+            )}
+
+            {/* Kết cục nói ra ngay tại chỗ, kèm đường đi tiếp. Một toast biến
+                mất sau vài giây; người vừa rời máy đi pha cà phê trong lúc chạy
+                sẽ quay lại đúng lúc nó đã tắt. */}
+            {job.status === 'done' && (
+              <StatusBanner
+                tone={job.run?.status === 'passed' ? 'pass' : 'warn'}
+                title={
+                  job.run?.status === 'passed'
+                    ? 'Workflow đã hoàn tất'
+                    : 'Workflow hoàn tất nhưng có testcase fail'
+                }
+                detail="Report, ảnh và video đã sẵn sàng."
+                actions={
+                  <Button asChild size="sm" variant="outline">
+                    <Link to="/runner/history" search={{ runId: undefined }}>Xem report</Link>
+                  </Button>
+                }
               />
             )}
           </div>
