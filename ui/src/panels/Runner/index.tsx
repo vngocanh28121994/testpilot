@@ -15,7 +15,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { api, qs } from '@/api/client';
 import { ROUTES, STREAM_ROUTES } from '@/api/routes';
 import { DevicePicker } from '@/components/DevicePicker';
-import { PrereqCard } from './PrereqCard';
+import { PrereqTools } from './PrereqTools';
 import { useAppState } from '@/hooks/useAppState';
 import { useStreamJob } from '@/hooks/useStreamJob';
 import { when } from '@/lib/datetime';
@@ -164,13 +164,12 @@ export default function RunnerPanel() {
             </CardContent>
           </Card>
 
-          <PrereqCard platform={platform} />
-
           <PreflightCard
             result={preflight.data}
             pending={preflight.isPending}
             error={preflight.error}
             onRefresh={() => void preflight.refetch()}
+            platform={platform}
             chosen={device}
             onPick={setDevice}
           />
@@ -188,6 +187,7 @@ function PreflightCard({
   pending,
   error,
   onRefresh,
+  platform,
   chosen,
   onPick,
 }: {
@@ -195,15 +195,17 @@ function PreflightCard({
   pending: boolean;
   error: Error | null;
   onRefresh: () => void;
+  platform: 'web' | 'android' | 'ios';
   chosen: string;
   onPick: (id: string) => void;
 }) {
   return (
     <Card aria-labelledby="preflight-title">
       <CardHeader>
-        <CardTitle id="preflight-title">Kiểm tra trước khi chạy</CardTitle>
+        <CardTitle id="preflight-title">Trước khi chạy</CardTitle>
         <CardDescription>
-          Driver và thiết bị phải sẵn sàng thì nút chạy mới mở khoá.
+          Driver và thiết bị phải sẵn sàng thì nút chạy mới mở khoá. Sửa được ngay ở đây,
+          không cần mở terminal.
         </CardDescription>
       </CardHeader>
       <CardContent className="flex flex-col gap-4">
@@ -252,6 +254,9 @@ function PreflightCard({
                 </div>
               )
             )}
+
+            {/* Web chỉ cần một URL nên không có gì để sửa ở đây. */}
+            {platform !== 'web' && <PrereqTools platform={platform} />}
           </>
         )}
       </CardContent>
