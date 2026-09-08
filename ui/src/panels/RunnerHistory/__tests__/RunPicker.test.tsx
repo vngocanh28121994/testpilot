@@ -60,3 +60,28 @@ describe('Chi tiết lượt chạy — bộ chọn', () => {
     expect(current.textContent).toContain('4✗');
   });
 });
+
+/**
+ * Danh sách dài ra theo từng ngày làm việc. Không giới hạn chiều cao thì nó đẩy
+ * phần chi tiết — thứ người ta mở trang này để xem — xuống dưới màn hình.
+ */
+describe('Chi tiết lượt chạy — danh sách dài', () => {
+  const many = Array.from({ length: 40 }, (_, i) => ({
+    id: `r-${i}`,
+    platform: 'android',
+    tag: '@a',
+    status: 'passed',
+    startedAt: new Date(Date.UTC(2026, 8, 8, 4, i)).toISOString(),
+    counters: { passed: 1, failed: 0 },
+  }));
+
+  it('cuộn trong chính nó và nói tổng số', async () => {
+    server.use(http.get(ROUTES.state, () => HttpResponse.json({ ...stateFixture, reports: many })));
+    renderWithRouter(<RunnerHistoryPanel />, { path: '/runner/history' });
+
+    expect(await screen.findByText('40 lượt chạy')).toBeInTheDocument();
+    const list = screen.getByRole('list', { name: 'Các lượt chạy' });
+    expect(list.className).toMatch(/overflow-auto/);
+    expect(list.className).toMatch(/max-h-/);
+  });
+});

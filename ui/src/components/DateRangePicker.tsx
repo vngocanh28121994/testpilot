@@ -1,13 +1,22 @@
 import { useState } from 'react';
 import { format } from 'date-fns';
 import { DayPicker, type DateRange } from 'react-day-picker';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 
 interface DateRangePickerProps {
   value: DateRange | undefined;
   onChange: (range: DateRange | undefined) => void;
 }
 
-/** Chọn khoảng ngày bằng react-day-picker, thay thế flatpickr của UI cũ. */
+/**
+ * Chọn khoảng ngày bằng react-day-picker, thay thế flatpickr của UI cũ.
+ *
+ * Lịch nằm trong một Popover chứ không phải một <div> tự bật/tắt. Bản tự dựng
+ * chỉ đóng khi bấm đúng cái nút đã mở nó: bấm ra ngoài, bấm Escape, hay chuyển
+ * tiêu điểm sang chỗ khác đều không đóng, nên nó che mất phần bảng ngay bên
+ * dưới và người dùng phải quay lại tìm đúng cái nút. Popover lo cả ba việc đó,
+ * cộng với định vị khi lịch chạm mép màn hình.
+ */
 export function DateRangePicker({ value, onChange }: DateRangePickerProps) {
   const [open, setOpen] = useState(false);
   const label = value?.from
@@ -15,18 +24,13 @@ export function DateRangePicker({ value, onChange }: DateRangePickerProps) {
     : 'Tất cả ngày';
 
   return (
-    <div className="relative">
-      <button
-        className="button mt-1 w-full text-left"
-        type="button"
-        aria-expanded={open}
-        aria-label="Lọc theo ngày"
-        onClick={() => setOpen((shown) => !shown)}
-      >
-        {label}
-      </button>
-      {open && (
-        <div className="bg-popover border-border absolute z-10 mt-1 rounded-md border p-3 shadow-md">
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <button className="button mt-1 w-full text-left" type="button" aria-label="Lọc theo ngày">
+          {label}
+        </button>
+      </PopoverTrigger>
+      <PopoverContent>
           <DayPicker
             mode="range"
             selected={value}
@@ -52,16 +56,15 @@ export function DateRangePicker({ value, onChange }: DateRangePickerProps) {
               outside: 'text-muted-foreground opacity-50',
             }}
           />
-          <div className="mt-2 flex justify-between gap-4">
-            <button className="text-sm underline" type="button" onClick={() => onChange(undefined)}>
-              Xoá lọc
-            </button>
-            <button className="text-sm underline" type="button" onClick={() => setOpen(false)}>
-              Xong
-            </button>
-          </div>
+        <div className="mt-2 flex justify-between gap-4">
+          <button className="text-sm underline" type="button" onClick={() => onChange(undefined)}>
+            Xoá lọc
+          </button>
+          <button className="text-sm underline" type="button" onClick={() => setOpen(false)}>
+            Xong
+          </button>
         </div>
-      )}
-    </div>
+      </PopoverContent>
+    </Popover>
   );
 }

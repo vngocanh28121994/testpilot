@@ -30,7 +30,17 @@ export default function RunnerHistoryPanel({ runId }: { runId?: string }) {
         có cách nào biết mình đang chọn cái nào, kể cả sau khi đã bấm. Giờ mỗi
         nút mang giờ chạy — thứ duy nhất thật sự khác nhau — cộng kết quả và tag.
       */}
-      <ul aria-label="Các lượt chạy" className="flex flex-col gap-1.5">
+      {/*
+        Danh sách dài ra theo từng ngày làm việc, nên nó phải cuộn trong chính
+        nó thay vì đẩy phần chi tiết — thứ người ta mở trang này để xem — xuống
+        dưới màn hình. Con số tổng đứng ngay trên để "cuộn mãi không hết" không
+        biến thành "không biết còn bao nhiêu".
+      */}
+      <div className="text-muted-foreground mb-2 text-sm">{reports.length} lượt chạy</div>
+      <ul
+        aria-label="Các lượt chạy"
+        className="flex max-h-64 flex-col gap-1.5 overflow-auto pe-1"
+      >
         {reports.map((item) => {
           const active = report?.id === item.id;
           const pass = item.counters?.passed ?? 0;
@@ -40,6 +50,11 @@ export default function RunnerHistoryPanel({ runId }: { runId?: string }) {
               <button
                 type="button"
                 aria-current={active}
+                // Lượt đang chọn có thể nằm ngoài vùng nhìn thấy khi danh sách
+                // dài — nhất là khi vào thẳng bằng link từ bảng lịch sử.
+                ref={(node) => {
+                  if (active) node?.scrollIntoView({ block: 'nearest' });
+                }}
                 onClick={() => setPicked(item.id)}
                 className={cn(
                   'flex w-full flex-wrap items-center gap-x-3 gap-y-1 rounded-lg border px-3 py-2 text-left text-sm',
