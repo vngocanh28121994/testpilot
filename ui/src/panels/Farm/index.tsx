@@ -117,20 +117,67 @@ export default function FarmPanel() {
     if (login.status === 'done' || login.status === 'error') checkAws();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [login.status]);
-  const loadProjects = () =>
-    void farmGet<FarmProject[]>(`${ROUTES.farmProjects}${qs({ region })}`)
-      .then(setProjects)
-      .catch((error: Error) => toast.error(error.message));
-  const loadPools = () => {
-    if (project)
-      void farmGet<FarmPool[]>(`${ROUTES.farmPools}${qs({ region, projectArn: project })}`)
-        .then(setPools)
-        .catch((error: Error) => toast.error(error.message));
+  /**
+   * Việc nào đang chạy, hoặc null.
+   *
+   * Ba nút này gọi thẳng sang AWS Device Farm — mất vài giây là chuyện thường.
+   * Trước đây chúng bắn đi rồi thôi: không khoá, không đổi nhãn, không nói gì
+   * khi xong. Bấm xong màn hình đứng im thì phản xạ tự nhiên là bấm tiếp, và
+   * mỗi lần bấm là thêm một lượt gọi API tính tiền.
+   */
+  const [loading, setLoading] = useState<'projects' | 'pools' | 'devices' | null>(null);
+
+  async function load<T>(
+    key: 'projects' | 'pools' | 'devices',
+    url: string,
+    apply: (data: T) => void,
+    done: (data: T) => string,
+  ) {
+    setLoading(key);
+    try {
+      const data = await farmGet<T>(url);
+      apply(data);
+      // Nói ra kết quả, không chỉ ngừng quay: "0 project" và "chưa bấm" trông
+      // giống hệt nhau trên một cái dropdown rỗng.
+      toast.success(done(data));
+      return data;
+    } catch (error) {
+      toast.error((error as Error).message);
+      return undefined;
+    } finally {
+      setLoading(null);
+    }
+  }
+
+  const loadPools = () =>
+    project
+      ? load<FarmPool[]>(
+          'pools',
+          `${ROUTES.farmPools}${qs({ region, projectArn: project })}`,
+          setPools,
+          (data) => `${data.length} device pool.`,
+        )
+      : Promise.resolve(undefined);
+
+  const loadProjects = async () => {
+    const data = await load<FarmProject[]>(
+      'projects',
+      `${ROUTES.farmProjects}${qs({ region })}`,
+      setProjects,
+      (items) => `${items.length} project.`,
+    );
+    // Đã có project được chọn sẵn thì tải luôn pool của nó — bản cũ làm vậy, và
+    // đúng: người ta bấm "Tải project" để đi tiếp, không phải để dừng ở đó.
+    if (data && project) await loadPools();
   };
+
   const loadDevices = () =>
-    void farmGet<FarmDevice[]>(`${ROUTES.farmDevices}${qs({ region, platform })}`)
-      .then(setDevices)
-      .catch((error: Error) => toast.error(error.message));
+    load<FarmDevice[]>(
+      'devices',
+      `${ROUTES.farmDevices}${qs({ region, platform })}`,
+      setDevices,
+      (data) => `${data.length} thiết bị.`,
+    );
   const makePool = async () => {
     if (!poolName || !project || selected.length === 0)
       return toast.error('Cần project, tên pool và ít nhất một thiết bị.');
@@ -256,13 +303,21 @@ export default function FarmPanel() {
                 </div>
 
                 <div className="flex flex-wrap gap-2">
-                  <Button variant="outline" onClick={loadProjects}>
+                  <Button
+                    variant="outline"
+                    disabled={loading !== null}
+                    onClick={() => void loadProjects()}
+                  >
                     <Download className="size-4" />
-                    Tải project
+                    {loading === 'projects' ? 'Đang tải project…' : 'Tải project'}
                   </Button>
-                  <Button variant="outline" disabled={!project} onClick={loadPools}>
+                  <Button
+                    variant="outline"
+                    disabled={!project || loading !== null}
+                    onClick={() => void loadPools()}
+                  >
                     <Download className="size-4" />
-                    Tải pool
+                    {loading === 'pools' ? 'Đang tải pool…' : 'Tải pool'}
                   </Button>
                 </div>
               </CardContent>
@@ -318,9 +373,15 @@ export default function FarmPanel() {
                     Hoặc tự chọn thiết bị và tạo pool mới
                   </summary>
                   <div className="mt-3 flex flex-col gap-3">
-                    <Button variant="outline" size="sm" className="self-start" onClick={loadDevices}>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="self-start"
+                      disabled={loading !== null}
+                      onClick={() => void loadDevices()}
+                    >
                       <Download className="size-4" />
-                      Tải thiết bị
+                      {loading === 'devices' ? 'Đang tải thiết bị…' : 'Tải thiết bị'}
                     </Button>
                     {devices.length > 0 && (
                       <div className="max-h-64 overflow-auto rounded-lg border">
