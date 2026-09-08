@@ -536,11 +536,11 @@
           "source": "runtime-observed",
           "status": "healed",
           "confidence": 0.6,
-          "verifiedAt": "2026-09-08T18:12:09.074Z",
+          "verifiedAt": "2026-09-08T18:44:07.895Z",
           "platform": "web"
         }
       ],
-      "lastUpdatedAt": "2026-09-08T18:12:09.074Z"
+      "lastUpdatedAt": "2026-09-08T18:44:07.895Z"
     },
     "transfer.soTien": {
       "element": "transfer.soTien",
@@ -551,11 +551,11 @@
           "source": "runtime-observed",
           "status": "healed",
           "confidence": 0.6,
-          "verifiedAt": "2026-09-08T18:12:10.447Z",
+          "verifiedAt": "2026-09-08T18:43:00.757Z",
           "platform": "web"
         }
       ],
-      "lastUpdatedAt": "2026-09-08T18:12:10.447Z"
+      "lastUpdatedAt": "2026-09-08T18:43:00.757Z"
     },
     "transfer.tienChuyenPhi0": {
       "element": "transfer.tienChuyenPhi0",
@@ -566,11 +566,11 @@
           "source": "runtime-observed",
           "status": "healed",
           "confidence": 0.6,
-          "verifiedAt": "2026-09-08T18:10:18.807Z",
+          "verifiedAt": "2026-09-08T18:43:10.391Z",
           "platform": "web"
         }
       ],
-      "lastUpdatedAt": "2026-09-08T18:10:18.807Z"
+      "lastUpdatedAt": "2026-09-08T18:43:10.391Z"
     }
   }
 }

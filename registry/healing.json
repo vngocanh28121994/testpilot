@@ -328,7 +328,10 @@
     "2026-09-08T09-58-40Z-web": "2026-09-08T10:03:55.169Z",
     "2026-09-08T11-00-36Z-web": "2026-09-08T11:05:57.827Z",
     "2026-09-08T12-53-46Z-web": "2026-09-08T12:59:56.106Z",
-    "2026-09-08T18-06-51Z-web-feature-chuyen-tien-noi-bo": "2026-09-08T18:12:12.818Z"
+    "2026-09-08T18-06-51Z-web-feature-chuyen-tien-noi-bo": "2026-09-08T18:12:12.818Z",
+    "2026-09-08T18-13-57Z-web-feature-chuyen-tien-noi-bo": "2026-09-08T18:18:22.282Z",
+    "2026-09-08T18-34-46Z-web-feature-chuyen-tien-noi-bo": "2026-09-08T18:39:00.868Z",
+    "2026-09-08T18-41-45Z-web-feature-chuyen-tien-noi-bo": "2026-09-08T18:44:09.059Z"
   },
   "entries": {
     "home.totalAssets::android::6dbfe0a6bf0ea4c4": {
@@ -773,6 +776,32 @@
       "lastSeen": "2026-09-08T05:07:21.522Z",
       "devices": {
         "SM_S938B": 4
+      }
+    },
+    "transfer.thongBao::web::d902c01a3180a982": {
+      "elementId": "transfer.thongBao",
+      "platform": "web",
+      "from": {
+        "strategy": "css",
+        "value": ".subtitle-dialog-common",
+        "weight": 0.95,
+        "noScope": true,
+        "origin": "crawler"
+      },
+      "to": {
+        "strategy": "css",
+        "value": ".msg-row-wraper .label-content",
+        "weight": 0.8,
+        "origin": "crawler"
+      },
+      "successes": 2,
+      "runIds": [
+        "2026-09-08T18-41-45Z-web-feature-chuyen-tien-noi-bo"
+      ],
+      "firstSeen": "2026-09-08T18:44:09.059Z",
+      "lastSeen": "2026-09-08T18:44:09.059Z",
+      "devices": {
+        "Pixel 7": 2
       }
     }
   }

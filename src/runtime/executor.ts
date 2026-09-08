@@ -720,7 +720,7 @@ export class Executor {
           confirm();
           return heal;
         }
-        const { r, heal, confirm } = await withElement(intent.element, 'assert-text', {
+        let { r, heal, confirm } = await withElement(intent.element, 'assert-text', {
           locatorParams: intent.locatorParams,
         });
         // Every match, not just the first — the same reason the negative form
@@ -730,9 +730,44 @@ export class Executor {
         // at the top of the watchlist", which is a different claim and failed
         // against a list sorted alphabetically. An element that matches once is
         // unaffected: the snapshot then holds exactly one text.
-        const snapshot = this.driver.inspectMatches
-          ? await this.driver.inspectMatches(r.candidate)
-          : { count: 1, texts: [(await r.handle.text()).trim()], focused: [] };
+        const read = async (resolution: typeof r) => this.driver.inspectMatches
+          ? await this.driver.inspectMatches(resolution.candidate)
+          : { count: 1, texts: [(await resolution.handle.text()).trim()], focused: [] };
+        let snapshot = await read(r);
+
+        // Một candidate đã resolve nhưng giờ khớp KHÔNG phần tử nào không phải
+        // bằng chứng "chữ không đúng" — nó là bằng chứng phần tử đã rời màn
+        // hình giữa lúc resolve và lúc đọc.
+        //
+        // Trước đây snapshot rỗng đi thẳng xuống phần so sánh, thành `got ""`,
+        // và câu đó gửi người đọc đi tìm một lỗi nội dung không hề tồn tại:
+        //
+        //   Text assertion failed on "transfer.thongBao":
+        //   expected to contain "Chuyển tiền thành công", got "".
+        //
+        // Thực tế `.subtitle-dialog-common` (candidate nặng ký nhất) trỏ vào
+        // dialog xác nhận, mà dialog ấy đóng ngay sau khi bấm XÁC NHẬN. Câu
+        // thành công vẫn nằm trên màn hình, ở candidate xếp sau —
+        // `.msg-row-wraper .label-content` — nhưng không ai hỏi tới nó, vì
+        // resolver đã dừng ở candidate đầu tiên tìm thấy.
+        const rejected: string[] = [];
+        while (snapshot.count === 0 && rejected.length < 3) {
+          this.resolver.rejectResolution(intent.element, r);
+          rejected.push(candidateKey(r.candidate));
+          const next = await withElement(intent.element, 'assert-text', {
+            locatorParams: intent.locatorParams,
+            excludeCandidateKeys: rejected,
+          }).catch(() => null);
+          if (!next) break;
+          ({ r, heal, confirm } = next);
+          snapshot = await read(r);
+        }
+        if (snapshot.count === 0) {
+          throw new Error(
+            `"${intent.element}" không còn trên màn hình lúc kiểm tra `
+            + `(đã thử ${rejected.length + 1} locator). Không kết luận được về nội dung.`,
+          );
+        }
         const seen = snapshot.texts.map((value) => value.trim());
         const expected = this.expand(intent.text).trim();
         const matches = (values: string[]) => intent.mode === 'equals'
