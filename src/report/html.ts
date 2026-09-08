@@ -159,6 +159,11 @@ function render(
 .media { display: flex; gap: 16px; flex-wrap: wrap; margin: 12px 0 4px; }
 .media figure { margin: 0; }
 .media figcaption { font-size: 12px; color: #6b7280; margin-bottom: 6px; }
+/* Tên kịch bản là dòng đầu của caption, đậm; mô tả ảnh xuống dòng dưới và mờ
+   hơn. Ảnh bị tách khỏi tiêu đề khối ngay khi người ta cuộn, hoặc khi họ tải nó
+   về dán vào ticket — lúc đó caption là thứ duy nhất còn nói được nó là của ai. */
+.media figcaption b { display: block; color: #111827; font-weight: 600; }
+.media figcaption .shot-what { display: block; }
 .warn {
   border: 1px solid #f0c36d; background: #fdf6e3; border-radius: 8px;
   padding: 12px 16px; margin: 8px 0 4px;
@@ -353,6 +358,14 @@ function failures(results: ScenarioResult[], outDir: string): string {
           label: st.step.text.replace(/^I take a screenshot named "(.*)"$/i, '$1'),
         }));
       const where = manyDevices ? `<span class="where">${esc(r.platform)}/${esc(r.device)}</span>` : '';
+      // Mỗi ảnh tự nói nó thuộc kịch bản nào.
+      //
+      // Tên kịch bản có ở tiêu đề khối, nhưng cuộn xuống tới ảnh là nó đã ra
+      // khỏi tầm nhìn — và với mười kịch bản fail thì màn hình chỉ còn một dãy
+      // ảnh giống nhau, không cái nào tự nhận là của ai. Cũng là thứ người ta
+      // hay tải về hoặc dán vào ticket, lúc đó thì mọi bối cảnh đều đã mất.
+      const shotOf = (what: string) => `${what} — ${esc(r.scenario.name)}`;
+
       // Only the first is expanded: a run with ten failures should open as a
       // list you can scan, not as ten screenshots you have to scroll past.
       return `<details${i === 0 ? ' open' : ''}>
@@ -360,8 +373,8 @@ function failures(results: ScenarioResult[], outDir: string): string {
   ${step ? `<p><code>${esc(step.step.keyword)} ${esc(step.step.text)}</code> — line ${step.step.line}</p>
   <pre>${esc(step.error?.message ?? '')}</pre>` : '<p class="empty">No failing step recorded.</p>'}
   <div class="media">
-    ${shot ? `<figure class="shot"><figcaption>Screenshot khi fail — bấm để xem cỡ thật</figcaption><a href="${esc(shot)}" target="_blank"><img src="${esc(shot)}" loading="lazy" alt="Screenshot at failure"></a></figure>` : ''}
-    ${staged.map((sh) => `<figure class="shot"><figcaption>${esc(sh.label)}</figcaption><a href="${esc(sh.href)}" target="_blank"><img src="${esc(sh.href)}" loading="lazy" alt="${esc(sh.label)}"></a></figure>`).join('\n    ')}
+    ${shot ? `<figure class="shot"><figcaption><b>${esc(r.scenario.name)}</b><span class="shot-what">Lúc fail — bấm để xem cỡ thật</span></figcaption><a href="${esc(shot)}" target="_blank"><img src="${esc(shot)}" loading="lazy" alt="${shotOf('Ảnh lúc fail')}"></a></figure>` : ''}
+    ${staged.map((sh) => `<figure class="shot"><figcaption><b>${esc(r.scenario.name)}</b><span class="shot-what">${esc(sh.label)}</span></figcaption><a href="${esc(sh.href)}" target="_blank"><img src="${esc(sh.href)}" loading="lazy" alt="${shotOf(esc(sh.label))}"></a></figure>`).join('\n    ')}
     ${videoFigures(r, outDir)}
   </div>
 </details>`;
@@ -378,7 +391,8 @@ function videoFigures(r: ScenarioResult, outDir: string): string {
     .filter((run) => run.video)
     .map((run) => {
       const href = assetHref(outDir, run.video!);
-      return `<figure><figcaption>Video — lần thử ${run.attempt} (${run.status})</figcaption>
+      // Video cũng vậy: nó còn dễ bị tải về hơn cả ảnh.
+      return `<figure><figcaption><b>${esc(r.scenario.name)}</b><span class="shot-what">Video — lần thử ${run.attempt} (${run.status})</span></figcaption>
 <video src="${esc(href)}" controls preload="metadata" playsinline></video></figure>`;
     })
     .join('\n');
