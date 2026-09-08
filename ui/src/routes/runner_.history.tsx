@@ -2,7 +2,7 @@
 import { createFileRoute } from '@tanstack/react-router';
 import RunnerHistoryPanel from '@/panels/RunnerHistory';
 
-export const Route = createFileRoute('/runner/history')({
+export const Route = createFileRoute('/runner_/history')({
   validateSearch: (search: Record<string, unknown>) => ({ runId: typeof search.runId === 'string' ? search.runId : undefined }),
   component: RunnerHistoryRoute,
 });

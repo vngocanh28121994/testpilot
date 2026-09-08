@@ -2,7 +2,7 @@
 import { createFileRoute } from '@tanstack/react-router';
 import HistoryPanel from '@/panels/History';
 
-export const Route = createFileRoute('/scenarios/history')({
+export const Route = createFileRoute('/scenarios_/history')({
   validateSearch: (search: Record<string, unknown>) => ({ focusId: typeof search.focusId === 'string' ? search.focusId : undefined }),
   component: ScenarioHistoryRoute,
 });

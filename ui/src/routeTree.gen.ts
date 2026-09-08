@@ -17,10 +17,10 @@ import { Route as RunnerRouteImport } from './routes/runner'
 import { Route as ScenariosRouteImport } from './routes/scenarios'
 import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as StudioRouteImport } from './routes/studio'
-import { Route as FarmRunIdRouteImport } from './routes/farm.$runId'
+import { Route as FarmRunIdRouteImport } from './routes/farm_.$runId'
 import { Route as ProbeStreamRouteImport } from './routes/probe.stream'
-import { Route as RunnerHistoryRouteImport } from './routes/runner.history'
-import { Route as ScenariosHistoryRouteImport } from './routes/scenarios.history'
+import { Route as RunnerHistoryRouteImport } from './routes/runner_.history'
+import { Route as ScenariosHistoryRouteImport } from './routes/scenarios_.history'
 import { Route as TodoSlugRouteImport } from './routes/todo.$slug'
 
 const IndexRoute = IndexRouteImport.update({
@@ -64,9 +64,9 @@ const StudioRoute = StudioRouteImport.update({
   getParentRoute: () => rootRouteImport,
 } as any)
 const FarmRunIdRoute = FarmRunIdRouteImport.update({
-  id: '/$runId',
-  path: '/$runId',
-  getParentRoute: () => FarmRoute,
+  id: '/farm_/$runId',
+  path: '/farm/$runId',
+  getParentRoute: () => rootRouteImport,
 } as any)
 const ProbeStreamRoute = ProbeStreamRouteImport.update({
   id: '/probe/stream',
@@ -74,14 +74,14 @@ const ProbeStreamRoute = ProbeStreamRouteImport.update({
   getParentRoute: () => rootRouteImport,
 } as any)
 const RunnerHistoryRoute = RunnerHistoryRouteImport.update({
-  id: '/history',
-  path: '/history',
-  getParentRoute: () => RunnerRoute,
+  id: '/runner_/history',
+  path: '/runner/history',
+  getParentRoute: () => rootRouteImport,
 } as any)
 const ScenariosHistoryRoute = ScenariosHistoryRouteImport.update({
-  id: '/history',
-  path: '/history',
-  getParentRoute: () => ScenariosRoute,
+  id: '/scenarios_/history',
+  path: '/scenarios/history',
+  getParentRoute: () => rootRouteImport,
 } as any)
 const TodoSlugRoute = TodoSlugRouteImport.update({
   id: '/todo/$slug',
@@ -92,10 +92,10 @@ const TodoSlugRoute = TodoSlugRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/builds': typeof BuildsRoute
-  '/farm': typeof FarmRouteWithChildren
+  '/farm': typeof FarmRoute
   '/healing': typeof HealingRoute
-  '/runner': typeof RunnerRouteWithChildren
-  '/scenarios': typeof ScenariosRouteWithChildren
+  '/runner': typeof RunnerRoute
+  '/scenarios': typeof ScenariosRoute
   '/settings': typeof SettingsRoute
   '/studio': typeof StudioRoute
   '/farm/$runId': typeof FarmRunIdRoute
@@ -107,10 +107,10 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/builds': typeof BuildsRoute
-  '/farm': typeof FarmRouteWithChildren
+  '/farm': typeof FarmRoute
   '/healing': typeof HealingRoute
-  '/runner': typeof RunnerRouteWithChildren
-  '/scenarios': typeof ScenariosRouteWithChildren
+  '/runner': typeof RunnerRoute
+  '/scenarios': typeof ScenariosRoute
   '/settings': typeof SettingsRoute
   '/studio': typeof StudioRoute
   '/farm/$runId': typeof FarmRunIdRoute
@@ -123,16 +123,16 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/builds': typeof BuildsRoute
-  '/farm': typeof FarmRouteWithChildren
+  '/farm': typeof FarmRoute
   '/healing': typeof HealingRoute
-  '/runner': typeof RunnerRouteWithChildren
-  '/scenarios': typeof ScenariosRouteWithChildren
+  '/runner': typeof RunnerRoute
+  '/scenarios': typeof ScenariosRoute
   '/settings': typeof SettingsRoute
   '/studio': typeof StudioRoute
-  '/farm/$runId': typeof FarmRunIdRoute
+  '/farm_/$runId': typeof FarmRunIdRoute
   '/probe/stream': typeof ProbeStreamRoute
-  '/runner/history': typeof RunnerHistoryRoute
-  '/scenarios/history': typeof ScenariosHistoryRoute
+  '/runner_/history': typeof RunnerHistoryRoute
+  '/scenarios_/history': typeof ScenariosHistoryRoute
   '/todo/$slug': typeof TodoSlugRoute
 }
 export interface FileRouteTypes {
@@ -176,23 +176,26 @@ export interface FileRouteTypes {
     | '/scenarios'
     | '/settings'
     | '/studio'
-    | '/farm/$runId'
+    | '/farm_/$runId'
     | '/probe/stream'
-    | '/runner/history'
-    | '/scenarios/history'
+    | '/runner_/history'
+    | '/scenarios_/history'
     | '/todo/$slug'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   BuildsRoute: typeof BuildsRoute
-  FarmRoute: typeof FarmRouteWithChildren
+  FarmRoute: typeof FarmRoute
   HealingRoute: typeof HealingRoute
-  RunnerRoute: typeof RunnerRouteWithChildren
-  ScenariosRoute: typeof ScenariosRouteWithChildren
+  RunnerRoute: typeof RunnerRoute
+  ScenariosRoute: typeof ScenariosRoute
   SettingsRoute: typeof SettingsRoute
   StudioRoute: typeof StudioRoute
+  FarmRunIdRoute: typeof FarmRunIdRoute
   ProbeStreamRoute: typeof ProbeStreamRoute
+  RunnerHistoryRoute: typeof RunnerHistoryRoute
+  ScenariosHistoryRoute: typeof ScenariosHistoryRoute
   TodoSlugRoute: typeof TodoSlugRoute
 }
 
@@ -254,12 +257,12 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof StudioRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/farm/$runId': {
-      id: '/farm/$runId'
-      path: '/$runId'
+    '/farm_/$runId': {
+      id: '/farm_/$runId'
+      path: '/farm/$runId'
       fullPath: '/farm/$runId'
       preLoaderRoute: typeof FarmRunIdRouteImport
-      parentRoute: typeof FarmRoute
+      parentRoute: typeof rootRouteImport
     }
     '/probe/stream': {
       id: '/probe/stream'
@@ -268,19 +271,19 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ProbeStreamRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/runner/history': {
-      id: '/runner/history'
-      path: '/history'
+    '/runner_/history': {
+      id: '/runner_/history'
+      path: '/runner/history'
       fullPath: '/runner/history'
       preLoaderRoute: typeof RunnerHistoryRouteImport
-      parentRoute: typeof RunnerRoute
+      parentRoute: typeof rootRouteImport
     }
-    '/scenarios/history': {
-      id: '/scenarios/history'
-      path: '/history'
+    '/scenarios_/history': {
+      id: '/scenarios_/history'
+      path: '/scenarios/history'
       fullPath: '/scenarios/history'
       preLoaderRoute: typeof ScenariosHistoryRouteImport
-      parentRoute: typeof ScenariosRoute
+      parentRoute: typeof rootRouteImport
     }
     '/todo/$slug': {
       id: '/todo/$slug'
@@ -292,49 +295,19 @@ declare module '@tanstack/react-router' {
   }
 }
 
-interface FarmRouteChildren {
-  FarmRunIdRoute: typeof FarmRunIdRoute
-}
-
-const FarmRouteChildren: FarmRouteChildren = {
-  FarmRunIdRoute: FarmRunIdRoute,
-}
-
-const FarmRouteWithChildren = FarmRoute._addFileChildren(FarmRouteChildren)
-
-interface RunnerRouteChildren {
-  RunnerHistoryRoute: typeof RunnerHistoryRoute
-}
-
-const RunnerRouteChildren: RunnerRouteChildren = {
-  RunnerHistoryRoute: RunnerHistoryRoute,
-}
-
-const RunnerRouteWithChildren =
-  RunnerRoute._addFileChildren(RunnerRouteChildren)
-
-interface ScenariosRouteChildren {
-  ScenariosHistoryRoute: typeof ScenariosHistoryRoute
-}
-
-const ScenariosRouteChildren: ScenariosRouteChildren = {
-  ScenariosHistoryRoute: ScenariosHistoryRoute,
-}
-
-const ScenariosRouteWithChildren = ScenariosRoute._addFileChildren(
-  ScenariosRouteChildren,
-)
-
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   BuildsRoute: BuildsRoute,
-  FarmRoute: FarmRouteWithChildren,
+  FarmRoute: FarmRoute,
   HealingRoute: HealingRoute,
-  RunnerRoute: RunnerRouteWithChildren,
-  ScenariosRoute: ScenariosRouteWithChildren,
+  RunnerRoute: RunnerRoute,
+  ScenariosRoute: ScenariosRoute,
   SettingsRoute: SettingsRoute,
   StudioRoute: StudioRoute,
+  FarmRunIdRoute: FarmRunIdRoute,
   ProbeStreamRoute: ProbeStreamRoute,
+  RunnerHistoryRoute: RunnerHistoryRoute,
+  ScenariosHistoryRoute: ScenariosHistoryRoute,
   TodoSlugRoute: TodoSlugRoute,
 }
 export const routeTree = rootRouteImport

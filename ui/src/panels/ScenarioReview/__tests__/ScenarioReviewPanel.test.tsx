@@ -4,13 +4,20 @@ import { screen } from '@testing-library/react';
 import { renderWithRouter , chooseFromDropdown } from '@/test/utils';
 import ScenarioReviewPanel from '@/panels/ScenarioReview';
 
-const editButtons = () => screen.getAllByRole('button', { name: 'Sửa' });
+/**
+ * Hành động phụ nằm trong menu "⋯", không bày hết ra hàng — bốn nút mỗi hàng
+ * thì cột hành động nuốt mất chỗ của chính nội dung kịch bản. Nên thao tác của
+ * test cũng phải là: mở menu, rồi chọn.
+ */
+const moreButtons = () => screen.getAllByRole('button', { name: /Hành động khác/ });
 
 /** `noUncheckedIndexedAccess` bật, nên chỉ số phải được thu hẹp kiểu ở đây. */
-function editButtonAt(index: number): HTMLElement {
-  const button = editButtons()[index];
-  if (!button) throw new Error(`Không có nút "Sửa" thứ ${index}`);
-  return button;
+async function openEditorAt(index: number) {
+  const user = userEvent.setup();
+  const button = moreButtons()[index];
+  if (!button) throw new Error(`Không có menu hành động thứ ${index}`);
+  await user.click(button);
+  await user.click(await screen.findByRole('menuitem', { name: /Sửa kịch bản/ }));
 }
 
 const render = () => renderWithRouter(<ScenarioReviewPanel search={{}} />, { path: '/scenarios' });
@@ -58,14 +65,13 @@ describe('ScenarioReviewPanel — sửa kịch bản', () => {
    * Panel chỉ được nạp khối của đúng kịch bản đã bấm.
    */
   it('chỉ đưa ra kịch bản được bấm, không phải cả file', async () => {
-    const user = userEvent.setup();
     await render();
     await screen.findByText('Đăng nhập thành công');
 
-    expect(editButtons()).toHaveLength(2);
+    expect(moreButtons()).toHaveLength(2);
     expect(screen.queryByRole('textbox', { name: 'Nội dung kịch bản' })).not.toBeInTheDocument();
 
-    await user.click(editButtonAt(0));
+    await openEditorAt(0);
 
     expect(editor()).toHaveValue(
       ['@web', '  Scenario: Đăng nhập thành công', '    Given I open the app', '    Then I see "Trang chủ"'].join('\n'),
@@ -81,9 +87,9 @@ describe('ScenarioReviewPanel — sửa kịch bản', () => {
     await render();
     await screen.findByText('Sai mật khẩu');
 
-    await user.click(editButtonAt(0));
+    await openEditorAt(0);
     await user.click(screen.getByRole('button', { name: 'Huỷ' }));
-    await user.click(editButtonAt(1));
+    await openEditorAt(1);
 
     expect(editor().value).toContain('Scenario: Sai mật khẩu');
     expect(editor().value).not.toContain('Trang chủ');
@@ -94,7 +100,7 @@ describe('ScenarioReviewPanel — sửa kịch bản', () => {
     await render();
     await screen.findByText('Đăng nhập thành công');
 
-    await user.click(editButtonAt(0));
+    await openEditorAt(0);
     await user.click(screen.getByRole('button', { name: 'Huỷ' }));
 
     expect(screen.queryByRole('textbox', { name: 'Nội dung kịch bản' })).not.toBeInTheDocument();

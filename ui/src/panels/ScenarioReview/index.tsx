@@ -2,9 +2,16 @@ import { Fragment, useMemo, useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Link, useNavigate } from '@tanstack/react-router';
 import { toast } from 'sonner';
-import { Check, FileCode, Filter, Pencil, Plus, TriangleAlert, X } from 'lucide-react';
+import { Check, FileCode, Filter, MoreHorizontal, Pencil, Plus, TriangleAlert, X } from 'lucide-react';
 import { AppShell } from '@/components/layout/AppShell';
 import { Dropdown } from '@/components/Dropdown';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { Field } from '@/components/Field';
 import { Pagination } from '@/components/Pagination';
 import { StatusPill } from '@/components/StatusPill';
@@ -398,7 +405,22 @@ function ReviewBody({ state, search }: { state: StateResponse; search: ScenarioS
                             <StatusPill status={scenario.review?.status ?? 'pending'} />
                           </td>
                           <td className="p-2">
-                            <div className="flex justify-end gap-1">
+                            {/* Một hành động chính, phần còn lại nằm trong menu.
+                                Bốn nút bày hết ra hàng thì mỗi hàng thành một
+                                thanh công cụ: mắt phải đọc lại cùng bốn nhãn ở
+                                mỗi dòng, và cột hành động nuốt mất chỗ của
+                                chính nội dung kịch bản. Bản cũ chỉ để nút Duyệt
+                                cộng một nút "⋯". */}
+                            <div className="flex items-center justify-end gap-1">
+                              {scenario.knownIssue && (
+                                <span
+                                  title={scenario.knownIssue.note}
+                                  className="bg-status-flaky/15 text-status-flaky flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium"
+                                >
+                                  <TriangleAlert className="size-3" />
+                                  Known issue
+                                </span>
+                              )}
                               <Button
                                 size="sm"
                                 variant="outline"
@@ -413,74 +435,65 @@ function ReviewBody({ state, search }: { state: StateResponse; search: ScenarioS
                               >
                                 Duyệt
                               </Button>
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                className="text-destructive hover:text-destructive"
-                                disabled={review.isPending}
-                                onClick={() =>
-                                  review.mutate({
-                                    filename: feature.name,
-                                    scenarioName: scenario.name,
-                                    decision: 'reject',
-                                  })
-                                }
-                              >
-                                Không duyệt
-                              </Button>
-                              {scenario.knownIssue && (
-                                <span
-                                  title={scenario.knownIssue.note}
-                                  className="bg-status-flaky/15 text-status-flaky flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium"
-                                >
-                                  <TriangleAlert className="size-3" />
-                                  Known issue
-                                </span>
-                              )}
+                              <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                  <Button size="sm" variant="ghost" aria-label={`Hành động khác cho "${scenario.name}"`}>
+                                    <MoreHorizontal className="size-4" />
+                                  </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end">
+                                  <DropdownMenuItem
+                                    onSelect={() =>
+                                      setEditing({
+                                        filename: feature.name,
+                                        scenarioName: scenario.name,
+                                        block: extractScenario(feature.content, scenario.name),
+                                      })
+                                    }
+                                  >
+                                    <Pencil className="size-4" />
+                                    Sửa kịch bản
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem
+                                    onSelect={() => {
+                                      if (scenario.knownIssue) {
+                                        knownIssue.mutate({ scenarioId: scenario.id, remove: true });
+                                        return;
+                                      }
+                                      // Lý do là bắt buộc: một nhãn không kèm lý
+                                      // do thì năm sau không ai giải thích được
+                                      // vì sao kịch bản này được miễn.
+                                      const note = window.prompt(
+                                        `Vì sao "${scenario.name}" đỏ do sản phẩm chưa đáp ứng?`,
+                                      );
+                                      if (!note?.trim()) return;
+                                      knownIssue.mutate({ scenarioId: scenario.id, note });
+                                    }}
+                                  >
+                                    <TriangleAlert className="size-4" />
+                                    {scenario.knownIssue ? 'Gỡ nhãn Known issue' : 'Đánh dấu Known issue'}
+                                  </DropdownMenuItem>
+                                  <DropdownMenuSeparator />
+                                  <DropdownMenuItem
+                                    variant="destructive"
+                                    onSelect={() =>
+                                      review.mutate({
+                                        filename: feature.name,
+                                        scenarioName: scenario.name,
+                                        decision: 'reject',
+                                      })
+                                    }
+                                  >
+                                    <X className="size-4" />
+                                    Không duyệt
+                                  </DropdownMenuItem>
+                                </DropdownMenuContent>
+                              </DropdownMenu>
                               {scenario.knownIssueStale && (
                                 <span className="text-muted-foreground text-xs">
-                                  Nhãn Known issue đã cũ — kịch bản đã đổi
+                                  Nhãn cũ — kịch bản đã đổi
                                 </span>
                               )}
-                              <Button
-                                size="sm"
-                                variant="ghost"
-                                disabled={knownIssue.isPending}
-                                onClick={() => {
-                                  if (scenario.knownIssue) {
-                                    knownIssue.mutate({
-                                      scenarioId: scenario.id,
-                                      remove: true,
-                                    });
-                                    return;
-                                  }
-                                  // Lý do là bắt buộc: một nhãn không kèm lý do
-                                  // thì năm sau không ai giải thích được vì sao
-                                  // kịch bản này được miễn.
-                                  const note = window.prompt(
-                                    `Vì sao "${scenario.name}" đỏ do sản phẩm chưa đáp ứng?`,
-                                  );
-                                  if (!note?.trim()) return;
-                                  knownIssue.mutate({ scenarioId: scenario.id, note });
-                                }}
-                              >
-                                <TriangleAlert className="size-4" />
-                                {scenario.knownIssue ? 'Gỡ Known issue' : 'Known issue'}
-                              </Button>
-                              <Button
-                                size="sm"
-                                variant="ghost"
-                                onClick={() =>
-                                  setEditing({
-                                    filename: feature.name,
-                                    scenarioName: scenario.name,
-                                    block: extractScenario(feature.content, scenario.name),
-                                  })
-                                }
-                              >
-                                <Pencil className="size-4" />
-                                Sửa
-                              </Button>
                             </div>
                           </td>
                         </tr>
