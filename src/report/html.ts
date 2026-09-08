@@ -15,10 +15,18 @@ export async function writeHtmlReport(
   report: RunReport,
   verdicts: FlakeVerdict[],
   outDir: string,
+  /**
+   * Kịch bản đã được đánh dấu "sản phẩm chưa đáp ứng", theo scenario id.
+   *
+   * Không có nó thì report không phân biệt được "đã gắn nhãn" với "gắn được
+   * nhãn", và cái NÚT mời gắn nhãn trông y hệt một cái NHÃN đã gắn — mọi dòng
+   * fail đều như đang mang nhãn, kể cả khi chưa ai đánh dấu gì.
+   */
+  knownIssues: ReadonlyMap<string, string> = new Map(),
 ): Promise<string> {
   await mkdir(outDir, { recursive: true });
   const file = path.join(outDir, 'index.html');
-  await writeFile(file, render(report, verdicts, outDir), 'utf8');
+  await writeFile(file, render(report, verdicts, outDir, knownIssues), 'utf8');
   await writeFile(
     path.join(outDir, 'report.json'),
     JSON.stringify({ report, verdicts }, null, 2),
@@ -82,7 +90,12 @@ function assetHref(outDir: string, assetPath: string): string {
   return path.relative(outDir, path.resolve(assetPath)).split(path.sep).join('/');
 }
 
-function render(report: RunReport, verdicts: FlakeVerdict[], outDir: string): string {
+function render(
+  report: RunReport,
+  verdicts: FlakeVerdict[],
+  outDir: string,
+  knownIssues: ReadonlyMap<string, string>,
+): string {
   const byKey = new Map(verdicts.map((v) => [`${v.scenarioId}::${v.platform}::${v.device}`, v]));
   const counts = {
     passed: report.results.filter((r) => r.verdict === 'passed').length,
@@ -109,9 +122,15 @@ function render(report: RunReport, verdicts: FlakeVerdict[], outDir: string): st
   .tiles { display:flex; gap:.75rem; flex-wrap:wrap; margin-bottom:2rem; }
   .tile { border:1px solid var(--line); border-radius:10px; padding:.75rem 1.1rem; background:var(--card); }
   .tile b { display:block; font-size:1.6rem; line-height:1.2; }
-  .ki{margin-left:.5rem;font:inherit;font-size:.75rem;padding:.1rem .5rem;border:1px solid currentColor;
-      border-radius:999px;background:none;color:var(--flake);cursor:pointer}
+  /* Nút MỜI gắn nhãn: viền đứt và chữ mờ, để không bị đọc nhầm thành một nhãn
+     đã gắn. Nhãn thật thì tô nền đặc. */
+  .ki{margin-left:.5rem;font:inherit;font-size:.72rem;padding:.1rem .5rem;
+      border:1px dashed var(--line);border-radius:999px;background:none;
+      color:var(--muted);cursor:pointer}
+  .ki:hover{color:var(--flake);border-color:var(--flake)}
   .ki[disabled]{opacity:.6;cursor:default}
+  .ki-on{margin-left:.5rem;font-size:.72rem;padding:.1rem .5rem;border-radius:999px;
+         background:#fdf6e3;color:#9a6b00;border:1px solid #e5d7a3;white-space:nowrap}
   .passed b{color:var(--pass)} .failed b{color:var(--fail)} .flaky b{color:var(--flake)}
   h2 { font-size:1.05rem; margin:2rem 0 .75rem; }
   table { width:100%; border-collapse:collapse; font-size:.875rem; }
@@ -179,7 +198,15 @@ function render(report: RunReport, verdicts: FlakeVerdict[], outDir: string): st
 <div class="wrap"><table>
 <thead><tr><th>Scenario</th><th>Platform</th><th>Device</th><th>Verdict</th><th>Flake rate</th><th>Attempts</th></tr></thead>
 <tbody>
-${report.results.map((r) => row(r, byKey.get(`${r.scenario.id}::${r.platform}::${r.device}`))).join('\n')}
+${report.results
+  .map((r) =>
+    row(
+      r,
+      byKey.get(`${r.scenario.id}::${r.platform}::${r.device}`),
+      knownIssues.get(r.scenario.id),
+    ),
+  )
+  .join('\n')}
 </tbody></table></div>
 
 ${quarantine(report)}
@@ -250,18 +277,21 @@ ${rows
 </tbody></table></div>`;
 }
 
-function row(r: ScenarioResult, v?: FlakeVerdict): string {
+function row(r: ScenarioResult, v?: FlakeVerdict, knownIssueNote?: string): string {
   const rate = v ? `${Math.round(v.flakeRate * 100)}% of ${v.runs}` : '—';
-  const note = v?.brokenNotFlaky ? ' <span class="tag">broken, not flaky</span>' : '';
-  // Nút gắn nhãn đứng ngay cạnh kịch bản đỏ, vì ĐÂY là chỗ người ta phát hiện
-  // ra nó. Biết trước lúc sinh kịch bản thì đã không cần nhãn; cái người ta
-  // biết sau khi đọc report mà phải đi tìm màn hình khác để ghi lại thì phần
-  // lớn sẽ không ai ghi.
-  const mark = r.verdict === 'failed'
-    ? ` <button class="ki" data-scenario="${esc(r.scenario.id)}" type="button">Known issue</button>`
-    : '';
+  const flakeTag = v?.brokenNotFlaky ? ' <span class="tag">broken, not flaky</span>' : '';
+  // Đã gắn nhãn thì hiện NHÃN; chưa gắn thì hiện một lời MỜI gắn.
+  //
+  // Bản đầu dùng cùng một chữ "Known issue" cho cả hai, nên mọi dòng fail trông
+  // như đang mang nhãn dù chưa ai đánh dấu gì — bảy dòng "Known issue" trong khi
+  // thực tế mới có một. Nút mời gắn nay có dấu cộng và chữ khác hẳn.
+  const mark = knownIssueNote !== undefined
+    ? ` <span class="ki-on" title="${esc(knownIssueNote)}">⚠ Known issue</span>`
+    : r.verdict === 'failed'
+      ? ` <button class="ki" data-scenario="${esc(r.scenario.id)}" type="button">+ Đánh dấu Known issue</button>`
+      : '';
   return `<tr>
-  <td>${esc(r.scenario.name)}${note}${mark}</td>
+  <td>${esc(r.scenario.name)}${flakeTag}${mark}</td>
   <td>${esc(r.platform)}</td>
   <td>${esc(r.device)}</td>
   <td class="v-${r.verdict}">${r.verdict}</td>

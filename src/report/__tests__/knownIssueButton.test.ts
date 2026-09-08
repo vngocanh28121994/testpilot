@@ -11,12 +11,27 @@ import { describe, it } from 'node:test';
 const html = readFileSync('src/report/html.ts', 'utf8');
 
 describe('report — nút Known issue', () => {
-  it('chỉ mọc ở kịch bản đỏ, không mọc ở kịch bản xanh', () => {
+  it('chỉ mời gắn nhãn ở kịch bản đỏ chưa có nhãn', () => {
     assert.match(
       html,
-      /const mark = r\.verdict === 'failed'[\s\S]{0,200}data-scenario/,
-      'nút phải gắn theo verdict failed và mang scenario id',
+      /r\.verdict === 'failed'[\s\S]{0,220}data-scenario/,
+      'lời mời phải gắn theo verdict failed và mang scenario id',
     );
+  });
+
+  /**
+   * Bản đầu dùng cùng một chữ "Known issue" cho cả nhãn đã gắn lẫn lời mời gắn,
+   * nên mọi dòng fail trông như đang mang nhãn dù chưa ai đánh dấu gì — bảy dòng
+   * "Known issue" trong một report mà thực tế mới có một.
+   */
+  it('phân biệt nhãn ĐÃ gắn với lời MỜI gắn', () => {
+    assert.match(html, /knownIssueNote !== undefined/, 'không đọc nhãn đã gắn');
+    assert.match(html, /⚠ Known issue<\/span>/, 'nhãn đã gắn phải là một span, không phải nút');
+    assert.match(html, /\+ Đánh dấu Known issue<\/button>/, 'lời mời phải nói rõ là hành động');
+  });
+
+  it('nhãn đã gắn mang theo lý do', () => {
+    assert.match(html, /title="\$\{esc\(knownIssueNote\)\}"/);
   });
 
   it('khoá theo scenario id, vì report không mang tên file feature', () => {

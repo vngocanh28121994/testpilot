@@ -291,7 +291,19 @@ async function main(): Promise<void> {
     quarantined,
   };
 
-  const out = await writeHtmlReport(report, verdicts, runDir);
+  // Nhãn đi vào report để nó phân biệt được "đã gắn" với "gắn được": không có
+  // dữ liệu này thì lời mời gắn nhãn trông y hệt một cái nhãn đã gắn.
+  const knownById = new Map(
+    results
+      .map((r) => {
+        const issue = r.scenario.contentHash
+          ? known.active(r.scenario.id, r.scenario.contentHash)
+          : undefined;
+        return issue ? ([r.scenario.id, issue.note] as const) : null;
+      })
+      .filter((entry): entry is readonly [string, string] => entry !== null),
+  );
+  const out = await writeHtmlReport(report, verdicts, runDir, knownById);
 
   // Kịch bản đỏ vì sản phẩm chưa đáp ứng, không phải vì test hỏng.
   //
