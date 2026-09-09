@@ -150,6 +150,17 @@ const Ios = z.object({
    * has nothing to do with the app under test.
    */
   wdaBundleId: z.string().optional(),
+  /**
+   * Dùng lại WebDriverAgent đã cài trên máy, thay vì build và cài lại mỗi lượt.
+   *
+   * Mỗi lần Appium build lại WDA, iOS hỏi mật mã máy để cho phép cài — nên cứ
+   * bấm Chạy test là phải cầm điện thoại lên gõ mật khẩu một lần nữa. Bật cờ
+   * này thì Appium bỏ qua hẳn xcodebuild và chỉ khởi chạy bản đã nằm sẵn.
+   *
+   * Cần `wdaBundleId` trỏ đúng bản đã cài. Và nhớ: profile của Apple ID miễn
+   * phí chỉ sống 7 ngày — hết hạn thì phải tắt cờ này một lượt để build lại.
+   */
+  usePreinstalledWDA: z.boolean().default(false),
   hybrid: z.boolean().default(false),
   /**
    * How long to wait at launch for the app's WebView to attach.

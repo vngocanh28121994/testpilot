@@ -143,6 +143,8 @@ export interface NativeDriverOptions {
   teamId?: string;
   signingId?: string;
   wdaBundleId?: string;
+  /** Dùng lại WDA đã cài thay vì build lại mỗi lượt. Xem config.ios. */
+  usePreinstalledWDA?: boolean;
   /** App-specific DOM popup rules shared with the browser driver. */
   popupRules?: PopupRule[];
 }
@@ -287,9 +289,18 @@ export class NativeUiDriver implements UiDriver {
         // above. Its 60s default is shorter than a first-time build, so it
         // aborted a build that was progressing normally.
         ...(isAndroid ? {} : { 'appium:wdaLaunchTimeout': 10 * 60_000 }),
+        // Dùng lại bản WDA đã nằm trên máy: Appium bỏ hẳn xcodebuild, nên iOS
+        // không hỏi mật mã để cho phép cài lại ở mỗi lượt chạy. Các cờ ký số
+        // bên dưới chỉ phục vụ việc BUILD, nên khi đã bỏ build thì không gửi.
+        ...(!isAndroid && this.opts.usePreinstalledWDA && this.opts.wdaBundleId
+          ? {
+              'appium:usePreinstalledWDA': true,
+              'appium:updatedWDABundleId': this.opts.wdaBundleId,
+            }
+          : {}),
         // Handed to the WebDriverAgent build. Sent only when configured, so a
         // simulator run — which needs no signature — is unaffected.
-        ...(!isAndroid && this.opts.teamId
+        ...(!isAndroid && !this.opts.usePreinstalledWDA && this.opts.teamId
           ? {
               'appium:xcodeOrgId': this.opts.teamId,
               'appium:xcodeSigningId': this.opts.signingId ?? 'Apple Development',
@@ -647,12 +658,16 @@ export class NativeUiDriver implements UiDriver {
       await this.enterWebview(budget);
       this.webviewUnavailable = false;
       return;
-    } catch {
+    } catch (err) {
       this.webviewUnavailable = true;
+      // Nuốt luôn lời giải thích của enterWebview() là lý do một lượt chạy hỏng
+      // toàn tập chỉ để lại đúng một dòng "no WebView": nó liệt kê context nhìn
+      // thấy được, và đó là thứ phân biệt "app không cho inspect" với "máy chậm".
       console.warn(
         `[native] No WebView found within ${Math.round(budget / 1000)}s — running in native context. ` +
           'For a hybrid app this usually means the run is about to fail; raise ' +
-          '<platform>.webviewTimeoutMs if the device is simply slow.',
+          '<platform>.webviewTimeoutMs if the device is simply slow.\n' +
+          `[native] ${err instanceof Error ? err.message : String(err)}`,
       );
     }
   }
