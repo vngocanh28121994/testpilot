@@ -288,7 +288,14 @@ export class NativeUiDriver implements UiDriver {
         // Appium's own patience with WDA, separate from the request timeout
         // above. Its 60s default is shorter than a first-time build, so it
         // aborted a build that was progressing normally.
-        ...(isAndroid ? {} : { 'appium:wdaLaunchTimeout': 10 * 60_000 }),
+        //
+        // Nhưng khi dùng lại WDA có sẵn thì không có bản build nào để chờ:
+        // Appium chỉ gọi `devicectl process launch` rồi hỏi /status. Bản đã cài
+        // hoặc trả lời trong vài giây, hoặc chết ngay và không bao giờ trả lời.
+        // Chờ 10 phút ở đây chỉ biến một lỗi thành mười phút nhìn màn hình đứng.
+        ...(isAndroid
+          ? {}
+          : { 'appium:wdaLaunchTimeout': this.opts.usePreinstalledWDA ? 60_000 : 10 * 60_000 }),
         // Dùng lại bản WDA đã nằm trên máy: Appium bỏ hẳn xcodebuild, nên iOS
         // không hỏi mật mã để cho phép cài lại ở mỗi lượt chạy. Các cờ ký số
         // bên dưới chỉ phục vụ việc BUILD, nên khi đã bỏ build thì không gửi.

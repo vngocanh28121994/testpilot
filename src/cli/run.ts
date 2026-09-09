@@ -231,7 +231,7 @@ async function main(): Promise<void> {
   try {
     await driver.start();
   } catch (err) {
-    throw new Error(explainDriverStart(err as Error, platform));
+    throw new Error(explainDriverStart(err as Error, platform, cfg.ios.usePreinstalledWDA));
   }
   // Written only now: before start() the install has not happened, and a failed
   // session must not leave a claim about the device that nothing put there.
@@ -750,8 +750,22 @@ function stepElementAt(run: ScenarioResult['runs'][number], line: number): strin
  * Không đoán bừa: chỉ thêm hướng dẫn cho đúng mã lỗi này, và giữ nguyên câu
  * gốc bên dưới để ai cần vẫn tra được.
  */
-function explainDriverStart(err: Error, platform: Platform): string {
-  if (platform !== 'ios' || !/xcodebuild failed with code 65/i.test(err.message)) {
+function explainDriverStart(err: Error, platform: Platform, reusingWda = false): string {
+  if (platform !== 'ios') return err.message;
+  // Bỏ build thì không còn xcodebuild để hỏng; cái hỏng là bản WDA đã cài không
+  // chịu mở cổng. Appium chỉ báo hết giờ chờ /status, không nói vì sao — mà "vì
+  // sao" ở đây luôn là cùng một chuyện: runner khởi động rồi tắt ngay.
+  if (reusingWda && /wda|webdriveragent|status/i.test(err.message)) {
+    return (
+      'Bản WebDriverAgent đã cài trên máy không phản hồi (đang bật ios.usePreinstalledWDA).\n\n'
+      + 'Nó được khởi động bằng devicectl chứ không qua xcodebuild, và bản runner\n'
+      + 'cài sẵn thường bật lên rồi tắt ngay thay vì mở cổng 8100.\n\n'
+      + 'Cách xử lý: đặt ios.usePreinstalledWDA = false để build lại như cũ\n'
+      + '(đổi lại máy sẽ hỏi mật mã một lần mỗi lượt chạy).\n\n'
+      + `Nguyên văn lỗi: ${err.message}`
+    );
+  }
+  if (!/xcodebuild failed with code 65/i.test(err.message)) {
     return err.message;
   }
   return (

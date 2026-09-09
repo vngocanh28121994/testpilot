@@ -49,6 +49,6 @@ describe('explainDriverStart', () => {
   });
 
   it('được nối vào chỗ khởi động driver', () => {
-    assert.match(source, /throw new Error\(explainDriverStart\(err as Error, platform\)\);/);
+    assert.match(source, /throw new Error\(explainDriverStart\(err as Error, platform[^)]*\)\);/);
   });
 });

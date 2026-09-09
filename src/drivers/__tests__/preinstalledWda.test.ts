@@ -40,7 +40,20 @@ describe('usePreinstalledWDA', () => {
     );
   });
 
+  it('không bắt chờ 10 phút cho một bản build không tồn tại', () => {
+    assert.match(
+      native,
+      /'appium:wdaLaunchTimeout': this\.opts\.usePreinstalledWDA \? 60_000 : 10 \* 60_000/,
+    );
+  });
+
   it('được truyền xuống từ config, trừ khi chạy trên Device Farm', () => {
     assert.match(run, /!onFarm && cfg\.ios\.usePreinstalledWDA \? \{ usePreinstalledWDA: true \}/);
+  });
+
+  it('nói rõ phải làm gì khi bản WDA có sẵn không mở cổng', () => {
+    assert.match(run, /explainDriverStart\(err as Error, platform, cfg\.ios\.usePreinstalledWDA\)/);
+    assert.match(run, /reusingWda && \/wda\|webdriveragent\|status\/i/);
+    assert.match(run, /đặt ios\.usePreinstalledWDA = false/);
   });
 });
