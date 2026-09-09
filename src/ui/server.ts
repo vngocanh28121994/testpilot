@@ -1929,7 +1929,10 @@ async function runWorkflow(
   stage: (run: WorkflowRun) => void,
 ): Promise<void> {
   const history = await History.load();
-  const run = history.start(cfg.targetFeature || 'generated', 'workflow', WORKFLOW_STAGES);
+  // Chỗ giữ chỗ nói rõ nó là chỗ giữ chỗ. "generated" trông y hệt một tên
+  // feature, nên năm lượt chết sớm nằm cạnh nhau trong history đều mang đúng
+  // chữ đó và không phân biệt được với nhau.
+  const run = history.start(cfg.targetFeature || '(chưa đọc được tài liệu)', 'workflow', WORKFLOW_STAGES);
   run.execution = {
     platforms: cfg.workflow.platforms,
     ...(cfg.workflow.deviceFarm ? { deviceFarm: cfg.workflow.deviceFarm } : {}),
@@ -1948,6 +1951,14 @@ async function runWorkflow(
   try {
     const result = await runGenPipeline(cfg, {
       log: record,
+      // Tên tạm ngay khi đọc xong tài liệu, thay vì đợi tới lúc sinh xong
+      // Gherkin. Lượt chết ở bước "AI phân tích" vẫn nói được nó đang làm gì.
+      documentTitle: (title) => {
+        if (cfg.targetFeature) return;
+        run.feature = title;
+        stage(run);
+        void history.save();
+      },
       stage: (index, status) => {
         // runGenPipeline has seven implementation stages; the end-to-end
         // workflow combines file-write + bind into one user-facing task.

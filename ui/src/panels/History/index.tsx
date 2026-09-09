@@ -37,14 +37,42 @@ export default function HistoryPanel({ focusId }: { focusId?: string }) {
       <div className="flex max-w-5xl flex-col gap-3">
         {shownRuns.map((run) => {
           const runReports = reports.filter((report) => Boolean(run.runDirs?.includes(report.id)));
+          // history.json đọc thẳng từ đĩa, không qua kiểm tra. Kiểu nói `stages`
+          // là bắt buộc và history.start() luôn đặt, nhưng một bản ghi cũ thiếu
+          // nó từng làm vỡ cả trang — cả danh sách lịch sử biến mất vì một dòng
+          // dữ liệu, đúng lúc người ta vào đây để tìm hiểu chuyện gì đã hỏng.
+          const stages = run.stages ?? [];
+          const log = run.log ?? [];
+          // Bước đang chạy nếu còn chạy, bước hỏng nếu đã hỏng. Lượt xong xuôi
+          // không có gì để nói ở đây — trạng thái đã nói rồi.
+          const stopped = stages.find((s) => s.status === 'running')?.name
+            ?? stages.find((s) => s.status === 'failed')?.name;
           return <div key={run.id} ref={run.id === focusId ? focus : undefined} className="border-border rounded-lg border p-4">
-            <div className="flex flex-wrap items-center gap-2"><b>{run.feature}</b><StatusPill status={run.status}/><span className="text-muted-foreground text-xs">{run.stagesDone}/{run.stages.length} stages · {when(run.startedAt)}</span></div>
-            {/* Dùng chung danh sách bước với App Studio thay vì nối một dòng
-                chữ: cùng một dữ liệu thì không nên có hai cách đọc. */}
-            {run.stages.length > 0 && (
-              <div className="mt-3">
-                <WorkflowStages stages={run.stages} runStatus={run.status} />
-              </div>
+            <div className="flex flex-wrap items-center gap-2"><b>{run.feature}</b><StatusPill status={run.status}/><span className="text-muted-foreground text-xs">{run.stagesDone ?? 0}/{stages.length} bước · {when(run.startedAt)}</span></div>
+            {/* Bước dừng lại, ngay ở dòng đầu.
+                Đây là câu trả lời cho câu hỏi người ta mang tới trang này —
+                "lượt này đi tới đâu thì hỏng" — nên nó không được nằm sau một
+                lần bấm, cũng không được bắt người đọc tự dò 11 dòng tìm dấu ✗. */}
+            {stopped && (
+              <p className="text-muted-foreground mt-1 text-sm">
+                {run.status === 'running' ? 'Đang ở: ' : 'Dừng ở: '}
+                <span className="text-foreground">{stopped}</span>
+              </p>
+            )}
+            {/* Danh sách đầy đủ gấp lại.
+                Mười một bước nhân với mỗi lượt chạy là hơn trăm dòng lặp đúng
+                những cái tên ấy, và danh sách lịch sử mất khả năng quét bằng
+                mắt. Mở ra thì vẫn dùng chung component với App Studio: cùng
+                một dữ liệu thì không nên có hai cách đọc. */}
+            {stages.length > 0 && (
+              <details className="mt-2">
+                <summary className="text-muted-foreground cursor-pointer text-sm select-none">
+                  Tiến trình ({stages.length} bước)
+                </summary>
+                <div className="mt-2">
+                  <WorkflowStages stages={stages} runStatus={run.status} />
+                </div>
+              </details>
             )}
             {run.generatedFile && <p className="mt-2 font-mono text-xs">{run.generatedFile}</p>}
             {/*
@@ -87,7 +115,7 @@ export default function HistoryPanel({ focusId }: { focusId?: string }) {
               )}
             </div>
             {run.error && <div className="mt-2"><FailureBanner error={run.error} /></div>}
-            {run.log.length > 0 && <details className="mt-2"><summary className="cursor-pointer text-sm">Log ({run.log.length} dòng)</summary><LogView logs={run.log} className="mt-2 max-h-80" label="Log lượt chạy" /></details>}
+            {log.length > 0 && <details className="mt-2"><summary className="cursor-pointer text-sm">Log ({log.length} dòng)</summary><LogView logs={log} className="mt-2 max-h-80" label="Log lượt chạy" /></details>}
           </div>;
         })}
       </div>

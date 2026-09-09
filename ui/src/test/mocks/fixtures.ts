@@ -100,10 +100,20 @@ export const stateFixture: StateResponse = {
   elements: 106,
   reports: [],
   runs: [
-    // `stages` có mặt vì dữ liệu thật luôn có: một run không stages từng làm
-    // danh sách bước vỡ, và fixture là chỗ duy nhất tạo ra được tình huống đó.
     { id: 'run-1', status: 'passed', stagesDone: 4, stages: [{ name: 'Đọc tài liệu', status: 'done' }] },
-    { id: 'run-2', status: 'failed', stagesDone: 2 },
+    // Một lượt hỏng thật luôn kèm bước hỏng: đó là thứ người ta vào lịch sử để
+    // tìm. Fixture cũ chỉ có status 'failed' trần, nên không test nào chạm được
+    // vào phần nói "dừng ở đâu".
+    {
+      id: 'run-2', status: 'failed', stagesDone: 1,
+      stages: [
+        { name: 'Đọc tài liệu', status: 'done' },
+        { name: 'AI phân tích yêu cầu', status: 'failed' },
+        { name: 'Sinh bộ testcase', status: 'pending' },
+      ],
+    },
+    // `stages` thiếu hẳn: một bản ghi cũ như vậy từng làm vỡ cả trang lịch sử.
+    // Giữ lại vì đây là chỗ duy nhất dựng lại được tình huống đó.
     { id: 'run-3', status: 'failed', stagesDone: 1 },
   ] as unknown as StateResponse['runs'],
   // KHÔNG có trường `password` — xem R9 và test ở api/__tests__/secrets.test.ts.

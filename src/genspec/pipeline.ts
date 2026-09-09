@@ -31,6 +31,16 @@ import { loadExistingScenarios } from './existingScenarios.js';
 export interface PipelineEvents {
   log: (line: string) => void;
   stage?: (index: number, status: StageStatus) => void;
+  /**
+   * Tên tạm, biết được ngay sau khi đọc xong tài liệu.
+   *
+   * Tên chính thức lấy từ dòng `Feature:` mà model viết ra, nên nó chỉ có ở
+   * bước 4. Lượt chạy chết trước đó — Gemini quá tải, JSON hỏng — nằm lại
+   * trong history dưới cái tên giữ chỗ "generated", trông y hệt một tên
+   * feature thật và không phân biệt được với nhau. Trong khi tiêu đề tài liệu
+   * đã nằm trong tay từ bước 1.
+   */
+  documentTitle?: (title: string) => void;
 }
 
 export interface PipelineResult {
@@ -87,6 +97,8 @@ export async function runGenPipeline(
       );
     }
     ev.log(`${found.length} tài liệu, ~${found.reduce((n, d) => n + d.text.length, 0)} ký tự.`);
+    const title = found[0]?.title?.trim();
+    if (title) ev.documentTitle?.(title);
     return found;
   });
 
