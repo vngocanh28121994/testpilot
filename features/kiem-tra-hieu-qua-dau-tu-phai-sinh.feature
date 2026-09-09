@@ -3,7 +3,7 @@ Feature: Kiểm tra hiệu quả đầu tư phái sinh
   Background:
     Given I open the app
 
-  @hieu-qua-dau-tu
+  @hieu-qua-dau-tu @positive
   Scenario: Kiểm tra hiệu quả đầu tư phái sinh
     Given I am logged in as "tcbs"
     When I open feature "Hiệu quả đầu tư" from search

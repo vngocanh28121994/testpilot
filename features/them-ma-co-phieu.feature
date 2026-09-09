@@ -26,13 +26,13 @@ Feature: Thêm mã cổ phiếu
     When I enter "M" into "Ô tìm kiếm mã cổ phiếu"
     Then "Danh sách gợi ý" count is at most "5"
 
-  @p0 @boundary
+  @p0 @business-rule
   Scenario: Lọc trùng kết quả khi mã trùng với tên doanh nghiệp
     Given I click "Thêm mã"
     When I enter "MEL" into "Ô tìm kiếm mã cổ phiếu"
     Then "Danh sách gợi ý" shows "MEL-HNX" exactly "1" times
 
-  @p0 @boundary
+  @p0 @business-rule
   Scenario: Chọn mã cổ phiếu đã có trong danh mục sẽ scroll tới và focus vào dòng đó
     Given I click "Thêm mã"
     When I enter "TCB" into "Ô tìm kiếm mã cổ phiếu"

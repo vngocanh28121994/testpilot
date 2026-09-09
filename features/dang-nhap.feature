@@ -5,7 +5,7 @@ Feature: Đăng nhập TCInvest
     Given I open the app
 
   # Scenario duy nhất chạm backend thật — chạy độc lập với: npm run run:web -- --tag @login
-  @login
+  @login @positive
   Scenario: Đăng nhập thành công vào tài khoản
     When I enter "{{account.tcbs.username}}" into "Ô tên đăng nhập"
     And I enter "{{account.tcbs.password}}" into "Ô mật khẩu"
@@ -13,14 +13,14 @@ Feature: Đăng nhập TCInvest
     And I wait for "Tổng tài sản"
     Then "Tổng tài sản" is visible
 
-  @login
+  @login @negative
   Scenario: Đăng nhập thất bại — nhập sai thông tin
     When I enter "0123456789" into "Ô tên đăng nhập"
     And I enter "sat-khau-sai-123" into "Ô mật khẩu"
     And I tap "Nút đăng nhập"
     Then "Thông báo lỗi đăng nhập" is visible
 
-@search
+  @search @positive
   Scenario: Tìm kiếm Bảng giá cổ phiếu sau đăng nhập
     Given I am logged in as "tcbs"
     When I open feature "Bảng giá cổ phiếu" from search
@@ -35,7 +35,7 @@ Feature: Đăng nhập TCInvest
     And I click "Xoá khỏi danh mục"
     Then "ADS" is not visible
 
-  @my-asset-bond
+  @my-asset-bond @positive
   Scenario: Kiểm tra tài sản trái phiếu
     Given I am logged in as "tcbs"
     When I open feature "Tài sản của tôi" from search
@@ -53,7 +53,7 @@ Feature: Đăng nhập TCInvest
     And I scroll to "Kiểm thử"
     And I click "Kiểm thử"
     Then "Kiểm thử Fundmart" is visible
-  @farm-debug
+  @farm-debug @positive
   Scenario: Chẩn đoán nút đăng nhập trên Device Farm
     When I enter "{{account.tcbs.username}}" into "Ô tên đăng nhập"
     And I enter "{{account.tcbs.password}}" into "Ô mật khẩu"

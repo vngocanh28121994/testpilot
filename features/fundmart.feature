@@ -3,7 +3,7 @@ Feature: fundmart
   Background:
     Given I open the app
 
-  @check-tooltip
+  @check-tooltip @positive
   Scenario: Kiểm tra tooltip table
     Given I am logged in as "tcbs"
     When I open feature "Bảng giá Fundmart" from search

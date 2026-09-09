@@ -36,12 +36,12 @@ Feature: Chuyển tiền nội bộ
     Then "Thông báo" shows "Chuyển tiền thành công"
     And "Được chuyển" decreased by "500" from "availableBefore"
 
-  @p1 @positive
+  @p1 @business-rule
   Scenario: Tiểu khoản đã chọn ở nguồn không xuất hiện ở dropdown đích
     When I select "TK Thường" from "Chuyển từ"
     Then "TK Thường" is not an option in "Chọn TK nhận tiền"
 
-  @p1 @positive
+  @p1 @business-rule
   Scenario: Tiểu khoản đã chọn ở đích không xuất hiện ở dropdown nguồn
     When I select "TK Ký Quỹ" from "Chọn TK nhận tiền"
     Then "TK Ký Quỹ" is not an option in "Chuyển từ"

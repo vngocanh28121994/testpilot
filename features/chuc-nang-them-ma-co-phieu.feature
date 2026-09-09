@@ -14,7 +14,7 @@ Feature: Chức năng Thêm mã cổ phiếu
     And I click "Thêm mã"
     Then "Dòng cổ phiếu trong danh mục" shows "VIC" exactly "1" times
 
-  @p0 @smoke @positive
+  @p0 @smoke @business-rule
   Scenario: Thêm mã cổ phiếu đã có trong danh mục
     When I click "Thêm mã"
     And I enter "VIC" into "Ô tìm kiếm mã cổ phiếu"
@@ -37,7 +37,7 @@ Feature: Chức năng Thêm mã cổ phiếu
     And I enter "M" into "Ô tìm kiếm mã cổ phiếu"
     Then "Danh sách gợi ý mã cổ phiếu" count is at most "5"
 
-  @p0 @smoke @positive
+  @p0 @smoke @business-rule
   Scenario: Tìm kiếm theo mã ưu tiên hơn tìm kiếm theo tên doanh nghiệp
     When I click "Thêm mã"
     And I enter "VIC" into "Ô tìm kiếm mã cổ phiếu"

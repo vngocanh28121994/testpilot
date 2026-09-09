@@ -169,6 +169,27 @@ export class ScenarioReviewStore {
     );
   }
 
+  /**
+   * Nội dung kịch bản không đổi, chỉ nhãn phân loại đổi.
+   *
+   * syncFile() thấy contentHash khác là đưa về `pending`, và với một lượt gán
+   * lại tag thì luật đó cho kết quả sai: các bước test không đổi một chữ, nên
+   * quyết định duyệt trước đó vẫn còn nguyên giá trị — bắt duyệt lại 26 kịch
+   * bản chỉ vì sửa một cái nhãn là phí, và tệ hơn là dạy người ta bấm duyệt
+   * hàng loạt cho xong.
+   *
+   * Chỉ dùng khi thứ duy nhất đổi là dòng tag. Trả về true khi có mang trạng
+   * thái cũ đi tiếp.
+   */
+  retagged(filename: string, scenarioName: string, contentHash: string): boolean {
+    const entry = this.db.entries[scenarioKey(filename, scenarioName)];
+    if (!entry || entry.contentHash === contentHash) return false;
+    entry.contentHash = contentHash;
+    entry.updatedAt = new Date().toISOString();
+    this.dirty = true;
+    return true;
+  }
+
   async save(): Promise<void> {
     if (!this.dirty && existsSync(this.file)) return;
     await mkdir(path.dirname(this.file), { recursive: true });

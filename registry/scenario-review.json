@@ -5,75 +5,75 @@
       "id": "order-stock.feature::Đặt lệnh nháp",
       "filename": "order-stock.feature",
       "scenarioName": "Đặt lệnh nháp",
-      "contentHash": "6698c1389f426ba6bafee072385e5fc325080f1f595de926ade12e6592636b65",
+      "contentHash": "726b5322cfbf63b82b90b1811a59472a344d0c5142cf4693535ed5cc5b687a0e",
       "status": "approved",
       "source": "legacy",
-      "updatedAt": "2026-08-24T01:16:24.205Z"
+      "updatedAt": "2026-09-09T03:16:57.504Z"
     },
     "dang-nhap.feature::Đăng nhập thành công vào tài khoản": {
       "id": "dang-nhap.feature::Đăng nhập thành công vào tài khoản",
       "filename": "dang-nhap.feature",
       "scenarioName": "Đăng nhập thành công vào tài khoản",
-      "contentHash": "95d21a266ee3c1cb7a794a8b93b8ad49a28ae2e3787215bee05aa43a655c86a9",
+      "contentHash": "b7e1db892afbda7c25ef9888c1569a1ff5986e0cd87773577edbe143164f52a2",
       "status": "approved",
       "source": "legacy",
-      "updatedAt": "2026-08-24T01:17:46.817Z",
+      "updatedAt": "2026-09-09T03:16:57.504Z",
       "reviewedAt": "2026-08-24T01:17:46.817Z"
     },
     "dang-nhap.feature::Đăng nhập thất bại — nhập sai thông tin": {
       "id": "dang-nhap.feature::Đăng nhập thất bại — nhập sai thông tin",
       "filename": "dang-nhap.feature",
       "scenarioName": "Đăng nhập thất bại — nhập sai thông tin",
-      "contentHash": "b0e8a774a5079c6f277bd376b7db0504f9328117b65927102a4a1d7dab583f7c",
+      "contentHash": "74d006a8b1dbb3fc035a82b35bcbccf8642af54f596cb9f1834f73d66d6c5ab7",
       "status": "approved",
       "source": "legacy",
-      "updatedAt": "2026-08-24T01:16:24.218Z"
+      "updatedAt": "2026-09-09T03:16:57.504Z"
     },
     "dang-nhap.feature::Tìm kiếm Bảng giá cổ phiếu sau đăng nhập": {
       "id": "dang-nhap.feature::Tìm kiếm Bảng giá cổ phiếu sau đăng nhập",
       "filename": "dang-nhap.feature",
       "scenarioName": "Tìm kiếm Bảng giá cổ phiếu sau đăng nhập",
-      "contentHash": "58fbc4ba3a0778a6c9898eda99b0482150e373c0f2736daa8771dfb499514c49",
+      "contentHash": "a0aa19f090fb476c06dab91db4c9e2cbbf318d09c40d6d46919f4ac98fc0e001",
       "status": "approved",
       "source": "legacy",
-      "updatedAt": "2026-08-24T01:16:24.218Z"
+      "updatedAt": "2026-09-09T03:16:57.504Z"
     },
     "dang-nhap.feature::Kiểm tra tài sản trái phiếu": {
       "id": "dang-nhap.feature::Kiểm tra tài sản trái phiếu",
       "filename": "dang-nhap.feature",
       "scenarioName": "Kiểm tra tài sản trái phiếu",
-      "contentHash": "e92415d986d9771e7aaa033776761175a2a26fe042b4421ac55df8a45d410bd1",
+      "contentHash": "2229dd7158e236abf659ae6459562bb446bac9e1785b5b5bab48e1f6952a2b94",
       "status": "approved",
       "source": "legacy",
-      "updatedAt": "2026-08-24T01:16:24.218Z"
+      "updatedAt": "2026-09-09T03:16:57.504Z"
     },
     "dang-nhap.feature::Chẩn đoán nút đăng nhập trên Device Farm": {
       "id": "dang-nhap.feature::Chẩn đoán nút đăng nhập trên Device Farm",
       "filename": "dang-nhap.feature",
       "scenarioName": "Chẩn đoán nút đăng nhập trên Device Farm",
-      "contentHash": "230dee24905129236d2d563454c1828f6695326da63612e81b202158e7c08eee",
+      "contentHash": "f0d3bf155775e7ae02215b56c9be4fd7bbd842534f4f01cdaf884f23192128c3",
       "status": "pending",
       "source": "manual",
-      "updatedAt": "2026-08-24T02:01:03.087Z"
+      "updatedAt": "2026-09-09T03:16:57.504Z"
     },
     "fundmart.feature::Kiểm tra tooltip table": {
       "id": "fundmart.feature::Kiểm tra tooltip table",
       "filename": "fundmart.feature",
       "scenarioName": "Kiểm tra tooltip table",
-      "contentHash": "1c64cb22558f0fae2c49c9d6d4e22c027af49309876d621a2516c1d6743cf053",
+      "contentHash": "0e30df2cb292bbd21de8d6d76b419ffe6655a2d858d48251766d770527384479",
       "status": "rejected",
       "source": "legacy",
-      "updatedAt": "2026-08-27T15:34:58.552Z",
+      "updatedAt": "2026-09-09T03:16:57.504Z",
       "reviewedAt": "2026-08-27T15:34:58.552Z"
     },
     "kiem-tra-hieu-qua-dau-tu-phai-sinh.feature::Kiểm tra hiệu quả đầu tư phái sinh": {
       "id": "kiem-tra-hieu-qua-dau-tu-phai-sinh.feature::Kiểm tra hiệu quả đầu tư phái sinh",
       "filename": "kiem-tra-hieu-qua-dau-tu-phai-sinh.feature",
       "scenarioName": "Kiểm tra hiệu quả đầu tư phái sinh",
-      "contentHash": "1111d4f4b0750ed90665bf58c7a968454dd088152c9af5aec9b795763472666b",
+      "contentHash": "d391c05e0afca3deb5f77dbe68c32fd604118b19402c50d03f320681e5e1c1b4",
       "status": "rejected",
       "source": "legacy",
-      "updatedAt": "2026-08-27T15:34:56.551Z",
+      "updatedAt": "2026-09-09T03:16:57.504Z",
       "reviewedAt": "2026-08-27T15:34:56.551Z"
     },
     "chuc-nang-them-ma-co-phieu.feature::Thêm mã cổ phiếu mới vào danh mục": {
@@ -99,10 +99,10 @@
       "id": "chuc-nang-them-ma-co-phieu.feature::Thêm mã cổ phiếu đã có trong danh mục",
       "filename": "chuc-nang-them-ma-co-phieu.feature",
       "scenarioName": "Thêm mã cổ phiếu đã có trong danh mục",
-      "contentHash": "16dbb7312416882833bb2efe9af44bea37f5f22b8dd23c5a03d29ff4ff25d3f8",
+      "contentHash": "b6d5f150f57d758115cc75a297852cfcc6df88144c9038054f5a3f3e28cd893f",
       "status": "approved",
       "source": "legacy",
-      "updatedAt": "2026-08-25T09:21:14.386Z",
+      "updatedAt": "2026-09-09T03:16:57.502Z",
       "reviewedAt": "2026-08-25T09:21:14.386Z"
     },
     "chuc-nang-them-ma-co-phieu.feature::Tìm kiếm mã cổ phiếu hiển thị tối đa 5 kết quả": {
@@ -119,10 +119,10 @@
       "id": "chuc-nang-them-ma-co-phieu.feature::Tìm kiếm theo mã ưu tiên hơn tìm kiếm theo tên doanh nghiệp",
       "filename": "chuc-nang-them-ma-co-phieu.feature",
       "scenarioName": "Tìm kiếm theo mã ưu tiên hơn tìm kiếm theo tên doanh nghiệp",
-      "contentHash": "6268aaff0d11d90df8ea1e1588acce241f5b4324385fd00cf4f19a84d6b098dd",
+      "contentHash": "58aedee6b08c543364bbd217f7fbe959976c8156dc7a422b7910228107b3a0fb",
       "status": "approved",
       "source": "generated",
-      "updatedAt": "2026-08-25T09:21:14.386Z",
+      "updatedAt": "2026-09-09T03:16:57.502Z",
       "reviewedAt": "2026-08-25T09:21:14.386Z"
     },
     "chuc-nang-them-ma-co-phieu.feature::Tự động lọc trùng kết quả tìm kiếm từ mã và tên doanh nghiệp": {
@@ -179,20 +179,20 @@
       "id": "them-ma-co-phieu.feature::Lọc trùng kết quả khi mã trùng với tên doanh nghiệp",
       "filename": "them-ma-co-phieu.feature",
       "scenarioName": "Lọc trùng kết quả khi mã trùng với tên doanh nghiệp",
-      "contentHash": "9972fa910e76a3bc78ec4f34c1e212b8064b6fde06d18f1d1021c71489124951",
+      "contentHash": "46a3c991d217c8f10fe1d6a9b2de50697a285666097681e46f0283a27e33ed3b",
       "status": "approved",
       "source": "generated",
-      "updatedAt": "2026-08-25T16:39:18.751Z",
+      "updatedAt": "2026-09-09T03:16:57.505Z",
       "reviewedAt": "2026-08-25T16:39:18.751Z"
     },
     "them-ma-co-phieu.feature::Chọn mã cổ phiếu đã có trong danh mục sẽ scroll tới và focus vào dòng đó": {
       "id": "them-ma-co-phieu.feature::Chọn mã cổ phiếu đã có trong danh mục sẽ scroll tới và focus vào dòng đó",
       "filename": "them-ma-co-phieu.feature",
       "scenarioName": "Chọn mã cổ phiếu đã có trong danh mục sẽ scroll tới và focus vào dòng đó",
-      "contentHash": "f64693d03c2ad894659b10d148c134c5a677168702a9f87ee4ab74105ab8c248",
+      "contentHash": "3a3df0392b4965bb7c9a0ca34c1e78d653dde2339f34274ece22d99214c02fad",
       "status": "approved",
       "source": "generated",
-      "updatedAt": "2026-08-25T16:39:18.751Z",
+      "updatedAt": "2026-09-09T03:16:57.505Z",
       "reviewedAt": "2026-08-25T16:39:18.751Z"
     },
     "them-ma-co-phieu.feature::Xóa mã cổ phiếu khỏi danh mục hiện tại": {
@@ -219,10 +219,10 @@
       "id": "chuyen-tien-noi-bo.feature::Tiểu khoản đã chọn ở nguồn không xuất hiện ở dropdown đích",
       "filename": "chuyen-tien-noi-bo.feature",
       "scenarioName": "Tiểu khoản đã chọn ở nguồn không xuất hiện ở dropdown đích",
-      "contentHash": "7cc838381ba8c96d445eb3548acf32a63ad12d15a0eaea4c94970ec6d06686bd",
+      "contentHash": "0e2e1a7a57468dd1ae2a99caa67557b6d7093e7a00fee56c6588295dd3b93117",
       "status": "approved",
       "source": "generated",
-      "updatedAt": "2026-09-08T17:49:20.917Z",
+      "updatedAt": "2026-09-09T03:16:57.503Z",
       "reviewedAt": "2026-09-08T17:49:20.917Z"
     },
     "chuyen-tien-noi-bo.feature::Nhập số tiền vượt quá số tiền được chuyển": {
@@ -239,10 +239,10 @@
       "id": "chuyen-tien-noi-bo.feature::Tiểu khoản đã chọn ở đích không xuất hiện ở dropdown nguồn",
       "filename": "chuyen-tien-noi-bo.feature",
       "scenarioName": "Tiểu khoản đã chọn ở đích không xuất hiện ở dropdown nguồn",
-      "contentHash": "4c6a11e6e918e8ae72ed4f68785b2926e9664257c0bcc00c2390407dc92b1371",
+      "contentHash": "d2bacef4bbc1f42ee08edf3cbd0651b85ef8e73b022e4d61ea7cb6e0c0e3da49",
       "status": "approved",
       "source": "generated",
-      "updatedAt": "2026-09-08T17:49:20.918Z",
+      "updatedAt": "2026-09-09T03:16:57.503Z",
       "reviewedAt": "2026-09-08T17:49:20.918Z"
     },
     "chuyen-tien-noi-bo.feature::Chuyển tiền thành công từ TK Thường sang TK Ký Quỹ": {

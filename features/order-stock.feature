@@ -3,7 +3,7 @@ Feature: order-stock
   Background:
     Given I open the app
 
-  @draft-order
+  @draft-order @positive
   Scenario: Đặt lệnh nháp
     When I enter "{{account.tcbs.username}}" into "Ô tên đăng nhập"
     And I enter "{{account.tcbs.password}}" into "Ô mật khẩu"
