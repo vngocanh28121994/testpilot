@@ -107,9 +107,14 @@ export default function RunnerPanel() {
   const preflight = useQuery({
     // Máy đang chọn nằm trong khoá cache: chọn máy khác là một câu hỏi khác,
     // và câu trả lời cũ không được phép ghi đè câu trả lời mới.
-    queryKey: ['preflight', platform, device],
+    // `env` nằm trong khoá cache, không chỉ trong query string: đổi môi trường
+    // là một câu hỏi khác, và câu trả lời cũ không được phép ở lại. Thiếu nó
+    // thì bấm "Kiểm tra lại" cũng chỉ nạp lại đúng câu trả lời cũ.
+    queryKey: ['preflight', platform, device, env],
     queryFn: () =>
-      api.get<PreflightResponse>(`${ROUTES.preflight}${qs({ platform, device: device || undefined })}`),
+      api.get<PreflightResponse>(
+        `${ROUTES.preflight}${qs({ platform, device: device || undefined, env: env || undefined })}`,
+      ),
     enabled: Boolean(state.data),
   });
   const tags = useMemo(

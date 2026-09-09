@@ -860,10 +860,20 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
       // later when the run reaches its first step.
       const asked = url.searchParams.get('platform');
       const platform = asked === 'android' || asked === 'ios' || asked === 'web' ? asked : 'web';
+      // Môi trường phải đi theo câu hỏi.
+      //
+      // Thiếu nó, preflight luôn trả lời theo config gốc: chọn SIT mà màn hình
+      // vẫn báo "Địa chỉ web: https://tcinvest.tcbs.com.vn" của prod. Kết luận
+      // "Sẵn sàng chạy" khi ấy nói về một môi trường khác với môi trường sắp
+      // chạy — và với một bộ test chuyển tiền thật thì đó là loại nhầm lẫn
+      // không được phép có.
+      const base = await loadConfig(CONFIG_FILE);
+      const env = url.searchParams.get('env')?.trim();
+      const cfg = env ? applyEnv(base, env).config : base;
       return json(
         res,
         200,
-        await preflight(platform, await loadConfig(CONFIG_FILE), url.searchParams.get('device') ?? undefined),
+        await preflight(platform, cfg, url.searchParams.get('device') ?? undefined),
       );
     }
 

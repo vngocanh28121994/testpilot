@@ -149,7 +149,7 @@ export function DeviceChips({
                 title={[target.id, target.deviceName, target.udid].filter(Boolean).join(' · ')}
                 onClick={() => onToggle(token)}
                 className={cn(
-                  'flex items-center gap-1.5 rounded-md border px-2 py-0.5 text-xs',
+                  'flex items-center gap-1.5 rounded-md border px-1.5 py-0.5 text-[11px]',
                   on ? 'border-primary bg-primary/10 font-medium' : 'border-border hover:bg-muted/50',
                 )}
               >
