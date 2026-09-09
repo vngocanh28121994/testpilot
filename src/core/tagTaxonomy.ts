@@ -164,6 +164,7 @@ export function applyGeneratedTagPolicy(
   requirements: readonly RequirementLike[],
   mappings: readonly MappingLike[],
 ): string {
+  const authoredTypes = authoredTypesByScenario(content);
   const canonical = normalizeFeatureTags(content).content;
   const newline = canonical.includes('\r\n') ? '\r\n' : '\n';
   const lines = canonical.split(/\r?\n/);
@@ -187,10 +188,28 @@ export function applyGeneratedTagPolicy(
       .map((mapping) => requirementById.get(mapping.requirementId))
       .filter((item): item is RequirementLike => Boolean(item));
     const priority = mapped.some((item) => item.priority === 'P0') ? '@p0' : mapped.length ? '@p1' : '@p2';
-    const type = scenarioType(name, mapped);
     const previous = tagsBefore(lines, scenarioIndex);
     const platform = previous.filter((tag) => tagCategory(tag) === 'platform');
     const operation = previous.filter((tag) => tagCategory(tag) === 'operation');
+
+    // Loại hành vi lấy từ chính model, không tính lại bằng từ khoá.
+    //
+    // tagPolicyPrompt() đã yêu cầu "mỗi scenario có đúng một loại", và model
+    // vừa đọc tài liệu lẫn map yêu cầu để viết ra kịch bản đó — nó biết nhiều
+    // hơn hẳn một danh sách 19 cụm từ. Trước đây câu trả lời ấy bị vứt đi và
+    // thay bằng kết quả dò từ khoá, nên "Tiểu khoản đã chọn ở nguồn không xuất
+    // hiện ở dropdown đích" — một quy tắc nghiệp vụ rõ ràng — thành @positive
+    // chỉ vì "không xuất hiện" không nằm trong danh sách.
+    //
+    // Dò từ khoá vẫn giữ, nhưng lùi về làm lưới đỡ: model không gán, hoặc gán
+    // nhiều hơn một loại (tức đã phá chính luật được giao, và lúc đó không đoán
+    // được nó định nói cái nào).
+    // Lấy từ NỘI DUNG GỐC, không phải từ `lines`. Dòng đầu hàm này đã chạy
+    // normalizeFeatureTags(), mà nó gộp mỗi scenario còn đúng một loại bằng
+    // cách giữ `types[0]` — cái viết trước. Đọc sau bước đó thì hai loại mâu
+    // thuẫn đã thành một, và không còn cách nào biết model đã tự mâu thuẫn.
+    const authored = authoredTypes.get(sameKey(name)) ?? [];
+    const type = authored.length === 1 ? authored[0]! : scenarioType(name, mapped);
     const tags = normalizeTagList([
       priority,
       ...(priority === '@p0' && type === '@positive' ? ['@smoke'] : []),
@@ -203,18 +222,77 @@ export function applyGeneratedTagPolicy(
   return lines.join(newline);
 }
 
+/**
+ * Biên từ dùng được với tiếng Việt.
+ *
+ * `\b` của JavaScript chỉ biết chữ cái ASCII, nên một cụm tiếng Việt chỉ khớp
+ * khi ký tự ĐẦU và CUỐI của nó tình cờ là chữ ASCII — một tính chất ngẫu nhiên,
+ * không ai chọn. Ba cụm rơi ra ngoài và không bao giờ khớp, ở bất kỳ vị trí nào:
+ *
+ *   "độ dài"        mở đầu bằng `đ`
+ *   "không hợp lệ"  kết thúc bằng `ệ`
+ *   "không thể"     kết thúc bằng `ể`
+ *
+ * Hai cụm sau là cách nói thường gặp nhất cho ca lỗi, nên "Dữ liệu không hợp lệ"
+ * rơi thẳng xuống nhánh mặc định và được dán nhãn @positive — luồng thành công.
+ */
+function phrasePattern(phrases: readonly string[]): RegExp {
+  return new RegExp(
+    `(?<![\\p{L}\\p{N}])(?:${phrases.join('|')})(?![\\p{L}\\p{N}])`,
+    'iu',
+  );
+}
+
+const BOUNDARY_WORDS = phrasePattern([
+  'tối đa', 'tối thiểu', 'giới hạn', 'ngưỡng', 'giá trị biên', 'độ dài', 'rỗng',
+]);
+const BUSINESS_RULE_WORDS = phrasePattern([
+  'tự động', 'lọc trùng', 'không trùng', 'phân quyền', 'chỉ được', 'không được phép',
+]);
+const NEGATIVE_WORDS = phrasePattern([
+  'thất bại', 'không hợp lệ', 'bị từ chối', 'báo lỗi', 'không thể', 'sai thông tin',
+]);
+
 function scenarioType(name: string, requirements: readonly RequirementLike[]): string {
   const text = [name, ...requirements.flatMap((item) => [item.rule, item.expectedResult])]
     .join(' ')
     .toLocaleLowerCase('vi-VN');
-  if (/\b(tối đa|tối thiểu|giới hạn|ngưỡng|giá trị biên|độ dài|rỗng)\b/iu.test(text)) return '@boundary';
-  if (/\b(tự động|lọc trùng|không trùng|phân quyền|chỉ được|không được phép)\b/iu.test(text)) {
-    return '@business-rule';
-  }
-  if (/\b(thất bại|không hợp lệ|bị từ chối|báo lỗi|không thể|sai thông tin)\b/iu.test(text)) {
-    return '@negative';
-  }
+  if (BOUNDARY_WORDS.test(text)) return '@boundary';
+  if (BUSINESS_RULE_WORDS.test(text)) return '@business-rule';
+  if (NEGATIVE_WORDS.test(text)) return '@negative';
   return '@positive';
+}
+
+/** Khoá so tên scenario, chịu được khác biệt hoa thường và khoảng trắng. */
+function sameKey(name: string): string {
+  return name.trim().replace(/\s+/g, ' ').toLocaleLowerCase('vi-VN');
+}
+
+/**
+ * Loại hành vi model tự gán cho từng scenario, đọc từ nội dung CHƯA chuẩn hoá.
+ *
+ * Phải đọc trước normalizeFeatureTags(), vì bước đó gộp mỗi scenario còn đúng
+ * một loại và giữ cái viết trước — sau đó thì "model gán hai loại mâu thuẫn"
+ * trông giống hệt "model gán đúng một loại".
+ */
+function authoredTypesByScenario(content: string): Map<string, string[]> {
+  const lines = content.split(/\r?\n/);
+  const out = new Map<string, string[]>();
+  lines.forEach((line, index) => {
+    if (!/^\s*Scenario(?:\s+Outline)?\s*:/i.test(line)) return;
+    const name = line.replace(/^\s*Scenario(?:\s+Outline)?\s*:\s*/i, '').trim();
+    const tags: string[] = [];
+    for (let cursor = index - 1; cursor >= 0; cursor--) {
+      const parsed = parseTagLine(lines[cursor]);
+      if (!parsed) break;
+      tags.unshift(...parsed.tags);
+    }
+    const types = [...new Set(
+      tags.map(canonicalTag).filter((tag) => tag && tagCategory(tag) === 'type'),
+    )];
+    out.set(sameKey(name), types);
+  });
+  return out;
 }
 
 function tagsBefore(lines: string[], index: number): string[] {
