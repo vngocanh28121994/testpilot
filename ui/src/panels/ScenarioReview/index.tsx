@@ -364,6 +364,11 @@ function ReviewBody({ state, search }: { state: StateResponse; search: ScenarioS
                   )}
                   {pageRows.map(({ feature, scenario }) => {
                     const id = idFor(feature.name, scenario.name);
+                    // Sửa kịch bản làm đổi contentHash, và syncFile() đưa entry
+                    // về `pending` ngay lúc đó — nên `approved` ở đây luôn có
+                    // nghĩa "đã duyệt VÀ còn đúng nội dung này". Không còn gì
+                    // để duyệt nữa.
+                    const status = scenario.review?.status ?? 'pending';
                     return (
                       <Fragment key={id}>
                         <tr className="border-t">
@@ -430,20 +435,28 @@ function ReviewBody({ state, search }: { state: StateResponse; search: ScenarioS
                                 chính nội dung kịch bản. Bản cũ chỉ để nút Duyệt
                                 cộng một nút "⋯". */}
                             <div className="flex items-center justify-end gap-1">
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                disabled={review.isPending}
-                                onClick={() =>
-                                  review.mutate({
-                                    filename: feature.name,
-                                    scenarioName: scenario.name,
-                                    decision: 'approve',
-                                  })
-                                }
-                              >
-                                Duyệt
-                              </Button>
+                              {/* Kịch bản đã duyệt thì không mời duyệt nữa. Nút
+                                  đứng đó không làm gì, và tệ hơn: nó khiến một
+                                  hàng đã xong trông y hệt hàng còn phải xử lý,
+                                  đúng thứ mà cột Trạng thái vừa nói ngược lại.
+                                  Đã "không duyệt" thì duyệt lại vẫn có nghĩa,
+                                  nên hàng đó giữ nút. */}
+                              {status !== 'approved' && (
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  disabled={review.isPending}
+                                  onClick={() =>
+                                    review.mutate({
+                                      filename: feature.name,
+                                      scenarioName: scenario.name,
+                                      decision: 'approve',
+                                    })
+                                  }
+                                >
+                                  Duyệt
+                                </Button>
+                              )}
                               <DropdownMenu>
                                 <DropdownMenuTrigger asChild>
                                   <Button size="sm" variant="ghost" aria-label={`Hành động khác cho "${scenario.name}"`}>
@@ -483,19 +496,21 @@ function ReviewBody({ state, search }: { state: StateResponse; search: ScenarioS
                                     {scenario.knownIssue ? 'Gỡ nhãn Known issue' : 'Đánh dấu Known issue'}
                                   </DropdownMenuItem>
                                   <DropdownMenuSeparator />
-                                  <DropdownMenuItem
-                                    variant="destructive"
-                                    onSelect={() =>
-                                      review.mutate({
-                                        filename: feature.name,
-                                        scenarioName: scenario.name,
-                                        decision: 'reject',
-                                      })
-                                    }
-                                  >
-                                    <X className="size-4" />
-                                    Không duyệt
-                                  </DropdownMenuItem>
+                                  {status !== 'rejected' && (
+                                    <DropdownMenuItem
+                                      variant="destructive"
+                                      onSelect={() =>
+                                        review.mutate({
+                                          filename: feature.name,
+                                          scenarioName: scenario.name,
+                                          decision: 'reject',
+                                        })
+                                      }
+                                    >
+                                      <X className="size-4" />
+                                      Không duyệt
+                                    </DropdownMenuItem>
+                                  )}
                                 </DropdownMenuContent>
                               </DropdownMenu>
                             </div>

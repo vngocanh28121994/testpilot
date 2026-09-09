@@ -65,7 +65,23 @@ export const stateFixture: StateResponse = {
       background: [],
       scenarios: [
         { id: 'dang-nhap-thanh-cong', name: 'Đăng nhập thành công', tags: ['@web'], platforms: ['web'], steps: 4, review: null, knownIssue: null, knownIssueStale: false },
-        { id: 'sai-mat-khau', name: 'Sai mật khẩu', tags: ['@web'], platforms: ['web'], steps: 3, review: null, knownIssue: null, knownIssueStale: false },
+        // Một file thật gần như luôn có trạng thái lẫn lộn; fixture toàn
+        // `review: null` thì mọi hàng đều là pending và không test nào chạm
+        // được vào nhánh đã-duyệt.
+        {
+          id: 'sai-mat-khau', name: 'Sai mật khẩu', tags: ['@web'], platforms: ['web'], steps: 3,
+          review: {
+            id: 'dang-nhap.feature::Sai mật khẩu',
+            filename: 'dang-nhap.feature',
+            scenarioName: 'Sai mật khẩu',
+            contentHash: 'h-sai-mat-khau',
+            status: 'approved',
+            source: 'generated',
+            updatedAt: '2026-09-01T03:00:00.000Z',
+            reviewedAt: '2026-09-01T03:00:00.000Z',
+          },
+          knownIssue: null, knownIssueStale: false,
+        },
       ],
       coverage: null,
       error: null,
