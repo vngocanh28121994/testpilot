@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import userEvent from '@testing-library/user-event';
 import { render, screen } from '@testing-library/react';
-import { DeviceChips, matchesQuery, selectionHint, type DeviceTarget } from '@/components/DeviceChips';
+import { DeviceChips, chipLabel, matchesQuery, selectionHint, type DeviceTarget } from '@/components/DeviceChips';
 
 /**
  * v2 chỉ có radio chọn MỘT máy, và Local Runner luôn gửi đúng một phần tử
@@ -58,7 +58,7 @@ describe('DeviceChips', () => {
 
   it('hiện cả máy chưa cắm', () => {
     setup();
-    expect(screen.getByRole('button', { name: /sm-s938b/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /SM_S938B/ })).toBeInTheDocument();
     // Chip hiện TÊN máy khi biết, nên tìm theo tên chứ không theo mã.
     expect(screen.getByRole('button', { name: /iPhone 12 Pro Max/ })).toBeInTheDocument();
   });
@@ -66,7 +66,7 @@ describe('DeviceChips', () => {
   it('chọn được nhiều máy', async () => {
     const user = userEvent.setup();
     const onToggle = setup(['android:sm-s918b']);
-    await user.click(screen.getByRole('button', { name: /sm-s938b/ }));
+    await user.click(screen.getByRole('button', { name: /SM_S938B/ }));
     expect(onToggle).toHaveBeenCalledWith('android:sm-s938b');
   });
 
@@ -75,7 +75,7 @@ describe('DeviceChips', () => {
     setup();
     await user.type(screen.getByRole('searchbox', { name: 'Tìm thiết bị' }), 'iphone');
     expect(screen.getByRole('button', { name: /iPhone 12 Pro Max/ })).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /sm-s918b/ })).toBeNull();
+    expect(screen.queryByRole('button', { name: /SM_S918B/ })).toBeNull();
   });
 
   /**
@@ -86,7 +86,7 @@ describe('DeviceChips', () => {
     const user = userEvent.setup();
     setup(['android:sm-s918b']);
     await user.type(screen.getByRole('searchbox', { name: 'Tìm thiết bị' }), 'iphone');
-    expect(screen.getByRole('button', { name: /sm-s918b/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /SM_S918B/ })).toBeInTheDocument();
   });
 
   it('không khớp gì thì nói ra', async () => {
@@ -104,27 +104,43 @@ describe('DeviceChips', () => {
     setup();
     const dots = (name: RegExp) =>
       screen.getByRole('button', { name }).querySelectorAll('span[aria-hidden="true"]').length;
-    expect(dots(/sm-s918b/)).toBe(1);
+    expect(dots(/SM_S918B/)).toBe(1);
     expect(dots(/iPhone 12 Pro Max/)).toBe(0);
   });
 
   it('máy đang chọn nói ra bằng aria-pressed, không chỉ bằng màu', () => {
     setup(['android:sm-s918b']);
-    expect(screen.getByRole('button', { name: /sm-s918b/ })).toHaveAttribute('aria-pressed', 'true');
-    expect(screen.getByRole('button', { name: /sm-s938b/ })).toHaveAttribute('aria-pressed', 'false');
+    expect(screen.getByRole('button', { name: /SM_S918B/ })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByRole('button', { name: /SM_S938B/ })).toHaveAttribute('aria-pressed', 'false');
+  });
+});
+
+describe('chipLabel', () => {
+  /**
+   * Tên thương mại thật chỉ iOS có (qua devicectl). Android hầu như không
+   * khai — tôi hỏi thẳng một Galaxy S25 Ultra đang cắm, cả sáu prop
+   * marketname đều trống — nên ở đó `deviceName` trong config là thứ đọc được
+   * nhất: ngắn, ổn định, do đội đặt.
+   */
+  it('tên thương mại thắng khi có', () => {
+    expect(chipLabel({ platform: 'ios', id: 'x', deviceName: 'iPhone của Anh', friendlyName: 'iPhone 12 Pro Max' }))
+      .toBe('iPhone 12 Pro Max');
+  });
+
+  it('không có thì dùng deviceName của config', () => {
+    expect(chipLabel({ platform: 'android', id: 'sm-s938b', deviceName: 'SM_S938B' })).toBe('SM_S938B');
+  });
+
+  it('không có gì thì dùng id', () => {
+    expect(chipLabel({ platform: 'android', id: 'sm-s938b' })).toBe('sm-s938b');
   });
 });
 
 describe('tên máy đọc được', () => {
-  /**
-   * Mã máy không nói lên đó là máy nào trên bàn. `deviceName` trong config
-   * cũng không cứu được: nó hoặc là cùng mã đó viết hoa ("SM_S918B"), hoặc là
-   * tên ai đó tự gõ vào Cài đặt ("iPhone của Anh").
-   */
-  it('hiện tên thật khi biết, mã máy khi chưa', () => {
+  it('hiện tên thật cho ios, deviceName cho android', () => {
     render(<DeviceChips targets={targets} selected={[]} onToggle={vi.fn()} fallbackPlatform="android" />);
     expect(screen.getByRole('button', { name: /iPhone 12 Pro Max/ })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /sm-s918b/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /SM_S918B/ })).toBeInTheDocument();
   });
 
   it('tìm được theo cả tên thật lẫn mã máy', async () => {

@@ -22,12 +22,10 @@ export interface DeviceTarget {
   deviceName?: string;
   udid?: string;
   /**
-   * Tên máy đọc được — "iPhone 12 Pro Max", "Galaxy S23 Ultra".
+   * Tên thương mại thật, do chính máy khai — "iPhone 12 Pro Max".
    *
-   * Chỉ có sau khi dò, vì nó đến từ chính cái máy. Mã máy trong config
-   * ("sm-s918b") không nói lên đó là máy nào trên bàn, mà `deviceName` cũng
-   * không cứu được: nó hoặc là cùng mã đó viết hoa, hoặc là tên ai đó tự gõ
-   * vào phần Cài đặt của máy.
+   * Chỉ iOS có sẵn (qua devicectl). Android hầu như không khai, nên ở đó
+   * `deviceName` trong config là thứ đọc được nhất.
    */
   friendlyName?: string;
   /**
@@ -41,6 +39,17 @@ export interface DeviceTarget {
 }
 
 export const deviceToken = (t: DeviceTarget) => `${t.platform}:${t.id}`;
+
+/**
+ * Chữ trên chip.
+ *
+ * Tên thương mại thật thắng, vì chỉ nó mới nói được "máy nào" — nhưng chỉ iOS
+ * có. Android quay về `deviceName` trong config: nó ngắn, ổn định, và do đội
+ * đặt, khác hẳn tên máy tự đặt vốn là bất cứ thứ gì người cầm máy đã gõ.
+ */
+export function chipLabel(target: DeviceTarget): string {
+  return target.friendlyName ?? target.deviceName ?? target.id;
+}
 
 /**
  * Lựa chọn hiện tại có nghĩa gì.
@@ -97,16 +106,16 @@ export function DeviceChips({
 
   return (
     <div className="border-border flex flex-col gap-2.5 rounded-lg border p-3">
-      <div className="flex items-center justify-between gap-3">
-        <span className="text-sm font-medium">Chạy trên máy</span>
-        <div className="flex items-center gap-2">
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="shrink-0 text-sm font-medium whitespace-nowrap">Chạy trên máy</span>
+        <div className="ms-auto flex items-center gap-2">
           <Input
             type="search"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Tìm máy…"
             aria-label="Tìm thiết bị"
-            className="h-8 w-36 text-xs"
+            className="h-8 w-32 text-xs"
           />
           {/* Nút nằm ngay cạnh thứ nó thay đổi. Để nó ở khu công cụ phía dưới
               thì bấm xong ticks đổi ở một chỗ người đọc không nhìn tới. */}
@@ -155,7 +164,7 @@ export function DeviceChips({
                     )}
                   />
                 )}
-                {target.friendlyName ?? target.id}
+                {chipLabel(target)}
               </button>
             );
           })}

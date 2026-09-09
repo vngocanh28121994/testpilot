@@ -185,10 +185,10 @@ export default function RunnerPanel() {
         ...Object.fromEntries(
           android.devices
             .filter((d) => d.state === 'device')
-            .map((d) => [
-              d.id,
-              d.marketName ?? [d.manufacturer, d.model].filter(Boolean).join(' '),
-            ])
+            // CHỈ tên thương mại máy tự khai. Ghép hãng + mã máy ra
+            // "samsung SM-S938B" — dài hơn `deviceName` trong config mà không
+            // nói thêm được gì.
+            .map((d) => [d.id, d.marketName ?? ''])
             .filter(([, name]) => Boolean(name)),
         ),
       });
