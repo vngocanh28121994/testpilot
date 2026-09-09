@@ -354,6 +354,31 @@ async function androidPreflight(cfg: TestPilotConfig, override?: string): Promis
   return { checks, device, candidates };
 }
 
+/**
+ * Bảng `xcrun devicectl list devices` thành danh sách máy kèm trạng thái.
+ *
+ * Trước đây chỉ lọc dòng có chữ `connected` rồi vứt phần còn lại. Nhưng một
+ * iPhone đã ghép đôi mà đang khoá hoặc chưa bật Developer Mode nằm ở trạng thái
+ * `unavailable` — và bị vứt đi hoàn toàn, nên preflight nói "không thấy máy
+ * thật nào" trong khi máy đang cắm ngay đó. Đó là đúng tình huống mà nhánh
+ * Android đã xử lý cho `unauthorized`, chỉ là iOS chưa có.
+ */
+export function parseDevicectl(stdout: string): Array<{ name: string; state: string; usable: boolean }> {
+  const out: Array<{ name: string; state: string; usable: boolean }> = [];
+  for (const line of stdout.split('\n')) {
+    // Bỏ tiêu đề và đường kẻ; cột cách nhau bằng nhiều khoảng trắng.
+    if (!line.trim() || /^-+\s/.test(line.trim()) || /^Name\s{2,}/.test(line)) continue;
+    const cols = line.trim().split(/\s{2,}/).filter(Boolean);
+    if (cols.length < 4) continue;
+    const name = cols[0]!;
+    // Trạng thái là cột áp chót trong bảng của devicectl (sau nó là Model).
+    const state = (cols[cols.length - 2] ?? '').trim().toLowerCase();
+    if (!state) continue;
+    out.push({ name, state, usable: state === 'connected' });
+  }
+  return out;
+}
+
 async function iosPreflight(cfg: TestPilotConfig, override?: string): Promise<PlatformChecks> {
   const checks: PreflightCheck[] = [];
 
@@ -363,15 +388,25 @@ async function iosPreflight(cfg: TestPilotConfig, override?: string): Promise<Pl
   // is unavailable the report says only simulators were checked rather than
   // claiming there is no device.
   const physical = await tryRun('xcrun', ['devicectl', 'list', 'devices']);
-  const physicalNames = physical.ok
-    ? physical.stdout.split('\n').filter((l) => /\bconnected\b/i.test(l)).map((l) => l.trim().split(/\s{2,}/)[0]!).filter(Boolean)
-    : [];
+  const listed = physical.ok ? parseDevicectl(physical.stdout) : [];
+  const physicalNames = listed.filter((d) => d.usable).map((d) => d.name);
+  // Cắm rồi nhưng chưa dùng được là một câu trả lời RIÊNG, và với iPhone thì
+  // nó phổ biến y như `unauthorized` bên Android: máy nằm ngay đó, chỉ là đang
+  // khoá, chưa bật Developer Mode, hoặc chưa tin tưởng máy tính này.
+  const blockedPhones = listed.filter((d) => !d.usable);
 
   if (!sim.ok && !physical.ok) {
     checks.push({
       name: 'Thiết bị iOS',
       ok: false,
       detail: `Không chạy được \`xcrun\` (${sim.error ?? 'không rõ'}). Cần Xcode command line tools trên máy macOS.`,
+    });
+  } else if (booted.length === 0 && physicalNames.length === 0 && blockedPhones.length > 0) {
+    checks.push({
+      name: 'Thiết bị iOS',
+      ok: false,
+      detail: `Máy đã nhận nhưng chưa dùng được: ${blockedPhones.map((d) => `${d.name} (${d.state})`).join(', ')}. `
+        + '`unavailable` thường là máy đang khoá, chưa bật Developer Mode, hoặc chưa bấm Tin tưởng máy tính này.',
     });
   } else if (booted.length === 0 && physicalNames.length === 0) {
     checks.push({
@@ -386,6 +421,9 @@ async function iosPreflight(cfg: TestPilotConfig, override?: string): Promise<Pl
       detail: [
         booted.length ? `Simulator đang bật: ${booted.join(', ')}` : '',
         physicalNames.length ? `Máy thật: ${physicalNames.join(', ')}` : '',
+        blockedPhones.length
+          ? `(chưa dùng được: ${blockedPhones.map((d) => `${d.name} — ${d.state}`).join(', ')})`
+          : '',
       ].filter(Boolean).join(' · '),
     });
   }
@@ -407,12 +445,19 @@ async function iosPreflight(cfg: TestPilotConfig, override?: string): Promise<Pl
   // for it, and dies at `xcodebuild failed with code 65` before step one. A
   // simulator needs no signature, so this only matters when a physical device
   // is what is there.
-  if (physicalNames.length > 0 && !cfg.ios.teamId) {
-    checks.push({
-      name: 'Chữ ký cho máy thật',
-      ok: false,
-      detail: 'Chạy trên iPhone thật cần ios.teamId (Apple Developer Team ID, 10 ký tự). Thiếu nó, WebDriverAgent không cài được.',
-    });
+  // Hiện cả khi ĐẠT, không chỉ khi thiếu. Một dòng chỉ xuất hiện lúc hỏng thì
+  // người đang cấu hình không có cách nào xác nhận mình đã đặt đúng — họ chỉ
+  // biết khi một lượt chạy thật đổ ở `xcodebuild failed with code 65`.
+  if (physicalNames.length > 0 || blockedPhones.length > 0) {
+    checks.push(
+      cfg.ios.teamId
+        ? { name: 'Chữ ký cho máy thật', ok: true, detail: `ios.teamId = ${cfg.ios.teamId}` }
+        : {
+            name: 'Chữ ký cho máy thật',
+            ok: false,
+            detail: 'Chạy trên iPhone thật cần ios.teamId (Apple Developer Team ID, 10 ký tự). Thiếu nó, WebDriverAgent không cài được.',
+          },
+    );
   }
 
   return { checks, device, candidates };
