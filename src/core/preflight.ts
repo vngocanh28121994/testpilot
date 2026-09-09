@@ -374,7 +374,19 @@ export function parseDevicectl(stdout: string): Array<{ name: string; state: str
     // Trạng thái là cột áp chót trong bảng của devicectl (sau nó là Model).
     const state = (cols[cols.length - 2] ?? '').trim().toLowerCase();
     if (!state) continue;
-    out.push({ name, state, usable: state === 'connected' });
+    // `connected` KHÔNG phải trạng thái dùng được duy nhất.
+    //
+    // Một iPhone nối qua tunnel CoreDevice (Xcode 15+/iOS 17+) báo là
+    // `available (paired)`, và `xctrace` còn xếp nó vào "Devices Offline" —
+    // nhưng nó dùng được thật. Đo trên máy người dùng:
+    //
+    //   devicectl device info lockState → Acquired tunnel connection to device.
+    //   developerModeStatus: enabled · unlockedSinceBoot: true
+    //
+    // Bắt đúng chữ `connected` khiến tool báo "chưa dùng được" cho một máy đã
+    // mở khoá, đã tin cậy, đã bật Developer Mode — và người dùng đi sửa một
+    // thứ vốn không hỏng.
+    out.push({ name, state, usable: /^(connected|available)/.test(state) });
   }
   return out;
 }

@@ -3571,8 +3571,38 @@ async function iosDeviceNames(): Promise<Record<string, string>> {
   }
 }
 
+/**
+ * udid của những máy iOS thật đang dùng được, theo devicectl.
+ *
+ * Nguồn thứ hai bên cạnh `xctrace`, vì `xctrace` xếp máy nối qua tunnel
+ * CoreDevice vào "Devices Offline" dù chúng dùng được — đo trên máy thật:
+ * cùng lúc đó `devicectl device info lockState` lấy được tunnel và đọc được
+ * trạng thái khoá.
+ */
+async function usableIosUdids(): Promise<string[]> {
+  const file = path.join(os.tmpdir(), `tp-devicectl-u-${Date.now()}.json`);
+  try {
+    await execFileAsync('xcrun', ['devicectl', 'list', 'devices', '--json-output', file], { timeout: 20_000 });
+    const parsed = JSON.parse(await readFile(file, 'utf8')) as {
+      result?: { devices?: Array<{
+        hardwareProperties?: { udid?: string };
+        connectionProperties?: { tunnelState?: string; pairingState?: string };
+      }> };
+    };
+    return (parsed.result?.devices ?? [])
+      .filter((d) => d.connectionProperties?.pairingState === 'paired')
+      .map((d) => d.hardwareProperties?.udid)
+      .filter((u): u is string => Boolean(u));
+  } catch {
+    return [];
+  } finally {
+    await rm(file, { force: true }).catch(() => {});
+  }
+}
+
 async function prereqIosDevices(): Promise<{ devices: string[]; attached: string[]; names: Record<string, string> }> {
   const names = await iosDeviceNames();
+  const usableUdids = await usableIosUdids();
   return new Promise((resolve, reject) => {
     let out = '';
     const child = spawn('xcrun', ['xctrace', 'list', 'devices'], { stdio: ['ignore', 'pipe', 'ignore'] });
@@ -3597,7 +3627,11 @@ async function prereqIosDevices(): Promise<{ devices: string[]; attached: string
     child.on('close', () => {
       clearTimeout(timer);
       const devices = out.split('\n').map((l) => l.trim()).filter(Boolean);
-      resolve({ devices, attached: attachedIosUdids(devices), names });
+      // Gộp hai nguồn: `xctrace` bỏ sót máy nối qua tunnel CoreDevice (nó xếp
+      // chúng vào "Devices Offline"), còn `devicectl` thì thấy. Chỉ tin một
+      // nguồn là bỏ rơi đúng những máy đời mới.
+      const attached = [...new Set([...attachedIosUdids(devices), ...usableUdids])];
+      resolve({ devices, attached, names });
     });
   });
 }

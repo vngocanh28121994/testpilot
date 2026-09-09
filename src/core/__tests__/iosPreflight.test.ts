@@ -34,6 +34,30 @@ describe('parseDevicectl', () => {
     assert.equal(devices[0]!.usable, true);
   });
 
+  /**
+   * `connected` không phải trạng thái dùng được duy nhất.
+   *
+   * Một iPhone nối qua tunnel CoreDevice (Xcode 15+/iOS 17+) báo là
+   * `available (paired)`, và `xctrace` còn xếp nó vào "Devices Offline" —
+   * nhưng nó dùng được thật. Đo trên máy người dùng, cùng thời điểm:
+   *
+   *   devicectl device info lockState → Acquired tunnel connection to device.
+   *   developerModeStatus: enabled · unlockedSinceBoot: true
+   *
+   * Bắt đúng chữ `connected` khiến tool báo "chưa dùng được" cho một máy đã mở
+   * khoá, đã tin cậy, đã bật Developer Mode — và người dùng đi sửa một thứ vốn
+   * không hỏng. Đúng chuyện đã xảy ra.
+   */
+  it('available (paired) cũng là dùng được', () => {
+    const devices = parseDevicectl(REAL.replace('unavailable', 'available (paired)'));
+    assert.match(devices[0]!.state, /^available/);
+    assert.equal(devices[0]!.usable, true);
+  });
+
+  it('unavailable thì vẫn là chưa dùng được', () => {
+    assert.equal(parseDevicectl(REAL)[0]!.usable, false);
+  });
+
   it('bỏ tiêu đề và đường kẻ', () => {
     for (const d of parseDevicectl(REAL)) {
       assert.notEqual(d.name, 'Name');
