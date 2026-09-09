@@ -99,7 +99,13 @@ export default function FarmPanel() {
       .get<AwsStatus>(`${ROUTES.aws}${qs({ region })}`)
       .then(setAws)
       .catch((error: Error) => toast.error(error.message));
-  useEffect(checkAws, [region]);
+  // Bọc trong thân khối thay vì truyền thẳng `checkAws`: giá trị nó trả về sẽ
+  // đi vào chỗ hàm dọn dẹp mà chỗ gọi không nhìn thấy. Hôm nay `checkAws` có
+  // `void` nên trả undefined và không sao — nhưng đó là một tính chất ở tận
+  // định nghĩa hàm, cách đây mấy dòng, và không gì bắt nó phải giữ nguyên.
+  useEffect(() => {
+    checkAws();
+  }, [region]);
 
   /**
    * Đăng nhập xong thì kiểm tra lại ngay.

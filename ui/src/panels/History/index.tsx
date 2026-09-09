@@ -18,7 +18,21 @@ export default function HistoryPanel({ focusId }: { focusId?: string }) {
   const focus = useRef<HTMLDivElement>(null);
   const [range, setRange] = useState<DateRange>();
   const [page, setPage] = useState(1);
-  useEffect(() => focus.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), [focusId]);
+  // Thân KHỐI, không phải thân rút gọn — giá trị trả về của một effect là hàm
+  // dọn dẹp, nên thân rút gọn lặng lẽ biến kết quả của biểu thức thành cleanup.
+  //
+  // `scrollIntoView` theo spec trả undefined, và trong nhiều trình duyệt đúng
+  // là vậy, nên chỗ này chạy tốt suốt. Nhưng ở Chrome của người dùng nó trả về
+  // một Promise; React giữ Promise ấy làm cleanup, rồi lúc rời màn hình gọi nó:
+  //
+  //   TypeError: destroy_ is not a function
+  //
+  // Cả trang lịch sử vỡ khi bấm sang màn khác — và stack chỉ có mã nội bộ
+  // React, không một khung nào của ứng dụng, vì hàm ấy sinh ra từ một lần
+  // render đã xong từ lâu.
+  useEffect(() => {
+    focus.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }, [focusId]);
   const runs = useMemo(() => (state.data?.runs ?? [])
     .filter((run) => inRange(run.startedAt, range))
     .sort((a, b) => Date.parse(b.startedAt ?? '') - Date.parse(a.startedAt ?? '')), [range, state.data?.runs]);
