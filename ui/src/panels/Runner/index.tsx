@@ -29,6 +29,7 @@ import { when } from '@/lib/datetime';
 import { cn } from '@/lib/utils';
 import type {
   PreflightResponse,
+  PrereqIosNamesResponse,
   PrereqAdbResponse,
   PrereqIosDevicesResponse,
   ReportView,
@@ -65,6 +66,22 @@ export default function RunnerPanel() {
   const [attachedUdids, setAttachedUdids] = useState<Set<string> | null>(null);
   /** udid → tên máy đọc được, gom từ cả hai nền tảng sau khi dò. */
   const [deviceNames, setDeviceNames] = useState<Record<string, string>>({});
+
+  /**
+   * Tên máy iOS, hỏi ngay khi mở màn.
+   *
+   * Không đợi người dùng bấm "Kiểm tra máy đang cắm": tên máy không đổi theo
+   * việc máy có đang cắm hay không, và tải lại trang mà chip tụt về
+   * "iPhone của Anh" — tên ai đó gõ vào Cài đặt — là mất đúng thứ vừa làm ra.
+   *
+   * Rẻ nên gọi được: `devicectl` mất 0,05 giây, khác hẳn `xctrace` 1,5 giây
+   * của endpoint danh sách đầy đủ.
+   */
+  const iosNames = useQuery({
+    queryKey: ['ios-device-names'],
+    queryFn: () => api.get<PrereqIosNamesResponse>(ROUTES.prereqIosNames),
+    staleTime: 5 * 60_000,
+  });
   const [detecting, setDetecting] = useState(false);
   const job = useStreamJob('local-run', STREAM_ROUTES.run);
 
@@ -146,11 +163,11 @@ export default function RunnerPanel() {
         // tảng đang chọn mới biết được, phần còn lại để trống.
         // Nhãn trong config đứng TRƯỚC mọi thứ dò được: nó do đội đặt, nằm
         // trong repo, và không đổi theo việc ai đang cầm máy.
-        ...(d.label
-          ? { friendlyName: d.label }
-          : d.udid && deviceNames[d.udid]
-            ? { friendlyName: deviceNames[d.udid] }
-            : {}),
+        ...(() => {
+          const probed = d.udid ? deviceNames[d.udid] ?? iosNames.data?.names[d.udid] : undefined;
+          const name = d.label ?? probed;
+          return name ? { friendlyName: name } : {};
+        })(),
         ...(attachedUdids
           ? { attached: Boolean(d.udid && attachedUdids.has(d.udid)) }
           : p === platform
@@ -158,7 +175,7 @@ export default function RunnerPanel() {
             : {}),
       })),
     );
-  }, [state.data?.config, preflight.data?.candidates, platform, attachedUdids, deviceNames]);
+  }, [state.data?.config, preflight.data?.candidates, platform, attachedUdids, deviceNames, iosNames.data]);
 
   /**
    * Dò cả android lẫn ios, rồi tự tích những máy đang cắm.

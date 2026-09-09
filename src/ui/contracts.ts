@@ -667,3 +667,12 @@ export interface ActiveRunSummary {
 export interface ActiveRunsResponse {
   runs: ActiveRunSummary[];
 }
+
+/* ------------------------------------------------------------------ */
+/* GET /api/prereq/ios-names                                           */
+/* ------------------------------------------------------------------ */
+
+/** udid → tên máy đọc được. Rẻ, gọi được ngay khi mở màn chọn máy. */
+export interface PrereqIosNamesResponse {
+  names: Record<string, string>;
+}

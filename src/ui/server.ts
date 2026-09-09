@@ -949,6 +949,17 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
     case 'GET /api/prereq/ios-devices':
       return json(res, 200, await prereqIosDevices());
 
+    /**
+     * Chỉ tên máy, không kèm danh sách đầy đủ.
+     *
+     * Tách khỏi /ios-devices vì hai thứ đó có giá khác hẳn nhau: `devicectl`
+     * mất 0,05 giây, còn `xctrace` mất 1,5 giây và đã từng treo hẳn (vì thế
+     * endpoint kia có timeout 15 giây). Màn chọn máy chỉ cần tên, và cần ngay
+     * lúc mở — bắt nó chờ `xctrace` là trả giá cho thứ nó không dùng.
+     */
+    case 'GET /api/prereq/ios-names':
+      return json(res, 200, { names: await iosDeviceNames() });
+
     case 'POST /api/prereq/driver': {
       const { driver } = await readJson<{ driver: string }>(req);
       return stream(res, (log) => prereqInstallDriver(driver, log));

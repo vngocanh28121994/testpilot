@@ -44,6 +44,7 @@ export const ROUTES = {
   farmPool: '/api/farm/pool',
   prereqAdb: '/api/prereq/adb',
   prereqXcode: '/api/prereq/xcode',
+  prereqIosNames: '/api/prereq/ios-names',
   prereqIosDevices: '/api/prereq/ios-devices',
   prereqAppiumStatus: '/api/prereq/appium/status',
 } as const;
