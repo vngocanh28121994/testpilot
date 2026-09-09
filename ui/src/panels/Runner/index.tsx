@@ -21,6 +21,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { api, qs } from '@/api/client';
 import { ROUTES, STREAM_ROUTES } from '@/api/routes';
 import { DevicePicker } from '@/components/DevicePicker';
+import { DeviceChips, type DeviceTarget } from '@/components/DeviceChips';
 import { PrereqTools } from './PrereqTools';
 import { useAppState } from '@/hooks/useAppState';
 import { useStreamJob } from '@/hooks/useStreamJob';
@@ -42,6 +43,13 @@ export default function RunnerPanel() {
    * đúng đường cũ, vì một máy duy nhất thì không có gì phải hỏi.
    */
   const [device, setDevice] = useState('');
+  /**
+   * Máy được tích để chạy song song.
+   *
+   * Tách khỏi `device` (lựa chọn MỘT máy của preflight): hai câu hỏi khác nhau
+   * — "máy nào khi có nhiều máy cùng cắm" và "chạy trên mấy máy cùng lúc".
+   */
+  const [multi, setMulti] = useState<string[]>([]);
   const job = useStreamJob('local-run', STREAM_ROUTES.run);
 
   /**
@@ -94,11 +102,35 @@ export default function RunnerPanel() {
       includeQuarantined: quarantined,
       ...(env ? { env } : {}),
       ...(() => {
+        // Tích nhiều máy thì gửi cả danh sách: server thấy `devices.length > 1`
+        // là rẽ sang run-parallel.ts. Trước đây chỗ này luôn gửi đúng một phần
+        // tử, nên giao diện không có cách nào khởi động một lượt song song.
+        if (multi.length > 0) return { devices: multi };
         const picked = device || preflight.data.device;
         return picked ? { devices: [`${platform}:${picked}`] } : {};
       })(),
     });
   };
+  /**
+   * Máy có thể chạy: lấy từ config, đánh dấu cái nào đang cắm.
+   *
+   * Cả những máy chưa cắm cũng hiện — chúng là thứ người ta mong thấy khi đi
+   * tìm xem còn máy nào; giấu đi thì danh sách trông như config bị mất.
+   */
+  const targets: DeviceTarget[] = useMemo(() => {
+    const cfg = state.data?.config;
+    const attached = new Set((preflight.data?.candidates ?? []).map((c) => c.id));
+    return (['android', 'ios'] as const).flatMap((p) =>
+      (cfg?.[p]?.devices ?? []).map((d) => ({
+        platform: p,
+        id: d.id,
+        deviceName: d.deviceName,
+        udid: d.udid,
+        attached: attached.has(d.id),
+      })),
+    );
+  }, [state.data?.config, preflight.data?.candidates]);
+
   const stop = async () => {
     try {
       await api.post<{ ok: boolean }>(ROUTES.runStop);
@@ -187,6 +219,22 @@ export default function RunnerPanel() {
                   </Button>
                 )}
               </div>
+
+              {/* Chọn nhiều máy nằm CẠNH nút chạy, không nằm trong thẻ kiểm tra
+                  môi trường: nó là một phần của câu "chạy cái gì", chứ không
+                  phải một kết luận về việc chạy được hay chưa. */}
+              {targets.length > 0 && (
+                <DeviceChips
+                  targets={targets}
+                  selected={multi}
+                  fallbackPlatform={platform}
+                  onToggle={(token) =>
+                    setMulti((prev) =>
+                      prev.includes(token) ? prev.filter((t) => t !== token) : [...prev, token],
+                    )
+                  }
+                />
+              )}
             </CardContent>
           </Card>
 

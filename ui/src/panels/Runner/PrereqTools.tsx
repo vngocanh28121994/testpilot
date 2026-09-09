@@ -152,8 +152,7 @@ function DevicesRow({ platform }: { platform: 'android' | 'ios' }) {
       </div>
       {platform === 'ios' && (
         <span className="text-muted-foreground text-xs">
-          Máy nằm ở mục “Devices Offline” là đã ghép đôi nhưng chưa dùng được — thường do đang khoá,
-          chưa bật Developer Mode, hoặc chưa bấm Tin tưởng máy tính này.
+          Máy ở mục “Devices Offline” là đã ghép đôi nhưng chưa dùng được.
         </span>
       )}
       {devices.data && (

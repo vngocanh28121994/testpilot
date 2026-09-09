@@ -1,0 +1,100 @@
+import { cn } from '@/lib/utils';
+
+/**
+ * Chọn máy để chạy — nhiều máy một lúc.
+ *
+ * v2 trước đây chỉ có radio chọn MỘT máy, và Local Runner luôn gửi đúng một
+ * phần tử trong `devices`. Nghĩa là giao diện không có cách nào khởi động một
+ * lượt chạy song song, dù server đã làm được từ lâu: `picked.length > 1` là rẽ
+ * sang run-parallel.ts, một tiến trình con cho mỗi máy.
+ *
+ * Chip chứ không phải danh sách chọn: mục đích là nhìn thấy ngay những máy nào
+ * đang nằm trên bàn, và thấy được cả những máy có trong config mà chưa cắm —
+ * một dropdown giấu đúng thứ cần nhìn.
+ */
+
+export interface DeviceTarget {
+  platform: 'android' | 'ios';
+  id: string;
+  deviceName?: string;
+  udid?: string;
+  /** Máy đang thật sự cắm vào máy tính này. */
+  attached: boolean;
+}
+
+export const deviceToken = (t: DeviceTarget) => `${t.platform}:${t.id}`;
+
+/**
+ * Lựa chọn hiện tại có nghĩa gì.
+ *
+ * Không có dòng này thì "tích hai máy" và "tích một máy" trông giống hệt nhau,
+ * trong khi một bên chạy song song và một bên chạy tuần tự — khác nhau cả về
+ * thời gian lẫn về việc kết quả được gộp ra sao.
+ */
+export function selectionHint(tokens: string[], fallbackPlatform: string): string {
+  if (tokens.length === 0) return `Chưa chọn — chạy ${fallbackPlatform} như bình thường.`;
+  if (tokens.length === 1) return '1 máy — chạy tuần tự.';
+  const platforms = [...new Set(tokens.map((t) => t.split(':')[0]))];
+  return platforms.length > 1
+    ? `${tokens.length} máy trên ${platforms.join(' + ')} — chạy song song.`
+    : `${tokens.length} máy — chạy song song, gộp kết quả sau khi xong.`;
+}
+
+export function DeviceChips({
+  targets,
+  selected,
+  onToggle,
+  fallbackPlatform,
+}: {
+  targets: DeviceTarget[];
+  selected: string[];
+  onToggle: (token: string) => void;
+  fallbackPlatform: string;
+}) {
+  if (targets.length === 0) return null;
+  const groups = (['android', 'ios'] as const)
+    .map((platform) => [platform, targets.filter((t) => t.platform === platform)] as const)
+    .filter(([, list]) => list.length > 0);
+
+  return (
+    <div className="flex flex-col gap-2">
+      <span className="text-xs font-medium">Chạy trên máy</span>
+      {groups.map(([platform, list]) => (
+        <div key={platform} className="flex flex-wrap items-center gap-2">
+          <span className="text-muted-foreground w-16 shrink-0 text-xs">{platform}</span>
+          {list.map((target) => {
+            const token = deviceToken(target);
+            const on = selected.includes(token);
+            return (
+              <button
+                key={token}
+                type="button"
+                aria-pressed={on}
+                // Mọi thứ khác về máy nằm ở tooltip: một chip hai dòng chỉ lặp
+                // lại cùng một mã máy ở dạng viết khác.
+                title={[target.deviceName, target.udid].filter(Boolean).join(' · ')}
+                onClick={() => onToggle(token)}
+                className={cn(
+                  'flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs',
+                  on ? 'border-primary bg-primary/10 font-medium' : 'border-border hover:bg-muted/50',
+                )}
+              >
+                {/* Chấm chỉ nói MỘT điều: máy có đang cắm không. Đó là thứ
+                    quyết định chọn được hay không, và là thứ đổi liên tục. */}
+                <span
+                  aria-hidden="true"
+                  className={cn(
+                    'size-1.5 rounded-full',
+                    target.attached ? 'bg-status-pass' : 'bg-muted-foreground/40',
+                  )}
+                />
+                {target.id}
+              </button>
+            );
+          })}
+        </div>
+      ))}
+      <span className="text-muted-foreground text-xs">{selectionHint(selected, fallbackPlatform)}</span>
+    </div>
+  );
+}

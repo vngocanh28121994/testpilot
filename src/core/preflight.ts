@@ -405,8 +405,10 @@ async function iosPreflight(cfg: TestPilotConfig, override?: string): Promise<Pl
     checks.push({
       name: 'Thiết bị iOS',
       ok: false,
-      detail: `Máy đã nhận nhưng chưa dùng được: ${blockedPhones.map((d) => `${d.name} (${d.state})`).join(', ')}. `
-        + '`unavailable` thường là máy đang khoá, chưa bật Developer Mode, hoặc chưa bấm Tin tưởng máy tính này.',
+      // Một câu, có hành động. Bản trước giải nghĩa từ `unavailable` rồi đoán ba
+      // nguyên nhân — dài, và ba nguyên nhân đoán mò thì không phải hướng dẫn.
+      detail: `${blockedPhones.map((d) => `${d.name} (${d.state})`).join(', ')} — máy đã nhận `
+        + 'nhưng chưa dùng được. Mở khoá máy và giữ cáp, hoặc bật một simulator.',
     });
   } else if (booted.length === 0 && physicalNames.length === 0) {
     checks.push({
