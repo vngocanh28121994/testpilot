@@ -106,7 +106,13 @@ async function main(): Promise<void> {
   const secrets = await Secrets.load();
   const variables = accountVariables(cfg.accounts, secrets, alias);
   assertAccountsResolve(features, cfg, variables, alias, envName);
-  warnAboutLocatorlessElements(features, registry, platform);
+  warnAboutLocatorlessElements(
+    features,
+    registry,
+    platform,
+    inScope,
+    platform !== 'web' && Boolean(platform === 'ios' ? cfg.ios.hybrid : cfg.android.hybrid),
+  );
 
   // Fixed before anything runs, because the report, the screenshots and the
   // videos all have to land in the same directory for the run to be readable
@@ -726,16 +732,39 @@ function warnAboutLocatorlessElements(
   features: FeatureSpec[],
   registry: Registry,
   platform: Platform,
+  /**
+   * Chỉ cảnh báo về kịch bản THUỘC lượt chạy này.
+   *
+   * Trước đây nó duyệt mọi feature, nên chạy đăng nhập trên iOS lại nhận một
+   * cảnh báo về `priceBoard.floorTabs` — element chỉ dùng ở một kịch bản của
+   * feature thêm-mã-cổ-phiếu, thứ chưa bao giờ nằm trong phạm vi được hỏi.
+   * Cảnh báo về việc mình không yêu cầu là cách nhanh nhất để người ta ngừng
+   * đọc cảnh báo.
+   */
+  inScope: (scenario: { tags: string[]; platforms: string[] }) => boolean,
+  /** App chạy trong WebView: candidate `web` dùng được cho cả nền tảng native. */
+  hybrid: boolean,
 ): void {
   const offenders = new Map<string, { label: string; where: string[] }>();
   for (const feature of features) {
     for (const scenario of feature.scenarios) {
+      if (!inScope(scenario)) continue;
       for (const step of scenario.steps) {
         const intent = step.intent as { element?: string };
         if (!intent.element) continue;
         const element = registry.raw.elements[intent.element];
         if (!element) continue;
-        if ((element.candidates[platform]?.length ?? 0) > 0) continue;
+        // App hybrid chạy trong WebView, và `NativeUiDriver.platform` trả về
+        // 'web' khi đang ở trong đó (native.ts:216). Nên một element chỉ có
+        // candidate `web` VẪN dùng được trên iOS/Android hybrid — đòi cho bằng
+        // được candidate `ios` là cảnh báo về một thứ không hỏng.
+        //
+        // Đây không phải trường hợp hiếm: phần lớn element của bộ này là
+        // web-only, và chúng chạy tốt trên Android hybrid suốt.
+        const usable = hybrid
+          ? [...(element.candidates[platform] ?? []), ...(element.candidates.web ?? [])]
+          : (element.candidates[platform] ?? []);
+        if (usable.length > 0) continue;
         if ((element.health?.resolutions ?? 0) > 0) continue;
         const entry = offenders.get(intent.element)
           ?? { label: element.label, where: [] };
