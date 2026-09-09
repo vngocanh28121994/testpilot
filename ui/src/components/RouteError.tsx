@@ -57,7 +57,23 @@ function markReload(): void {
   } catch { /* không ghi được thì thôi, chỉ mất khả năng tự sửa */ }
 }
 
-export function RouteError({ error, reset }: { error: Error; reset?: () => void }) {
+export function RouteError({
+  error,
+  reset,
+  info,
+}: {
+  error: Error;
+  reset?: () => void;
+  /**
+   * Chuỗi component nơi lỗi bật ra, do React dựng.
+   *
+   * Thứ quan trọng nhất trên màn hình này. Stack của lỗi chỉ có mã nội bộ
+   * React — với một cleanup effect hỏng thì không có lấy một khung nào của ứng
+   * dụng, vì hàm gây lỗi được tạo ở một lần render đã xong từ lâu. Chỉ chuỗi
+   * component mới nói được lỗi nằm ở màn hình nào, component nào.
+   */
+  info?: { componentStack?: string };
+}) {
   const router = useRouter();
 
   if (isStaleChunk(error) && !reloadedRecently()) {
@@ -95,6 +111,17 @@ export function RouteError({ error, reset }: { error: Error; reset?: () => void 
           Tải lại trang
         </Button>
       </div>
+
+      {info?.componentStack && (
+        <details className="mt-4" open>
+          <summary className="text-muted-foreground cursor-pointer text-sm select-none">
+            Component
+          </summary>
+          <code className="text-muted-foreground mt-2 block max-h-64 overflow-auto rounded bg-black/5 p-3 font-mono text-xs whitespace-pre-wrap dark:bg-white/5">
+            {info.componentStack}
+          </code>
+        </details>
+      )}
 
       {error.stack && (
         <details className="mt-4" open>

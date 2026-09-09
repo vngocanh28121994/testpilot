@@ -37,6 +37,19 @@ describe('RouteError', () => {
     expect(screen.getByText(/at Xyz \(index-abc\.js/)).toBeInTheDocument();
   });
 
+  /**
+   * Với một cleanup effect hỏng, stack chỉ có mã nội bộ React — không một khung
+   * nào của ứng dụng, vì hàm gây lỗi được tạo ở một lần render đã xong từ lâu.
+   * Chuỗi component là thứ duy nhất chỉ ra được chỗ hỏng.
+   */
+  it('hiện chuỗi component khi React đưa sang', async () => {
+    await renderWithRouter(
+      <RouteError error={new Error('destroy_ is not a function')} info={{ componentStack: '\n    at LogView\n    at HistoryPanel' }} />,
+      { path: '/scenarios' },
+    );
+    expect(await screen.findByText(/at HistoryPanel/)).toBeInTheDocument();
+  });
+
   it('nói rõ đang ở route nào', async () => {
     await render(new Error('bùm'));
     expect(await screen.findByText('/scenarios')).toBeInTheDocument();
