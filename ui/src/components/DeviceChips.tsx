@@ -1,3 +1,5 @@
+import { useState } from 'react';
+import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
 
 /**
@@ -40,6 +42,15 @@ export function selectionHint(tokens: string[], fallbackPlatform: string): strin
     : `${tokens.length} máy — chạy song song, gộp kết quả sau khi xong.`;
 }
 
+/** Khớp theo id, tên máy hoặc udid — ba thứ người ta thật sự gõ để tìm. */
+export function matchesQuery(target: DeviceTarget, query: string): boolean {
+  const q = query.trim().toLowerCase();
+  if (!q) return true;
+  return [target.id, target.deviceName, target.udid]
+    .filter(Boolean)
+    .some((value) => value!.toLowerCase().includes(q));
+}
+
 export function DeviceChips({
   targets,
   selected,
@@ -51,14 +62,34 @@ export function DeviceChips({
   onToggle: (token: string) => void;
   fallbackPlatform: string;
 }) {
+  const [query, setQuery] = useState('');
   if (targets.length === 0) return null;
+
+  // Máy ĐANG CHỌN không bao giờ bị lọc mất. Gõ tìm rồi thấy lựa chọn biến mất
+  // là mất luôn cách bỏ chọn nó, và dòng tổng kết bên dưới thành khó hiểu.
+  const visible = targets.filter(
+    (t) => matchesQuery(t, query) || selected.includes(deviceToken(t)),
+  );
   const groups = (['android', 'ios'] as const)
-    .map((platform) => [platform, targets.filter((t) => t.platform === platform)] as const)
+    .map((platform) => [platform, visible.filter((t) => t.platform === platform)] as const)
     .filter(([, list]) => list.length > 0);
 
   return (
     <div className="flex flex-col gap-2">
-      <span className="text-xs font-medium">Chạy trên máy</span>
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="text-xs font-medium">Chạy trên máy</span>
+        <Input
+          type="search"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder="Tìm theo tên, id hoặc udid…"
+          aria-label="Tìm thiết bị"
+          className="h-7 max-w-56 text-xs"
+        />
+      </div>
+      {groups.length === 0 && (
+        <span className="text-muted-foreground text-xs">Không có thiết bị nào khớp.</span>
+      )}
       {groups.map(([platform, list]) => (
         <div key={platform} className="flex flex-wrap items-center gap-2">
           <span className="text-muted-foreground w-16 shrink-0 text-xs">{platform}</span>

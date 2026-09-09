@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import userEvent from '@testing-library/user-event';
 import { render, screen } from '@testing-library/react';
-import { DeviceChips, selectionHint, type DeviceTarget } from '@/components/DeviceChips';
+import { DeviceChips, matchesQuery, selectionHint, type DeviceTarget } from '@/components/DeviceChips';
 
 /**
  * v2 chỉ có radio chọn MỘT máy, và Local Runner luôn gửi đúng một phần tử
@@ -31,6 +31,21 @@ describe('selectionHint', () => {
   });
 });
 
+describe('matchesQuery', () => {
+  const t = targets[0]!;
+  it('khớp theo id, tên máy và udid', () => {
+    expect(matchesQuery(t, 's918')).toBe(true);
+    expect(matchesQuery(t, 'SM_S918B')).toBe(true);
+    expect(matchesQuery(t, 'r5c1')).toBe(true);
+  });
+  it('rỗng thì khớp tất cả', () => {
+    expect(matchesQuery(t, '  ')).toBe(true);
+  });
+  it('không khớp thì trả false', () => {
+    expect(matchesQuery(t, 'iphone')).toBe(false);
+  });
+});
+
 describe('DeviceChips', () => {
   const setup = (selected: string[] = []) => {
     const onToggle = vi.fn();
@@ -51,6 +66,32 @@ describe('DeviceChips', () => {
     const onToggle = setup(['android:sm-s918b']);
     await user.click(screen.getByRole('button', { name: /sm-s938b/ }));
     expect(onToggle).toHaveBeenCalledWith('android:sm-s938b');
+  });
+
+  it('lọc theo ô tìm kiếm', async () => {
+    const user = userEvent.setup();
+    setup();
+    await user.type(screen.getByRole('searchbox', { name: 'Tìm thiết bị' }), 'iphone');
+    expect(screen.getByRole('button', { name: /iphone-12-pro-max/ })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /sm-s918b/ })).toBeNull();
+  });
+
+  /**
+   * Gõ tìm rồi thấy máy đang chọn biến mất là mất luôn cách bỏ chọn nó, và
+   * dòng tổng kết bên dưới thành khó hiểu.
+   */
+  it('máy đang chọn không bị lọc mất', async () => {
+    const user = userEvent.setup();
+    setup(['android:sm-s918b']);
+    await user.type(screen.getByRole('searchbox', { name: 'Tìm thiết bị' }), 'iphone');
+    expect(screen.getByRole('button', { name: /sm-s918b/ })).toBeInTheDocument();
+  });
+
+  it('không khớp gì thì nói ra', async () => {
+    const user = userEvent.setup();
+    setup();
+    await user.type(screen.getByRole('searchbox', { name: 'Tìm thiết bị' }), 'zzz');
+    expect(screen.getByText('Không có thiết bị nào khớp.')).toBeInTheDocument();
   });
 
   it('máy đang chọn nói ra bằng aria-pressed, không chỉ bằng màu', () => {
