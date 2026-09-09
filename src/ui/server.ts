@@ -3453,6 +3453,16 @@ async function prereqAdb(): Promise<{ devices: PrereqAndroidDevice[] }> {
       }
       const manufacturer = props.get('ro.product.manufacturer')?.trim();
       const model = props.get('ro.product.model')?.trim();
+      // Tên người ta thật sự đọc được. `ro.product.model` là mã máy —
+      // "SM-S918B" không nói lên đó là máy nào trên bàn. Samsung, Xiaomi và
+      // Oppo đều ghi tên thương mại vào một trong các prop dưới đây; máy nào
+      // không có thì thôi, quay về mã máy.
+      const marketName = [
+        'ro.product.marketname',
+        'ro.config.marketing_name',
+        'ro.product.vendor.marketname',
+        'ro.oppo.market.name',
+      ].map((key) => props.get(key)?.trim()).find(Boolean);
       const androidVersion = props.get('ro.build.version.release')?.trim();
       const emulator = fallbackKind === 'emulator' || props.get('ro.kernel.qemu') === '1';
       return {
@@ -3460,6 +3470,7 @@ async function prereqAdb(): Promise<{ devices: PrereqAndroidDevice[] }> {
         state,
         ...(manufacturer ? { manufacturer } : {}),
         ...(model ? { model } : {}),
+        ...(marketName ? { marketName } : {}),
         ...(androidVersion ? { androidVersion } : {}),
         kind: emulator ? 'emulator' : 'physical',
       };
@@ -3503,7 +3514,41 @@ function attachedIosUdids(lines: string[]): string[] {
   return udids;
 }
 
-async function prereqIosDevices(): Promise<{ devices: string[]; attached: string[] }> {
+/**
+ * Tên máy đọc được, theo udid.
+ *
+ * `devicectl --json-output` là chỗ duy nhất có CẢ udid lẫn marketingName. Bảng
+ * chữ mà devicectl in ra thì cột Identifier là UUID của CoreDevice, không phải
+ * udid — ghép với config bằng nó là ghép trượt.
+ *
+ * Trả về cho MỌI máy nó thấy, kể cả máy đang tắt: danh sách chọn máy vẫn cần
+ * đọc được tên của một máy chưa cắm.
+ */
+async function iosDeviceNames(): Promise<Record<string, string>> {
+  const file = path.join(os.tmpdir(), `tp-devicectl-${Date.now()}.json`);
+  try {
+    await execFileAsync('xcrun', ['devicectl', 'list', 'devices', '--json-output', file], { timeout: 20_000 });
+    const parsed = JSON.parse(await readFile(file, 'utf8')) as {
+      result?: { devices?: Array<{ hardwareProperties?: { udid?: string; marketingName?: string } }> };
+    };
+    const out: Record<string, string> = {};
+    for (const device of parsed.result?.devices ?? []) {
+      const udid = device.hardwareProperties?.udid;
+      const name = device.hardwareProperties?.marketingName;
+      if (udid && name) out[udid] = name;
+    }
+    return out;
+  } catch {
+    // Máy không có Xcode, hoặc devicectl bản cũ không nhận --json-output. Thiếu
+    // tên chỉ làm danh sách khó đọc hơn, không được phép làm hỏng cả câu trả lời.
+    return {};
+  } finally {
+    await rm(file, { force: true }).catch(() => {});
+  }
+}
+
+async function prereqIosDevices(): Promise<{ devices: string[]; attached: string[]; names: Record<string, string> }> {
+  const names = await iosDeviceNames();
   return new Promise((resolve, reject) => {
     let out = '';
     const child = spawn('xcrun', ['xctrace', 'list', 'devices'], { stdio: ['ignore', 'pipe', 'ignore'] });
@@ -3513,6 +3558,7 @@ async function prereqIosDevices(): Promise<{ devices: string[]; attached: string
     const timer = setTimeout(() => {
       child.kill('SIGKILL');
       resolve({
+        names,
         attached: [],
         devices: [
           'xcrun xctrace không phản hồi sau 15s.',
@@ -3527,7 +3573,7 @@ async function prereqIosDevices(): Promise<{ devices: string[]; attached: string
     child.on('close', () => {
       clearTimeout(timer);
       const devices = out.split('\n').map((l) => l.trim()).filter(Boolean);
-      resolve({ devices, attached: attachedIosUdids(devices) });
+      resolve({ devices, attached: attachedIosUdids(devices), names });
     });
   });
 }

@@ -13,7 +13,7 @@ const targets: DeviceTarget[] = [
   { platform: 'android', id: 'sm-s918b', deviceName: 'SM_S918B', udid: 'R5C1', attached: true },
   { platform: 'android', id: 'sm-s938b', deviceName: 'SM_S938B', udid: 'R5C2', attached: false },
   // Nền tảng không được dò: tình trạng là CHƯA BIẾT, không phải "chưa cắm".
-  { platform: 'ios', id: 'iphone-12-pro-max', deviceName: 'iPhone của Anh', udid: '0008' },
+  { platform: 'ios', id: 'iphone-12-pro-max', deviceName: 'iPhone của Anh', udid: '0008', friendlyName: 'iPhone 12 Pro Max' },
 ];
 
 describe('selectionHint', () => {
@@ -59,7 +59,8 @@ describe('DeviceChips', () => {
   it('hiện cả máy chưa cắm', () => {
     setup();
     expect(screen.getByRole('button', { name: /sm-s938b/ })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /iphone-12-pro-max/ })).toBeInTheDocument();
+    // Chip hiện TÊN máy khi biết, nên tìm theo tên chứ không theo mã.
+    expect(screen.getByRole('button', { name: /iPhone 12 Pro Max/ })).toBeInTheDocument();
   });
 
   it('chọn được nhiều máy', async () => {
@@ -73,7 +74,7 @@ describe('DeviceChips', () => {
     const user = userEvent.setup();
     setup();
     await user.type(screen.getByRole('searchbox', { name: 'Tìm thiết bị' }), 'iphone');
-    expect(screen.getByRole('button', { name: /iphone-12-pro-max/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /iPhone 12 Pro Max/ })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /sm-s918b/ })).toBeNull();
   });
 
@@ -104,13 +105,37 @@ describe('DeviceChips', () => {
     const dots = (name: RegExp) =>
       screen.getByRole('button', { name }).querySelectorAll('span[aria-hidden="true"]').length;
     expect(dots(/sm-s918b/)).toBe(1);
-    expect(dots(/iphone-12-pro-max/)).toBe(0);
+    expect(dots(/iPhone 12 Pro Max/)).toBe(0);
   });
 
   it('máy đang chọn nói ra bằng aria-pressed, không chỉ bằng màu', () => {
     setup(['android:sm-s918b']);
     expect(screen.getByRole('button', { name: /sm-s918b/ })).toHaveAttribute('aria-pressed', 'true');
     expect(screen.getByRole('button', { name: /sm-s938b/ })).toHaveAttribute('aria-pressed', 'false');
+  });
+});
+
+describe('tên máy đọc được', () => {
+  /**
+   * Mã máy không nói lên đó là máy nào trên bàn. `deviceName` trong config
+   * cũng không cứu được: nó hoặc là cùng mã đó viết hoa ("SM_S918B"), hoặc là
+   * tên ai đó tự gõ vào Cài đặt ("iPhone của Anh").
+   */
+  it('hiện tên thật khi biết, mã máy khi chưa', () => {
+    render(<DeviceChips targets={targets} selected={[]} onToggle={vi.fn()} fallbackPlatform="android" />);
+    expect(screen.getByRole('button', { name: /iPhone 12 Pro Max/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /sm-s918b/ })).toBeInTheDocument();
+  });
+
+  it('tìm được theo cả tên thật lẫn mã máy', async () => {
+    const user = userEvent.setup();
+    render(<DeviceChips targets={targets} selected={[]} onToggle={vi.fn()} fallbackPlatform="android" />);
+    const box = screen.getByRole('searchbox', { name: 'Tìm thiết bị' });
+    await user.type(box, 'pro max');
+    expect(screen.getByRole('button', { name: /iPhone 12 Pro Max/ })).toBeInTheDocument();
+    await user.clear(box);
+    await user.type(box, 'iphone-12');
+    expect(screen.getByRole('button', { name: /iPhone 12 Pro Max/ })).toBeInTheDocument();
   });
 });
 

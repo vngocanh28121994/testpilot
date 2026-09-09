@@ -22,6 +22,15 @@ export interface DeviceTarget {
   deviceName?: string;
   udid?: string;
   /**
+   * Tên máy đọc được — "iPhone 12 Pro Max", "Galaxy S23 Ultra".
+   *
+   * Chỉ có sau khi dò, vì nó đến từ chính cái máy. Mã máy trong config
+   * ("sm-s918b") không nói lên đó là máy nào trên bàn, mà `deviceName` cũng
+   * không cứu được: nó hoặc là cùng mã đó viết hoa, hoặc là tên ai đó tự gõ
+   * vào phần Cài đặt của máy.
+   */
+  friendlyName?: string;
+  /**
    * Máy có đang cắm không — `undefined` khi CHƯA BIẾT.
    *
    * Preflight chỉ dò nền tảng đang chọn, nên tình trạng của nền tảng còn lại là
@@ -53,7 +62,7 @@ export function selectionHint(tokens: string[], fallbackPlatform: string): strin
 export function matchesQuery(target: DeviceTarget, query: string): boolean {
   const q = query.trim().toLowerCase();
   if (!q) return true;
-  return [target.id, target.deviceName, target.udid]
+  return [target.id, target.friendlyName, target.deviceName, target.udid]
     .filter(Boolean)
     .some((value) => value!.toLowerCase().includes(q));
 }
@@ -126,7 +135,9 @@ export function DeviceChips({
                 aria-pressed={on}
                 // Mọi thứ khác về máy nằm ở tooltip: một chip hai dòng chỉ lặp
                 // lại cùng một mã máy ở dạng viết khác.
-                title={[target.deviceName, target.udid].filter(Boolean).join(' · ')}
+                // Mã máy và udid lùi vào tooltip: chúng cần khi đi đối chiếu,
+                // không cần khi đang tìm xem máy nào là máy nào.
+                title={[target.id, target.deviceName, target.udid].filter(Boolean).join(' · ')}
                 onClick={() => onToggle(token)}
                 className={cn(
                   'flex items-center gap-1.5 rounded-md border px-2 py-0.5 text-xs',
@@ -144,7 +155,7 @@ export function DeviceChips({
                     )}
                   />
                 )}
-                {target.id}
+                {target.friendlyName ?? target.id}
               </button>
             );
           })}

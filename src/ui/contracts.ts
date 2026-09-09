@@ -500,6 +500,8 @@ export interface PrereqAndroidDevice {
   state: string;
   manufacturer?: string;
   model?: string;
+  /** Tên thương mại, ví dụ "Galaxy S23 Ultra". Không phải máy nào cũng khai. */
+  marketName?: string;
   androidVersion?: string;
   kind: 'physical' | 'emulator';
 }
@@ -522,6 +524,17 @@ export interface PrereqIosDevicesResponse {
   devices: string[];
   /** Máy thật đang cắm, đã lọc khỏi phần simulator. */
   attached: string[];
+  /**
+   * udid → tên máy đọc được, ví dụ "iPhone 12 Pro Max".
+   *
+   * Lấy từ `devicectl --json-output`, nơi duy nhất có CẢ udid lẫn
+   * marketingName. Bảng chữ của devicectl thì cột Identifier là UUID của
+   * CoreDevice, không phải udid, nên không ghép được với config.
+   *
+   * Có cho MỌI máy devicectl thấy, không chỉ máy đang cắm: một máy đang tắt
+   * vẫn cần đọc được tên trên danh sách chọn.
+   */
+  names?: Record<string, string>;
 }
 
 export interface PrereqAppiumStatusResponse {

@@ -63,6 +63,8 @@ export default function RunnerPanel() {
    * thái cho chip của nền tảng còn lại.
    */
   const [attachedUdids, setAttachedUdids] = useState<Set<string> | null>(null);
+  /** udid → tên máy đọc được, gom từ cả hai nền tảng sau khi dò. */
+  const [deviceNames, setDeviceNames] = useState<Record<string, string>>({});
   const [detecting, setDetecting] = useState(false);
   const job = useStreamJob('local-run', STREAM_ROUTES.run);
 
@@ -142,6 +144,7 @@ export default function RunnerPanel() {
         udid: d.udid,
         // Đã dò cả hai nền tảng thì dùng kết quả đó; chưa dò thì chỉ nền
         // tảng đang chọn mới biết được, phần còn lại để trống.
+        ...(d.udid && deviceNames[d.udid] ? { friendlyName: deviceNames[d.udid] } : {}),
         ...(attachedUdids
           ? { attached: Boolean(d.udid && attachedUdids.has(d.udid)) }
           : p === platform
@@ -149,7 +152,7 @@ export default function RunnerPanel() {
             : {}),
       })),
     );
-  }, [state.data?.config, preflight.data?.candidates, platform, attachedUdids]);
+  }, [state.data?.config, preflight.data?.candidates, platform, attachedUdids, deviceNames]);
 
   /**
    * Dò cả android lẫn ios, rồi tự tích những máy đang cắm.
@@ -166,8 +169,23 @@ export default function RunnerPanel() {
     try {
       const [android, ios] = await Promise.all([
         api.get<PrereqAdbResponse>(ROUTES.prereqAdb).catch(() => ({ devices: [] })),
-        api.get<PrereqIosDevicesResponse>(ROUTES.prereqIosDevices).catch(() => ({ attached: [] })),
+        api
+          .get<PrereqIosDevicesResponse>(ROUTES.prereqIosDevices)
+          .catch(() => ({ attached: [] as string[], names: {} as Record<string, string> })),
       ]);
+      setDeviceNames({
+        ...(ios.names ?? {}),
+        // Android: tên thương mại nếu máy khai, không thì mã máy kèm hãng.
+        ...Object.fromEntries(
+          android.devices
+            .filter((d) => d.state === 'device')
+            .map((d) => [
+              d.id,
+              d.marketName ?? [d.manufacturer, d.model].filter(Boolean).join(' '),
+            ])
+            .filter(([, name]) => Boolean(name)),
+        ),
+      });
       const udids = new Set<string>([
         ...android.devices.filter((d) => d.state === 'device').map((d) => d.id),
         ...(ios.attached ?? []),
