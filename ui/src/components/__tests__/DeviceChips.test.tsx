@@ -113,3 +113,43 @@ describe('DeviceChips', () => {
     expect(screen.getByRole('button', { name: /sm-s938b/ })).toHaveAttribute('aria-pressed', 'false');
   });
 });
+
+describe('nút dò máy đang cắm', () => {
+  it('gọi ra ngoài khi bấm', async () => {
+    const user = userEvent.setup();
+    const onDetect = vi.fn();
+    render(
+      <DeviceChips
+        targets={targets}
+        selected={[]}
+        onToggle={vi.fn()}
+        fallbackPlatform="android"
+        onDetect={onDetect}
+      />,
+    );
+    await user.click(screen.getByRole('button', { name: 'Kiểm tra máy đang cắm' }));
+    expect(onDetect).toHaveBeenCalledTimes(1);
+  });
+
+  it('đang dò thì khoá nút và nói ra', () => {
+    render(
+      <DeviceChips
+        targets={targets}
+        selected={[]}
+        onToggle={vi.fn()}
+        fallbackPlatform="android"
+        onDetect={vi.fn()}
+        detecting
+      />,
+    );
+    expect(screen.getByRole('button', { name: 'Đang dò…' })).toBeDisabled();
+  });
+
+  /** Không truyền onDetect thì không có nút — Studio chưa dùng tới nó. */
+  it('không có onDetect thì không hiện nút', () => {
+    render(
+      <DeviceChips targets={targets} selected={[]} onToggle={vi.fn()} fallbackPlatform="android" />,
+    );
+    expect(screen.queryByRole('button', { name: /Kiểm tra máy|Đang dò/ })).toBeNull();
+  });
+});

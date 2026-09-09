@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Input } from '@/components/ui/input';
+import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 
 /**
@@ -62,11 +63,16 @@ export function DeviceChips({
   selected,
   onToggle,
   fallbackPlatform,
+  onDetect,
+  detecting,
 }: {
   targets: DeviceTarget[];
   selected: string[];
   onToggle: (token: string) => void;
   fallbackPlatform: string;
+  /** Dò lại xem máy nào đang cắm, cho CẢ hai nền tảng. */
+  onDetect?: () => void;
+  detecting?: boolean;
 }) {
   const [query, setQuery] = useState('');
   if (targets.length === 0) return null;
@@ -84,14 +90,23 @@ export function DeviceChips({
     <div className="border-border flex flex-col gap-2.5 rounded-lg border p-3">
       <div className="flex items-center justify-between gap-3">
         <span className="text-sm font-medium">Chạy trên máy</span>
-        <Input
-          type="search"
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          placeholder="Tìm máy…"
-          aria-label="Tìm thiết bị"
-          className="h-8 w-40 text-xs"
-        />
+        <div className="flex items-center gap-2">
+          <Input
+            type="search"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Tìm máy…"
+            aria-label="Tìm thiết bị"
+            className="h-8 w-36 text-xs"
+          />
+          {/* Nút nằm ngay cạnh thứ nó thay đổi. Để nó ở khu công cụ phía dưới
+              thì bấm xong ticks đổi ở một chỗ người đọc không nhìn tới. */}
+          {onDetect && (
+            <Button size="sm" variant="outline" disabled={detecting} onClick={onDetect}>
+              {detecting ? 'Đang dò…' : 'Kiểm tra máy đang cắm'}
+            </Button>
+          )}
+        </div>
       </div>
       {groups.length === 0 && (
         <span className="text-muted-foreground text-xs">Không có thiết bị nào khớp.</span>

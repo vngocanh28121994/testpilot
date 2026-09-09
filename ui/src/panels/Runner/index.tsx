@@ -21,13 +21,18 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { api, qs } from '@/api/client';
 import { ROUTES, STREAM_ROUTES } from '@/api/routes';
 import { DevicePicker } from '@/components/DevicePicker';
-import { DeviceChips, type DeviceTarget } from '@/components/DeviceChips';
+import { DeviceChips, deviceToken, type DeviceTarget } from '@/components/DeviceChips';
 import { PrereqTools } from './PrereqTools';
 import { useAppState } from '@/hooks/useAppState';
 import { useStreamJob } from '@/hooks/useStreamJob';
 import { when } from '@/lib/datetime';
 import { cn } from '@/lib/utils';
-import type { PreflightResponse, ReportView } from '@core/ui/contracts.js';
+import type {
+  PreflightResponse,
+  PrereqAdbResponse,
+  PrereqIosDevicesResponse,
+  ReportView,
+} from '@core/ui/contracts.js';
 
 const PAGE_DESCRIPTION = 'Chạy bộ test ngay trên máy này, trước khi đẩy lên farm.';
 
@@ -50,6 +55,15 @@ export default function RunnerPanel() {
    * — "máy nào khi có nhiều máy cùng cắm" và "chạy trên mấy máy cùng lúc".
    */
   const [multi, setMulti] = useState<string[]>([]);
+  /**
+   * UDID của những máy đang thật sự cắm, dò cho CẢ hai nền tảng.
+   *
+   * `null` nghĩa là chưa dò lần nào — khác hẳn "dò rồi và không có máy nào".
+   * Preflight chỉ dò nền tảng đang chọn, nên một mình nó không đủ để vẽ trạng
+   * thái cho chip của nền tảng còn lại.
+   */
+  const [attachedUdids, setAttachedUdids] = useState<Set<string> | null>(null);
+  const [detecting, setDetecting] = useState(false);
   const job = useStreamJob('local-run', STREAM_ROUTES.run);
 
   /**
@@ -126,11 +140,55 @@ export default function RunnerPanel() {
         id: d.id,
         deviceName: d.deviceName,
         udid: d.udid,
-        // Chỉ nền tảng đang chọn mới được dò; nền tảng kia là CHƯA BIẾT.
-        ...(p === platform ? { attached: attached.has(d.id) } : {}),
+        // Đã dò cả hai nền tảng thì dùng kết quả đó; chưa dò thì chỉ nền
+        // tảng đang chọn mới biết được, phần còn lại để trống.
+        ...(attachedUdids
+          ? { attached: Boolean(d.udid && attachedUdids.has(d.udid)) }
+          : p === platform
+            ? { attached: attached.has(d.id) }
+            : {}),
       })),
     );
-  }, [state.data?.config, preflight.data?.candidates, platform]);
+  }, [state.data?.config, preflight.data?.candidates, platform, attachedUdids]);
+
+  /**
+   * Dò cả android lẫn ios, rồi tự tích những máy đang cắm.
+   *
+   * Server quyết định "đang cắm" nghĩa là gì. Tự suy ra từ danh sách in ra sẽ
+   * đếm nhầm cả máy offline lẫn simulator vào — đúng cái bẫy master đã ghi lại.
+   *
+   * Thay hẳn lựa chọn chứ không cộng thêm: một máy không cắm thì chạy cũng
+   * không được — run-parallel bỏ qua nó — nên để nó tích chỉ là hứa một lượt
+   * chạy sẽ không xảy ra.
+   */
+  const detectDevices = async () => {
+    setDetecting(true);
+    try {
+      const [android, ios] = await Promise.all([
+        api.get<PrereqAdbResponse>(ROUTES.prereqAdb).catch(() => ({ devices: [] })),
+        api.get<PrereqIosDevicesResponse>(ROUTES.prereqIosDevices).catch(() => ({ attached: [] })),
+      ]);
+      const udids = new Set<string>([
+        ...android.devices.filter((d) => d.state === 'device').map((d) => d.id),
+        ...(ios.attached ?? []),
+      ]);
+      setAttachedUdids(udids);
+      const cfg = state.data?.config;
+      const ticked = (['android', 'ios'] as const).flatMap((p) =>
+        (cfg?.[p]?.devices ?? [])
+          .filter((d) => d.udid && udids.has(d.udid))
+          .map((d) => deviceToken({ platform: p, id: d.id })),
+      );
+      setMulti(ticked);
+      toast.success(
+        ticked.length > 0
+          ? `${ticked.length} máy đang cắm, đã tích sẵn.`
+          : 'Không thấy máy nào đang cắm.',
+      );
+    } finally {
+      setDetecting(false);
+    }
+  };
 
   const stop = async () => {
     try {
@@ -238,6 +296,8 @@ export default function RunnerPanel() {
                   targets={targets}
                   selected={multi}
                   fallbackPlatform={platform}
+                  detecting={detecting}
+                  onDetect={() => void detectDevices()}
                   onToggle={(token) =>
                     setMulti((prev) =>
                       prev.includes(token) ? prev.filter((t) => t !== token) : [...prev, token],
