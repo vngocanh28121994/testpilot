@@ -42,6 +42,21 @@ describe('SettingsPanel', () => {
     expect(screen.getByText(/Anthropic dự phòng/)).toBeInTheDocument();
   });
 
+  it('đổi theme màu đỏ Techcombank ngay lập tức và lưu lựa chọn', async () => {
+    const user = userEvent.setup();
+    await renderWithRouter(<SettingsPanel />);
+    await ready();
+
+    const techcombank = screen.getByRole('radio', { name: /Đỏ Techcombank/ });
+    expect(techcombank).toHaveAttribute('aria-checked', 'false');
+
+    await user.click(techcombank);
+
+    expect(techcombank).toHaveAttribute('aria-checked', 'true');
+    expect(document.documentElement).toHaveAttribute('data-color-theme', 'techcombank');
+    expect(localStorage.getItem('testpilot-color-theme')).toBe('techcombank');
+  });
+
   it('chỉ hiện trường của transport đang chọn', async () => {
     await renderWithRouter(<SettingsPanel />);
     await ready();

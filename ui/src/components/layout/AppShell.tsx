@@ -4,6 +4,7 @@ import { AppSidebar } from './AppSidebar';
 import { Header } from './Header';
 import { Main } from './Main';
 import { ThemeSwitch } from '@/components/ThemeSwitch';
+import { DotBackground } from '@/components/DotBackground';
 
 /**
  * Khung trang dùng chung, theo khuôn authenticated-layout của sen:
@@ -32,7 +33,11 @@ export function AppShell({
           rộng vì thế kéo cả khung nội dung tràn qua phải màn hình thay vì để
           overflow-x-auto bên trong tự cuộn. sidebar.tsx là file vendor giống
           hệt bên sen nên không sửa ở đó; chặn tại đây. */}
-      <SidebarInset className="min-w-0">
+      {/* isolate: SidebarInset thành một stacking context riêng, nhờ đó nền
+          `fixed` bên trong không trèo lên sidebar (sidebar là anh em, z-10).
+          Nền nằm ở z-0, Header (z-50) và Main (z-10) đè lên trên. */}
+      <SidebarInset className="isolate min-w-0">
+        <DotBackground disableMouseLinks className="fixed z-0" />
         <Header fixed>
           <div className="flex min-w-0 items-center gap-2 text-sm">
             <h1 className="font-medium">{title}</h1>
@@ -47,7 +52,7 @@ export function AppShell({
             <ThemeSwitch />
           </div>
         </Header>
-        <Main>{children}</Main>
+        <Main className="relative z-10">{children}</Main>
       </SidebarInset>
     </SidebarProvider>
   );

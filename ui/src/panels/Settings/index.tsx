@@ -22,6 +22,7 @@ import {
 import { mcpFromForm, mcpToForm, visionKeyStatus, type McpForm } from './mcp';
 import { Field } from '@/components/Field';
 import { GroupHeading } from '@/components/GroupHeading';
+import { ColorThemePicker } from '@/components/ColorThemePicker';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -183,6 +184,19 @@ function SettingsForm({
                 <Badge variant="secondary">{state.elements}</Badge>
               </StatusRow>
             </ul>
+          </CardContent>
+        </Card>
+
+        <Card aria-labelledby="color-theme-title">
+          <CardHeader>
+            <CardTitle id="color-theme-title">Theme màu</CardTitle>
+            <CardDescription>
+              Đổi màu thương hiệu cho toàn bộ giao diện. Lựa chọn được áp dụng ngay và lưu trên
+              trình duyệt này; chế độ sáng/tối vẫn chọn ở thanh trên cùng.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <ColorThemePicker />
           </CardContent>
         </Card>
 
