@@ -251,7 +251,7 @@ function Step({
 }
 
 /**
- * Ba thiết lập nằm trên chính cái điện thoại.
+ * Bốn thiết lập nằm trên chính cái điện thoại.
  *
  * Không lệnh nào trên máy tính này đọc lại được, nên chúng được NÊU RA thay vì
  * kiểm tra — và chúng là lý do thường gặp nhất khiến một bộ cài đúng vẫn hỏng:
@@ -281,6 +281,19 @@ function IosDeviceSetup() {
         <div className="mt-0.5">
           Mục này chỉ xuất hiện sau khi máy đã cắm vào Xcode một lần, hoặc đã cài một app ký bằng
           chứng chỉ dev. Máy mới sẽ không thấy dòng đó.
+        </div>
+      </li>
+      <li>
+        <b className="text-foreground">Tự động hoá giao diện</b> —{' '}
+        <span className="text-foreground">
+          Cài đặt › Nhà phát triển › Tự động hoá giao diện (UI Automation)
+        </span>{' '}
+        → bật.
+        <div className="mt-0.5">
+          Đây là công tắc quyết định chuyện máy có hỏi mật mã ở MỖI lượt chạy hay không. Chưa bật thì
+          iOS coi từng phiên XCUITest là một lần cấp quyền riêng, và người chạy phải gõ mật mã giữa
+          chừng — cắm năm máy là năm lần, mỗi lượt. Bật rồi thì chỉ còn đúng một lần cho mỗi máy,
+          lúc cài đặt.
         </div>
       </li>
       <li>

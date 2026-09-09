@@ -153,12 +153,17 @@ const Ios = z.object({
   /**
    * Dùng lại WebDriverAgent đã cài trên máy, thay vì build và cài lại mỗi lượt.
    *
-   * Mỗi lần Appium build lại WDA, iOS hỏi mật mã máy để cho phép cài — nên cứ
-   * bấm Chạy test là phải cầm điện thoại lên gõ mật khẩu một lần nữa. Bật cờ
-   * này thì Appium bỏ qua hẳn xcodebuild và chỉ khởi chạy bản đã nằm sẵn.
+   * Bật cờ này thì Appium bỏ qua hẳn xcodebuild và chỉ khởi chạy bản đã nằm sẵn
+   * bằng devicectl. Cần `wdaBundleId` trỏ đúng bản đã cài, và nhớ profile của
+   * Apple ID miễn phí chỉ sống 7 ngày.
    *
-   * Cần `wdaBundleId` trỏ đúng bản đã cài. Và nhớ: profile của Apple ID miễn
-   * phí chỉ sống 7 ngày — hết hạn thì phải tắt cờ này một lượt để build lại.
+   * ĐÃ THỬ VÀ KHÔNG CHẠY ĐƯỢC trên iPhone 12 Pro Max / iOS 26.5 ở đây: devicectl
+   * báo khởi chạy thành công nhưng runner tắt ngay, cổng 8100 không bao giờ mở.
+   * Bản runner cài sẵn không tự dựng được phiên XCTest ngoài xcodebuild.
+   *
+   * Nếu bật cờ này vì máy hỏi mật mã mỗi lượt chạy thì đó là nhầm chỗ: công tắc
+   * quyết định chuyện đó nằm trên điện thoại — Cài đặt › Nhà phát triển › Tự
+   * động hoá giao diện. Bật lên là hết hỏi, một lần cho mỗi máy.
    */
   usePreinstalledWDA: z.boolean().default(false),
   hybrid: z.boolean().default(false),
