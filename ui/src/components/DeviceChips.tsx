@@ -20,8 +20,14 @@ export interface DeviceTarget {
   id: string;
   deviceName?: string;
   udid?: string;
-  /** Máy đang thật sự cắm vào máy tính này. */
-  attached: boolean;
+  /**
+   * Máy có đang cắm không — `undefined` khi CHƯA BIẾT.
+   *
+   * Preflight chỉ dò nền tảng đang chọn, nên tình trạng của nền tảng còn lại là
+   * chưa biết chứ không phải "chưa cắm". Vẽ một chấm xám ở đó là khẳng định một
+   * điều chưa hề kiểm tra.
+   */
+  attached?: boolean;
 }
 
 export const deviceToken = (t: DeviceTarget) => `${t.platform}:${t.id}`;
@@ -75,24 +81,26 @@ export function DeviceChips({
     .filter(([, list]) => list.length > 0);
 
   return (
-    <div className="flex flex-col gap-2">
-      <div className="flex flex-wrap items-center gap-2">
-        <span className="text-xs font-medium">Chạy trên máy</span>
+    <div className="border-border flex flex-col gap-2.5 rounded-lg border p-3">
+      <div className="flex items-center justify-between gap-3">
+        <span className="text-sm font-medium">Chạy trên máy</span>
         <Input
           type="search"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder="Tìm theo tên, id hoặc udid…"
+          placeholder="Tìm máy…"
           aria-label="Tìm thiết bị"
-          className="h-7 max-w-56 text-xs"
+          className="h-8 w-40 text-xs"
         />
       </div>
       {groups.length === 0 && (
         <span className="text-muted-foreground text-xs">Không có thiết bị nào khớp.</span>
       )}
       {groups.map(([platform, list]) => (
-        <div key={platform} className="flex flex-wrap items-center gap-2">
-          <span className="text-muted-foreground w-16 shrink-0 text-xs">{platform}</span>
+        <div key={platform} className="flex flex-wrap items-baseline gap-x-2 gap-y-1.5">
+          <span className="text-muted-foreground w-14 shrink-0 text-[11px] tracking-wide uppercase">
+            {platform}
+          </span>
           {list.map((target) => {
             const token = deviceToken(target);
             const on = selected.includes(token);
@@ -106,19 +114,21 @@ export function DeviceChips({
                 title={[target.deviceName, target.udid].filter(Boolean).join(' · ')}
                 onClick={() => onToggle(token)}
                 className={cn(
-                  'flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs',
+                  'flex items-center gap-1.5 rounded-md border px-2 py-0.5 text-xs',
                   on ? 'border-primary bg-primary/10 font-medium' : 'border-border hover:bg-muted/50',
                 )}
               >
-                {/* Chấm chỉ nói MỘT điều: máy có đang cắm không. Đó là thứ
-                    quyết định chọn được hay không, và là thứ đổi liên tục. */}
-                <span
-                  aria-hidden="true"
-                  className={cn(
-                    'size-1.5 rounded-full',
-                    target.attached ? 'bg-status-pass' : 'bg-muted-foreground/40',
-                  )}
-                />
+                {/* Chấm chỉ nói MỘT điều: máy có đang cắm không — và chỉ vẽ
+                    khi đã thật sự biết. Không có chấm nghĩa là chưa dò. */}
+                {target.attached !== undefined && (
+                  <span
+                    aria-hidden="true"
+                    className={cn(
+                      'size-1.5 rounded-full',
+                      target.attached ? 'bg-status-pass' : 'bg-muted-foreground/40',
+                    )}
+                  />
+                )}
                 {target.id}
               </button>
             );

@@ -126,10 +126,11 @@ export default function RunnerPanel() {
         id: d.id,
         deviceName: d.deviceName,
         udid: d.udid,
-        attached: attached.has(d.id),
+        // Chỉ nền tảng đang chọn mới được dò; nền tảng kia là CHƯA BIẾT.
+        ...(p === platform ? { attached: attached.has(d.id) } : {}),
       })),
     );
-  }, [state.data?.config, preflight.data?.candidates]);
+  }, [state.data?.config, preflight.data?.candidates, platform]);
 
   const stop = async () => {
     try {
@@ -155,7 +156,13 @@ export default function RunnerPanel() {
                   <Dropdown
                     className="mt-0"
                     value={platform}
-                    onChange={(next) => setPlatform(next as typeof platform)}
+                    onChange={(next) => {
+                      setPlatform(next as typeof platform);
+                      // Đổi sang web là bỏ hết tích: ô chọn máy biến mất, nhưng
+                      // lựa chọn cũ thì không — và nó vẫn được gửi đi trong
+                      // `devices`, khiến lượt chạy web bỗng thành chạy máy.
+                      if (next === 'web') setMulti([]);
+                    }}
                     options={[
                       { value: 'web', label: 'web — Playwright' },
                       { value: 'android', label: 'android — Appium' },
@@ -223,7 +230,10 @@ export default function RunnerPanel() {
               {/* Chọn nhiều máy nằm CẠNH nút chạy, không nằm trong thẻ kiểm tra
                   môi trường: nó là một phần của câu "chạy cái gì", chứ không
                   phải một kết luận về việc chạy được hay chưa. */}
-              {targets.length > 0 && (
+              {/* Web không có máy để chọn, và một máy duy nhất thì không có gì
+                  để chọn giữa — hiện ô này ở hai trường hợp đó chỉ là thêm một
+                  thứ phải đọc rồi bỏ qua. */}
+              {platform !== 'web' && targets.length > 1 && (
                 <DeviceChips
                   targets={targets}
                   selected={multi}

@@ -12,7 +12,8 @@ import { DeviceChips, matchesQuery, selectionHint, type DeviceTarget } from '@/c
 const targets: DeviceTarget[] = [
   { platform: 'android', id: 'sm-s918b', deviceName: 'SM_S918B', udid: 'R5C1', attached: true },
   { platform: 'android', id: 'sm-s938b', deviceName: 'SM_S938B', udid: 'R5C2', attached: false },
-  { platform: 'ios', id: 'iphone-12-pro-max', deviceName: 'iPhone của Anh', udid: '0008', attached: false },
+  // Nền tảng không được dò: tình trạng là CHƯA BIẾT, không phải "chưa cắm".
+  { platform: 'ios', id: 'iphone-12-pro-max', deviceName: 'iPhone của Anh', udid: '0008' },
 ];
 
 describe('selectionHint', () => {
@@ -92,6 +93,18 @@ describe('DeviceChips', () => {
     setup();
     await user.type(screen.getByRole('searchbox', { name: 'Tìm thiết bị' }), 'zzz');
     expect(screen.getByText('Không có thiết bị nào khớp.')).toBeInTheDocument();
+  });
+
+  /**
+   * Preflight chỉ dò nền tảng đang chọn. Vẽ chấm xám cho nền tảng còn lại là
+   * khẳng định "chưa cắm" mà chưa hề kiểm tra.
+   */
+  it('không vẽ chấm khi chưa biết máy có cắm hay không', () => {
+    setup();
+    const dots = (name: RegExp) =>
+      screen.getByRole('button', { name }).querySelectorAll('span[aria-hidden="true"]').length;
+    expect(dots(/sm-s918b/)).toBe(1);
+    expect(dots(/iphone-12-pro-max/)).toBe(0);
   });
 
   it('máy đang chọn nói ra bằng aria-pressed, không chỉ bằng màu', () => {
