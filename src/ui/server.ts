@@ -3461,8 +3461,11 @@ async function prereqAdb(): Promise<{ devices: PrereqAndroidDevice[] }> {
         'ro.product.marketname',
         'ro.config.marketing_name',
         'ro.product.vendor.marketname',
+        'ro.product.odm.marketname',
         'ro.oppo.market.name',
+        'ro.vivo.market.name',
       ].map((key) => props.get(key)?.trim()).find(Boolean);
+
       const androidVersion = props.get('ro.build.version.release')?.trim();
       const emulator = fallbackKind === 'emulator' || props.get('ro.kernel.qemu') === '1';
       return {

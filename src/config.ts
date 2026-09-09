@@ -53,6 +53,20 @@ const Device = z.object({
   /** Short label. Used in log prefixes and in the run directory name. */
   id: z.string(),
   deviceName: z.string(),
+  /**
+   * Tên hiển thị trên màn hình chọn máy. Không ảnh hưởng gì tới lượt chạy.
+   *
+   * Cần một trường RIÊNG vì hai nguồn kia đều không dùng được. `deviceName` là
+   * capability của Appium, không phải nhãn cho người đọc. Còn tên máy tự đặt —
+   * `settings global device_name`, cũng là tên hiện trên Bluetooth — thì là bất
+   * cứ thứ gì người cầm máy đã gõ vào; một phòng lab đặt tên lung tung là danh
+   * sách chọn máy vô dụng.
+   *
+   * Không phải máy nào cũng khai tên thương mại: một Galaxy S25 Ultra thật chỉ
+   * có `ro.product.model` = "SM-S938B". Trường này là chỗ đội tự ghi tên mình
+   * muốn thấy, và nó nằm trong repo nên cả đội thấy giống nhau.
+   */
+  label: z.string().optional(),
   udid: z.string().optional(),
   systemPort: z.number().optional(),
   wdaLocalPort: z.number().optional(),

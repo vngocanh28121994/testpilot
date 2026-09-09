@@ -144,7 +144,13 @@ export default function RunnerPanel() {
         udid: d.udid,
         // Đã dò cả hai nền tảng thì dùng kết quả đó; chưa dò thì chỉ nền
         // tảng đang chọn mới biết được, phần còn lại để trống.
-        ...(d.udid && deviceNames[d.udid] ? { friendlyName: deviceNames[d.udid] } : {}),
+        // Nhãn trong config đứng TRƯỚC mọi thứ dò được: nó do đội đặt, nằm
+        // trong repo, và không đổi theo việc ai đang cầm máy.
+        ...(d.label
+          ? { friendlyName: d.label }
+          : d.udid && deviceNames[d.udid]
+            ? { friendlyName: deviceNames[d.udid] }
+            : {}),
         ...(attachedUdids
           ? { attached: Boolean(d.udid && attachedUdids.has(d.udid)) }
           : p === platform
