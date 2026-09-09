@@ -51,6 +51,31 @@ export function extractScenario(content: string, scenarioName: string): string {
   return lines.slice(bounds.start, bounds.end).join('\n').trim();
 }
 
+/**
+ * Bỏ hẳn một kịch bản khỏi file.
+ *
+ * Dùng chung `findScenarioBounds` với sửa và trích: ranh giới của một kịch bản
+ * là thứ đã khó tự tính lại cho đúng — tag đứng trên tên nó thuộc về nó, còn
+ * tag đứng ngay trước một `Scenario:` khác thì không.
+ *
+ * Dọn nốt dòng trống thừa để hai kịch bản còn lại không dính vào nhau, và cũng
+ * không để lại một khoảng trắng ba dòng ở chỗ vừa xoá.
+ */
+export function removeScenario(content: string, scenarioName: string): string {
+  const lines = content.split('\n');
+  const bounds = findScenarioBounds(lines, scenarioName);
+  if (!bounds) return content;
+
+  const before = lines.slice(0, bounds.start);
+  const after = lines.slice(bounds.end);
+  while (before.length > 0 && before[before.length - 1]!.trim() === '') before.pop();
+  while (after.length > 0 && after[0]!.trim() === '') after.shift();
+
+  // Còn kịch bản phía sau thì chừa đúng một dòng trống; hết rồi thì thôi.
+  const joined = after.length > 0 ? [...before, '', ...after] : before;
+  return joined.join('\n').trimEnd() + '\n';
+}
+
 export function replaceScenario(content: string, scenarioName: string, block: string): string {
   const lines = content.split('\n');
   const bounds = findScenarioBounds(lines, scenarioName);

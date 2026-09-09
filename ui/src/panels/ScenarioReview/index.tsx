@@ -2,7 +2,7 @@ import { Fragment, useMemo, useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Link, useNavigate } from '@tanstack/react-router';
 import { toast } from 'sonner';
-import { Check, FileCode, Filter, MoreHorizontal, Pencil, Plus, TriangleAlert, X } from 'lucide-react';
+import { Check, FileCode, Filter, MoreHorizontal, Pencil, Plus, Trash2, TriangleAlert, X } from 'lucide-react';
 import { AppShell } from '@/components/layout/AppShell';
 import { Dropdown } from '@/components/Dropdown';
 import {
@@ -27,6 +27,7 @@ import { ScenarioEditor, type CreateTarget } from './ScenarioEditor';
 import {
   appendScenario,
   extractScenario,
+  removeScenario,
   featureFileName,
   newFeatureContent,
   replaceScenario,
@@ -111,6 +112,44 @@ function ReviewBody({ state, search }: { state: StateResponse; search: ScenarioS
       api.post<KnownIssueResponse>(ROUTES.featureKnownIssue, body),
     onSuccess: (data) => {
       toast.success(data.removed ? 'Đã gỡ nhãn Known issue.' : 'Đã gắn nhãn Known issue.');
+      refresh();
+    },
+    onError: (error) => toast.error((error as Error).message),
+  });
+
+  /**
+   * Xoá kịch bản = ghi lại file thiếu nó.
+   *
+   * Không có endpoint xoá riêng, và cũng không cần: `PUT /api/feature` đã nhận
+   * nội dung đầy đủ kèm `baseRevision`, nên nó từ chối ghi đè khi file đã đổi
+   * dưới tay người khác. Một endpoint xoá riêng sẽ phải dựng lại đúng lớp bảo
+   * vệ đó.
+   *
+   * Gom theo file: xoá năm kịch bản trong cùng một file mà ghi năm lần thì lần
+   * sau đè lên lần trước, và bốn cái đầu quay về.
+   */
+  const remove = useMutation({
+    mutationFn: async (items: Array<{ filename: string; scenarioName: string }>) => {
+      const byFile = new Map<string, string[]>();
+      for (const item of items) {
+        byFile.set(item.filename, [...(byFile.get(item.filename) ?? []), item.scenarioName]);
+      }
+      for (const [filename, names] of byFile) {
+        const feature = state.features.find((f) => f.name === filename);
+        if (!feature) continue;
+        let content = feature.content;
+        for (const name of names) content = removeScenario(content, name);
+        await api.put<FeatureMutationResponse>(ROUTES.feature, {
+          filename,
+          content,
+          baseRevision: feature.revision,
+        });
+      }
+      return items.length;
+    },
+    onSuccess: (count) => {
+      setSelected([]);
+      toast.success(count === 1 ? 'Đã xoá kịch bản.' : `Đã xoá ${count} kịch bản.`);
       refresh();
     },
     onError: (error) => toast.error((error as Error).message),
@@ -324,6 +363,23 @@ function ReviewBody({ state, search }: { state: StateResponse; search: ScenarioS
                     <X className="size-4" />
                     Không duyệt đã chọn
                   </Button>
+                  <Button
+                    size="sm"
+                    variant="destructive"
+                    disabled={remove.isPending}
+                    onClick={() => {
+                      if (
+                        !window.confirm(
+                          `Xoá ${selectedItems.length} kịch bản đã chọn?\n\n` +
+                            'Chúng sẽ bị xoá khỏi feature file. Không hoàn tác được.',
+                        )
+                      ) return;
+                      remove.mutate(selectedItems);
+                    }}
+                  >
+                    <Trash2 className="size-4" />
+                    Xoá đã chọn ({selectedItems.length})
+                  </Button>
                 </div>
               </div>
             )}
@@ -511,6 +567,27 @@ function ReviewBody({ state, search }: { state: StateResponse; search: ScenarioS
                                       Không duyệt
                                     </DropdownMenuItem>
                                   )}
+                                  {/* Hỏi lại trước khi xoá: đây là thao tác
+                                      không hoàn tác được, và nó nằm ngay dưới
+                                      "Không duyệt" — thứ nghe gần giống mà hậu
+                                      quả khác hẳn. */}
+                                  <DropdownMenuItem
+                                    variant="destructive"
+                                    onSelect={() => {
+                                      if (
+                                        !window.confirm(
+                                          `Xoá "${scenario.name}" khỏi ${feature.name}?\n\n` +
+                                            'Kịch bản sẽ bị xoá khỏi feature file. Không hoàn tác được.',
+                                        )
+                                      ) return;
+                                      remove.mutate([
+                                        { filename: feature.name, scenarioName: scenario.name },
+                                      ]);
+                                    }}
+                                  >
+                                    <Trash2 className="size-4" />
+                                    Xoá kịch bản
+                                  </DropdownMenuItem>
                                 </DropdownMenuContent>
                               </DropdownMenu>
                             </div>
