@@ -228,7 +228,11 @@ async function main(): Promise<void> {
   const results: ScenarioResult[] = [];
   const quarantined: RunReport['quarantined'] = [];
 
-  await driver.start();
+  try {
+    await driver.start();
+  } catch (err) {
+    throw new Error(explainDriverStart(err as Error, platform));
+  }
   // Written only now: before start() the install has not happened, and a failed
   // session must not leave a claim about the device that nothing put there.
   if (tracksEnv && enforceAppInstall && appUnderTest) {
@@ -726,6 +730,37 @@ function toAttempt(run: ScenarioResult['runs'][number]): ScenarioAttempt {
 function stepElementAt(run: ScenarioResult['runs'][number], line: number): string | undefined {
   const step = run.steps.find((s) => s.step.line === line);
   return step && 'element' in step.step.intent ? step.step.intent.element : undefined;
+}
+
+/**
+ * Biến lỗi khởi động driver thành câu nói được phải làm gì.
+ *
+ * `xcodebuild failed with code 65` là câu Appium ném ra cho MỌI thứ hỏng quanh
+ * WebDriverAgent, và tự nó không chỉ được chỗ nào. Người dùng thấy vòng lặp
+ * cài app → cài WDA → app biến mất → lặp lại, và không có gì trong log nói vì
+ * sao.
+ *
+ * Trên máy vừa gặp lỗi, đào ra thì: build KÝ THÀNH CÔNG, cả hai app đều đã nằm
+ * trên điện thoại — hỏng ở khâu CHẠY. Với profile của Apple ID miễn phí (hạn 7
+ * ngày), iOS từ chối chạy app cho tới khi nhà phát triển được tin cậy trên
+ * chính máy đó. Appium thất bại rồi thử lại, thành đúng vòng lặp ấy.
+ *
+ * Không đoán bừa: chỉ thêm hướng dẫn cho đúng mã lỗi này, và giữ nguyên câu
+ * gốc bên dưới để ai cần vẫn tra được.
+ */
+function explainDriverStart(err: Error, platform: Platform): string {
+  if (platform !== 'ios' || !/xcodebuild failed with code 65/i.test(err.message)) {
+    return err.message;
+  }
+  return (
+    'Không khởi động được WebDriverAgent trên iPhone (xcodebuild code 65).\n\n'
+    + 'Thường gặp nhất: chứng chỉ nhà phát triển chưa được tin cậy TRÊN MÁY.\n'
+    + '  Cài đặt › Cài đặt chung › VPN & Quản lý thiết bị › mục Ứng dụng nhà phát triển\n'
+    + '  → chọn chứng chỉ → Tin cậy. Rồi chạy lại.\n\n'
+    + 'Nếu đã tin cậy rồi thì kiểm tiếp: máy phải mở khoá trong lúc chạy, và\n'
+    + 'profile của Apple ID miễn phí chỉ có hạn 7 ngày — hết hạn thì phải build lại.\n\n'
+    + `Nguyên văn lỗi: ${err.message}`
+  );
 }
 
 function warnAboutLocatorlessElements(
