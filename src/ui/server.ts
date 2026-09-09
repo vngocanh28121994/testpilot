@@ -1,4 +1,6 @@
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
+import { OrphanTracker } from '../core/orphans.js';
+import { closeInterruptedRuns } from '../core/runstore.js';
 import { firstJsonObject } from '../llm/json.js';
 import net from 'node:net';
 import os from 'node:os';
@@ -138,6 +140,51 @@ const MIME: Record<string, string> = {
 };
 
 await adoptStoredApiKeys();
+
+const runChildren = new Set<ReturnType<typeof spawn>>();
+const orphans = OrphanTracker.load();
+
+/**
+ * Dọn dẹp lúc khởi động, trước khi nhận request nào.
+ *
+ * Hai thứ sống sót sau khi một server chết giữa chừng, và cả hai đều nói dối
+ * người dùng: dòng history vẫn ghi `running` như thể còn ai đó chăm nó, và
+ * tiến trình test vẫn bấm vào thiết bị thật mà không nút nào dừng được.
+ */
+{
+  const reaped = orphans.reapOrphans();
+  for (const item of reaped) {
+    console.log(`[cleanup] dừng tiến trình mồ côi từ lần chạy trước: ${item.label} (pid ${item.pid})`);
+  }
+  const history = await History.load();
+  const closed = history.closeInterrupted();
+  if (closed > 0) {
+    await history.save();
+    console.log(`[cleanup] đóng ${closed} workflow bị treo ở trạng thái "đang chạy".`);
+  }
+  // meta.json của từng lượt chạy là bản ghi RIÊNG, và màn Local Runner đọc nó
+  // chứ không đọc history — đóng một bên mà bỏ bên kia thì vẫn còn nói dối.
+  const cfgForCleanup = await loadConfig(CONFIG_FILE).catch(() => undefined);
+  if (cfgForCleanup) {
+    const runs = await closeInterruptedRuns(cfgForCleanup.paths.runs);
+    if (runs.length > 0) {
+      console.log(`[cleanup] đóng ${runs.length} lượt chạy local bị treo: ${runs.join(', ')}`);
+    }
+  }
+}
+
+/**
+ * Và dọn lúc thoát, để lần sau không phải dọn.
+ *
+ * SIGKILL không bắt được — đó chính là lý do tệp PID tồn tại. Nhưng phần lớn
+ * lần server dừng là SIGTERM hoặc Ctrl-C, và những lần đó nên sạch ngay.
+ */
+for (const signal of ['SIGINT', 'SIGTERM'] as const) {
+  process.on(signal, () => {
+    for (const child of runChildren) child.kill('SIGTERM');
+    process.exit(signal === 'SIGINT' ? 130 : 143);
+  });
+}
 
 createServer((req, res) => {
   handle(req, res).catch((err: Error) => {
@@ -2655,7 +2702,24 @@ function spawnStep(bin: string, args: string[], log: (l: string) => void): Promi
  * only reach the newest one and the earlier process kept driving a device with
  * nobody able to stop it. A set reaches all of them.
  */
-const runChildren = new Set<ReturnType<typeof spawn>>();
+
+/**
+ * Theo dõi một tiến trình con cho tới lúc nó chết.
+ *
+ * Set trong RAM đủ để nút Dừng làm việc khi server còn sống. Tệp PID là cho
+ * trường hợp server KHÔNG còn sống — lúc đó Set biến mất còn tiến trình con
+ * thì không, vì giết cha không giết con.
+ */
+function track(child: ReturnType<typeof spawn>, signature: string, label: string): void {
+  runChildren.add(child);
+  if (child.pid !== undefined) orphans.add(child.pid, signature, label);
+  const forget = () => {
+    runChildren.delete(child);
+    if (child.pid !== undefined) orphans.remove(child.pid);
+  };
+  child.on('close', forget);
+  child.on('error', forget);
+}
 
 /** Delegates to the CLI so the UI and a terminal run exactly the same code. */
 interface RunSuiteOutcome {
@@ -2699,7 +2763,7 @@ function runSuite(
     log(`$ tsx ${args.join(' ')}`);
 
     const child = spawn(bin, args, { env: process.env });
-    runChildren.add(child);
+    track(child, 'src/cli/run.ts', `run ${platform}${tag ? ` @${tag}` : ''}`);
     const reportPaths: string[] = [];
     const pipe = (chunk: Buffer) => chunk.toString().split('\n').filter(Boolean).map(cleanLog).forEach((line) => {
       const report = /^\[run\] report -> (.+)$/.exec(line)?.[1]?.trim();
@@ -2779,7 +2843,7 @@ function runSuiteParallel(
     log(`$ tsx ${args.join(' ')}`);
 
     const child = spawn(bin, args, { env: process.env });
-    runChildren.add(child);
+    track(child, 'src/cli/run-parallel.ts', `run song song ${platform}`);
     const pipe = (chunk: Buffer) =>
       chunk.toString().split('\n').filter(Boolean).map(cleanLog).forEach(log);
     child.stdout.on('data', pipe);

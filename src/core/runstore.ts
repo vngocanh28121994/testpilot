@@ -117,6 +117,38 @@ export async function writeRunMeta(dir: string, meta: RunMeta): Promise<void> {
 }
 
 /**
+ * Đóng lại những lượt chạy mà tiến trình của chúng đã chết.
+ *
+ * `meta.json` được ghi ngay lúc bắt đầu với `status: 'running'`, cố ý — để một
+ * tiến trình bị giết vẫn để lại dấu vết thay vì một thư mục không ai giải thích
+ * được. Nhưng chưa có ai đóng lại cái dấu vết ấy, nên màn Local Runner hiện nó
+ * là "đang chạy" mãi mãi, kể cả khi máy đã tắt từ hôm trước.
+ *
+ * Gọi lúc server khởi động, khi chắc chắn chưa có lượt nào của tiến trình này.
+ * `interrupted` đã có sẵn trong kiểu RunMeta từ trước; chỉ là chưa ai đặt nó.
+ */
+export async function closeInterruptedRuns(root: string): Promise<string[]> {
+  if (!existsSync(root)) return [];
+  const closed: string[] = [];
+  for (const entry of await readdir(root, { withFileTypes: true })) {
+    if (!entry.isDirectory()) continue;
+    const file = path.join(root, entry.name, 'meta.json');
+    if (!existsSync(file)) continue;
+    try {
+      const meta = JSON.parse(await readFile(file, 'utf8')) as RunMeta;
+      if (meta.status !== 'running') continue;
+      meta.status = 'interrupted';
+      meta.finishedAt ??= new Date().toISOString();
+      await writeFile(file, JSON.stringify(meta, null, 2) + '\n', 'utf8');
+      closed.push(meta.id);
+    } catch {
+      // Một meta.json hỏng không được chặn server khởi động.
+    }
+  }
+  return closed;
+}
+
+/**
  * Rebuilds `runs/index.json` by scanning the directory.
  *
  * Derived from disk rather than appended to, so the index cannot drift from

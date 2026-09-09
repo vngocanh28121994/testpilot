@@ -196,6 +196,39 @@ export class History {
     return this.runs.find((run) => run.id === id);
   }
 
+  /**
+   * Đóng lại những lượt chạy mà tiến trình chủ của chúng đã chết.
+   *
+   * `status: 'running'` nghĩa là "có một tiến trình đang chăm nó". Tiến trình
+   * ấy chỉ ghi trạng thái kết thúc khi chạy xong; bị giết giữa chừng — server
+   * restart, máy sập, Ctrl-C — thì dòng đó nằm lại là `running` VĨNH VIỄN.
+   * Trong history thật đã có hai lượt treo như vậy 10 và 17 tiếng, hiện lên
+   * màn hình y như đang chạy.
+   *
+   * Gọi lúc khởi động, và chỉ lúc đó: tại thời điểm ấy tiến trình này chưa nuôi
+   * lượt nào, nên mọi `running` còn sót đều là của một tiến trình đã chết.
+   *
+   * KHÔNG đụng tới `waiting_review` và `waiting_input`. Hai trạng thái đó là
+   * điểm dừng bền vững, cố ý sống lâu hơn tiến trình sinh ra chúng — đóng
+   * chúng lại là vứt mất bộ testcase đang chờ người duyệt.
+   */
+  closeInterrupted(): number {
+    let closed = 0;
+    const now = new Date().toISOString();
+    for (const run of this.runs) {
+      if (run.status !== 'running') continue;
+      run.status = 'failed';
+      run.finishedAt = now;
+      run.error = 'Tiến trình chạy lượt này đã dừng (server khởi động lại hoặc bị tắt). '
+        + 'Kết quả tới bước cuối cùng vẫn giữ nguyên; chạy lại để đi tiếp.';
+      for (const stage of run.stages) {
+        if (stage.status === 'running') stage.status = 'failed';
+      }
+      closed += 1;
+    }
+    return closed;
+  }
+
   /** Creates a run in the `running` state and persists it immediately, so a
    *  crashed or killed process still leaves a visible trace in the table. */
   start(feature: string, kind: WorkflowRun['kind'], stageNames: readonly string[]): WorkflowRun {
