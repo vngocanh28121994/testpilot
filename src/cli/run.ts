@@ -107,10 +107,15 @@ async function main(): Promise<void> {
     args.tag,
     args.device ? device.id : undefined,
   );
-  // Announced only in the deferred mode, where a coordinator has to find this
-  // directory afterwards to fold its learnings in. Printing it unconditionally
-  // would add a line to every existing run's output for no one's benefit.
-  if (args.deferSharedWrites) console.log(`[run:dir] ${runDir}`);
+  // Báo LUÔN, không chỉ ở chế độ deferred.
+  //
+  // Lý do cũ — "in ra vô điều kiện chỉ thêm một dòng chẳng ai cần" — không còn
+  // đúng: server đọc dòng này để biết ghi log.txt vào đâu NGAY TRONG LÚC chạy,
+  // thay vì chỉ ghi một lần lúc kết thúc. Nhờ vậy một trang vừa tải lại nối lại
+  // được, và một lượt chạy bị giết giữa chừng vẫn còn log để đọc.
+  //
+  // Giao diện vẫn ẩn dòng này (LogView.tsx), nên người dùng không thấy gì khác.
+  console.log(`[run:dir] ${runDir}`);
   const artifactsDir = process.env.TESTPILOT_ARTIFACTS ?? path.join(runDir, 'artifacts');
   // Recorded up front so a crashed or killed process still leaves a row rather
   // than an unexplained directory.

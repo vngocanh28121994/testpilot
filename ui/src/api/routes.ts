@@ -35,6 +35,8 @@ export const ROUTES = {
   confluenceAuth: '/api/confluence-auth',
   mcpTools: '/api/mcp/tools',
   runStop: '/api/run/stop',
+  runActive: '/api/run/active',
+  runAttach: '/api/run/attach',
   aws: '/api/aws',
   farmDevices: '/api/farm/devices',
   farmPools: '/api/farm/pools',

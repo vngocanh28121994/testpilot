@@ -635,3 +635,22 @@ export interface KnownIssueResponse {
   issue?: KnownIssue;
   removed?: boolean;
 }
+
+/* ------------------------------------------------------------------ */
+/* GET /api/run/active                                                 */
+/* ------------------------------------------------------------------ */
+
+/** Một lượt chạy server đang giữ, để trang vừa tải lại nối lại được. */
+export interface ActiveRunSummary {
+  id: string;
+  label: string;
+  kind: 'run' | 'workflow';
+  startedAt: string;
+  lines: number;
+  dropped: number;
+  runDir?: string;
+}
+
+export interface ActiveRunsResponse {
+  runs: ActiveRunSummary[];
+}

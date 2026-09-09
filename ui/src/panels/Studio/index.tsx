@@ -23,6 +23,7 @@ import { ReportAction } from '@/components/ReportAction';
 import { WorkflowStages } from '@/components/WorkflowStages';
 import { WorkflowCompletion, useWorkflowCompletion } from '@/components/WorkflowCompletion';
 import { RecentWorkflows } from './RecentWorkflows';
+import { useActiveRuns } from '@/hooks/useActiveRuns';
 import { WorkflowPreflight, type NativePlatform } from './WorkflowPreflight';
 import { useStreamJob } from '@/hooks/useStreamJob';
 import type {
@@ -118,6 +119,21 @@ function StudioFormPanel({ state }: { state: StateResponse }) {
   const [workflowEnv, setWorkflowEnv] = useState(cfg.workflow.env ?? cfg.defaultEnv);
   const [headed, setHeaded] = useState(cfg.workflow.headed);
   const job = useStreamJob('studio-workflow', STREAM_ROUTES.gen);
+
+  /**
+   * Nối lại workflow còn sống ở server — cùng bệnh, cùng thuốc với Local
+   * Runner: job store nằm trong RAM của trang, nên tải lại là mất dấu một
+   * workflow vẫn đang chạy thật.
+   */
+  const live = useActiveRuns();
+  const liveWorkflow = live.data?.runs.find((r) => r.kind === 'workflow');
+  const attached = useRef(false);
+  useEffect(() => {
+    if (!liveWorkflow || attached.current) return;
+    if (job.status !== 'idle' || job.logs.length > 0) return;
+    attached.current = true;
+    job.attach(`${ROUTES.runAttach}?id=${encodeURIComponent(liveWorkflow.id)}`);
+  }, [liveWorkflow, job]);
   const completion = useWorkflowCompletion();
   const runs = useRecentRuns();
 

@@ -72,6 +72,8 @@ function applyFrame(job: Job, frame: JobFrame): Job {
 interface JobState {
   jobs: Record<string, Job>;
   start: (id: string, path: string, body?: unknown) => Promise<void>;
+  /** Nối lại một lượt đang chạy ở server, thay vì khởi động lượt mới. */
+  attach: (id: string, path: string) => Promise<void>;
   abort: (id: string) => void;
   reset: (id: string) => void;
   /** Chỉ dùng trong test — xem src/test/setup.ts. */
@@ -107,6 +109,34 @@ export const useJobStore = create<JobState>((set, get) => ({
 
     // Cầu nối duy nhất giữa hai mô hình state: một job vừa xong thường đã đổi
     // registry, history, hoặc config trên đĩa, mà Query không có cách nào biết.
+    void queryClient.invalidateQueries();
+  },
+
+  /**
+   * Nối lại một lượt chạy server đang giữ.
+   *
+   * Giống `start` ở mọi mặt trừ một: nó KHÔNG khởi động gì. Trang vừa tải lại
+   * mất sạch job store — vốn nằm trong RAM của trang — trong khi lượt chạy ở
+   * server vẫn đang bấm vào thiết bị thật. Đây là đường lấy lại nó.
+   */
+  async attach(id, path) {
+    if (get().jobs[id]?.status === 'running') return;
+    const controller = new AbortController();
+    const patch = (fn: (job: Job) => Job) =>
+      set((s) => ({ jobs: { ...s.jobs, [id]: fn(s.jobs[id] ?? EMPTY) } }));
+    patch(() => ({ ...EMPTY, status: 'running', controller }));
+    try {
+      await streamJob(path, undefined, (frame) => patch((job) => applyFrame(job, frame)), controller.signal, 'GET');
+      patch((job) => ({ ...job, status: job.status === 'error' ? 'error' : 'done', controller: null }));
+    } catch (err) {
+      const aborted = controller.signal.aborted;
+      patch((job) => ({
+        ...job,
+        status: aborted ? 'done' : 'error',
+        error: aborted ? null : (err as Error).message,
+        controller: null,
+      }));
+    }
     void queryClient.invalidateQueries();
   },
 

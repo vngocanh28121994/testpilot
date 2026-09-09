@@ -331,7 +331,9 @@
     "2026-09-08T18-06-51Z-web-feature-chuyen-tien-noi-bo": "2026-09-08T18:12:12.818Z",
     "2026-09-08T18-13-57Z-web-feature-chuyen-tien-noi-bo": "2026-09-08T18:18:22.282Z",
     "2026-09-08T18-34-46Z-web-feature-chuyen-tien-noi-bo": "2026-09-08T18:39:00.868Z",
-    "2026-09-08T18-41-45Z-web-feature-chuyen-tien-noi-bo": "2026-09-08T18:44:09.059Z"
+    "2026-09-08T18-41-45Z-web-feature-chuyen-tien-noi-bo": "2026-09-08T18:44:09.059Z",
+    "2026-09-09T04-41-56Z-web-feature-chuyen-tien-noi-bo": "2026-09-09T04:43:01.852Z",
+    "2026-09-09T04-45-44Z-web-feature-chuyen-tien-noi-bo": "2026-09-09T04:46:38.962Z"
   },
   "entries": {
     "home.totalAssets::android::6dbfe0a6bf0ea4c4": {
@@ -802,6 +804,33 @@
       "lastSeen": "2026-09-08T18:44:09.059Z",
       "devices": {
         "Pixel 7": 2
+      }
+    },
+    "transfer.sourceAccount::web::11c826932d0395f8": {
+      "elementId": "transfer.sourceAccount",
+      "platform": "web",
+      "from": {
+        "strategy": "role",
+        "value": "combobox",
+        "name": "Chuyển từ",
+        "weight": 0.9,
+        "origin": "llm"
+      },
+      "to": {
+        "strategy": "label",
+        "value": "Chuyển từ",
+        "weight": 0.8,
+        "origin": "llm"
+      },
+      "successes": 3,
+      "runIds": [
+        "2026-09-09T04-41-56Z-web-feature-chuyen-tien-noi-bo",
+        "2026-09-09T04-45-44Z-web-feature-chuyen-tien-noi-bo"
+      ],
+      "firstSeen": "2026-09-09T04:43:01.852Z",
+      "lastSeen": "2026-09-09T04:46:38.962Z",
+      "devices": {
+        "Pixel 7": 3
       }
     }
   }

@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from '@tanstack/react-router';
 import { useQuery } from '@tanstack/react-query';
 import { toast } from 'sonner';
@@ -10,6 +10,7 @@ import { PreflightChecks } from '@/components/PreflightChecks';
 import type { DateRange } from 'react-day-picker';
 import { DateRangePicker } from '@/components/DateRangePicker';
 import { Pagination } from '@/components/Pagination';
+import { useActiveRuns } from '@/hooks/useActiveRuns';
 import { inRange } from '@/lib/datetime';
 import { LogView } from '@/components/LogView';
 import { Field } from '@/components/Field';
@@ -42,6 +43,26 @@ export default function RunnerPanel() {
    */
   const [device, setDevice] = useState('');
   const job = useStreamJob('local-run', STREAM_ROUTES.run);
+
+  /**
+   * Nối lại lượt chạy còn sống ở server.
+   *
+   * Job store nằm trong RAM của trang, nên tải lại là mất sạch — trong khi tiến
+   * trình ở server vẫn đang bấm vào thiết bị thật. Trước đây màn hình trở về
+   * trạng thái ban đầu và cả nút Dừng cũng biến mất, dù server vẫn dừng được.
+   *
+   * Chỉ nối khi màn này chưa có gì: một job đang chạy trong chính tab này thì
+   * không được đụng vào.
+   */
+  const live = useActiveRuns();
+  const liveRun = live.data?.runs.find((r) => r.kind === 'run');
+  const attached = useRef(false);
+  useEffect(() => {
+    if (!liveRun || attached.current) return;
+    if (job.status !== 'idle' || job.logs.length > 0) return;
+    attached.current = true;
+    job.attach(`${ROUTES.runAttach}?id=${encodeURIComponent(liveRun.id)}`);
+  }, [liveRun, job]);
   const preflight = useQuery({
     // Máy đang chọn nằm trong khoá cache: chọn máy khác là một câu hỏi khác,
     // và câu trả lời cũ không được phép ghi đè câu trả lời mới.

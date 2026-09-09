@@ -3,6 +3,7 @@ import { useJobStore, selectJob, type Job } from '@/stores/jobStore';
 
 export interface StreamJobHandle extends Job {
   start: (body?: unknown) => void;
+  attach: (path: string) => void;
   abort: () => void;
   reset: () => void;
 }
@@ -20,12 +21,14 @@ export interface StreamJobHandle extends Job {
 export function useStreamJob(id: string, path: string): StreamJobHandle {
   const job = useJobStore(selectJob(id));
   const startFn = useJobStore((s) => s.start);
+  const attachFn = useJobStore((s) => s.attach);
   const abortFn = useJobStore((s) => s.abort);
   const resetFn = useJobStore((s) => s.reset);
 
   const start = useCallback((body?: unknown) => void startFn(id, path, body), [startFn, id, path]);
+  const attach = useCallback((from: string) => void attachFn(id, from), [attachFn, id]);
   const abort = useCallback(() => abortFn(id), [abortFn, id]);
   const reset = useCallback(() => resetFn(id), [resetFn, id]);
 
-  return { ...job, start, abort, reset };
+  return { ...job, start, attach, abort, reset };
 }

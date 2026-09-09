@@ -1,5 +1,6 @@
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import { OrphanTracker } from '../core/orphans.js';
+import { activeRuns, beginActiveRun, endActiveRun, findActiveRun } from './activeRuns.js';
 import { closeInterruptedRuns } from '../core/runstore.js';
 import { firstJsonObject } from '../llm/json.js';
 import net from 'node:net';
@@ -367,6 +368,44 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
       const { runId } = await readJson<{ runId: string }>(req);
       if (!runId) return json(res, 400, { error: 'Thiếu workflow ID.' });
       return stream(res, (log, stage) => continueWorkflow(runId, log, stage));
+    }
+
+    /**
+     * Lượt chạy nào đang sống.
+     *
+     * Trang hỏi câu này lúc mở lên. Không có nó thì một lượt chạy vẫn đang bấm
+     * vào thiết bị thật trở nên vô hình sau mỗi lần reload — và nút Dừng, thứ
+     * vốn vẫn hoạt động, không được hiện ra vì giao diện tưởng chẳng có gì.
+     */
+    case 'GET /api/run/active':
+      return json(res, 200, { runs: activeRuns() });
+
+    /**
+     * Nối lại một lượt đang chạy: trả toàn bộ log đã có, rồi stream tiếp.
+     *
+     * Cùng khuôn sự kiện với lúc bấm nút chạy, nên giao diện dùng lại đúng một
+     * đường xử lý thay vì có hai kiểu log.
+     */
+    case 'GET /api/run/attach': {
+      const id = url.searchParams.get('id') ?? '';
+      const live = findActiveRun(id);
+      if (!live) return json(res, 404, { error: 'Lượt chạy này không còn chạy nữa.' });
+      res.writeHead(200, {
+        'content-type': 'text/event-stream; charset=utf-8',
+        'cache-control': 'no-cache',
+        connection: 'keep-alive',
+      });
+      const send = (event: string, data: unknown) =>
+        res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
+      const { history, dropped, off } = live.subscribe((line) => send('log', line));
+      if (dropped > 0) send('dropped', dropped);
+      for (const line of history) send('log', line);
+      // Con chết thì đường dây này cũng phải đóng, nếu không trang treo mãi ở
+      // trạng thái "đang chạy" — đúng cái bệnh đang chữa, chỉ đổi chỗ.
+      const finish = () => { off(); send('done', { ok: true }); res.end(); };
+      const timer = setInterval(() => { if (!findActiveRun(id)) { clearInterval(timer); finish(); } }, 1_000);
+      req.on('close', () => { clearInterval(timer); off(); });
+      return;
     }
 
     case 'POST /api/run': {
@@ -1990,8 +2029,13 @@ async function runWorkflow(
   await history.save();
   stage(run);
 
+  // Workflow cùng bệnh với lượt chạy local: log chỉ tồn tại trên đường dây SSE
+  // của tab đã bấm nút. Đưa nó vào sổ lượt chạy đang sống để một trang khác nối
+  // lại được sau khi reload.
+  const live = beginActiveRun(cfg.targetFeature || 'workflow', 'workflow');
   const record = (line: string) => {
     run.log.push(line);
+    live.push(line);
     log(line);
   };
 
@@ -2047,6 +2091,7 @@ async function runWorkflow(
     run.finishedAt = new Date().toISOString();
     throw err;
   } finally {
+    endActiveRun(live);
     stage(run);
     await history.save();
   }
@@ -2763,16 +2808,25 @@ function runSuite(
     log(`$ tsx ${args.join(' ')}`);
 
     const child = spawn(bin, args, { env: process.env });
-    track(child, 'src/cli/run.ts', `run ${platform}${tag ? ` @${tag}` : ''}`);
+    const label = `${platform}${device ? ` · ${device}` : ''}${tag ? ` · @${tag}` : ''}`;
+    track(child, 'src/cli/run.ts', `run ${label}`);
+    // Mọi dòng đi qua sổ lượt chạy đang sống, không chỉ qua đường dây SSE của
+    // tab đã bấm nút. Đó là thứ cho phép một trang khác nối lại sau khi reload.
+    const live = beginActiveRun(label, 'run');
     const reportPaths: string[] = [];
     const pipe = (chunk: Buffer) => chunk.toString().split('\n').filter(Boolean).map(cleanLog).forEach((line) => {
       const report = /^\[run\] report -> (.+)$/.exec(line)?.[1]?.trim();
       if (report && !reportPaths.includes(report)) reportPaths.push(report);
+      // Con báo thư mục của nó ở dòng này; từ đây log ghi được xuống đĩa, và
+      // những dòng đã trôi qua được ghi bù.
+      const dir = /^\[run:dir\] (.+)$/.exec(line)?.[1]?.trim();
+      if (dir) live.attachDir(path.resolve(dir));
+      live.push(line);
       log(line);
     });
     child.stdout.on('data', pipe);
     child.stderr.on('data', pipe);
-    child.on('error', (err) => { runChildren.delete(child); reject(err); });
+    child.on('error', (err) => { runChildren.delete(child); endActiveRun(live); reject(err); });
     child.on('close', (code) => {
       runChildren.delete(child);
       const stopped = code === null || code === 130 || code === 143;
@@ -2788,6 +2842,7 @@ function runSuite(
               ? '\n⊘ Test đã bị dừng.'
               : `\n✗ Test kết thúc với lỗi (mã ${code}) — xem log bên trên để biết chi tiết.`,
       );
+      endActiveRun(live);
       resolve({ code, stopped, reportPaths });
     });
   });

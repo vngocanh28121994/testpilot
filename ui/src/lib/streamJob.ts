@@ -15,11 +15,17 @@ export async function streamJob(
   body: unknown,
   onFrame: (frame: JobFrame) => void,
   signal?: AbortSignal,
+  /**
+   * GET dùng cho việc NỐI LẠI một lượt đang chạy: nó không khởi động gì cả,
+   * chỉ đọc. Gửi POST tới đó sẽ là bảo server "chạy đi" một lần nữa.
+   */
+  method: 'POST' | 'GET' = 'POST',
 ): Promise<{ lastRun: WorkflowRun | null; ok: boolean }> {
   const res = await fetch(path, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify(body ?? {}),
+    method,
+    ...(method === 'POST'
+      ? { headers: { 'content-type': 'application/json' }, body: JSON.stringify(body ?? {}) }
+      : {}),
     signal,
   });
 
