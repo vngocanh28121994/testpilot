@@ -1,6 +1,7 @@
-import type { ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
+import { CheckedAt } from '@/components/CheckedAt';
 import { LogView } from '@/components/LogView';
 import { Button } from '@/components/ui/button';
 import { api } from '@/api/client';
@@ -24,6 +25,7 @@ import type { PrereqAdbResponse, PrereqIosDevicesResponse, PrereqXcodeResponse }
  */
 export function PrereqTools({ platform }: { platform: 'android' | 'ios' }) {
   const client = useQueryClient();
+  const [rechecking, setRechecking] = useState(false);
   const restart = useStreamJob('prereq-appium-restart', STREAM_ROUTES.prereqAppiumRestart);
   const driver = platform === 'android' ? 'uiautomator2' : 'xcuitest';
   const install = useStreamJob(`prereq-driver-${driver}`, STREAM_ROUTES.prereqDriver);
@@ -106,15 +108,32 @@ export function PrereqTools({ platform }: { platform: 'android' | 'ios' }) {
         />
       )}
 
-      {/* Sau khi sửa xong thì dò lại, để kết luận ở trên tự đổi. */}
+      {/* Nút này từng là ca tệ nhất trong cả màn hình.
+          `variant="ghost"` làm nó trông như chữ thường, và thứ nó thay đổi —
+          kết luận preflight — nằm ở một THẺ KHÁC phía trên, có thể đang ngoài
+          tầm nhìn. Đứng ở đáy thẻ này bấm thì đúng là không thấy gì xảy ra.
+          Nay nó trông ra nút, tự khoá trong lúc chạy, và kéo luôn kết quả vào
+          tầm mắt thay vì đổi một thứ ở nơi khác rồi im lặng. */}
       {(restart.status === 'done' || install.status === 'done') && (
         <Button
           size="sm"
-          variant="ghost"
+          variant="outline"
           className="self-start"
-          onClick={() => void client.invalidateQueries({ queryKey: ['preflight'] })}
+          disabled={rechecking}
+          onClick={async () => {
+            setRechecking(true);
+            try {
+              await client.invalidateQueries({ queryKey: ['preflight'] });
+              document
+                .querySelector('[aria-labelledby="preflight-title"]')
+                ?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+              toast.success('Đã kiểm tra lại môi trường.');
+            } finally {
+              setRechecking(false);
+            }
+          }}
         >
-          Kiểm tra lại sau khi sửa
+          {rechecking ? 'Đang kiểm tra…' : 'Kiểm tra lại sau khi sửa'}
         </Button>
       )}
     </div>
@@ -167,7 +186,7 @@ function DevicesRow({ platform }: { platform: 'android' | 'ios' }) {
   });
   return (
     <div className="flex flex-col gap-1">
-      <div>
+      <div className="flex flex-wrap items-center gap-2">
         <Button
           size="sm"
           variant="outline"
@@ -176,6 +195,7 @@ function DevicesRow({ platform }: { platform: 'android' | 'ios' }) {
         >
           Xem thiết bị hệ thống thấy
         </Button>
+        <CheckedAt at={devices.dataUpdatedAt || undefined} busy={devices.isFetching} />
       </div>
       {platform === 'ios' && (
         <span className="text-muted-foreground text-xs">
@@ -282,7 +302,7 @@ function XcodeRow() {
   });
   return (
     <div className="flex flex-col gap-1">
-      <div>
+      <div className="flex flex-wrap items-center gap-2">
         <Button
           size="sm"
           variant="outline"
@@ -291,6 +311,7 @@ function XcodeRow() {
         >
           Kiểm tra Xcode
         </Button>
+        <CheckedAt at={xcode.dataUpdatedAt || undefined} busy={xcode.isFetching} />
       </div>
       {xcode.data && (
         <LogView

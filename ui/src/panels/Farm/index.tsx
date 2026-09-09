@@ -19,6 +19,8 @@ import { GroupHeading } from '@/components/GroupHeading';
 import { StatusBanner } from '@/components/StatusBanner';
 import { StatusPill } from '@/components/StatusPill';
 import { Button } from '@/components/ui/button';
+import { CheckedAt } from '@/components/CheckedAt';
+import { cn } from '@/lib/utils';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { api, qs } from '@/api/client';
@@ -94,11 +96,21 @@ export default function FarmPanel() {
   }));
   const job = useStreamJob('farm-run', STREAM_ROUTES.farmRun);
   const login = useStreamJob('aws-login', STREAM_ROUTES.awsLogin);
-  const checkAws = () =>
+  // Trạng thái AWS gần như không đổi giữa hai lần bấm, nên nếu màn hình đứng im
+  // thì không phân biệt được "đã kiểm rồi, vẫn vậy" với "nút hỏng".
+  const [awsCheckedAt, setAwsCheckedAt] = useState<number | undefined>(undefined);
+  const [awsChecking, setAwsChecking] = useState(false);
+  const checkAws = () => {
+    setAwsChecking(true);
     void api
       .get<AwsStatus>(`${ROUTES.aws}${qs({ region })}`)
-      .then(setAws)
-      .catch((error: Error) => toast.error(error.message));
+      .then((next) => {
+        setAws(next);
+        setAwsCheckedAt(Date.now());
+      })
+      .catch((error: Error) => toast.error(error.message))
+      .finally(() => setAwsChecking(false));
+  };
   // Bọc trong thân khối thay vì truyền thẳng `checkAws`: giá trị nó trả về sẽ
   // đi vào chỗ hàm dọn dẹp mà chỗ gọi không nhìn thấy. Hôm nay `checkAws` có
   // `void` nên trả undefined và không sao — nhưng đó là một tính chất ở tận
@@ -265,10 +277,16 @@ export default function FarmPanel() {
                   }
                   actions={
                     <>
-                      <Button variant="outline" size="sm" onClick={checkAws}>
-                        <RefreshCw className="size-4" />
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        disabled={awsChecking}
+                        onClick={checkAws}
+                      >
+                        <RefreshCw className={cn('size-4', awsChecking && 'animate-spin')} />
                         Kiểm tra lại
                       </Button>
+                      <CheckedAt at={awsCheckedAt} busy={awsChecking} />
                       {aws?.canLogin && (
                         <Button
                           variant="outline"

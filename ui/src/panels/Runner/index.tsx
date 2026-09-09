@@ -5,6 +5,7 @@ import { toast } from 'sonner';
 import { CheckCircle2, Play, RefreshCw, Smartphone, Square, XCircle } from 'lucide-react';
 import { AppShell } from '@/components/layout/AppShell';
 import { CheckRow } from '@/components/CheckRow';
+import { CheckedAt } from '@/components/CheckedAt';
 import { Dropdown } from '@/components/Dropdown';
 import { PreflightChecks } from '@/components/PreflightChecks';
 import type { DateRange } from 'react-day-picker';
@@ -443,14 +444,9 @@ function PreflightCard({
                 <RefreshCw className={cn('size-4', fetching && 'animate-spin')} />
                 {fetching ? 'Đang kiểm tra…' : 'Kiểm tra lại'}
               </Button>
-              {/* Dấu thời gian là bằng chứng còn lại sau khi vòng quay dừng:
-                  kết quả y hệt nhưng giờ đổi thì người đọc biết nó vừa được
-                  hỏi lại, chứ không phải đang nhìn đồ nguội. */}
-              {checkedAt && !fetching && (
-                <span className="text-muted-foreground text-xs">
-                  đã kiểm lúc {new Date(checkedAt).toLocaleTimeString('vi-VN')}
-                </span>
-              )}
+              {/* Cùng một component với các nút kiểm tra bên dưới: sửa cho
+                  một nút mà quên nút bên cạnh là đúng chuyện vừa xảy ra. */}
+              <CheckedAt at={checkedAt || undefined} busy={fetching} />
             </div>
 
             <PreflightChecks checks={result.checks} />
