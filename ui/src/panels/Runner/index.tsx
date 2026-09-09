@@ -357,6 +357,8 @@ export default function RunnerPanel() {
           <PreflightCard
             result={preflight.data}
             pending={preflight.isPending}
+            fetching={preflight.isFetching}
+            checkedAt={preflight.dataUpdatedAt}
             error={preflight.error}
             onRefresh={() => void preflight.refetch()}
             platform={platform}
@@ -375,6 +377,8 @@ export default function RunnerPanel() {
 function PreflightCard({
   result,
   pending,
+  fetching,
+  checkedAt,
   error,
   onRefresh,
   platform,
@@ -383,6 +387,10 @@ function PreflightCard({
 }: {
   result: PreflightResponse | undefined;
   pending: boolean;
+  /** Đang dò lại, kể cả khi đã có kết quả cũ trên màn hình. */
+  fetching: boolean;
+  /** Lúc kết quả đang hiển thị được lấy về. */
+  checkedAt?: number;
   error: Error | null;
   onRefresh: () => void;
   platform: 'web' | 'android' | 'ios';
@@ -419,10 +427,30 @@ function PreflightCard({
                   Chưa sẵn sàng chạy.
                 </Badge>
               )}
-              <Button variant="outline" size="sm" type="button" onClick={onRefresh}>
-                <RefreshCw className="size-4" />
-                Kiểm tra lại
+              {/* Nút phải cho thấy nó đã làm gì.
+                  Kết quả preflight thường KHÔNG đổi sau khi bấm — máy vẫn thế,
+                  Appium vẫn thế — nên nếu màn hình đứng im thì không phân biệt
+                  được "đã kiểm, vẫn vậy" với "nút hỏng". Trước đây dòng "Đang
+                  kiểm tra…" chỉ gắn với `isPending`, mà cờ đó chỉ đúng ở lần
+                  tải ĐẦU; mọi lần bấm sau đều im lặng hoàn toàn. */}
+              <Button
+                variant="outline"
+                size="sm"
+                type="button"
+                disabled={fetching}
+                onClick={onRefresh}
+              >
+                <RefreshCw className={cn('size-4', fetching && 'animate-spin')} />
+                {fetching ? 'Đang kiểm tra…' : 'Kiểm tra lại'}
               </Button>
+              {/* Dấu thời gian là bằng chứng còn lại sau khi vòng quay dừng:
+                  kết quả y hệt nhưng giờ đổi thì người đọc biết nó vừa được
+                  hỏi lại, chứ không phải đang nhìn đồ nguội. */}
+              {checkedAt && !fetching && (
+                <span className="text-muted-foreground text-xs">
+                  đã kiểm lúc {new Date(checkedAt).toLocaleTimeString('vi-VN')}
+                </span>
+              )}
             </div>
 
             <PreflightChecks checks={result.checks} />
