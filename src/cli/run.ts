@@ -75,7 +75,23 @@ async function main(): Promise<void> {
   );
   // Printed before anything runs: a scenario dropped by the review gate is not
   // a result, and the operator has to see it while it can still be acted on.
-  const unapproved = features.flatMap((feature) => feature.unapproved);
+  //
+  // Chỉ những kịch bản LẼ RA ĐÃ CHẠY trong lượt này.
+  //
+  // Trước đây đây là toàn bộ kịch bản chưa duyệt của mọi feature, không lọc
+  // theo tag lẫn nền tảng. Chọn chạy đăng nhập trên iOS thì nhận về mười ba
+  // dòng về những feature khác, kèm một câu "13 kịch bản chưa duyệt nên không
+  // được chạy" — đọc như thể lượt chạy vừa bị chặn, trong khi nó vẫn chạy bình
+  // thường và mười ba kịch bản kia chưa bao giờ nằm trong phạm vi được hỏi.
+  const wantedTags = args.tag ? args.tag.split(',').map(canonicalTag).filter(Boolean) : [];
+  const inScope = (scenario: { tags: string[]; platforms: string[] }) =>
+    scenario.platforms.includes(platform)
+    && (wantedTags.length === 0 || wantedTags.some((tag) => scenario.tags.includes(tag)));
+
+  const unapproved = features
+    .flatMap((feature) => feature.unapproved)
+    .filter(inScope)
+    .map((scenario) => scenario.name);
   for (const name of unapproved) console.log(`[run:unapproved] ✎ ${name}`);
   if (unapproved.length > 0) {
     console.log(
@@ -219,11 +235,9 @@ async function main(): Promise<void> {
   try {
     featureLoop: for (const feature of features) {
       for (const scenario of feature.scenarios) {
-        if (!scenario.platforms.includes(platform)) continue;
-        if (args.tag) {
-          const wanted = args.tag.split(',').map(canonicalTag).filter(Boolean);
-          if (!wanted.some((t) => scenario.tags.includes(t))) continue;
-        }
+        // Cùng một predicate với chỗ báo "chưa duyệt" ở trên: hai định nghĩa
+        // của "kịch bản này có thuộc lượt chạy không" là hai cách trôi khỏi nhau.
+        if (!inScope(scenario)) continue;
 
         if (flake.isQuarantined(scenario.id, platform, driver.device) && !args.includeQuarantined) {
           console.log(`[run:skip] ⊘ ${scenario.name}`);
@@ -894,9 +908,9 @@ async function loadFeatures(
       // broken. The caller prints these so the summary can never imply a
       // scenario ran when it did not.
       const approvedNames = new Set(approved.map((scenario) => scenario.name));
-      const unapproved = feature.scenarios
-        .filter((scenario) => !approvedNames.has(scenario.name))
-        .map((scenario) => scenario.name);
+      // Giữ nguyên kịch bản, không chỉ tên: chỗ in ra phải lọc được theo đúng
+      // tag và nền tảng của lượt chạy, mà tên trần thì không đủ để làm việc đó.
+      const unapproved = feature.scenarios.filter((scenario) => !approvedNames.has(scenario.name));
       return { ...feature, scenarios: approved, unapproved };
     }),
   );
