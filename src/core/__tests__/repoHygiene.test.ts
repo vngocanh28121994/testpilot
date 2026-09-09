@@ -14,7 +14,8 @@
  */
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync, readlinkSync, lstatSync } from 'node:fs';
+import path from 'node:path';
 import { describe, it } from 'node:test';
 
 describe('vệ sinh repo', () => {
@@ -32,5 +33,27 @@ describe('vệ sinh repo', () => {
       assert.ok(ignore.includes(name), `.gitignore phải có dòng "${name}" (không dấu /)`);
       assert.ok(!ignore.includes(`${name}/`), `"${name}/" không khớp symlink — bỏ dấu /`);
     }
+  });
+
+  // Gỡ khỏi index là chưa đủ: bản đã bị git dựng ra vẫn nằm trên đĩa, và cái
+  // ELOOP đầu tiên người dùng gặp lại là lúc tải bản build lên — mkdir 'build'
+  // hỏng, còn thông báo thì không nói gì về symlink.
+  it('không còn symlink tự trỏ nào trên đĩa', () => {
+    const loops: string[] = [];
+    const walk = (dir: string, depth: number): void => {
+      if (depth > 3) return;
+      for (const entry of readdirSync(dir, { withFileTypes: true })) {
+        if (entry.name === '.git') continue;
+        const full = path.join(dir, entry.name);
+        if (entry.isSymbolicLink()) {
+          if (path.resolve(dir, readlinkSync(full)) === path.resolve(full)) loops.push(full);
+          continue;
+        }
+        // Chỉ đi vào thư mục thật; theo symlink là cách tự đi vào vòng lặp.
+        if (lstatSync(full).isDirectory()) walk(full, depth + 1);
+      }
+    };
+    walk(process.cwd(), 0);
+    assert.deepEqual(loops, [], `symlink trỏ vào chính nó: ${loops.join(', ')}`);
   });
 });
