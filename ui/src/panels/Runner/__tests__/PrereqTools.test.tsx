@@ -72,3 +72,41 @@ describe('PrereqTools', () => {
     expect(useJobStore.getState().jobs['prereq-appium-restart']).toBeDefined();
   });
 });
+
+/**
+ * Khu này là một TRÌNH TỰ, không phải một rổ nút. Không có Xcode thì không
+ * build được WebDriverAgent, nên mọi bước sau chưa kiểm được — và ba thiết lập
+ * trên chính cái điện thoại là lý do thường gặp nhất khiến một bộ cài đúng vẫn
+ * hỏng, trong khi không lệnh nào ở đây đọc lại được chúng.
+ */
+describe('hướng dẫn từng bước', () => {
+  it('iOS mở đầu bằng Xcode', () => {
+    renderWithProviders(<PrereqTools platform="ios" />);
+    const steps = screen.getAllByText(/^[1-9]$/).map((el) => el.parentElement?.textContent ?? '');
+    expect(steps[0]).toMatch(/Xcode/);
+  });
+
+  it('iOS có khối chuẩn bị trên máy, kèm đường dẫn Cài đặt', () => {
+    renderWithProviders(<PrereqTools platform="ios" />);
+    expect(screen.getByText(/Chuẩn bị trên chính iPhone/)).toBeInTheDocument();
+    // Đường dẫn Cài đặt nằm trong span riêng để in đậm được, nên khớp theo
+    // textContent của cả phần tử thay vì để matcher mặc định dò từng thẻ.
+    const has = (re: RegExp) =>
+      screen.getAllByText((_, el) => Boolean(el?.textContent && re.test(el.textContent))).length > 0;
+    expect(has(/Quyền riêng tư & Bảo mật › Chế độ nhà phát triển/)).toBe(true);
+    expect(has(/Safari › Nâng cao › Web Inspector/)).toBe(true);
+  });
+
+  /** Android không có Xcode lẫn ba thiết lập kia — nêu ra là nhiễu. */
+  it('Android không hiện phần riêng của iOS', () => {
+    renderWithProviders(<PrereqTools platform="android" />);
+    expect(screen.queryByText(/Chuẩn bị trên chính iPhone/)).toBeNull();
+    expect(screen.queryByText(/xcodebuild/)).toBeNull();
+  });
+
+  it('các bước được đánh số liên tiếp', () => {
+    renderWithProviders(<PrereqTools platform="ios" />);
+    const numbers = screen.getAllByText(/^[1-9]$/).map((el) => Number(el.textContent));
+    expect(numbers).toEqual([1, 2, 3, 4, 5]);
+  });
+});

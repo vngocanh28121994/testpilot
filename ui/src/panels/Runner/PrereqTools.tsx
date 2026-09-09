@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { LogView } from '@/components/LogView';
@@ -27,47 +28,76 @@ export function PrereqTools({ platform }: { platform: 'android' | 'ios' }) {
   const driver = platform === 'android' ? 'uiautomator2' : 'xcuitest';
   const install = useStreamJob(`prereq-driver-${driver}`, STREAM_ROUTES.prereqDriver);
 
+  // Xcode đứng ĐẦU cho iOS: driver phải build WebDriverAgent, nên thiếu nó thì
+  // mọi bước sau chưa kiểm được. Thứ tự này là nội dung, không phải trang trí.
+  let n = 0;
+
   return (
-    <div className="flex flex-col gap-3 rounded-lg border p-3">
-      <span className="text-sm font-medium">Công cụ</span>
+    <div className="flex flex-col gap-4 rounded-lg border p-3">
+      <span className="text-sm font-medium">Yêu cầu trước khi chạy</span>
 
-      <div className="flex flex-wrap items-center gap-2">
-        {/* Khởi động lại luôn bấm được, kể cả khi Appium đang chạy: đó chính là
-            lúc cần nó — một Appium còn sống nhưng đã treo phiên cũ. */}
-        <Button
-          size="sm"
-          variant="outline"
-          disabled={restart.status === 'running'}
-          onClick={() => {
-            restart.start();
-            toast.info('Đang khởi động lại Appium…');
-          }}
+      {platform === 'ios' && (
+        <Step
+          n={(n += 1)}
+          title="Xcode — driver phải build WebDriverAgent"
+          command="xcodebuild -version"
+          note="Command Line Tools là không đủ; cần Xcode đầy đủ."
         >
-          {restart.status === 'running' ? 'Đang khởi động lại…' : 'Khởi động lại Appium'}
-        </Button>
-        <code className="text-muted-foreground text-xs">appium</code>
-      </div>
+          <XcodeRow />
+        </Step>
+      )}
 
-      <div className="flex flex-wrap items-center gap-2">
-        <Button
-          size="sm"
-          variant="outline"
-          disabled={install.status === 'running'}
-          onClick={() => {
-            install.start({ driver });
-            toast.info(`Đang cài driver ${driver}…`);
-          }}
+      <Step n={(n += 1)} title="Appium server" command="appium">
+        <div>
+          {/* Khởi động lại luôn bấm được, kể cả khi Appium đang chạy: đó chính
+              là lúc cần nó — một Appium còn sống nhưng đã treo phiên cũ. */}
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={restart.status === 'running'}
+            onClick={() => {
+              restart.start();
+              toast.info('Đang khởi động lại Appium…');
+            }}
+          >
+            {restart.status === 'running' ? 'Đang khởi động lại…' : 'Khởi động lại Appium'}
+          </Button>
+        </div>
+      </Step>
+
+      <Step
+        n={(n += 1)}
+        title={platform === 'ios' ? 'Kết nối iPhone/iPad hoặc bật Simulator' : 'Kết nối máy Android hoặc bật emulator'}
+        command={platform === 'ios' ? 'xcrun xctrace list devices' : 'adb devices -l'}
+      >
+        <DevicesRow platform={platform} />
+      </Step>
+
+      {platform === 'ios' && (
+        <Step
+          n={(n += 1)}
+          title="Chuẩn bị trên chính iPhone/iPad"
+          note="Ba thiết lập này nằm trên máy, không lệnh nào ở đây đọc lại được — nên chúng được nêu ra thay vì kiểm tra. Đây là lý do thường gặp nhất khiến một bộ cài đúng vẫn hỏng."
         >
-          {install.status === 'running' ? 'Đang cài…' : `Cài driver ${driver}`}
-        </Button>
-        {/* Câu lệnh tương đương hiện ra để việc màn hình vừa làm là thứ kiểm
-            chứng lại được, chứ không phải một hộp đen bấm rồi tin. */}
-        <code className="text-muted-foreground text-xs">appium driver install {driver}</code>
-      </div>
+          <IosDeviceSetup />
+        </Step>
+      )}
 
-      {platform === 'ios' && <XcodeRow />}
-      <DevicesRow platform={platform} />
-
+      <Step n={(n += 1)} title="Appium driver" command={`appium driver install ${driver}`}>
+        <div>
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={install.status === 'running'}
+            onClick={() => {
+              install.start({ driver });
+              toast.info(`Đang cài driver ${driver}…`);
+            }}
+          >
+            {install.status === 'running' ? 'Đang cài…' : `Cài driver ${driver}`}
+          </Button>
+        </div>
+      </Step>
       {(restart.logs.length > 0 || install.logs.length > 0) && (
         <LogView
           logs={[...restart.logs, ...install.logs]}
@@ -137,7 +167,7 @@ function DevicesRow({ platform }: { platform: 'android' | 'ios' }) {
   });
   return (
     <div className="flex flex-col gap-1">
-      <div className="flex flex-wrap items-center gap-2">
+      <div>
         <Button
           size="sm"
           variant="outline"
@@ -146,9 +176,6 @@ function DevicesRow({ platform }: { platform: 'android' | 'ios' }) {
         >
           Xem thiết bị hệ thống thấy
         </Button>
-        <code className="text-muted-foreground text-xs">
-          {platform === 'ios' ? 'xcrun xctrace list devices' : 'adb devices -l'}
-        </code>
       </div>
       {platform === 'ios' && (
         <span className="text-muted-foreground text-xs">
@@ -166,6 +193,88 @@ function DevicesRow({ platform }: { platform: 'android' | 'ios' }) {
   );
 }
 
+/**
+ * Một bước, có số.
+ *
+ * Khu này là một TRÌNH TỰ, không phải một rổ nút: không có Xcode thì không
+ * build được WebDriverAgent, nên mọi thứ sau đó chưa kiểm được. Đánh số nói ra
+ * điều đó; một danh sách nút phẳng thì không.
+ */
+function Step({
+  n,
+  title,
+  command,
+  note,
+  children,
+}: {
+  n: number;
+  title: string;
+  command?: string;
+  note?: string;
+  children?: ReactNode;
+}) {
+  return (
+    <div className="flex gap-2.5">
+      <span className="bg-muted text-muted-foreground mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-full text-[11px] font-medium">
+        {n}
+      </span>
+      <div className="flex min-w-0 flex-1 flex-col gap-1.5">
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-sm">{title}</span>
+          {command && <code className="text-muted-foreground text-xs">{command}</code>}
+        </div>
+        {note && <span className="text-muted-foreground text-xs">{note}</span>}
+        {children}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Ba thiết lập nằm trên chính cái điện thoại.
+ *
+ * Không lệnh nào trên máy tính này đọc lại được, nên chúng được NÊU RA thay vì
+ * kiểm tra — và chúng là lý do thường gặp nhất khiến một bộ cài đúng vẫn hỏng:
+ * Appium báo một lỗi về WebDriverAgent, còn nguyên nhân thật nằm ở một công tắc
+ * trong Cài đặt mà không ai nghĩ tới.
+ */
+function IosDeviceSetup() {
+  return (
+    <ol className="text-muted-foreground flex list-decimal flex-col gap-2 ps-4 text-xs">
+      <li>
+        <b className="text-foreground">Tin cậy máy tính</b> — cắm cáp, mở khoá máy, bấm “Tin cậy”
+        rồi nhập mật mã.
+        <div className="mt-0.5">
+          Hộp thoại chỉ hiện khi máy đang mở khoá. Lỡ bấm “Không tin cậy”:{' '}
+          <span className="text-foreground">
+            Cài đặt › Cài đặt chung › Chuyển hoặc Đặt lại iPhone › Đặt lại › Đặt lại Vị trí &amp; Quyền riêng tư
+          </span>
+          , rồi cắm lại.
+        </div>
+      </li>
+      <li>
+        <b className="text-foreground">Chế độ nhà phát triển</b> (iOS 16+) —{' '}
+        <span className="text-foreground">
+          Cài đặt › Quyền riêng tư &amp; Bảo mật › Chế độ nhà phát triển
+        </span>{' '}
+        → bật → khởi động lại máy → xác nhận.
+        <div className="mt-0.5">
+          Mục này chỉ xuất hiện sau khi máy đã cắm vào Xcode một lần, hoặc đã cài một app ký bằng
+          chứng chỉ dev. Máy mới sẽ không thấy dòng đó.
+        </div>
+      </li>
+      <li>
+        <b className="text-foreground">Web Inspector</b> —{' '}
+        <span className="text-foreground">Cài đặt › Safari › Nâng cao › Web Inspector</span>.
+        <div className="mt-0.5">
+          Chỉ cần khi <code>ios.hybrid = true</code>. Không bật thì Appium không thấy WebView context
+          nào, và app hybrid trông như một màn hình rỗng.
+        </div>
+      </li>
+    </ol>
+  );
+}
+
 function XcodeRow() {
   const xcode = useQuery({
     queryKey: ['prereq-xcode'],
@@ -173,7 +282,7 @@ function XcodeRow() {
   });
   return (
     <div className="flex flex-col gap-1">
-      <div className="flex flex-wrap items-center gap-2">
+      <div>
         <Button
           size="sm"
           variant="outline"
@@ -182,11 +291,7 @@ function XcodeRow() {
         >
           Kiểm tra Xcode
         </Button>
-        <code className="text-muted-foreground text-xs">xcodebuild -version</code>
       </div>
-      <span className="text-muted-foreground text-xs">
-        Command Line Tools là không đủ — cần Xcode đầy đủ.
-      </span>
       {xcode.data && (
         <LogView
           className="max-h-32"
