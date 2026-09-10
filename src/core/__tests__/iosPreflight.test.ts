@@ -13,7 +13,7 @@
  */
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { parseDevicectl } from '../preflight.js';
+import { IOS_TUNNEL_COMMAND, iosTunnelCheck, parseDevicectl } from '../preflight.js';
 
 /** Nguyên văn từ máy thật, không phải bảng tự nghĩ ra. */
 const REAL = `Name             Hostname                          Identifier                             State         Model
@@ -94,5 +94,31 @@ describe('parseDevicectl', () => {
 
   it('dòng thiếu cột thì bỏ qua, không đoán', () => {
     assert.deepEqual(parseDevicectl('rác  linh  tinh'), []);
+  });
+});
+
+/**
+ * Tunnel CoreDevice.
+ *
+ * Đo trên máy người dùng ngày 2026-09-10: lượt chạy hybrid hỏng cả hai kịch bản
+ * vì `getContexts()` chỉ trả về NATIVE_APP, và lý do nằm ở một dòng duy nhất
+ * giữa hàng nghìn dòng log Appium:
+ *
+ *   [RemoteDebugger] Failed to start WebInspector shim service:
+ *   Tunnel registry port not found. Please run the tunnel creation script first.
+ *
+ * Một điều kiện quyết định được cả lượt chạy thì phải hỏi TRƯỚC khi chạy.
+ */
+describe('điều kiện tunnel iOS', () => {
+  it('nói ra đúng lệnh cần chạy khi chưa có tunnel', async () => {
+    const check = await iosTunnelCheck();
+    // Máy CI không có tunnel; máy dev có thể có. Chỉ ràng buộc phần bất biến:
+    // hỏng thì phải kèm lệnh, đạt thì phải kèm cổng.
+    if (check.ok) assert.match(check.detail, /127\.0\.0\.1:\d+/);
+    else assert.ok(check.detail.includes(IOS_TUNNEL_COMMAND), check.detail);
+  });
+
+  it('lệnh phải chạy bằng sudo — tool không tự chạy thay được', () => {
+    assert.match(IOS_TUNNEL_COMMAND, /^sudo appium driver run xcuitest tunnel-creation$/);
   });
 });

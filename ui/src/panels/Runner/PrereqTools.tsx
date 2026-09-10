@@ -85,6 +85,16 @@ export function PrereqTools({ platform }: { platform: 'android' | 'ios' }) {
         </Step>
       )}
 
+      {platform === 'ios' && (
+        <Step
+          n={(n += 1)}
+          title="Tunnel cho WebView (iOS 17+)"
+          note="Chỉ cần khi app là hybrid. Từ iOS 17, Appium chỉ với tới Web Inspector qua tunnel này; thiếu nó thì mọi kịch bản hybrid hỏng ngay bước đầu dù máy, app và WebDriverAgent đều đúng."
+        >
+          <TunnelCommand />
+        </Step>
+      )}
+
       <Step n={(n += 1)} title="Appium driver" command={`appium driver install ${driver}`}>
         <div>
           <Button
@@ -220,6 +230,46 @@ function DevicesRow({ platform }: { platform: 'android' | 'ios' }) {
  * build được WebDriverAgent, nên mọi thứ sau đó chưa kiểm được. Đánh số nói ra
  * điều đó; một danh sách nút phẳng thì không.
  */
+/**
+ * Lệnh dựng tunnel, kèm nút chép.
+ *
+ * Không có nút "chạy": lệnh cần sudo, mà server không có mật khẩu máy và cũng
+ * không nên có. Việc duy nhất giao diện làm được tử tế là đưa đúng lệnh sang
+ * clipboard để người dùng dán vào Terminal của họ — và nói rõ phải giữ cửa sổ
+ * đó mở, vì tunnel chết theo tiến trình.
+ */
+function TunnelCommand() {
+  const [copied, setCopied] = useState(false);
+  const command = 'sudo appium driver run xcuitest tunnel-creation';
+  return (
+    <div className="flex flex-col gap-1.5">
+      <div className="flex flex-wrap items-center gap-2">
+        <code className="bg-muted rounded px-2 py-1 text-xs">{command}</code>
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={() => {
+            void navigator.clipboard
+              .writeText(command)
+              .then(() => {
+                setCopied(true);
+                toast.success('Đã chép lệnh. Dán vào Terminal và để cửa sổ đó chạy.');
+              })
+              .catch(() => toast.error('Trình duyệt không cho chép. Bạn chép tay giúp nhé.'));
+          }}
+        >
+          {copied ? 'Đã chép' : 'Chép lệnh'}
+        </Button>
+      </div>
+      <span className="text-muted-foreground text-xs">
+        Mở một cửa sổ Terminal riêng, dán lệnh, nhập mật khẩu máy, rồi{' '}
+        <b className="text-foreground">để nguyên cửa sổ đó</b> suốt buổi test. Đóng cửa sổ là tunnel
+        tắt theo, và lượt chạy hybrid tiếp theo lại hỏng.
+      </span>
+    </div>
+  );
+}
+
 function Step({
   n,
   title,

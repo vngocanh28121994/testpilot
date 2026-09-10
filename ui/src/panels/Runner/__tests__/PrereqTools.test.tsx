@@ -107,6 +107,10 @@ describe('hướng dẫn từng bước', () => {
   it('các bước được đánh số liên tiếp', () => {
     renderWithProviders(<PrereqTools platform="ios" />);
     const numbers = screen.getAllByText(/^[1-9]$/).map((el) => Number(el.textContent));
-    expect(numbers).toEqual([1, 2, 3, 4, 5]);
+    // Bất biến là LIÊN TIẾP, không phải một con số cụ thể: chốt cứng độ dài thì
+    // mỗi lần thêm một bước chính đáng lại phải sửa test, và người sửa dễ tay
+    // đôi chỉnh luôn con số thay vì nhìn xem thứ tự có còn đúng không.
+    expect(numbers).toEqual(numbers.map((_, i) => i + 1));
+    expect(numbers.length).toBeGreaterThanOrEqual(5);
   });
 });

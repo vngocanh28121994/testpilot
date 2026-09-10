@@ -1,5 +1,8 @@
 import { execFile } from 'node:child_process';
 import { existsSync } from 'node:fs';
+import { readFile } from 'node:fs/promises';
+import net from 'node:net';
+import os from 'node:os';
 import path from 'node:path';
 import { promisify } from 'node:util';
 
@@ -490,7 +493,77 @@ async function iosPreflight(cfg: TestPilotConfig, override?: string): Promise<Pl
     );
   }
 
+  // Chỉ hỏi khi có máy thật và app là hybrid: simulator không cần tunnel, và
+  // một bộ kịch bản thuần native cũng không.
+  if (cfg.ios.hybrid && physicalNames.length > 0) {
+    checks.push(await iosTunnelCheck());
+  }
+
   return { checks, device, candidates };
+}
+
+/** Lệnh duy nhất dựng được tunnel; cần sudo nên tool không tự chạy thay được. */
+export const IOS_TUNNEL_COMMAND = 'sudo appium driver run xcuitest tunnel-creation';
+
+/**
+ * Cổng của sổ đăng ký tunnel, nếu script tunnel-creation từng chạy.
+ *
+ * `appium-ios-remotexpc` cất số cổng bằng @appium/strongbox, tức một file phẳng
+ * trong thư mục dữ liệu của `appium-xcuitest-driver`. Đọc lại đúng file đó là
+ * cách duy nhất biết được cổng mà không phải nạp nội bộ của Appium vào tiến
+ * trình này.
+ */
+async function tunnelRegistryPort(): Promise<number | undefined> {
+  // env-paths thêm hậu tố "-nodejs" vào tên container.
+  const file = path.join(
+    os.homedir(), 'Library', 'Application Support',
+    'appium-xcuitest-driver-nodejs', 'tunnelRegistryPort',
+  );
+  try {
+    const port = Number.parseInt((await readFile(file, 'utf8')).trim(), 10);
+    return Number.isInteger(port) && port > 0 && port < 65536 ? port : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/** Có ai đang lắng nghe ở cổng đó không. Số cất lại không có nghĩa là còn sống. */
+function portAccepting(port: number): Promise<boolean> {
+  return new Promise((resolve) => {
+    const socket = net.connect({ host: '127.0.0.1', port });
+    const done = (ok: boolean): void => {
+      socket.removeAllListeners();
+      socket.destroy();
+      resolve(ok);
+    };
+    socket.setTimeout(500, () => done(false));
+    socket.once('connect', () => done(true));
+    socket.once('error', () => done(false));
+  });
+}
+
+/**
+ * Tunnel CoreDevice — thứ chặn app hybrid trên iOS 17 trở lên.
+ *
+ * Từ iOS 17, Appium chỉ nói chuyện được với Web Inspector qua một tunnel do
+ * script chạy bằng sudo dựng lên. Thiếu nó, `getContexts()` trả về đúng
+ * NATIVE_APP sau ~10s và MỌI kịch bản hybrid hỏng ở bước đầu tiên — nhưng log
+ * Appium chỉ ghi một dòng "Tunnel registry port not found" nằm lẫn giữa hàng
+ * nghìn dòng khác. Đây là chỗ để nói ra trước khi chạy, thay vì sau khi hỏng.
+ */
+export async function iosTunnelCheck(): Promise<PreflightCheck> {
+  const name = 'Tunnel cho WebView (iOS 17+)';
+  const port = await tunnelRegistryPort();
+  if (port !== undefined && (await portAccepting(port))) {
+    return { name, ok: true, detail: `Đang chạy ở 127.0.0.1:${port}.` };
+  }
+  return {
+    name,
+    ok: false,
+    detail: port === undefined
+      ? `Chưa chạy lần nào. Mở một cửa sổ Terminal riêng, chạy lệnh sau và để nguyên đó: ${IOS_TUNNEL_COMMAND}`
+      : `Cổng ${port} không còn ai nghe — tunnel đã tắt. Chạy lại và giữ cửa sổ: ${IOS_TUNNEL_COMMAND}`,
+  };
 }
 
 /**
