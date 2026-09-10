@@ -1740,24 +1740,34 @@ export class NativeUiDriver implements UiDriver {
       let raw: RawEl[] | null = null;
       try {
         await this.b.switchContext(this.webview!);
-        const json = (await this.b.execute(DOM_OBSERVE_SCRIPT)) as string;
-        raw = typeof json === 'string' ? (JSON.parse(json) as RawEl[]) : null;
+        // Thử lại vài nhịp khi kết quả rỗng.
+        //
+        // SPA render theo từng đợt: ngay sau khi điều hướng, `document` có thể
+        // chỉ còn cái khung. Đo trên máy thật ngày 2026-09-10, hai lệnh cách
+        // nhau chừng 300ms trong cùng một lần quan sát:
+        //
+        //   lệnh 1 (đoạn quét)   → []            ← trang đang dựng lại
+        //   lệnh 2 (đếm node)    → 1469 node, 47 khớp
+        //
+        // Trên trang đã ổn định, đúng đoạn quét đó trả về 51 phần tử và 8360 ký
+        // tự JSON — nên đây không phải lỗi của đoạn quét mà là lỗi thời điểm.
+        // Bốn nhịp, mỗi nhịp 400ms: đủ để bắt kịp một lần render, và vẫn nằm
+        // gọn trong ngân sách của discovery.
+        for (let attempt = 0; attempt < 4; attempt += 1) {
+          if (attempt > 0) await sleep(400);
+          const json = (await this.b.execute(DOM_OBSERVE_SCRIPT)) as string;
+          raw = typeof json === 'string' ? (JSON.parse(json) as RawEl[]) : null;
+          if (raw && raw.length > 0) break;
+        }
         if (!raw || raw.length === 0) {
-          // Đo TẤT CẢ tại đúng chỗ hỏng, một lần, thay vì sửa theo giả thuyết
-          // rồi chạy lại. Năm vòng truy trước đều mất một lượt chạy chỉ để loại
-          // một phỏng đoán; bốn con số dưới đây loại được cả bốn cùng lúc.
+          // Vẫn rỗng sau bốn nhịp: ghi lại trang lúc đó, vì lúc này nó không
+          // còn là chuyện render dở nữa.
           const facts = await this.b
             .execute(
-              'return JSON.stringify({url: location.href, tong: document.querySelectorAll("*").length,'
-              + ' khop: document.querySelectorAll(\'input, textarea, button, [role], a, select, span, p, li, label, legend\').length,'
-              + ' kieu: typeof JSON.stringify([1,2,3])})',
+              'return JSON.stringify({url: location.href, tong: document.querySelectorAll("*").length})',
             )
             .catch((e) => `lỗi: ${(e as Error).message.slice(0, 70)}`);
-          console.warn(
-            `[observe] DOM rỗng — kiểu trả về=${typeof json}`
-            + ` | độ dài chuỗi=${typeof json === 'string' ? json.length : 'n/a'}`
-            + ` | ${String(facts)}`,
-          );
+          console.warn(`[observe] DOM vẫn rỗng sau 4 nhịp — ${String(facts)}`);
         }
       } catch (err) {
         console.warn(`[observe] chạy đoạn quét DOM hỏng: ${(err as Error).message.slice(0, 200)}`);

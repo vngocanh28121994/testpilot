@@ -165,7 +165,16 @@ export class ConfidenceScorer {
     if (candidate.text) {
       const target = intent.text ?? intent.label;
       if (target) {
-        if (norm(candidate.text) === norm(target)) {
+        // "Nút đăng nhập" và "Đăng nhập" là CÙNG một thứ: chữ đầu chỉ nói đây
+        // là loại điều khiển gì, không phải nội dung nó mang. Không bỏ nó ra
+        // thì phép so chỉ đạt mức "một phần" (14 điểm thay vì 20) cho một
+        // element khớp hoàn hảo — đo trên máy thật ngày 2026-09-10: nút đăng
+        // nhập đúng chỉ được 19 điểm trên ngưỡng 40.
+        //
+        // FIELD_NOUNS đã có sẵn trong tệp này và đang được dùng cho luật
+        // "subset"; đây là cùng một ý, áp cho phép so chính.
+        const bare = stripFieldNoun(target);
+        if (norm(candidate.text) === norm(target) || norm(candidate.text) === norm(bare)) {
           add(this.weights.exactText, 'text exact match');
           if (candidate.interactive && actionRequiresInteraction(intent.action)) {
             add(this.weights.interactiveExactText, 'exact text on interactive control');
@@ -236,8 +245,23 @@ export class ConfidenceScorer {
         candidate.text != null &&
         norm(c.text) === norm(candidate.text),
     ).length;
-    if (duplicates > 0) {
-      penalize(this.weights.duplicatePenalty, `${duplicates} duplicate(s) with same text`);
+    // Chỉ phạt khi bản trùng cũng là một điều khiển thật.
+    //
+    // Trong DOM, một cái nút thường mang theo <span> chứa đúng chữ đó bên
+    // trong. Phạt cả hai nghĩa là phạt chính cái nút vì nó có nhãn — và đó là
+    // 25 điểm trừ đúng vào ứng viên đúng. Ambiguity chỉ có thật khi có HAI thứ
+    // cùng bấm được mang cùng một chữ.
+    const interactiveDuplicates = (opts.allCandidates ?? []).filter(
+      (c) =>
+        c.id !== candidate.id &&
+        c.text != null &&
+        candidate.text != null &&
+        norm(c.text) === norm(candidate.text) &&
+        c.interactive === true,
+    ).length;
+    const ambiguous = candidate.interactive ? interactiveDuplicates : duplicates;
+    if (ambiguous > 0) {
+      penalize(this.weights.duplicatePenalty, `${ambiguous} duplicate(s) with same text`);
     }
 
     // Being the only answer on the screen is evidence in itself — the mirror of
@@ -312,6 +336,18 @@ export type TextMatch = 'exact' | 'contains' | 'subset' | 'none';
  * Written the way norm() leaves them — diacritics stripped — because that is
  * the form every comparison here works in.
  */
+/**
+ * Bỏ danh từ chỉ loại điều khiển ở đầu nhãn: "Nút đăng nhập" → "đăng nhập".
+ *
+ * Chỉ bỏ ở ĐẦU và chỉ một từ. "Ô tìm kiếm nút gạt" thì từ "nút" ở giữa là nội
+ * dung thật, không phải khung.
+ */
+function stripFieldNoun(label: string): string {
+  const parts = normalizeHumanText(label).split(/\s+/).filter(Boolean);
+  if (parts.length > 1 && FIELD_NOUNS.has(parts[0]!)) return parts.slice(1).join(' ');
+  return parts.join(' ');
+}
+
 const FIELD_NOUNS = new Set(['o', 'truong', 'nut', 'input', 'field', 'button', 'icon']);
 
 /**
