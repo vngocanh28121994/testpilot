@@ -262,7 +262,19 @@ export class NativeUiDriver implements UiDriver {
       hostname: this.opts.hostname ?? '127.0.0.1',
       port: this.opts.port ?? 4723,
       path: this.opts.path ?? '/',
-      logLevel: 'error',
+      // 'silent' chứ không phải 'error'.
+      //
+      // WebdriverIO ghi log của riêng nó ra stderr, bằng tiếng Anh, kèm stack —
+      // và nó ghi TRƯỚC khi promise reject, nên một lỗi mà tool đã bắt và xử lý
+      // xong vẫn để lại một dòng ERROR trên màn hình người dùng. Lượt chạy 08:44
+      // hôm nay xanh cả hai kịch bản mà log vẫn có "ERROR webdriver:
+      // WebDriverError: An attempt was made to operate on a modal dialog…".
+      //
+      // Mọi lỗi thật đều đã được tool tự nói lại bằng tiếng Việt ở chỗ nó xảy
+      // ra (explainDriverStart, executor, các cảnh báo [native]), còn chi tiết
+      // thô thì nằm nguyên trong log của Appium server. Không mất gì để chẩn
+      // đoán, chỉ bớt đi một nguồn chữ mà người đọc không dùng được.
+      logLevel: 'silent',
       // The first iOS session on a machine compiles WebDriverAgent from source
       // and installs it — minutes, not seconds. WebdriverIO's default request
       // timeout aborts the POST /session long before that finishes, and Appium
@@ -976,11 +988,25 @@ export class NativeUiDriver implements UiDriver {
   private async clearIosAlerts(rounds: number): Promise<void> {
     if (!this.browser) return;
     for (let round = 0; round < rounds; round += 1) {
+      // Hỏi cây view trước, thay vì hỏi `mobile: alert` rồi bắt lỗi.
+      //
+      // Cách cũ đúng về mặt logic nhưng bẩn về mặt log: WebdriverIO ghi ra một
+      // dòng "ERROR webdriver: WebDriverError: An attempt was made to operate
+      // on a modal dialog when one was not open" TRƯỚC khi promise reject, nên
+      // nó lọt ra màn hình kể cả khi lượt chạy xanh. Một lượt chạy đạt mà log
+      // đầy chữ ERROR thì người đọc không còn tin được dòng nào.
+      //
+      // Tìm element thì không có lỗi để mà ghi: không có alert thì trả mảng
+      // rỗng. Giá phải trả là một lệnh find mỗi vòng, chỉ chạy lúc mở app.
+      const alerts = await Promise.resolve(this.b.$$('-ios class chain:**/XCUIElementTypeAlert'))
+        .catch(() => []);
+      if (alerts.length === 0) return;
+
       let buttons: string[];
       try {
         buttons = (await this.b.execute('mobile: alert', { action: 'getButtons' })) as string[];
       } catch {
-        return; // no alert on screen — the normal way out
+        return; // alert vừa tự đóng giữa hai lệnh — không có gì để làm nữa
       }
       if (!Array.isArray(buttons) || buttons.length === 0) return;
 
