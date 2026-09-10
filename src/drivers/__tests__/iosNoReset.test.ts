@@ -27,8 +27,10 @@ const config = readFileSync('src/config.ts', 'utf8');
 
 describe('ios.isolation', () => {
   it('có trong config, mặc định giữ app lại', () => {
+    // Cắt từ usePreinstalledWDA tới hết khối ios; khối này đã dài thêm vì
+    // usePrebuiltWDA chen vào giữa, nên đừng chốt cứng độ dài lát cắt.
     const ios = config.slice(config.indexOf('usePreinstalledWDA'));
-    assert.match(ios.slice(0, 2000), /isolation: z\.enum\(\['restart', 'none'\]\)\.default\('restart'\)/);
+    assert.match(ios.slice(0, 4000), /isolation: z\.enum\(\['restart', 'none'\]\)\.default\('restart'\)/);
   });
 
   it('được truyền xuống driver', () => {

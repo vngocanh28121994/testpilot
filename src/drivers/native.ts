@@ -149,6 +149,10 @@ export interface NativeDriverOptions {
   wdaBundleId?: string;
   /** Dùng lại WDA đã cài thay vì build lại mỗi lượt. Xem config.ios. */
   usePreinstalledWDA?: boolean;
+  /** Dùng lại bản WDA đã BUILD — chặn vòng lặp tin cậy. Xem config.ios. */
+  usePrebuiltWDA?: boolean;
+  /** Nơi giữ bản build WDA giữa các lượt chạy. */
+  derivedDataPath?: string;
   /** App-specific DOM popup rules shared with the browser driver. */
   popupRules?: PopupRule[];
 }
@@ -383,6 +387,12 @@ export class NativeUiDriver implements UiDriver {
         // Dùng lại bản WDA đã nằm trên máy: Appium bỏ hẳn xcodebuild, nên iOS
         // không hỏi mật mã để cho phép cài lại ở mỗi lượt chạy. Các cờ ký số
         // bên dưới chỉ phục vụ việc BUILD, nên khi đã bỏ build thì không gửi.
+        // Bỏ bước biên dịch: không có build mới thì không có provisioning
+        // profile mới, và không có profile mới thì iOS không hỏi tin cậy lại.
+        ...(!isAndroid && this.opts.usePrebuiltWDA ? { 'appium:usePrebuiltWDA': true } : {}),
+        ...(!isAndroid && this.opts.derivedDataPath
+          ? { 'appium:derivedDataPath': this.opts.derivedDataPath }
+          : {}),
         ...(!isAndroid && this.opts.usePreinstalledWDA && this.opts.wdaBundleId
           ? {
               'appium:usePreinstalledWDA': true,
@@ -1730,7 +1740,25 @@ export class NativeUiDriver implements UiDriver {
       let raw: RawEl[] | null = null;
       try {
         await this.b.switchContext(this.webview!);
-        raw = (await this.b.execute(DOM_OBSERVE_SCRIPT)) as RawEl[];
+        const json = (await this.b.execute(DOM_OBSERVE_SCRIPT)) as string;
+        raw = typeof json === 'string' ? (JSON.parse(json) as RawEl[]) : null;
+        if (!raw || raw.length === 0) {
+          // Đo TẤT CẢ tại đúng chỗ hỏng, một lần, thay vì sửa theo giả thuyết
+          // rồi chạy lại. Năm vòng truy trước đều mất một lượt chạy chỉ để loại
+          // một phỏng đoán; bốn con số dưới đây loại được cả bốn cùng lúc.
+          const facts = await this.b
+            .execute(
+              'return JSON.stringify({url: location.href, tong: document.querySelectorAll("*").length,'
+              + ' khop: document.querySelectorAll(\'input, textarea, button, [role], a, select, span, p, li, label, legend\').length,'
+              + ' kieu: typeof JSON.stringify([1,2,3])})',
+            )
+            .catch((e) => `lỗi: ${(e as Error).message.slice(0, 70)}`);
+          console.warn(
+            `[observe] DOM rỗng — kiểu trả về=${typeof json}`
+            + ` | độ dài chuỗi=${typeof json === 'string' ? json.length : 'n/a'}`
+            + ` | ${String(facts)}`,
+          );
+        }
       } catch (err) {
         console.warn(`[observe] chạy đoạn quét DOM hỏng: ${(err as Error).message.slice(0, 200)}`);
       }

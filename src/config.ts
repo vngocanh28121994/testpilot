@@ -167,6 +167,27 @@ const Ios = z.object({
    */
   usePreinstalledWDA: z.boolean().default(false),
   /**
+   * Dùng lại bản WebDriverAgent ĐÃ BUILD, thay vì build lại mỗi lượt chạy.
+   *
+   * Đây là cách chặn đúng gốc vòng lặp "Xác minh ứng dụng" mà người chạy phải
+   * lặp đi lặp lại. Đo trên máy thật ngày 2026-09-10, ba mốc liên tiếp:
+   *
+   *   devicectl mở WDA        → Launched application          (vừa tin cậy)
+   *   chạy test (xcodebuild)  → build lại + cài đè WDA
+   *   devicectl mở WDA        → Security: not explicitly trusted
+   *
+   * Với Apple ID cá nhân, mỗi lần build Xcode cấp một provisioning profile MỚI,
+   * và profile mới là một "ứng dụng nhà phát triển" mới chưa được tin cậy. Bỏ
+   * bước build thì không còn profile mới, nên tin cậy một lần là xong.
+   *
+   * Khác `usePreinstalledWDA`: cờ kia bỏ luôn cả xcodebuild và tự khởi chạy
+   * bằng devicectl — đã thử và bản runner cài sẵn tắt ngay. Cờ này vẫn để
+   * xcodebuild chạy phiên test, chỉ bỏ phần biên dịch.
+   */
+  usePrebuiltWDA: z.boolean().default(false),
+  /** Nơi giữ bản build WDA để lượt sau dùng lại. Trống thì Xcode tự chọn. */
+  derivedDataPath: z.string().optional(),
+  /**
    * Giữ app giữa các lượt chạy, hay để XCUITest gỡ và cài lại mỗi lần.
    *
    * Mặc định của XCUITest khi có capability `app` là gỡ app rồi cài lại ở MỖI

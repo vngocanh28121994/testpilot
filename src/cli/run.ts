@@ -605,6 +605,8 @@ async function makeDriver(
     ...(!onFarm && cfg.ios.wdaBundleId ? { wdaBundleId: cfg.ios.wdaBundleId } : {}),
     // Device Farm dựng máy mới mỗi lượt nên ở đó không có WDA nào "đã cài".
     ...(!onFarm && cfg.ios.usePreinstalledWDA ? { usePreinstalledWDA: true } : {}),
+    ...(!onFarm && cfg.ios.usePrebuiltWDA ? { usePrebuiltWDA: true } : {}),
+    ...(!onFarm && cfg.ios.derivedDataPath ? { derivedDataPath: cfg.ios.derivedDataPath } : {}),
     hybrid: cfg.ios.hybrid,
     isolation: cfg.ios.isolation,
     ...(cfg.ios.webviewTimeoutMs ? { webviewTimeoutMs: cfg.ios.webviewTimeoutMs } : {}),

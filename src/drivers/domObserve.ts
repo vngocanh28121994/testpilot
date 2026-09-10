@@ -115,5 +115,10 @@ export function observeDomInPage(): RawEl[] {
  *
  * Bốn lượt truy đi tìm nguyên nhân ở context, ở trạng thái trang, ở bộ chọn —
  * trong khi nó nằm ở đúng chỗ mà PopupInterceptor.ts đã ghi lại từ trước.
+ *
+ * Và trả về JSON.stringify chứ không trả mảng đối tượng: cùng đoạn quét, trả
+ * về `.length` thì ra 51, trả về cả mảng thì bên nhận được mảng rỗng — khâu
+ * tuần tự hoá kết quả qua Appium không chịu nổi 51 đối tượng lồng nhau. Một
+ * chuỗi thì luôn qua được, và JSON.parse ở phía mình là chuyện vặt.
  */
-export const DOM_OBSERVE_SCRIPT = `return (${observeDomInPage.toString()})();`;
+export const DOM_OBSERVE_SCRIPT = `return JSON.stringify((${observeDomInPage.toString()})());`;
