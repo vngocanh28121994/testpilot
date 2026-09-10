@@ -252,6 +252,18 @@ export class NativeUiDriver implements UiDriver {
       // then kills the build it had started: "** BUILD INTERRUPTED **". Android
       // keeps the default; it has nothing to compile.
       ...(isAndroid ? {} : { connectionRetryTimeout: 15 * 60_000 }),
+      // WebdriverIO thử lại một request hỏng 3 lần theo mặc định. Với một lệnh
+      // thường thì vô hại; với POST /session trên iOS thì đó là ba lần gỡ app,
+      // cài lại bản ipa hơn 100 MB, rồi build lại WebDriverAgent — mười phút
+      // cho một lỗi mà lần thử đầu đã trả lời xong.
+      //
+      // Và những lỗi hay gặp ở đây đều tất định: chứng chỉ chưa được tin cậy,
+      // thiếu teamId, sai bundle id. Thử lại không đổi được kết quả, chỉ làm
+      // người xem tưởng tool đang kẹt trong một vòng lặp cài đặt — đúng như đã
+      // xảy ra hai lần, và cả hai lần đều mất mươi phút mới nhìn ra.
+      //
+      // Android giữ mặc định: phiên ở đó không cài lại gì, thử lại là rẻ.
+      ...(isAndroid ? {} : { connectionRetryCount: 0 }),
       capabilities: {
         platformName: isAndroid ? 'Android' : 'iOS',
         'appium:automationName': isAndroid ? 'UiAutomator2' : 'XCUITest',
