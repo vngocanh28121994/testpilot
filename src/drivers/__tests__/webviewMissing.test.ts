@@ -30,9 +30,23 @@ describe('không vào được WebView', () => {
     assert.ok(Number(bound[2]) >= 15, `${bound[2]}s vẫn ngắn hơn ~10s+ Appium cần`);
   });
 
-  it('chỉ ra cách dựng tunnel cho iOS 17+', () => {
-    assert.match(source, /sudo appium driver run xcuitest tunnel-creation/);
-    assert.match(source, /Tunnel registry port not/);
+  /**
+   * Câu thông báo phải HỎI xem tunnel có thiếu không, chứ không kể ra mọi
+   * nguyên nhân có thể. Ở lượt chạy 03:27 tunnel đang chạy ngon lành mà thông
+   * báo vẫn bảo người dùng đi dựng nó — đọc xong thì thôi tin những gì tool nói,
+   * và lần sau họ bỏ qua cả những câu đúng.
+   */
+  it('hỏi trạng thái tunnel rồi mới đổ lỗi cho nó', () => {
+    assert.match(source, /const tunnel = this\.opts\.platform === 'ios' \? await iosTunnelCheck\(\)/);
+    assert.match(source, /tunnel && !tunnel\.ok[\s\S]{0,120}gần như chắc chắn là nguyên nhân/);
+  });
+
+  it('tunnel đang chạy thì chỉ sang Web Inspector và bản build', () => {
+    const branch = source.slice(source.indexOf('tunnel?.ok'));
+    assert.match(branch.slice(0, 900), /Web Inspector phải bật/);
+    assert.match(branch.slice(0, 900), /isInspectable = true/);
+    // Và phải nói ra cách tự phân biệt hai nguyên nhân đó.
+    assert.match(branch.slice(0, 1200), /mở Safari trên máy/);
   });
 
   it('nối chuỗi chứ không cộng số', () => {

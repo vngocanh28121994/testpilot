@@ -3,6 +3,7 @@ import { createHash } from 'node:crypto';
 import { mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { labelXPaths } from '../core/labelXPath.js';
+import { iosTunnelCheck } from '../core/preflight.js';
 import { promisify } from 'node:util';
 import { remote } from 'webdriverio';
 import type { Observed } from '../crawl/observe.js';
@@ -733,20 +734,28 @@ export class NativeUiDriver implements UiDriver {
       await sleep(500);
     }
 
+    // Hỏi thật xem tunnel có thiếu không, thay vì kể ra mọi nguyên nhân có thể.
+    // Bảo người dùng dựng một tunnel đang chạy sẵn là cách nhanh nhất để họ thôi
+    // tin những gì tool nói — đúng chuyện suýt xảy ra ở lượt chạy 03:27.
+    const tunnel = this.opts.platform === 'ios' ? await iosTunnelCheck() : undefined;
     throw new Error(
       `Không tìm thấy WebView context sau ${Math.round((this.opts.webviewTimeoutMs ?? 30_000) / 1000)}s. ` +
         `Context hiện có: ${seen.join(', ') || '(không có)'}.\n` +
-        (this.opts.platform === 'ios'
-          ? 'Trên iOS 17 trở lên, Appium cần một tunnel CoreDevice mới nói chuyện được '
-            + 'với Web Inspector. Thiếu nó thì log Appium ghi "Tunnel registry port not '
-            + 'found" rồi trả về đúng NATIVE_APP. Mở một terminal riêng và để chạy nền:\n'
-            + '  sudo appium driver run xcuitest tunnel-creation\n'
-            + 'Kèm theo, trên máy: Cài đặt › Safari › Nâng cao › Web Inspector phải bật.\n'
-          : '')
-        + 'Nguyên nhân hay gặp nhất không phải do chờ chưa đủ mà do bản build: ' +
-        'Appium chỉ nhìn thấy WebView nếu app bật WebView.setWebContentsDebuggingEnabled(true) ' +
-        '(Android) hoặc WKWebView.isInspectable = true (iOS 16.4+). Bản release thường tắt. ' +
-        'Xin team app một bản debuggable, hoặc tắt cờ hybrid để chạy bằng locator native.',
+        (tunnel && !tunnel.ok
+          ? `Tunnel cho Web Inspector chưa chạy — đây gần như chắc chắn là nguyên nhân.\n  ${tunnel.detail}\n`
+          : '') +
+        (tunnel?.ok
+          ? 'Tunnel đang chạy, nên Appium nói chuyện được với Web Inspector; thứ nó không '
+            + 'tìm thấy là một trang web nào để bám vào. Kiểm hai chỗ, theo thứ tự:\n'
+            + '  1. Trên máy: Cài đặt › Safari › Nâng cao › Web Inspector phải bật.\n'
+            + '  2. Bản build: WKWebView phải đặt isInspectable = true (iOS 16.4+). Bản release '
+            + 'thường tắt, và không có cách nào bật từ bên ngoài.\n'
+            + 'Cách phân biệt: mở Safari trên máy với một trang bất kỳ rồi chạy lại. Nếu Appium '
+            + 'thấy context của Safari thì Web Inspector đã bật và vấn đề nằm ở bản build.\n'
+          : 'Nguyên nhân hay gặp nhất không phải do chờ chưa đủ mà do bản build: '
+            + 'Appium chỉ nhìn thấy WebView nếu app bật WebView.setWebContentsDebuggingEnabled(true) '
+            + '(Android) hoặc WKWebView.isInspectable = true (iOS 16.4+). Bản release thường tắt. '
+            + 'Xin team app một bản debuggable, hoặc tắt cờ hybrid để chạy bằng locator native.'),
     );
   }
 
