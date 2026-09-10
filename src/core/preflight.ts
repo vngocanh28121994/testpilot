@@ -1,6 +1,6 @@
 import { execFile } from 'node:child_process';
 import { existsSync } from 'node:fs';
-import { readFile } from 'node:fs/promises';
+import { readFile, readdir } from 'node:fs/promises';
 import net from 'node:net';
 import os from 'node:os';
 import path from 'node:path';
@@ -32,7 +32,7 @@ import type { Platform } from './types.js';
  * diện gắn đúng cái nút. Bảo người dùng "chạy `appium` ở một terminal khác"
  * trong khi chính công cụ bật được Appium là đẩy việc của mình sang cho họ.
  */
-export type PreflightFix = 'appium' | 'ios-tunnel';
+export type PreflightFix = 'appium' | 'ios-tunnel' | 'ios-trust';
 
 export interface PreflightCheck {
   /** What was checked, in the operator's language. */
@@ -514,6 +514,16 @@ async function iosPreflight(cfg: TestPilotConfig, override?: string): Promise<Pl
     checks.push(await iosTunnelCheck());
   }
 
+  // WebDriverAgent: mắt xích ngốn nhiều thời gian nhất của hai ngày vừa rồi.
+  // Hỏi thẳng thiết bị ở đây biến một lượt chạy hỏng sau hai phút thành một
+  // câu trả lời tức thì, và nói luôn tên mục cần bấm Tin cậy.
+  // udid lấy từ chính cấu hình: đó cũng là máy mà lượt chạy sẽ dùng, nên kiểm
+  // đúng máy đó thay vì máy đầu tiên devicectl liệt kê.
+  const udid = devicesOf(cfg, 'ios').find((d) => d.udid)?.udid;
+  if (udid && (physicalNames.length > 0 || blockedPhones.length > 0)) {
+    checks.push(await iosWdaCheck(cfg, udid));
+  }
+
   return { checks, device, candidates };
 }
 
@@ -639,6 +649,106 @@ export async function iosTunnelCheck(): Promise<PreflightCheck> {
       ? `Chưa chạy lần nào. Mở một cửa sổ Terminal riêng, chạy lệnh sau và để nguyên đó: ${IOS_TUNNEL_COMMAND}`
       : `Cổng ${port} không còn ai nghe — tunnel đã tắt. Chạy lại và giữ cửa sổ: ${IOS_TUNNEL_COMMAND}`,
   };
+}
+
+/**
+ * WebDriverAgent đã cài chưa, và có mở được không.
+ *
+ * Đây là mắt xích ngốn nhiều thời gian nhất của hai ngày vừa rồi, và nó luôn
+ * hiện ra dưới dạng `xcodebuild failed with code 65` — một câu không nói gì.
+ * Hỏi thẳng thiết bị thì tách được ba trạng thái khác hẳn nhau:
+ *
+ *   chưa cài            → lượt chạy đầu sẽ tự build, mất khoảng hai phút
+ *   cài rồi, mở được    → sẵn sàng
+ *   cài rồi, bị từ chối → chứng chỉ chưa được tin cậy TRÊN MÁY
+ *
+ * Trạng thái thứ ba là thứ người dùng gặp đi gặp lại, và nó chỉ chữa được bằng
+ * tay trên điện thoại — nên việc của tool là chỉ đúng mục cần bấm, kèm TÊN của
+ * mục đó đọc từ chính profile của bản build.
+ */
+/**
+ * WebDriverAgent đã cài và mở được chưa — hỏi trước, thay vì để lượt chạy chết.
+ *
+ * Chứng chỉ nhà phát triển chưa được tin cậy là kiểu hỏng khó đoán nhất của
+ * iOS: Appium chỉ báo một lỗi phiên chung chung sau vài phút chờ, còn thứ cần
+ * làm lại nằm trên điện thoại. Hỏi bằng cách mở thử chính bundle đó là cách duy
+ * nhất biết chắc — cài rồi không có nghĩa là mở được.
+ *
+ * `run` tách ra được để test dựng lại đúng các câu trả lời của devicectl mà
+ * không cần một chiếc iPhone.
+ */
+export async function iosWdaCheck(
+  cfg: TestPilotConfig,
+  udid: string,
+  run: typeof tryRun = tryRun,
+  teamName: () => Promise<string | undefined> = wdaTeamName,
+): Promise<PreflightCheck> {
+  const name = 'WebDriverAgent trên máy';
+  const bundle = `${cfg.ios.wdaBundleId ?? 'com.facebook.WebDriverAgentRunner'}.xctrunner`;
+
+  const apps = await run('xcrun', [
+    'devicectl', 'device', 'info', 'apps', '--device', udid, '--quiet', '--json-output', '-',
+  ]);
+  const installed = apps.ok && apps.stdout.includes(bundle);
+  if (!installed) {
+    return {
+      name,
+      ok: true,
+      detail: `Chưa cài ${bundle}. Lượt chạy đầu tiên sẽ tự build và cài — mất khoảng hai phút, `
+        + 'và máy sẽ hỏi tin cậy chứng chỉ một lần.',
+    };
+  }
+
+  // Đang chạy sẵn thì để yên. Phần điều kiện này còn được dò lại trong lúc một
+  // lượt chạy đang diễn ra, mà tắt WDA giữa chừng là giết chính lượt chạy đó.
+  const procs = await run('xcrun', ['devicectl', 'device', 'info', 'processes', '--device', udid]);
+  if (procs.ok && /WebDriverAgentRunner-Runner/.test(procs.stdout)) {
+    return { name, ok: true, detail: `${bundle} đang chạy trên máy.` };
+  }
+
+  const launch = await run('xcrun', [
+    'devicectl', 'device', 'process', 'launch', '--device', udid, bundle,
+  ]);
+  if (launch.ok && /Launched application/i.test(launch.stdout)) {
+    return { name, ok: true, detail: `${bundle} đã cài và mở được.` };
+  }
+
+  const output = `${launch.stdout}${launch.error ?? ''}`;
+  if (!/Security|not.*trusted|invalid code signature|untrusted/i.test(output)) {
+    return { name, ok: false, detail: `Không mở được ${bundle}: ${output.slice(0, 160)}` };
+  }
+  const team = await teamName();
+  return {
+    name,
+    ok: false,
+    fix: 'ios-trust',
+    detail: 'Chứng chỉ nhà phát triển chưa được tin cậy trên máy — iOS từ chối mở WebDriverAgent.\n'
+      + `Cài đặt › Cài đặt chung › VPN & Quản lý thiết bị › ${team ?? 'mục Ứng dụng nhà phát triển'} → Tin cậy.\n`
+      + 'Tắt VPN trong lúc bấm Xác minh: bước đó cần máy liên lạc được với Apple.',
+  };
+}
+
+async function wdaTeamName(): Promise<string | undefined> {
+  const glob = path.join(
+    os.homedir(), 'Library', 'Developer', 'Xcode', 'DerivedData',
+  );
+  try {
+    const dirs = (await readdir(glob)).filter((d) => d.startsWith('WebDriverAgent-'));
+    for (const dir of dirs) {
+      const file = path.join(
+        glob, dir, 'Build', 'Products', 'Debug-iphoneos',
+        'WebDriverAgentRunner-Runner.app', 'embedded.mobileprovision',
+      );
+      if (!existsSync(file)) continue;
+      const { stdout } = await exec('security', ['cms', '-D', '-i', file], { timeout: 10_000 });
+      const team = /<key>TeamName<\/key>\s*<string>([^<]+)<\/string>/.exec(stdout)?.[1];
+      if (team) return team;
+    }
+  } catch {
+    // Không đọc được thì thôi: thiếu tên chỉ làm câu hướng dẫn kém chính xác
+    // hơn, không được phép làm hỏng cả phần kiểm tra.
+  }
+  return undefined;
 }
 
 /**

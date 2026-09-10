@@ -15,7 +15,7 @@ import { pipeline } from 'node:stream/promises';
 import { fileURLToPath } from 'node:url';
 import { createHash } from 'node:crypto';
 import { completeJson, listModels, llmAvailable, missingKeyHint, pickModel } from '../llm/client.js';
-import { ConfigSchema, applyEnv, loadConfig, resolveModel, saveConfig, type TestPilotConfig } from '../config.js';
+import { ConfigSchema, applyEnv, devicesOf, loadConfig, resolveModel, saveConfig, type TestPilotConfig } from '../config.js';
 // Hợp đồng dùng chung với app React ở ui/. Chỉ có type — không kéo theo gì
 // lúc chạy. Gắn kiểu trả về cho handler ở đây chính là chỗ TypeScript bắt
 // được lệch hợp đồng, thay vì để nó nổ ở trình duyệt. Xem contracts.ts.
@@ -984,6 +984,9 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
      */
     case 'POST /api/prereq/ios-tunnel':
       return json(res, 200, await openTunnelTerminal());
+
+    case 'POST /api/prereq/ios-trust':
+      return json(res, 200, await openIosSettings(await loadConfig(CONFIG_FILE)));
 
     case 'POST /api/prereq/driver': {
       const { driver } = await readJson<{ driver: string }>(req);
@@ -3596,6 +3599,31 @@ async function openTunnelTerminal(): Promise<{ ok: boolean; error?: string; comm
       command: IOS_TUNNEL_COMMAND,
       error: `Không mở được Terminal: ${(err as Error).message}. Bạn chép lệnh rồi chạy tay giúp nhé.`,
     };
+  }
+}
+
+/**
+ * Mở sẵn ứng dụng Cài đặt trên chính chiếc iPhone đang cắm.
+ *
+ * Việc tin cậy chứng chỉ nhà phát triển chỉ bấm được trên máy, không có đường
+ * nào làm hộ từ đây. Thứ làm hộ được là quãng đường tới đó: người dùng cầm máy
+ * lên thì Cài đặt đã mở sẵn, thay vì mở khoá rồi tự đi tìm.
+ *
+ * devicectl không có lệnh mở URL, nên không nhảy thẳng vào đúng mục quản lý
+ * thiết bị được — đường đi cụ thể nằm ở phần mô tả của dòng kiểm tra.
+ */
+async function openIosSettings(cfg: TestPilotConfig): Promise<{ ok: boolean; error?: string }> {
+  const udid = devicesOf(cfg, 'ios').find((d) => d.udid)?.udid;
+  if (!udid) return { ok: false, error: 'Chưa chọn máy iOS nào trong cấu hình.' };
+  try {
+    await execFileAsync(
+      'xcrun',
+      ['devicectl', 'device', 'process', 'launch', '--device', udid, '--terminate-existing', 'com.apple.Preferences'],
+      { timeout: 60_000 },
+    );
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, error: `Không mở được Cài đặt trên máy: ${(err as Error).message}` };
   }
 }
 

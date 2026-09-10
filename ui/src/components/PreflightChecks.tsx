@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { CheckCircle2, Play, Terminal, XCircle } from 'lucide-react';
+import { CheckCircle2, Play, Settings, Terminal, XCircle } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { useStreamJob } from '@/hooks/useStreamJob';
@@ -27,11 +27,12 @@ export function PreflightChecks({ checks }: { checks: PreflightCheck[] }) {
             <XCircle className="text-destructive mt-0.5 size-4 shrink-0" />
           )}
           <div className="flex min-w-0 flex-col items-start gap-1.5">
-            <span className="text-sm">
+            <span className="text-sm whitespace-pre-line">
               <b>{check.name}:</b> {check.detail}
             </span>
             {!check.ok && check.fix === 'appium' && <StartAppium />}
             {!check.ok && check.fix === 'ios-tunnel' && <StartIosTunnel />}
+            {!check.ok && check.fix === 'ios-trust' && <OpenIosSettings />}
           </div>
         </li>
       ))}
@@ -127,5 +128,34 @@ function StartIosTunnel() {
         {copied ? 'Đã chép' : 'Chép lệnh'}
       </Button>
     </div>
+  );
+}
+
+/**
+ * Mở sẵn Cài đặt trên chiếc iPhone đang cắm, cho bước tin cậy chứng chỉ.
+ *
+ * Nút này không tự chữa được — nút Tin cậy nằm trên máy và chỉ ngón tay người
+ * dùng bấm được. Nó rút ngắn phần làm hộ được: cầm máy lên là đã ở Cài đặt.
+ */
+function OpenIosSettings() {
+  const client = useQueryClient();
+  const open = useMutation({
+    mutationFn: () => api.post<{ ok: boolean; error?: string }>(ROUTES.prereqIosTrust),
+    onSuccess: (result) => {
+      if (!result.ok) {
+        toast.error(result.error ?? 'Không mở được Cài đặt trên máy.');
+        return;
+      }
+      toast.success('Đã mở Cài đặt trên máy. Bấm Tin cậy xong thì dò lại giúp nhé.');
+      void client.invalidateQueries({ queryKey: ['preflight'] });
+    },
+    onError: (err) => toast.error((err as Error).message),
+  });
+
+  return (
+    <Button size="sm" variant="outline" disabled={open.isPending} onClick={() => open.mutate()}>
+      <Settings className="size-4" />
+      {open.isPending ? 'Đang mở Cài đặt…' : 'Mở Cài đặt trên máy'}
+    </Button>
   );
 }
