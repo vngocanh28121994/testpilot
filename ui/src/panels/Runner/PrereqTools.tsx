@@ -261,11 +261,21 @@ function TunnelCommand() {
           {copied ? 'Đã chép' : 'Chép lệnh'}
         </Button>
       </div>
-      <span className="text-muted-foreground text-xs">
-        Mở một cửa sổ Terminal riêng, dán lệnh, nhập mật khẩu máy, rồi{' '}
-        <b className="text-foreground">để nguyên cửa sổ đó</b> suốt buổi test. Đóng cửa sổ là tunnel
-        tắt theo, và lượt chạy hybrid tiếp theo lại hỏng.
-      </span>
+      <ol className="text-muted-foreground flex list-decimal flex-col gap-1 ps-4 text-xs">
+        <li>
+          Mở Terminal trên máy Mac: bấm <b className="text-foreground">⌘ + dấu cách</b>, gõ
+          “Terminal”, Enter.
+        </li>
+        <li>Dán lệnh vừa chép, Enter, rồi nhập mật khẩu đăng nhập máy Mac (gõ không hiện ký tự).</li>
+        <li>
+          <b className="text-foreground">Để nguyên cửa sổ đó</b> suốt buổi test. Đóng cửa sổ là
+          tunnel tắt theo, và lượt chạy hybrid tiếp theo lại hỏng.
+        </li>
+        <li>
+          Quay lại đây bấm <b className="text-foreground">Kiểm tra lại</b>: dòng “Tunnel cho WebView”
+          phải chuyển sang xanh.
+        </li>
+      </ol>
     </div>
   );
 }

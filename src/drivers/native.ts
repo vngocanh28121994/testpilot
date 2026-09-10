@@ -134,7 +134,8 @@ export interface NativeDriverOptions {
   webviewTimeoutMs?: number;
   /**
    * Force-stop the app before each scenario so none of them inherits the last
-   * one's screen state. Android only — see `android.isolation` in config.ts.
+   * one's screen state. Xem `android.isolation` và `ios.isolation` trong
+   * config.ts: Android giữ tiến trình sống, iOS bỏ vòng gỡ-cài lại app.
    */
   isolation?: 'restart' | 'none';
   /** Serial number for adb commands targeting a specific device/emulator. */
@@ -334,6 +335,16 @@ export class NativeUiDriver implements UiDriver {
               'appium:noReset': true,
             }
           : {}),
+        // iOS: mặc định của XCUITest khi có `app` là GỠ rồi cài lại ở mỗi phiên
+        // — 109 MB và ~20 giây mỗi lượt, cộng một lần iOS hỏi xác nhận cài app
+        // ký bằng chứng chỉ dev. `noReset` bỏ vòng đó.
+        //
+        // Nhưng `noReset` cũng có nghĩa app đã cài thì không bao giờ cài đè, nên
+        // khi lượt chạy này CỐ Ý cài lại (--reinstall, hoặc đổi môi trường) thì
+        // không gửi: hai cờ ngược nhau, gửi cả hai là để Appium chọn hộ.
+        ...(!isAndroid && this.opts.isolation === 'restart' && !this.opts.enforceAppInstall
+          ? { 'appium:noReset': true }
+          : {}),
         // A device's WebView updates faster than chromedriver releases, so an
         // exact-version match is often impossible. Order of preference: a driver
         // shipped inside the test package (the only thing that works when the
@@ -511,6 +522,15 @@ export class NativeUiDriver implements UiDriver {
         // what makes iOS ask for notifications, and that alert covers the
         // WebView the next step is about to search.
         await this.clearBlockingDialogs();
+        // Với `noReset`, app không còn bị cài lại giữa các lượt — thứ trước đây
+        // vô tình dọn sạch phiên đăng nhập. Không xoá storage ở đây thì kịch bản
+        // 2 thừa hưởng đúng phiên mà kịch bản 1 vừa đăng nhập, và một bộ kịch
+        // bản đăng nhập sẽ đỏ vì lý do chẳng liên quan gì tới locator.
+        if (this.opts.hybrid && this.opts.isolation === 'restart') {
+          this.webview = undefined;
+          if (!this.cdpConnected) await this.tryEnterWebview();
+          if (this.inWebview || this.cdpConnected) await this.resetWebView();
+        }
       }
     }
     this.webview = undefined;

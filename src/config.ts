@@ -166,6 +166,25 @@ const Ios = z.object({
    * động hoá giao diện. Bật lên là hết hỏi, một lần cho mỗi máy.
    */
   usePreinstalledWDA: z.boolean().default(false),
+  /**
+   * Giữ app giữa các lượt chạy, hay để XCUITest gỡ và cài lại mỗi lần.
+   *
+   * Mặc định của XCUITest khi có capability `app` là gỡ app rồi cài lại ở MỖI
+   * phiên. Trên máy người dùng, đó là 109 MB và ~20 giây mỗi lượt, cộng thêm
+   * một lần iOS hỏi xác nhận cài app ký bằng chứng chỉ dev.
+   *
+   * `restart` gửi `noReset` để bỏ vòng đó. Đổi lại, dữ liệu app không còn bị
+   * xoá theo mỗi lượt — nên với app hybrid, launch() xoá localStorage/
+   * sessionStorage/cookie của WebView ở đầu mỗi kịch bản, đúng như bên Android.
+   * Đó là thứ giữ cho kịch bản 2 không thừa hưởng phiên đăng nhập của kịch bản 1.
+   *
+   * `noReset` cũng có nghĩa app đã cài thì không bao giờ cài đè: một bản build
+   * mới trong `app` sẽ bị bỏ qua. Cờ `--reinstall` và việc đổi môi trường vẫn
+   * cài lại được, vì lúc đó driver gửi `enforceAppInstall` và bỏ `noReset`.
+   *
+   * `none` trả lại hành vi mặc định của XCUITest: gỡ và cài lại mỗi lượt.
+   */
+  isolation: z.enum(['restart', 'none']).default('restart'),
   hybrid: z.boolean().default(false),
   /**
    * How long to wait at launch for the app's WebView to attach.

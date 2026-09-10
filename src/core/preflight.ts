@@ -409,6 +409,21 @@ export function parseDevicectl(
 async function iosPreflight(cfg: TestPilotConfig, override?: string): Promise<PlatformChecks> {
   const checks: PreflightCheck[] = [];
 
+  // Chạy iOS tại chỗ cần Xcode, tức cần macOS. Trên Windows/Linux, mọi dòng
+  // bên dưới đều hỏng vì cùng một lý do, và bản trước để người dùng đọc năm câu
+  // "không chạy được xcrun" rồi tự suy ra điều đó. Nói thẳng một câu, và chỉ
+  // sang đường thật sự đi được.
+  if (process.platform !== 'darwin') {
+    return {
+      checks: [{
+        name: 'Hệ điều hành',
+        ok: false,
+        detail: `Chạy iOS tại chỗ cần máy macOS có Xcode; máy đang chạy tool là ${process.platform}. `
+          + 'Với máy Windows/Linux, iOS chỉ chạy được qua Device Farm.',
+      }],
+    };
+  }
+
   const sim = await tryRun('xcrun', ['simctl', 'list', 'devices', 'booted', '-j']);
   const booted = sim.ok ? parseBootedSimulators(sim.stdout) : [];
   // Physical iPhones are invisible to simctl, so a separate probe — and if it

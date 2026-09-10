@@ -601,6 +601,7 @@ async function makeDriver(
     // Device Farm dựng máy mới mỗi lượt nên ở đó không có WDA nào "đã cài".
     ...(!onFarm && cfg.ios.usePreinstalledWDA ? { usePreinstalledWDA: true } : {}),
     hybrid: cfg.ios.hybrid,
+    isolation: cfg.ios.isolation,
     ...(cfg.ios.webviewTimeoutMs ? { webviewTimeoutMs: cfg.ios.webviewTimeoutMs } : {}),
     ...(cfg.web.popups ? { popupRules: cfg.web.popups } : {}),
     artifactsDir,
