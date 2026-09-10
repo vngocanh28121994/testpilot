@@ -148,6 +148,10 @@ export class Resolver {
     const deadline = Date.now() + o.timeoutMs;
     let attempts = 0;
     let ticks = 0;
+    /** Ứng viên do discovery tìm ra, có thể về sau vài tick. */
+    let discovered: LocatorCandidate | null = null;
+    let discoverySettled = false;
+    let discoveryStartedAt = 0;
     let discoveryAttempted = false;
     let lastUrl: string | undefined;
 
@@ -229,21 +233,32 @@ export class Resolver {
       // locator with only one attempt.
       if (this.elementDiscovery && !discoveryAttempted && ticks >= 3) {
         discoveryAttempted = true;
-        // Discovery is a fallback, not the owner of the resolve deadline. Keep
-        // at least two polling intervals for the known candidates afterwards.
-        const cap = Math.min(2_000, Math.max(0, deadline - Date.now() - o.pollMs * 2));
-        const discovered = cap > 0
-          ? await Promise.race([
-              this.tryDiscovery(
-                elementId,
-                o.discoveryAction,
-                o.locatorParams,
-                o.semanticContext,
-              ),
-              sleep(cap).then(() => null),
-            ])
-          : null;
-        if (discovered && !excluded.has(candidateKey(discovered))) candidates.unshift(discovered);
+        discoveryStartedAt = Date.now();
+        // Chạy nền, KHÔNG đua với đồng hồ rồi vứt kết quả.
+        //
+        // Bản cũ đặt discovery vào Promise.race với sleep(2s). Trên iOS, một lần
+        // lấy cây giao diện đã mất ~900ms (đo thật, có lần 11–12 giây), cộng
+        // parse, chấm điểm và có thể một lượt gọi model — nên nó gần như luôn
+        // thua cuộc đua. Thua thì kết quả bị bỏ, và tệ hơn: câu giải thích "vì
+        // sao không tìm được" nằm bên trong chính lời hứa bị bỏ đó, nên một
+        // discovery thất bại trông y hệt một discovery chưa từng chạy.
+        //
+        // Chạy nền thì mỗi vòng lặp sau chỉ việc hỏi "có kết quả chưa" — không
+        // tick nào bị chặn, và kết quả về muộn vẫn kịp dùng trong cùng lần
+        // resolve này.
+        void this.tryDiscovery(
+          elementId,
+          o.discoveryAction,
+          o.locatorParams,
+          o.semanticContext,
+        )
+          .then((c) => { discovered = c; })
+          .catch(() => { discovered = null; })
+          .finally(() => { discoverySettled = true; });
+      }
+      if (discovered && !excluded.has(candidateKey(discovered))) {
+        candidates.unshift(discovered);
+        discovered = null;
       }
 
       // A native overlay (permission dialog, system popup) sits above the WebView
@@ -262,6 +277,18 @@ export class Resolver {
       await this.driver.isIdle().catch(() => false);
       await sleep(o.pollMs);
     } while (Date.now() < deadline);
+
+    // Discovery vẫn đang chạy khi hết giờ là một câu trả lời, không phải im
+    // lặng. Trước đây trường hợp này không để lại dấu vết nào, nên "discovery
+    // không tìm ra" và "discovery chưa kịp chạy xong" trông giống hệt nhau —
+    // và người đi truy phải đoán. Trên iOS nó là trường hợp thường gặp: riêng
+    // một lần lấy cây giao diện đã tốn khoảng 900ms.
+    if (discoveryAttempted && !discoverySettled) {
+      console.warn(
+        `[discovery] "${elementId}": chưa trả lời xong sau ${Date.now() - discoveryStartedAt}ms `
+        + '— hết hạn resolve trước. Tăng resolve.timeoutMs nếu màn hình này vốn chậm.',
+      );
+    }
 
     // Build URL mismatch hint when the app ended up on a different screen.
     const urlMismatch =
