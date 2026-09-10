@@ -12,6 +12,7 @@ import { relativeRowLocatorXPath } from '../core/contextual.js';
 import type { ControlInspection, UiDriver, UiHandle, UiMatchSnapshot } from './driver.js';
 import { WebViewCdpDriver, WebViewCdpHandle, isCdpSessionLost } from './WebViewCdpDriver.js';
 import { SMART_DISMISS_SCRIPT, type PopupRule } from './PopupInterceptor.js';
+import { parseIosXml } from '../discovery/NativeObservationAdapter.js';
 import { checkAppVersion } from './appVersion.js';
 
 const execAsync = promisify(execCb);
@@ -1685,6 +1686,17 @@ export class NativeUiDriver implements UiDriver {
       }
     }
     const xml = await this.getPageSource();
+    // Cây của iOS là <XCUIElementTypeButton …>, của Android là <node …>. Trước
+    // đây cả hai đều đưa qua parser của Android, nên trên iOS `observe()` luôn
+    // trả về mảng RỖNG — không lỗi, không cảnh báo, chỉ là không thấy gì.
+    //
+    // Đó là thứ đứng sau dòng "observed 0 element(s)" khi discovery đi tìm một
+    // element không còn locator nào khớp: nó nhìn vào một màn hình đầy chữ và
+    // kết luận màn hình trống. Đo trên cây thật lưu trong artifact hôm nay:
+    // 0 thẻ <node>, 30 thẻ XCUIElementType.
+    if (this.opts.platform === 'ios') {
+      return parseIosXml(xml).map((el, i) => convertObservedElement(el, i));
+    }
     return parseUiAutomatorXml(xml);
   }
 
