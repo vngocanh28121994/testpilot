@@ -13,7 +13,7 @@ import { Registry } from '../core/registry.js';
 import { ScenarioReviewStore, scenarioBlocks } from '../core/scenarioReview.js';
 import { KnownIssueStore } from '../core/knownIssues.js';
 import { adoptStoredApiKeys, Secrets, accountVariables, secretEnvName } from '../core/secrets.js';
-import { DeviceEnvLog, needsReinstall } from '../core/deviceEnv.js';
+import { DeviceEnvLog, appFingerprint, needsReinstall } from '../core/deviceEnv.js';
 import { canonicalTag } from '../core/tagTaxonomy.js';
 import type {
   FeatureSpec,
@@ -164,8 +164,12 @@ async function main(): Promise<void> {
     !args.onFarm &&
     Boolean(device.udid) &&
     Object.keys(baseCfg.environments).length > 0;
+  // Đọc trước cả quyết định lẫn lúc ghi lại, để hai bên nói về đúng một file.
+  const appHash = tracksEnv ? await appFingerprint(appUnderTest) : undefined;
   const decision = tracksEnv
-    ? needsReinstall(envLog.get(device.udid!), envName, appUnderTest, envName === baseCfg.defaultEnv)
+    ? needsReinstall(
+        envLog.get(device.udid!), envName, appUnderTest, envName === baseCfg.defaultEnv, appHash,
+      )
     : { reinstall: false, because: '' };
   const enforceAppInstall = decision.reinstall || (tracksEnv && args.reinstall);
   if (tracksEnv) {
@@ -239,7 +243,7 @@ async function main(): Promise<void> {
     // Only what this process actually installed. Recording an assumption is
     // how the log would start lying about handsets nobody touched.
 
-    envLog.set(device.udid!, envName, appUnderTest);
+    envLog.set(device.udid!, envName, appUnderTest, appHash);
     await envLog.save();
   }
   try {

@@ -1,8 +1,11 @@
 import { strict as assert } from 'node:assert';
+import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
 import { test } from 'node:test';
 import { ConfigSchema, applyEnv, assertEnvPackage } from '../../config.js';
 import { Secrets, accountVariables } from '../secrets.js';
-import { needsReinstall } from '../deviceEnv.js';
+import { appFingerprint, needsReinstall } from '../deviceEnv.js';
 
 const base = (extra: Record<string, unknown> = {}) =>
   ConfigSchema.parse({
@@ -115,4 +118,68 @@ test('reinstall is required when the device holds another environment', () => {
   assert.equal(needsReinstall(undefined, 'sit', 'a.ipa', false).reinstall, true);
   // Nothing to install means nothing to enforce.
   assert.equal(needsReinstall(undefined, 'sit', undefined).reinstall, false);
+});
+
+/**
+ * Bản build mới, cùng đường dẫn.
+ *
+ * Đây là đường đi bình thường của mọi bản build ở đây: tải lên đè đúng chỗ cũ
+ * (`build/App.ipa`). So đường dẫn thì hai bản giống hệt nhau, nên không lượt
+ * chạy nào cài lại và điện thoại lặng lẽ chạy bản cũ. Trước khi bật `noReset`
+ * chuyện này tự khỏi vì XCUITest cài lại mỗi phiên; giờ thì không.
+ */
+const at = new Date().toISOString();
+
+test('vân tay: cùng đường dẫn nhưng khác nội dung thì phải cài lại', () => {
+  const decision = needsReinstall(
+    { env: 'prod', app: 'build/App.ipa', appHash: 'aaa', at }, 'prod', 'build/App.ipa', true, 'bbb',
+  );
+  assert.equal(decision.reinstall, true);
+  assert.match(decision.because, /nội dung/);
+});
+
+test('vân tay: cùng nội dung thì để yên', () => {
+  assert.equal(
+    needsReinstall(
+      { env: 'prod', app: 'build/App.ipa', appHash: 'aaa', at }, 'prod', 'build/App.ipa', true, 'aaa',
+    ).reinstall,
+    false,
+  );
+});
+
+/**
+ * Bản ghi cũ không có trường này. Coi "thiếu vân tay" là "khác vân tay" sẽ bắt
+ * mọi máy cài lại đúng một lần ngay sau khi nâng cấp tool — tức là gây ra đúng
+ * cái mà tính năng này định tránh.
+ */
+test('vân tay: bản ghi cũ chưa có vân tay thì không bịa ra lý do cài lại', () => {
+  assert.equal(
+    needsReinstall({ env: 'prod', app: 'build/App.ipa', at }, 'prod', 'build/App.ipa', true, 'bbb')
+      .reinstall,
+    false,
+  );
+});
+
+test('vân tay: không có file thì không có vân tay, và không được ném lỗi', async () => {
+  assert.equal(await appFingerprint('build/khong-co-that.ipa'), undefined);
+  assert.equal(await appFingerprint(undefined), undefined);
+});
+
+test('vân tay: đọc nội dung thật, không phải đường dẫn', async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), 'tp-fingerprint-'));
+  try {
+    const one = path.join(dir, 'a.ipa');
+    const two = path.join(dir, 'b.ipa');
+    await writeFile(one, 'bản cũ');
+    await writeFile(two, 'bản mới');
+    const a = await appFingerprint(one);
+    const b = await appFingerprint(two);
+    assert.ok(a && b);
+    assert.notEqual(a, b);
+    // Cùng nội dung ở đường dẫn khác vẫn phải ra cùng vân tay.
+    await writeFile(two, 'bản cũ');
+    assert.equal(await appFingerprint(two), a);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
 });

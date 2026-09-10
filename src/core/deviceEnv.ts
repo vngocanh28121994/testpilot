@@ -1,6 +1,8 @@
-import { existsSync } from 'node:fs';
+import { createHash } from 'node:crypto';
+import { createReadStream, existsSync } from 'node:fs';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
+import { pipeline } from 'node:stream/promises';
 
 /**
  * Which environment's build is currently installed on each handset.
@@ -24,6 +26,17 @@ interface Entry {
   env: string;
   /** The package that was installed, so a rebuilt ipa at the same path is visible. */
   app: string;
+  /**
+   * Vân tay nội dung của chính file đã cài.
+   *
+   * Đường dẫn không đủ. Bản build mới gần như luôn được tải đè lên đúng chỗ cũ
+   * (`build/App.ipa`), nên so đường dẫn thì thấy y hệt và không lượt chạy nào
+   * cài lại — điện thoại lặng lẽ chạy bản cũ. Trước đây chuyện này tự khỏi vì
+   * XCUITest cài lại mỗi phiên; từ khi bật `noReset` thì không còn ai dọn hộ.
+   *
+   * Không có với các bản ghi cũ, nên chỗ so sánh phải chịu được `undefined`.
+   */
+  appHash?: string;
   at: string;
 }
 
@@ -61,8 +74,13 @@ export class DeviceEnvLog {
     return { ...this.data.devices };
   }
 
-  set(udid: string, env: string, app: string): void {
-    this.data.devices[udid] = { env, app, at: new Date().toISOString() };
+  set(udid: string, env: string, app: string, appHash?: string): void {
+    this.data.devices[udid] = {
+      env,
+      app,
+      ...(appHash ? { appHash } : {}),
+      at: new Date().toISOString(),
+    };
   }
 
   async save(): Promise<void> {
@@ -90,6 +108,7 @@ export function needsReinstall(
   env: string,
   app: string | undefined,
   isDefaultEnv = true,
+  appHash?: string,
 ): { reinstall: boolean; because: string; unknown?: boolean } {
   if (!app) return { reinstall: false, because: 'không có package nào để cài' };
   if (!recorded) {
@@ -115,5 +134,33 @@ export function needsReinstall(
   if (recorded.app !== app) {
     return { reinstall: true, because: `package đổi (${recorded.app} → ${app})` };
   }
+  // Cùng đường dẫn, khác nội dung: đúng cái xảy ra khi ai đó tải bản build mới
+  // lên đè chỗ cũ. Chỉ kết luận khi CẢ HAI đều có vân tay — bản ghi cũ không có
+  // trường này, và coi "thiếu" là "khác" sẽ bắt mọi máy cài lại đúng một lần
+  // ngay sau khi nâng cấp tool, tức là gây ra chính cái nó định tránh.
+  if (recorded.appHash && appHash && recorded.appHash !== appHash) {
+    return { reinstall: true, because: 'nội dung bản build đổi (cùng đường dẫn)' };
+  }
   return { reinstall: false, because: `máy đã là env "${env}"` };
+}
+
+/**
+ * Vân tay nội dung của một file build.
+ *
+ * SHA-256 chảy theo luồng: một ipa 109 MB mất chừng nửa giây, một lần cho mỗi
+ * lượt chạy, và đó là cái giá rẻ hơn nhiều so với một buổi test chạy nhầm bản
+ * cũ mà không ai biết. Trả về `undefined` khi không đọc được — thiếu vân tay
+ * chỉ làm mất khả năng phát hiện, không được phép làm hỏng lượt chạy.
+ */
+export async function appFingerprint(file: string | undefined): Promise<string | undefined> {
+  if (!file) return undefined;
+  const abs = path.resolve(file);
+  if (!existsSync(abs)) return undefined;
+  try {
+    const hash = createHash('sha256');
+    await pipeline(createReadStream(abs), hash);
+    return hash.digest('hex');
+  } catch {
+    return undefined;
+  }
 }
