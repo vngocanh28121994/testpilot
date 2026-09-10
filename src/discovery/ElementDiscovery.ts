@@ -92,6 +92,16 @@ export interface DiscoveryOptions {
    */
   skipKnownLocatorVerification?: boolean;
   /**
+   * Gọi ngay khi có ảnh chụp màn hình, trước khi chấm điểm và qua các cổng.
+   *
+   * Để người gọi khởi động tầng AI SONG SONG thay vì chờ tầng tất định thất
+   * bại. Ảnh chụp là phần đắt nhất và đã có sẵn ở đây; phần còn lại của pipeline
+   * — chấm điểm, chống mập mờ, xác minh — mất thêm hàng giây vì có bước hỏi lại
+   * thiết bị. Đo trên máy thật ngày 2026-09-10: tầng AI luôn trả lời đúng nhưng
+   * thường về sau khi hạn resolve đã hết.
+   */
+  onObservation?: (observation: UiObservation) => void;
+  /**
    * 'healing': bypass the G01 known-locator fast path and force a fresh
    * observation.  Used by HealingOrchestrator and Resolver.tryDiscovery() so
    * that healing never re-uses a stale locator from the registry.
@@ -233,6 +243,8 @@ export class ElementDiscovery {
     try {
       observation = await this.observationProvider.observe();
       evidence.push(`observed ${observation.elements.length} element(s) via ${observation.source}`);
+      // Không await: người gọi tự lo vòng đời lời hứa của họ.
+      opts.onObservation?.(observation);
     } catch (err) {
       evidence.push(`observation failed: ${(err as Error).message}`);
       return { intent, method: 'failed', evidence };

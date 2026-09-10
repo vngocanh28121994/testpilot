@@ -367,6 +367,15 @@ export class Resolver {
   /** Element ids whose discovery failure has already been explained this run. */
   private readonly discoveryReported = new Set<string>();
   /** Element ids already proposed by the AI tier — one call each per run. */
+  /**
+   * Element đã hỏi AI rồi, kèm dấu vân tay màn hình lúc hỏi.
+   *
+   * Chặn hỏi lặp trên CÙNG một màn hình — hỏi lại khi không có gì đổi chỉ tốn
+   * tiền và thời gian cho đúng câu trả lời cũ. Nhưng màn hình đổi thì câu hỏi
+   * cũng là câu khác: cùng một element có thể vắng mặt ở bước này và xuất hiện
+   * ở bước sau. Khoá cũ chỉ dùng elementId nên mỗi element chỉ được hỏi đúng
+   * một lần cho cả lượt chạy — quá chặt.
+   */
   private readonly aiProposed = new Set<string>();
 
   /**
@@ -383,8 +392,16 @@ export class Resolver {
     observation: UiObservation,
     elementId: string,
   ): Promise<LocatorCandidate | null> {
-    if (!this.semanticDiscovery || this.aiProposed.has(elementId)) return null;
-    this.aiProposed.add(elementId);
+    if (!this.semanticDiscovery) return null;
+    // Vân tay màn hình: số phần tử quan sát được cộng vài nhãn đầu. Đủ để phân
+    // biệt hai màn hình khác nhau mà không cần băm cả cây.
+    const shape = observation.elements
+      .slice(0, 6)
+      .map((el) => el.accessibilityLabel ?? el.text ?? el.role ?? '')
+      .join('|');
+    const key = `${elementId}::${observation.elements.length}::${shape}`;
+    if (this.aiProposed.has(key)) return null;
+    this.aiProposed.add(key);
 
     const result = await this.semanticDiscovery
       .discover(intent, observation, { minConfidence: this.aiMinConfidence })
@@ -424,6 +441,8 @@ export class Resolver {
     locatorParams?: Record<string, string>,
     semanticContext?: string[],
   ): Promise<LocatorCandidate | null> {
+    /** Lời hứa của tầng AI, khởi động ngay khi có ảnh chụp. */
+    let aiTask: Promise<LocatorCandidate | null> | null = null;
     try {
       const elementDef = this.registry.element(elementId);
       const intent = buildElementIntent(elementId, {
@@ -443,20 +462,31 @@ export class Resolver {
         // Identity verification makes this candidate safe to try, but only the
         // executor can prove that the requested action had the intended effect.
         persistVerifiedLocator: false,
+        // Khởi động tầng AI NGAY khi có ảnh chụp, song song với phần còn lại.
+        //
+        // Ảnh chụp là phần đắt nhất và cả hai tầng dùng chung nó. Trước đây AI
+        // chỉ chạy sau khi tầng tất định thất bại, mà phần sau ảnh chụp — chấm
+        // điểm, cổng chống mập mờ, xác minh — còn hỏi lại thiết bị nên mất thêm
+        // hàng giây. Đo ngày 2026-09-10: AI trả đúng locator với tin cậy 95
+        // nhưng về sau hạn resolve và bị vứt đi.
+        onObservation: (obs) => {
+          aiTask = this.proposeViaAi(intent, obs, elementId).catch(() => null);
+        },
       });
       if (result.method === 'failed' || !result.locator) {
         // Say why, once per element. discover() collects an evidence trail and
         // this threw it away, so a failed discovery looked identical to one
         // that never ran — and diagnosing an unfindable element meant guessing
         // from the outside for an afternoon.
-        // Re-uses the observation discover() already took — the AI tier must not
-        // cost a second trip to the device.
-        if (result.observation) {
-          const proposed = await this
-            .proposeViaAi(intent, result.observation, elementId)
-            .catch(() => null);
-          if (proposed) return proposed;
-        }
+        // Tầng AI đã chạy từ lúc có ảnh chụp; ở đây chỉ việc lấy kết quả.
+        // Nhánh dự phòng dành cho trường hợp discover() thất bại TRƯỚC khi kịp
+        // quan sát, khi đó chưa có gì để khởi động.
+        const proposed = aiTask
+          ? await aiTask
+          : result.observation
+            ? await this.proposeViaAi(intent, result.observation, elementId).catch(() => null)
+            : null;
+        if (proposed) return proposed;
         if (!this.discoveryReported.has(elementId)) {
           this.discoveryReported.add(elementId);
           console.warn(

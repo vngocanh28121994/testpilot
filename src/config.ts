@@ -400,7 +400,7 @@ export const ConfigSchema = z.object({
         .object({
           enabled: z.boolean().default(false),
           /** Below this the model's own confidence is not worth acting on. */
-          minConfidence: z.number().default(60),
+          minConfidence: z.number().min(0).max(100).default(45),
         })
         .default({}),
     })
