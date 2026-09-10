@@ -36,7 +36,7 @@ export function PrereqTools({ platform }: { platform: 'android' | 'ios' }) {
   let n = 0;
 
   return (
-    <div className="flex flex-col gap-4 rounded-lg border p-3">
+    <div className="flex flex-col gap-4 rounded-lg border p-3 bg-card">
       <span className="text-sm font-medium">Yêu cầu trước khi chạy</span>
 
       {platform === 'ios' && (

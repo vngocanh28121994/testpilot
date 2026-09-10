@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { AppShell } from '@/components/layout/AppShell';
 import { StatusPill } from '@/components/StatusPill';
+import { Card, CardContent } from '@/components/ui/card';
 import { useAppState } from '@/hooks/useAppState';
 import { when } from '@/lib/datetime';
 import { cn } from '@/lib/utils';
@@ -45,11 +46,19 @@ export default function RunnerHistoryPanel({ runId }: { runId?: string }) {
         dưới màn hình. Con số tổng đứng ngay trên để "cuộn mãi không hết" không
         biến thành "không biết còn bao nhiêu".
       */}
-      <div className="text-muted-foreground mb-2 text-sm">{reports.length} lượt chạy</div>
-      <ul
-        aria-label="Các lượt chạy"
-        className="flex max-h-64 flex-col gap-1.5 overflow-auto pe-1"
-      >
+      {/*
+        Danh sách nằm trong Card, như mọi bảng khác trong app. Không phải để cho
+        đẹp: nền chấm động của AppShell vẽ xuyên qua bất cứ gì không có màu nền
+        riêng, và ở đây từng dòng chỉ có viền — nên chữ và cả cái viền đều chìm
+        vào hoa văn phía sau.
+      */}
+      <Card>
+        <CardContent className="flex flex-col gap-2">
+          <div className="text-muted-foreground text-sm">{reports.length} lượt chạy</div>
+          <ul
+            aria-label="Các lượt chạy"
+            className="flex max-h-64 flex-col gap-1.5 overflow-auto pe-1"
+          >
         {reports.map((item) => {
           const active = report?.id === item.id;
           const pass = item.counters?.passed ?? 0;
@@ -84,9 +93,11 @@ export default function RunnerHistoryPanel({ runId }: { runId?: string }) {
                 </span>
               </button>
             </li>
-          );
-        })}
-      </ul>
+              );
+            })}
+          </ul>
+        </CardContent>
+      </Card>
       {missing && (
         <p className="text-muted-foreground mt-4">
           Lượt chạy này chưa có report — nhiều khả năng nó dừng giữa chừng trước khi kịp ghi.

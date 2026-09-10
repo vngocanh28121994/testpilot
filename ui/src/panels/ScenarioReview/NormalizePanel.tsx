@@ -147,7 +147,7 @@ function ActionProposal({
   // Duyệt nó là tạo ra một mẫu câu gõ được nhưng chạy sẽ hỏng.
   const executable = action.kind !== 'primitive';
   return (
-    <div className="flex flex-col gap-2 rounded-lg border p-3">
+    <div className="flex flex-col gap-2 rounded-lg border p-3 bg-card">
       <div className="flex flex-col gap-0.5">
         <code className="text-xs">{action.phraseTemplate}</code>
         <span className="text-muted-foreground text-xs">{action.label}</span>

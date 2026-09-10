@@ -151,7 +151,7 @@ function QuestionField({
   onChange: (values: string[]) => void;
 }) {
   return (
-    <fieldset className="flex flex-col gap-2 rounded-lg border p-3">
+    <fieldset className="flex flex-col gap-2 rounded-lg border p-3 bg-card">
       <legend className="px-1 text-sm font-medium">{question.prompt}</legend>
       {question.rationale && (
         <p className="text-muted-foreground text-xs">{question.rationale}</p>

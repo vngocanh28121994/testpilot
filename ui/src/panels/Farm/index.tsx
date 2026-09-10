@@ -596,7 +596,7 @@ function EnvEditor({
   const change = (index: number, key: keyof EnvEntry, value: string) =>
     onChange(entries.map((entry, i) => (i === index ? { ...entry, [key]: value } : entry)));
   return (
-    <section className="rounded-lg border p-4">
+    <section className="rounded-lg border p-4 bg-card">
       <div className="flex items-center justify-between gap-2">
         <div className="flex flex-col gap-1">
           <h4 className="text-sm font-medium">Biến môi trường</h4>

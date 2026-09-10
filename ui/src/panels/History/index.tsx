@@ -42,7 +42,7 @@ export default function HistoryPanel({ focusId }: { focusId?: string }) {
 
   return (
     <AppShell title="Workflow History">
-      <div className="border-border mb-4 max-w-sm rounded-lg border p-3">
+      <div className="border-border bg-card mb-4 max-w-sm rounded-lg border p-3">
         <label className="text-sm">Khoảng thời gian<DateRangePicker value={range} onChange={(nextRange) => { setRange(nextRange); setPage(1); }} /></label>
       </div>
       {state.isError && <p role="alert" className="text-destructive text-sm">{(state.error as Error).message}</p>}
@@ -61,7 +61,7 @@ export default function HistoryPanel({ focusId }: { focusId?: string }) {
           // không có gì để nói ở đây — trạng thái đã nói rồi.
           const stopped = stages.find((s) => s.status === 'running')?.name
             ?? stages.find((s) => s.status === 'failed')?.name;
-          return <div key={run.id} ref={run.id === focusId ? focus : undefined} className="border-border rounded-lg border p-4">
+          return <div key={run.id} ref={run.id === focusId ? focus : undefined} className="border-border bg-card rounded-lg border p-4">
             <div className="flex flex-wrap items-center gap-2"><b>{run.feature}</b><StatusPill status={run.status}/><span className="text-muted-foreground text-xs">{run.stagesDone ?? 0}/{stages.length} bước · {when(run.startedAt)}</span></div>
             {/* Bước dừng lại, ngay ở dòng đầu.
                 Đây là câu trả lời cho câu hỏi người ta mang tới trang này —
