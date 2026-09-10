@@ -2829,7 +2829,9 @@ function runSuite(
     log(`$ tsx ${args.join(' ')}`);
 
     const child = spawn(bin, args, { env: process.env });
-    const label = `${platform}${device ? ` · ${device}` : ''}${tag ? ` · @${tag}` : ''}`;
+    // Tag từ UI đã mang sẵn dấu @; thêm một cái nữa thành "@@feature-dang-nhap"
+    // trong danh sách lượt chạy đang sống.
+    const label = `${platform}${device ? ` · ${device}` : ''}${tag ? ` · ${tag.startsWith('@') ? tag : `@${tag}`}` : ''}`;
     track(child, 'src/cli/run.ts', `run ${label}`);
     // Mọi dòng đi qua sổ lượt chạy đang sống, không chỉ qua đường dây SSE của
     // tab đã bấm nút. Đó là thứ cho phép một trang khác nối lại sau khi reload.

@@ -639,10 +639,15 @@ export class NativeUiDriver implements UiDriver {
     // Bounded. getContexts() has no timeout of its own and can simply never
     // answer — a stuck chromedriver is enough — which turns a slow probe into a
     // dead run with nothing in the log.
+    // 8s là quá ngắn: getContexts() của Appium tự thử 20 lượt trước khi trả lời,
+    // mất khoảng 10s trên iOS thật. Cắt ở 8s nghĩa là câu trả lời THẬT
+    // (["NATIVE_APP"] — tức app không lộ WebView nào) không bao giờ tới nơi, và
+    // log chỉ còn một dòng hết giờ không nói lên điều gì. Đo trên máy người
+    // dùng: hai lần probe, cả hai đều bị cắt trước khi Appium kịp đáp.
     const raw = (await Promise.race([
       this.b.getContexts(),
       new Promise<never>((_, reject) =>
-        setTimeout(() => reject(new Error('getContexts không trả lời sau 8s')), 8_000).unref?.(),
+        setTimeout(() => reject(new Error('getContexts không trả lời sau 20s')), 20_000).unref?.(),
       ),
     ])) as Array<string | { id?: string }>;
     return raw.map((c) => (typeof c === 'string' ? c : (c.id ?? ''))).filter(Boolean);
@@ -711,7 +716,14 @@ export class NativeUiDriver implements UiDriver {
     throw new Error(
       `Không tìm thấy WebView context sau ${Math.round((this.opts.webviewTimeoutMs ?? 30_000) / 1000)}s. ` +
         `Context hiện có: ${seen.join(', ') || '(không có)'}.\n` +
-        'Nguyên nhân hay gặp nhất không phải do chờ chưa đủ mà do bản build: ' +
+        (this.opts.platform === 'ios'
+          ? 'Trên iOS 17 trở lên, Appium cần một tunnel CoreDevice mới nói chuyện được '
+            + 'với Web Inspector. Thiếu nó thì log Appium ghi "Tunnel registry port not '
+            + 'found" rồi trả về đúng NATIVE_APP. Mở một terminal riêng và để chạy nền:\n'
+            + '  sudo appium driver run xcuitest tunnel-creation\n'
+            + 'Kèm theo, trên máy: Cài đặt › Safari › Nâng cao › Web Inspector phải bật.\n'
+          : '')
+        + 'Nguyên nhân hay gặp nhất không phải do chờ chưa đủ mà do bản build: ' +
         'Appium chỉ nhìn thấy WebView nếu app bật WebView.setWebContentsDebuggingEnabled(true) ' +
         '(Android) hoặc WKWebView.isInspectable = true (iOS 16.4+). Bản release thường tắt. ' +
         'Xin team app một bản debuggable, hoặc tắt cờ hybrid để chạy bằng locator native.',
