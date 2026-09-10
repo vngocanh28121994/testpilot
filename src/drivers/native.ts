@@ -11,7 +11,7 @@ import type { LocatorCandidate, Platform } from '../core/types.js';
 import { relativeRowLocatorXPath } from '../core/contextual.js';
 import type { ControlInspection, UiDriver, UiHandle, UiMatchSnapshot } from './driver.js';
 import { WebViewCdpDriver, WebViewCdpHandle, isCdpSessionLost } from './WebViewCdpDriver.js';
-import type { PopupRule } from './PopupInterceptor.js';
+import { SMART_DISMISS_SCRIPT, type PopupRule } from './PopupInterceptor.js';
 import { checkAppVersion } from './appVersion.js';
 
 const execAsync = promisify(execCb);
@@ -150,6 +150,43 @@ export interface NativeDriverOptions {
   /** App-specific DOM popup rules shared with the browser driver. */
   popupRules?: PopupRule[];
 }
+
+/**
+ * Luật popup của config, chạy trong WebView bằng DOM thuần.
+ *
+ * `:has-text('x')` là cú pháp riêng của Playwright. Ở đây nó được dịch tay:
+ * lấy phần trước làm selector CSS, phần trong ngoặc làm chuỗi con phải có
+ * trong textContent. Không dịch thì querySelector ném lỗi và luật im lặng
+ * không chạy — mà im lặng là kiểu hỏng đắt nhất trong đám này.
+ */
+export const IOS_CONFIGURED_POPUP_SCRIPT = `(function (rules, protect) {
+  function find(sel) {
+    var m = /^(.*?):has-text\\((['"])(.*?)\\2\\)$/.exec(sel);
+    if (!m) { try { return document.querySelector(sel); } catch (e) { return null; } }
+    var base = m[1] || '*', needle = m[3].toLowerCase();
+    var all;
+    try { all = document.querySelectorAll(base); } catch (e) { return null; }
+    for (var i = 0; i < all.length; i += 1) {
+      if ((all[i].textContent || '').toLowerCase().indexOf(needle) !== -1) return all[i];
+    }
+    return null;
+  }
+  function isProtected(el) {
+    for (var i = 0; i < protect.length; i += 1) {
+      try { if (el.closest(protect[i]) || el.querySelector(protect[i])) return true; } catch (e) {}
+    }
+    return false;
+  }
+  for (var r = 0; r < rules.length; r += 1) {
+    var seen = find(rules[r].detect);
+    if (!seen || isProtected(seen)) continue;
+    var control = find(rules[r].dismiss);
+    if (!control || isProtected(control)) continue;
+    control.click();
+    return { detect: rules[r].detect };
+  }
+  return null;
+})`;
 
 class NativeHandle implements UiHandle {
   constructor(
@@ -916,6 +953,14 @@ export class NativeUiDriver implements UiDriver {
   }
 
   async dismissOverlay(protect: string[] = []): Promise<boolean> {
+    // iOS đi đường riêng vì không có driver CDP nào để mượn.
+    //
+    // Trước đây hàm này trả `false` ngay cho mọi thứ không phải Android, mà đây
+    // lại đúng là hàm resolver gọi mỗi khi locator bị che và executor gọi trước
+    // mỗi thao tác. Nghĩa là trên iOS, một modal của app bật lên giữa kịch bản
+    // thì không ai đóng — bước đỏ với lý do "không tìm thấy element", trỏ vào
+    // locator trong khi thứ hỏng là cái hộp thoại nằm trên nó.
+    if (this.opts.platform === 'ios') return this.dismissIosOverlay(protect);
     if (this.opts.platform !== 'android') return false;
     // When the application UI is a WebView, use the same safe DOM interceptor
     // as local web first. This avoids an expensive and destabilising Appium
@@ -932,6 +977,70 @@ export class NativeUiDriver implements UiDriver {
     const pressed = await this.tapNativeButton();
     if (pressed) console.log(`[native] dismissed native overlay by tapping "${pressed}"`);
     return Boolean(pressed);
+  }
+
+  /**
+   * Đóng thứ đang che màn hình trên iOS: popup DOM trước, hộp thoại native sau.
+   *
+   * Thứ tự đó không tùy tiện. Popup DOM đóng bằng một lần `execute` trong chính
+   * context đang dùng; còn hộp thoại native đòi đổi context sang NATIVE_APP rồi
+   * quay lại, mỗi lần vài trăm mili giây và làm nhiễu phiên. Cái rẻ đi trước.
+   */
+  private async dismissIosOverlay(protect: string[]): Promise<boolean> {
+    if (!this.browser) return false;
+    if (this.inWebview && (await this.dismissDomPopup(protect))) return true;
+
+    // Cùng cơ chế tiết chế như Android: đổi context liên tục còn hại hơn cái
+    // hộp thoại nó định đóng.
+    const now = Date.now();
+    if (now - this.lastOverlayCheck < 5000) return false;
+    this.lastOverlayCheck = now;
+    const before = this.webview;
+    try {
+      await this.clearIosAlerts(1);
+      return true;
+    } catch {
+      return false;
+    } finally {
+      // clearIosAlerts chạy ở context native; trả lại chỗ cũ để bước tiếp theo
+      // không bỗng dưng thấy mình đang ở ngoài WebView.
+      if (before && this.webview !== before) {
+        await this.b.switchContext(before).catch(() => {});
+        this.webview = before;
+      }
+    }
+  }
+
+  /**
+   * Popup DOM trong WebView của iOS, dùng lại đúng luật của web và Android.
+   *
+   * Hai phần, giống hệt PopupInterceptor: luật cấu hình trước (chính xác, rẻ),
+   * rồi mới tới đoạn quét ngữ nghĩa dùng chung `SMART_DISMISS_SCRIPT`.
+   *
+   * Luật viết bằng cú pháp Playwright, trong đó `:has-text('x')` không phải CSS
+   * hợp lệ. Không dịch nó thì `querySelector` ném lỗi và cả luật bị bỏ qua —
+   * lặng lẽ, đúng kiểu hỏng khó thấy nhất.
+   */
+  private async dismissDomPopup(protect: string[]): Promise<boolean> {
+    const rules = this.opts.popupRules ?? [];
+    if (rules.length > 0) {
+      const closed = (await this.b
+        .execute(IOS_CONFIGURED_POPUP_SCRIPT, rules, protect)
+        .catch(() => null)) as { detect: string } | null;
+      if (closed) {
+        console.log(`[popup] đóng popup theo luật cấu hình: ${closed.detect}`);
+        return true;
+      }
+    }
+    const script = SMART_DISMISS_SCRIPT.replace('__PROTECT__', JSON.stringify(protect));
+    const semantic = (await this.b.execute(script).catch(() => null)) as
+      { root: string; control: string; text?: string } | null;
+    if (!semantic) return false;
+    console.log(
+      `[popup] đóng ${semantic.root} bằng ${semantic.control}`
+      + (semantic.text ? `\n[popup]   nội dung: "${semantic.text}"` : ''),
+    );
+    return true;
   }
 
   /**

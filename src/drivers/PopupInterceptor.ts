@@ -227,7 +227,14 @@ async function holdsProtected(root: Locator, protect: string[]): Promise<boolean
 
 // Kept as a string because tsx/esbuild's keepNames transform can inject helpers
 // into serialised callbacks that do not exist inside the browser/WebView.
-const SMART_DISMISS_SCRIPT = `(() => {
+/**
+ * Chỉ là một CHUỖI, và điều đó có ích ngoài Playwright.
+ *
+ * `page.evaluate` nhận chuỗi, mà `browser.execute` của Appium cũng vậy — nên
+ * cùng đúng đoạn quét này chạy được trong WebView của iOS, nơi không có
+ * Playwright Page nào để cầm. Xem NativeUiDriver.dismissDomPopup().
+ */
+export const SMART_DISMISS_SCRIPT = `(() => {
   var protect = __PROTECT__;
   var ROOTS = '[role="dialog"],[aria-modal="true"],mat-dialog-container,' +
     '.driver-popover,.cdk-overlay-pane,.modal.show,.modal[style*="display: block"],' +
