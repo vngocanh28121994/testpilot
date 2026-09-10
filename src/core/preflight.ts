@@ -363,8 +363,10 @@ async function androidPreflight(cfg: TestPilotConfig, override?: string): Promis
  * thật nào" trong khi máy đang cắm ngay đó. Đó là đúng tình huống mà nhánh
  * Android đã xử lý cho `unauthorized`, chỉ là iOS chưa có.
  */
-export function parseDevicectl(stdout: string): Array<{ name: string; state: string; usable: boolean }> {
-  const out: Array<{ name: string; state: string; usable: boolean }> = [];
+export function parseDevicectl(
+  stdout: string,
+): Array<{ name: string; label: string; state: string; usable: boolean }> {
+  const out: Array<{ name: string; label: string; state: string; usable: boolean }> = [];
   for (const line of stdout.split('\n')) {
     // Bỏ tiêu đề và đường kẻ; cột cách nhau bằng nhiều khoảng trắng.
     if (!line.trim() || /^-+\s/.test(line.trim()) || /^Name\s{2,}/.test(line)) continue;
@@ -386,7 +388,17 @@ export function parseDevicectl(stdout: string): Array<{ name: string; state: str
     // Bắt đúng chữ `connected` khiến tool báo "chưa dùng được" cho một máy đã
     // mở khoá, đã tin cậy, đã bật Developer Mode — và người dùng đi sửa một
     // thứ vốn không hỏng.
-    out.push({ name, state, usable: /^(connected|available)/.test(state) });
+    // Cột Model là "iPhone 12 Pro Max (iPhone13,4)". Phần trong ngoặc là mã
+    // phần cứng, không ai gọi máy bằng cái tên đó.
+    // Chỉ đọc khi bảng đủ năm cột (Name, Hostname, Identifier, State, Model);
+    // thiếu cột thì cột cuối chính là State, và lấy nó làm tên máy thì vô nghĩa.
+    const model = cols.length >= 5
+      ? (cols[cols.length - 1] ?? '').replace(/\s*\([^)]*\)\s*$/, '').trim()
+      : '';
+    // `name` là tên chủ máy tự đặt, dùng để KHỚP với cấu hình. `label` là thứ
+    // hiện lên màn hình, và phải giống hệt chip chọn máy — chip lấy
+    // `marketingName` từ devicectl, tức cùng một chuỗi với cột Model.
+    out.push({ name, label: model || name, state, usable: /^(connected|available)/.test(state) });
   }
   return out;
 }
@@ -401,7 +413,10 @@ async function iosPreflight(cfg: TestPilotConfig, override?: string): Promise<Pl
   // claiming there is no device.
   const physical = await tryRun('xcrun', ['devicectl', 'list', 'devices']);
   const listed = physical.ok ? parseDevicectl(physical.stdout) : [];
-  const physicalNames = listed.filter((d) => d.usable).map((d) => d.name);
+  const usablePhones = listed.filter((d) => d.usable);
+  // Tên để KHỚP với `devices` trong config, không phải để hiện.
+  const physicalNames = usablePhones.map((d) => d.name);
+  const physicalLabels = usablePhones.map((d) => d.label);
   // Cắm rồi nhưng chưa dùng được là một câu trả lời RIÊNG, và với iPhone thì
   // nó phổ biến y như `unauthorized` bên Android: máy nằm ngay đó, chỉ là đang
   // khoá, chưa bật Developer Mode, hoặc chưa tin tưởng máy tính này.
@@ -419,7 +434,7 @@ async function iosPreflight(cfg: TestPilotConfig, override?: string): Promise<Pl
       ok: false,
       // Một câu, có hành động. Bản trước giải nghĩa từ `unavailable` rồi đoán ba
       // nguyên nhân — dài, và ba nguyên nhân đoán mò thì không phải hướng dẫn.
-      detail: `${blockedPhones.map((d) => `${d.name} (${d.state})`).join(', ')} — máy đã nhận `
+      detail: `${blockedPhones.map((d) => `${d.label} (${d.state})`).join(', ')} — máy đã nhận `
         + 'nhưng chưa dùng được. Mở khoá máy và giữ cáp, hoặc bật một simulator.',
     });
   } else if (booted.length === 0 && physicalNames.length === 0) {
@@ -434,9 +449,9 @@ async function iosPreflight(cfg: TestPilotConfig, override?: string): Promise<Pl
       ok: true,
       detail: [
         booted.length ? `Simulator đang bật: ${booted.join(', ')}` : '',
-        physicalNames.length ? `Máy thật: ${physicalNames.join(', ')}` : '',
+        physicalLabels.length ? `Máy thật: ${physicalLabels.join(', ')}` : '',
         blockedPhones.length
-          ? `(chưa dùng được: ${blockedPhones.map((d) => `${d.name} — ${d.state}`).join(', ')})`
+          ? `(chưa dùng được: ${blockedPhones.map((d) => `${d.label} — ${d.state}`).join(', ')})`
           : '',
       ].filter(Boolean).join(' · '),
     });
@@ -446,7 +461,8 @@ async function iosPreflight(cfg: TestPilotConfig, override?: string): Promise<Pl
   let device: string | undefined;
   let candidates: DeviceCandidate[] | undefined;
   if (present.length > 0) {
-    const resolved = resolveDevice(cfg, 'ios', present, present.join(', '), override);
+    // Khớp bằng `present` (tên/udid thật), nhưng câu hiện ra dùng nhãn giống chip.
+    const resolved = resolveDevice(cfg, 'ios', present, [...booted, ...physicalLabels].join(', '), override);
     checks.push(resolved.check);
     device = resolved.device;
     candidates = resolved.candidates;

@@ -29,6 +29,28 @@ describe('parseDevicectl', () => {
     assert.equal(devices[0]!.usable, false);
   });
 
+  /**
+   * Tên hiện ra phải giống hệt chip chọn máy.
+   *
+   * Chip lấy `marketingName` từ devicectl ("iPhone 12 Pro Max"), còn phần điều
+   * kiện trước khi chạy lấy cột Name — tên chủ máy tự đặt ("iPhone cua Anh").
+   * Cùng một cái điện thoại mang hai tên trên cùng một màn hình, và người đọc
+   * không có cách nào biết đó là một máy hay hai.
+   *
+   * `name` vẫn phải giữ nguyên: nó là thứ đem đi khớp với `devices` trong
+   * config, đổi nó là hỏng việc chọn máy.
+   */
+  it('lấy tên máy từ cột Model để trùng với chip', () => {
+    const devices = parseDevicectl(REAL);
+    assert.equal(devices[0]!.label, 'iPhone 12 Pro Max');
+    assert.equal(devices[0]!.name, 'iPhone cua Anh');
+  });
+
+  it('thiếu cột Model thì lùi về tên chủ máy đặt, không lấy nhầm trạng thái', () => {
+    const devices = parseDevicectl(REAL.replace(' iPhone 12 Pro Max (iPhone13,4)', ''));
+    assert.equal(devices[0]!.label, 'iPhone cua Anh');
+  });
+
   it('máy đang kết nối thì dùng được', () => {
     const devices = parseDevicectl(REAL.replace('unavailable', 'connected  '));
     assert.equal(devices[0]!.usable, true);
