@@ -25,6 +25,9 @@ export const prereqHandlers = [
   http.get(ROUTES.prereqXcode, () =>
     HttpResponse.json({ ok: true, version: 'Xcode 26.6', path: '/Applications/Xcode.app', sdk: 'iphoneos26.5' }),
   ),
+  http.post(ROUTES.prereqIosTunnel, () =>
+    HttpResponse.json({ ok: true, command: 'sudo appium driver run xcuitest tunnel-creation' }),
+  ),
   http.get(ROUTES.prereqIosDevices, () =>
     HttpResponse.json({ devices: ['== Devices ==', 'iPhone của Anh (26.5)'], attached: [] }),
   ),

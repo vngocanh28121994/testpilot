@@ -46,7 +46,7 @@ import {
 } from '../core/questions.js';
 import { adoptStoredApiKeys, Secrets, farmSecretEnv, secretEnvName } from '../core/secrets.js';
 import { DeviceEnvLog } from '../core/deviceEnv.js';
-import { preflight, preflightSummary } from '../core/preflight.js';
+import { IOS_TUNNEL_COMMAND, preflight, preflightSummary } from '../core/preflight.js';
 import { resolveFarmTarget } from '../farm/target.js';
 import { buildInventory } from '../core/builds.js';
 import { normalizeFeatureTags, tagTaxonomyView } from '../core/tagTaxonomy.js';
@@ -969,6 +969,21 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
      */
     case 'GET /api/prereq/ios-names':
       return json(res, 200, { names: await iosDeviceNames() });
+
+    /**
+     * Mở Terminal của máy với lệnh dựng tunnel đã điền sẵn.
+     *
+     * Cố tình KHÔNG tự chạy `sudo` ở đây, dù về kỹ thuật là làm được bằng cách
+     * hỏi mật khẩu trên giao diện rồi đẩy vào stdin. Mật khẩu đó sẽ đi qua
+     * trình duyệt, qua HTTP, qua tiến trình này — nơi có sẵn một sổ log 8.000
+     * dòng đang ghi dần xuống đĩa — và server này không có xác thực gì cả.
+     * Để macOS tự hỏi trong Terminal thì tool không bao giờ chạm vào nó.
+     *
+     * Tiện thể giải quyết luôn chuyện vòng đời: tunnel chạy trong Terminal
+     * không chết theo server, nên restart server không làm hỏng buổi test.
+     */
+    case 'POST /api/prereq/ios-tunnel':
+      return json(res, 200, await openTunnelTerminal());
 
     case 'POST /api/prereq/driver': {
       const { driver } = await readJson<{ driver: string }>(req);
@@ -3550,6 +3565,40 @@ function attachedIosUdids(lines: string[]): string[] {
  * Trả về cho MỌI máy nó thấy, kể cả máy đang tắt: danh sách chọn máy vẫn cần
  * đọc được tên của một máy chưa cắm.
  */
+/**
+ * Bảo Terminal chạy lệnh dựng tunnel.
+ *
+ * Lệnh là hằng số trong mã nguồn, không ghép từ bất cứ thứ gì người dùng nhập
+ * — nên không có đường nào chèn thêm lệnh khác vào đoạn AppleScript này.
+ */
+async function openTunnelTerminal(): Promise<{ ok: boolean; error?: string; command: string }> {
+  if (process.platform !== 'darwin') {
+    return {
+      ok: false,
+      command: IOS_TUNNEL_COMMAND,
+      error: `Chỉ mở được Terminal trên macOS; máy này là ${process.platform}.`,
+    };
+  }
+  const script = [
+    'tell application "Terminal"',
+    '  activate',
+    `  do script ${JSON.stringify(IOS_TUNNEL_COMMAND)}`,
+    'end tell',
+  ].join('\n');
+  try {
+    await execFileAsync('osascript', ['-e', script], { timeout: 15_000 });
+    return { ok: true, command: IOS_TUNNEL_COMMAND };
+  } catch (err) {
+    // Máy có thể chặn AppleScript (Automation permission). Nút chép lệnh vẫn còn
+    // đó, nên câu trả lời phải nói ra để người dùng biết quay sang dùng nó.
+    return {
+      ok: false,
+      command: IOS_TUNNEL_COMMAND,
+      error: `Không mở được Terminal: ${(err as Error).message}. Bạn chép lệnh rồi chạy tay giúp nhé.`,
+    };
+  }
+}
+
 async function iosDeviceNames(): Promise<Record<string, string>> {
   const file = path.join(os.tmpdir(), `tp-devicectl-${Date.now()}.json`);
   try {

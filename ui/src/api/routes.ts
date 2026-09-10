@@ -47,6 +47,7 @@ export const ROUTES = {
   prereqIosNames: '/api/prereq/ios-names',
   prereqIosDevices: '/api/prereq/ios-devices',
   prereqAppiumStatus: '/api/prereq/appium/status',
+  prereqIosTunnel: '/api/prereq/ios-tunnel',
 } as const;
 
 /** 9 route SSE-over-POST. Đi qua streamJob(), không qua api.post(). */

@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from 'react';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { CheckedAt } from '@/components/CheckedAt';
 import { LogView } from '@/components/LogView';
@@ -241,10 +241,29 @@ function DevicesRow({ platform }: { platform: 'android' | 'ios' }) {
 function TunnelCommand() {
   const [copied, setCopied] = useState(false);
   const command = 'sudo appium driver run xcuitest tunnel-creation';
+
+  // Mở Terminal chứ không tự chạy sudo. Hỏi mật khẩu máy trên giao diện là đẩy
+  // nó qua trình duyệt, qua HTTP, rồi qua một tiến trình đang ghi log xuống
+  // đĩa — trong khi để macOS tự hỏi trong Terminal thì tool không hề chạm vào.
+  // Kèm một lợi ích thật: tunnel chạy ngoài server nên restart server không
+  // giết nó.
+  const open = useMutation({
+    mutationFn: () => api.post<{ ok: boolean; error?: string }>(ROUTES.prereqIosTunnel),
+    onSuccess: (result: { ok: boolean; error?: string }) => {
+      if (result.ok) toast.success('Đã mở Terminal. Nhập mật khẩu máy ở cửa sổ đó, rồi bấm “Kiểm tra lại”.');
+      else toast.error(result.error ?? 'Không mở được Terminal.');
+    },
+    onError: (err) => toast.error((err as Error).message),
+  });
+
   return (
     <div className="flex flex-col gap-1.5">
       <div className="flex flex-wrap items-center gap-2">
+        <Button size="sm" disabled={open.isPending} onClick={() => open.mutate()}>
+          {open.isPending ? 'Đang mở Terminal…' : 'Mở Terminal và chạy'}
+        </Button>
         <code className="bg-muted rounded px-2 py-1 text-xs">{command}</code>
+        {/* Đường lui cho máy chặn AppleScript, và cho ai muốn tự chạy chỗ khác. */}
         <Button
           size="sm"
           variant="outline"
@@ -263,13 +282,16 @@ function TunnelCommand() {
       </div>
       <ol className="text-muted-foreground flex list-decimal flex-col gap-1 ps-4 text-xs">
         <li>
-          Mở Terminal trên máy Mac: bấm <b className="text-foreground">⌘ + dấu cách</b>, gõ
-          “Terminal”, Enter.
+          Bấm <b className="text-foreground">Mở Terminal và chạy</b> — lệnh được điền sẵn, bạn không
+          phải gõ gì.
         </li>
-        <li>Dán lệnh vừa chép, Enter, rồi nhập mật khẩu đăng nhập máy Mac (gõ không hiện ký tự).</li>
+        <li>
+          Nhập mật khẩu đăng nhập máy Mac <b className="text-foreground">trong cửa sổ Terminal</b>{' '}
+          (gõ không hiện ký tự). Tool không hỏi và không thấy mật khẩu đó.
+        </li>
         <li>
           <b className="text-foreground">Để nguyên cửa sổ đó</b> suốt buổi test. Đóng cửa sổ là
-          tunnel tắt theo, và lượt chạy hybrid tiếp theo lại hỏng.
+          tunnel tắt theo.
         </li>
         <li>
           Quay lại đây bấm <b className="text-foreground">Kiểm tra lại</b>: dòng “Tunnel cho WebView”

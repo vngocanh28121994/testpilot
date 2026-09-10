@@ -115,6 +115,26 @@ describe('hướng dẫn từng bước', () => {
     expect(screen.getByRole('button', { name: 'Chép lệnh' })).toBeInTheDocument();
   });
 
+  /**
+   * Nút mở Terminal, và KHÔNG có ô mật khẩu nào.
+   *
+   * Cách làm hiển nhiên hơn là hỏi mật khẩu máy ngay trên giao diện rồi đẩy vào
+   * `sudo`. Nó bị bỏ có chủ đích: mật khẩu sẽ đi qua trình duyệt, qua HTTP, rồi
+   * qua một tiến trình đang ghi 8.000 dòng log xuống đĩa, trên một server không
+   * có xác thực. Test này giữ chủ đích đó, vì người sửa sau sẽ thấy việc thêm ô
+   * mật khẩu là một cải tiến.
+   */
+  it('mở Terminal thay vì hỏi mật khẩu máy', async () => {
+    const user = userEvent.setup();
+    renderWithProviders(<PrereqTools platform="ios" />);
+
+    expect(screen.queryByLabelText(/mật khẩu/i)).not.toBeInTheDocument();
+    expect(document.querySelector('input[type="password"]')).toBeNull();
+
+    await user.click(screen.getByRole('button', { name: 'Mở Terminal và chạy' }));
+    expect(await screen.findByRole('button', { name: 'Mở Terminal và chạy' })).toBeEnabled();
+  });
+
   it('không hỏi tunnel khi chạy Android', () => {
     renderWithProviders(<PrereqTools platform="android" />);
     expect(screen.queryByText(/tunnel-creation/)).not.toBeInTheDocument();
