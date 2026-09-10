@@ -39,6 +39,16 @@ describe('không nút kiểm tra nào bị bỏ quên', () => {
   /** Bỏ comment: nhắc tới một thứ trong câu giải thích không phải là dùng nó. */
   const stripComments = (source: string) =>
     source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+
+  /**
+   * Bỏ luôn nội dung toast, cùng một lý do.
+   *
+   * Một câu như “rồi bấm Kiểm tra lại” là chỉ đường tới nút, không phải một nút.
+   * Không bỏ thì test bắt nhầm mọi file lịch sự chỉ đường, và cách chữa duy
+   * nhất là viết câu tệ đi — tức là test làm hỏng đúng thứ nó muốn bảo vệ.
+   */
+  const stripToasts = (source: string) =>
+    source.replace(/toast\.[a-z]+\((?:[^()]|\([^()]*\))*\)/g, '');
   const src = (rel: string) => stripComments(readFileSync(path.resolve('ui/src', rel), 'utf8'));
 
   /**
@@ -65,7 +75,7 @@ describe('không nút kiểm tra nào bị bỏ quên', () => {
     const offenders = walk(path.resolve('ui/src'))
       .filter((file) => file !== path.resolve('ui/src/components/CheckedAt.tsx'))
       .filter((file) => {
-        const code = stripComments(readFileSync(file, 'utf8'));
+        const code = stripToasts(stripComments(readFileSync(file, 'utf8')));
         const hasProbeButton = /(Kiểm tra Xcode|Kiểm tra lại|Xem thiết bị hệ thống thấy)/.test(code);
         return hasProbeButton && !code.includes('CheckedAt');
       })

@@ -32,7 +32,7 @@ import type { Platform } from './types.js';
  * diện gắn đúng cái nút. Bảo người dùng "chạy `appium` ở một terminal khác"
  * trong khi chính công cụ bật được Appium là đẩy việc của mình sang cho họ.
  */
-export type PreflightFix = 'appium';
+export type PreflightFix = 'appium' | 'ios-tunnel';
 
 export interface PreflightCheck {
   /** What was checked, in the operator's language. */
@@ -587,6 +587,10 @@ export async function iosTunnelCheck(): Promise<PreflightCheck> {
   return {
     name,
     ok: false,
+    // Nút nằm ngay cạnh dòng đỏ, nên nó theo dòng này sang mọi màn hình có
+    // hiển thị kết quả kiểm tra — kể cả màn workflow, nơi trước đây người dùng
+    // đọc được lý do nhưng không có chỗ nào để chữa.
+    fix: 'ios-tunnel',
     detail: port === undefined
       ? `Chưa chạy lần nào. Mở một cửa sổ Terminal riêng, chạy lệnh sau và để nguyên đó: ${IOS_TUNNEL_COMMAND}`
       : `Cổng ${port} không còn ai nghe — tunnel đã tắt. Chạy lại và giữ cửa sổ: ${IOS_TUNNEL_COMMAND}`,

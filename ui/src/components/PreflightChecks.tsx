@@ -1,9 +1,12 @@
-import { useEffect } from 'react';
-import { useQueryClient } from '@tanstack/react-query';
-import { CheckCircle2, Play, XCircle } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { CheckCircle2, Play, Terminal, XCircle } from 'lucide-react';
+import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { useStreamJob } from '@/hooks/useStreamJob';
-import { STREAM_ROUTES } from '@/api/routes';
+import { api } from '@/api/client';
+import { ROUTES, STREAM_ROUTES } from '@/api/routes';
+import { IOS_TUNNEL_COMMAND } from '@/lib/tunnel';
 import type { PreflightCheck } from '@core/ui/contracts.js';
 
 /**
@@ -28,6 +31,7 @@ export function PreflightChecks({ checks }: { checks: PreflightCheck[] }) {
               <b>{check.name}:</b> {check.detail}
             </span>
             {!check.ok && check.fix === 'appium' && <StartAppium />}
+            {!check.ok && check.fix === 'ios-tunnel' && <StartIosTunnel />}
           </div>
         </li>
       ))}
@@ -68,6 +72,60 @@ function StartAppium() {
       {running && job.logs.length > 0 && (
         <span className="text-muted-foreground text-xs">{job.logs[job.logs.length - 1]}</span>
       )}
+    </div>
+  );
+}
+
+/**
+ * Mở Terminal với lệnh dựng tunnel đã điền sẵn.
+ *
+ * Gắn vào chính dòng kiểm tra, không phải vào một màn hình cụ thể: trước đây nút
+ * này chỉ có ở Local Runner, nên workflow nói đúng lý do dừng nhưng không cho
+ * người dùng chỗ nào để chữa — phải nhớ ra là mở sang màn khác.
+ *
+ * Không hỏi mật khẩu ở đây, và đó là chủ đích: xem chú thích ở
+ * openTunnelTerminal() trong src/ui/server.ts.
+ */
+function StartIosTunnel() {
+  const client = useQueryClient();
+  const [copied, setCopied] = useState(false);
+  const open = useMutation({
+    mutationFn: () => api.post<{ ok: boolean; error?: string }>(ROUTES.prereqIosTunnel),
+    onSuccess: (result) => {
+      if (!result.ok) {
+        toast.error(result.error ?? 'Không mở được Terminal.');
+        return;
+      }
+      toast.success('Đã mở Terminal. Nhập mật khẩu máy ở cửa sổ đó, rồi bấm “Kiểm tra lại”.');
+      // Không tự chuyển xanh được: tunnel chỉ chạy sau khi người dùng gõ mật
+      // khẩu, mà chuyện đó xảy ra ngoài tầm nhìn của tool. Dò lại một lượt để
+      // ai gõ nhanh thì thấy ngay, còn lại thì nút "Kiểm tra lại" lo nốt.
+      void client.invalidateQueries({ queryKey: ['preflight'] });
+    },
+    onError: (err) => toast.error((err as Error).message),
+  });
+
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      <Button size="sm" variant="outline" disabled={open.isPending} onClick={() => open.mutate()}>
+        <Terminal className="size-4" />
+        {open.isPending ? 'Đang mở Terminal…' : 'Mở Terminal và chạy'}
+      </Button>
+      <Button
+        size="sm"
+        variant="ghost"
+        onClick={() => {
+          void navigator.clipboard
+            .writeText(IOS_TUNNEL_COMMAND)
+            .then(() => {
+              setCopied(true);
+              toast.success('Đã chép lệnh.');
+            })
+            .catch(() => toast.error('Trình duyệt không cho chép. Bạn chép tay giúp nhé.'));
+        }}
+      >
+        {copied ? 'Đã chép' : 'Chép lệnh'}
+      </Button>
     </div>
   );
 }

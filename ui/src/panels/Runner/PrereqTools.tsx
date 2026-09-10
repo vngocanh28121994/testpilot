@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { api } from '@/api/client';
 import { ROUTES, STREAM_ROUTES } from '@/api/routes';
 import { useStreamJob } from '@/hooks/useStreamJob';
+import { IOS_TUNNEL_COMMAND } from '@/lib/tunnel';
 import type { PrereqAdbResponse, PrereqIosDevicesResponse, PrereqXcodeResponse } from '@core/ui/contracts.js';
 
 /**
@@ -240,7 +241,7 @@ function DevicesRow({ platform }: { platform: 'android' | 'ios' }) {
  */
 function TunnelCommand() {
   const [copied, setCopied] = useState(false);
-  const command = 'sudo appium driver run xcuitest tunnel-creation';
+  const command = IOS_TUNNEL_COMMAND;
 
   // Mở Terminal chứ không tự chạy sudo. Hỏi mật khẩu máy trên giao diện là đẩy
   // nó qua trình duyệt, qua HTTP, rồi qua một tiến trình đang ghi log xuống
