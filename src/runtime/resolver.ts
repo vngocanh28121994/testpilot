@@ -64,6 +64,15 @@ export interface Resolution {
  */
 const DISCOVERY_GRACE_MS = 4_000;
 
+/**
+ * Chờ bao lâu trước khi gọi discovery, khi số vòng lặp chưa đủ.
+ *
+ * Trên Appium-trong-WebView mỗi vòng tốn hàng giây, nên đếm vòng là sai đơn vị.
+ * 2,5 giây đủ để một chuyển màn bình thường kịp xong mà vẫn còn phần lớn ngân
+ * sách resolve cho việc tìm kiếm thật sự.
+ */
+const DISCOVERY_AFTER_MS = 2_500;
+
 export class ElementNotFoundError extends Error {
   constructor(
     readonly elementId: string,
@@ -156,6 +165,7 @@ export class Resolver {
     );
     const deadline = Date.now() + o.timeoutMs;
     let attempts = 0;
+    const startedAt = Date.now();
     let ticks = 0;
     /** Ứng viên do discovery tìm ra, có thể về sau vài tick. */
     let discovered: LocatorCandidate | null = null;
@@ -241,7 +251,18 @@ export class Resolver {
       // seconds; starting a full DOM observation after the very first miss used
       // to consume almost the entire post-click budget and leave a known-good
       // locator with only one attempt.
-      if (this.elementDiscovery && !discoveryAttempted && ticks >= 3) {
+      // Khởi động theo THỜI GIAN, không chỉ theo số vòng.
+      //
+      // "Vòng thứ ba" ngầm giả định mỗi vòng rẻ — đúng với Playwright và CDP,
+      // sai hẳn với Appium trong WebView. Đo trên máy thật ngày 2026-09-10: một
+      // lệnh tìm element không khớp tốn trung bình 3,4 GIÂY, nên trong ngân sách
+      // 10 giây resolver chỉ kịp 3 vòng và discovery gần như không bao giờ tới
+      // lượt — đúng chuỗi ba phép thử liên tiếp không thấy dòng [discovery] nào.
+      //
+      // Mốc thời gian nói đúng thứ cần nói: đã chờ đủ lâu để tin rằng các
+      // locator đã biết sẽ không cứu được nữa.
+      const waitedLongEnough = Date.now() - startedAt >= DISCOVERY_AFTER_MS;
+      if (this.elementDiscovery && !discoveryAttempted && (ticks >= 3 || waitedLongEnough)) {
         discoveryAttempted = true;
         discoveryStartedAt = Date.now();
         // Chạy nền, KHÔNG đua với đồng hồ rồi vứt kết quả.

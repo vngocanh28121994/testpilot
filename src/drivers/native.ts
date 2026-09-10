@@ -1746,7 +1746,17 @@ export class NativeUiDriver implements UiDriver {
     if ((this.inWebview || this.cdpConnected) && this.cdpDriver) {
       return this.cdpDriver.isIdle();
     }
-    const digest = createHash('sha1').update(await this.b.getPageSource()).digest('hex');
+    // Trong WebView, `getPageSource()` trả về TOÀN BỘ HTML — 35 KB trở lên trên
+    // màn đăng nhập của TCInvest — và nó được kéo về qua remote debugger ở mỗi
+    // vòng lặp của resolver chỉ để băm ra một chuỗi. Đo trên máy thật ngày
+    // 2026-09-10: mỗi vòng tốn khoảng 5 giây, nên trong ngân sách 10 giây
+    // resolver chỉ chạy được 2-3 vòng thay vì 40 — và discovery, thứ khởi động
+    // từ vòng thứ ba, gần như không bao giờ tới lượt.
+    //
+    // Một dấu vân tay nhỏ nói đúng bằng ấy chuyện: màn hình có còn đổi không.
+    const digest = this.inWebview
+      ? String(await this.b.execute(IDLE_DIGEST_SCRIPT).catch(() => Math.random()))
+      : createHash('sha1').update(await this.b.getPageSource()).digest('hex');
     const stable = digest === this.lastDigest;
     this.lastDigest = digest;
     return stable;
@@ -1937,10 +1947,25 @@ function firstLine(message: string): string {
  * đủ để matcher chấm điểm — vai trò, tên, chữ, placeholder — và thiếu thì thà
  * thiếu rõ ràng còn hơn bịa ra một cấu trúc chỉ đúng một nửa.
  */
+/**
+ * Dấu vân tay rẻ tiền của một trang, đủ để biết nó còn đang đổi hay đã đứng yên.
+ *
+ * Không cần chính xác — chỉ cần ĐỔI khi màn hình đổi. Số phần tử, độ dài chữ và
+ * trạng thái tải là đủ, mà chỉ tốn vài chục byte đường truyền thay vì cả cây DOM.
+ */
+const IDLE_DIGEST_SCRIPT =
+  'return document.readyState + "|" + document.querySelectorAll("*").length'
+  + ' + "|" + (document.body ? document.body.innerText.length : 0)';
+
 function domElementToObserved(el: RawEl, index: number): Observed {
   const name = el.ariaLabel ?? el.name ?? el.customName;
+  // formcontrolname là danh tính ổn định nhất mà một form Angular phơi ra —
+  // CDP đã map nó vào resourceId từ lâu, và bỏ quên nó ở đây nghĩa là iOS mất
+  // đúng cái tín hiệu phân biệt được ô tài khoản với ô mật khẩu.
+  const resourceId = el.formcontrolname ?? el.name ?? undefined;
   return {
     ...(el.testId ? { testId: el.testId } : {}),
+    ...(resourceId ? { resourceId } : {}),
     role: el.tag,
     ...(name ? { name } : {}),
     ...(el.domText ? { text: el.domText } : {}),

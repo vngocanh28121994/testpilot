@@ -131,17 +131,24 @@ export class ConfidenceScorer {
 
     // ── positive signals ──────────────────────────────────────────────────────
 
+    const intentKey = intent.id.split('.').pop() ?? '';
+
     if (candidate.testId) {
-      const intentKey = intent.id.split('.').pop() ?? '';
       if (intentKey && normId(candidate.testId) === normId(intentKey)) {
         add(this.weights.exactTestId, 'testId matches intent key');
+      } else if (idOverlaps(candidate.testId, intentKey)) {
+        add(Math.floor(this.weights.exactTestId * 0.8), 'testId khớp một phần với khoá element');
       } else if (intent.label && normId(candidate.testId).includes(normId(intent.label))) {
         add(Math.floor(this.weights.exactTestId * 0.8), 'testId partially matches label');
       }
     }
 
-    if (candidate.resourceId && intent.label) {
-      if (normId(candidate.resourceId).includes(normId(intent.label))) {
+    if (candidate.resourceId) {
+      if (intentKey && normId(candidate.resourceId) === normId(intentKey)) {
+        add(this.weights.exactResourceId, 'resourceId khớp khoá element');
+      } else if (idOverlaps(candidate.resourceId, intentKey)) {
+        add(Math.floor(this.weights.exactResourceId * 0.8), 'resourceId khớp một phần với khoá element');
+      } else if (intent.label && normId(candidate.resourceId).includes(normId(intent.label))) {
         add(this.weights.exactResourceId, 'resourceId matches label');
       }
     }
@@ -387,6 +394,28 @@ const CONTEXT_STOP_WORDS = new Set([
 ]);
 
 /** Normalise for id/resourceId/testId comparison (strip separators). */
+/**
+ * Định danh trong DOM có khớp khoá của element không, theo CẢ HAI CHIỀU.
+ *
+ * Luật cũ chỉ hỏi một chiều và chỉ so với NHÃN: `testId` phải chứa nhãn người
+ * đọc. Nhãn ở đây viết bằng tiếng Việt ("Ô tên đăng nhập") còn app viết bằng
+ * tiếng Anh ("username"), nên nó không bao giờ khớp — và cả một lớp bằng chứng
+ * mạnh nhất bị bỏ qua.
+ *
+ * Đo trên máy thật ngày 2026-09-10: ô tài khoản mang `formcontrolname="username"`,
+ * khoá element là `usernameField`. Chuỗi này chứa chuỗi kia, chỉ là chiều ngược
+ * với thứ luật cũ kiểm. Kết quả: ô đúng và ô mật khẩu cùng được 30 điểm — bộ
+ * chấm không phân biệt nổi hai ô ngay cạnh nhau.
+ *
+ * Ngưỡng 4 ký tự để "id" hay "el" không khớp bừa với mọi thứ.
+ */
+export function idOverlaps(candidateId: string, intentKey: string): boolean {
+  const a = normId(candidateId);
+  const b = normId(intentKey);
+  if (a.length < 4 || b.length < 4) return false;
+  return a.includes(b) || b.includes(a);
+}
+
 function normId(s: string): string {
   return normalizeHumanText(s).replace(/[\s_\-./]+/g, '');
 }
