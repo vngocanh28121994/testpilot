@@ -104,6 +104,22 @@ describe('hướng dẫn từng bước', () => {
     expect(screen.queryByText(/xcodebuild/)).toBeNull();
   });
 
+  /**
+   * Không có nút chạy tunnel, và đó là chủ ý: lệnh cần sudo. Thứ giao diện phải
+   * làm được là đưa đúng lệnh ra màn hình — thiếu nó thì người dùng không có
+   * đường nào tự dựng tunnel ngoài việc đi đọc log Appium.
+   */
+  it('đưa ra lệnh dựng tunnel cho iOS', () => {
+    renderWithProviders(<PrereqTools platform="ios" />);
+    expect(screen.getByText('sudo appium driver run xcuitest tunnel-creation')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Chép lệnh' })).toBeInTheDocument();
+  });
+
+  it('không hỏi tunnel khi chạy Android', () => {
+    renderWithProviders(<PrereqTools platform="android" />);
+    expect(screen.queryByText(/tunnel-creation/)).not.toBeInTheDocument();
+  });
+
   it('các bước được đánh số liên tiếp', () => {
     renderWithProviders(<PrereqTools platform="ios" />);
     const numbers = screen.getAllByText(/^[1-9]$/).map((el) => Number(el.textContent));
