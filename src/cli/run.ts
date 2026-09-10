@@ -14,6 +14,7 @@ import { ScenarioReviewStore, scenarioBlocks } from '../core/scenarioReview.js';
 import { KnownIssueStore } from '../core/knownIssues.js';
 import { adoptStoredApiKeys, Secrets, accountVariables, secretEnvName } from '../core/secrets.js';
 import { DeviceEnvLog, appFingerprint, needsReinstall } from '../core/deviceEnv.js';
+import { iosTunnelCheck } from '../core/preflight.js';
 import { canonicalTag } from '../core/tagTaxonomy.js';
 import type {
   FeatureSpec,
@@ -235,7 +236,7 @@ async function main(): Promise<void> {
   try {
     await driver.start();
   } catch (err) {
-    throw new Error(explainDriverStart(err as Error, platform, cfg.ios.usePreinstalledWDA));
+    throw new Error(await explainDriverStart(err as Error, platform, cfg.ios.usePreinstalledWDA));
   }
   // Written only now: before start() the install has not happened, and a failed
   // session must not leave a claim about the device that nothing put there.
@@ -755,8 +756,27 @@ function stepElementAt(run: ScenarioResult['runs'][number], line: number): strin
  * Không đoán bừa: chỉ thêm hướng dẫn cho đúng mã lỗi này, và giữ nguyên câu
  * gốc bên dưới để ai cần vẫn tra được.
  */
-function explainDriverStart(err: Error, platform: Platform, reusingWda = false): string {
+async function explainDriverStart(
+  err: Error, platform: Platform, reusingWda = false,
+): Promise<string> {
   if (platform !== 'ios') return err.message;
+  // "Unknown device or simulator UDID" nghe như cắm sai máy hoặc sai udid, và
+  // đó là chỗ ai cũng đi tìm đầu tiên. Nhưng từ iOS 18, Appium KHÔNG hỏi USB
+  // nữa: nó lấy danh sách máy thật từ sổ đăng ký của tunnel. Cáp rớt một nhịp
+  // là sổ rỗng, còn máy thì vẫn cắm, vẫn nhận, vẫn hiện trong Finder — và câu
+  // thông báo không hề nhắc tới tunnel. Một buổi sáng đã mất vì chuyện này.
+  if (/Unknown device or simulator UDID/i.test(err.message)) {
+    const tunnel = await iosTunnelCheck();
+    if (!tunnel.ok) {
+      return (
+        'Appium không thấy máy nào, dù cáp vẫn cắm.\n\n'
+        + `${tunnel.detail}\n\n`
+        + 'Từ iOS 18, Appium lấy danh sách máy thật từ sổ đăng ký của tunnel chứ không '
+        + 'hỏi USB. Sổ rỗng thì máy coi như không tồn tại.\n\n'
+        + `Nguyên văn lỗi: ${err.message}`
+      );
+    }
+  }
   // Bỏ build thì không còn xcodebuild để hỏng; cái hỏng là bản WDA đã cài không
   // chịu mở cổng. Appium chỉ báo hết giờ chờ /status, không nói vì sao — mà "vì
   // sao" ở đây luôn là cùng một chuyện: runner khởi động rồi tắt ngay.

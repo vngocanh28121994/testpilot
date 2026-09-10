@@ -49,6 +49,30 @@ describe('explainDriverStart', () => {
   });
 
   it('được nối vào chỗ khởi động driver', () => {
-    assert.match(source, /throw new Error\(explainDriverStart\(err as Error, platform[^)]*\)\);/);
+    assert.match(source, /throw new Error\(await explainDriverStart\(err as Error, platform[^)]*\)\);/);
+  });
+});
+
+/**
+ * "Unknown device or simulator UDID".
+ *
+ * Câu này nghe như cắm sai máy hoặc sai udid, và đó là chỗ ai cũng tìm đầu
+ * tiên. Thực tế ngày 2026-09-10: máy vẫn cắm (usbmux báo ConnectionType USB,
+ * 480 Mbps), vẫn hiện trong Finder — nhưng sổ đăng ký của tunnel rỗng:
+ *
+ *   {"status":"OK","tunnels":{},"metadata":{"totalTunnels":0}}
+ *
+ * Từ iOS 18 Appium lấy danh sách máy thật TỪ SỔ ĐÓ. Mất gần một giờ mới lần ra,
+ * và không dòng log nào nhắc tới tunnel. Câu thông báo phải tự nói ra.
+ */
+describe('máy cắm rồi mà Appium không thấy', () => {
+  it('chỉ sang tunnel thay vì để người dùng đi tìm cáp', () => {
+    const source = readFileSync('src/cli/run.ts', 'utf8');
+    assert.match(source, /Unknown device or simulator UDID\/i\.test\(err\.message\)/);
+    assert.match(source, /const tunnel = await iosTunnelCheck\(\)/);
+    assert.match(source, /Appium không thấy máy nào, dù cáp vẫn cắm/);
+    // Chỉ nói về tunnel khi tunnel THẬT SỰ hỏng; tunnel tốt thì lỗi này có
+    // nguyên nhân khác và đổ cho tunnel là dẫn người dùng đi sai đường.
+    assert.match(source, /if \(!tunnel\.ok\) \{/);
   });
 });

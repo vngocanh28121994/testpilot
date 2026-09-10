@@ -554,6 +554,34 @@ async function tunnelRegistryPort(): Promise<number | undefined> {
   return undefined;
 }
 
+/**
+ * Sổ đăng ký có đang giữ máy nào không.
+ *
+ * Cổng mở KHÔNG có nghĩa là dùng được. Đo trên máy người dùng ngày 2026-09-10:
+ * tunnel chạy liên tục 4 giờ 48 phút, cổng trả lời bình thường, mà sổ rỗng —
+ *
+ *   {"status":"OK","tunnels":{},"metadata":{"totalTunnels":0,"activeTunnels":0}}
+ *
+ * vì cáp rớt một nhịp và tunnel không nhận lại máy. Từ iOS 18, Appium lấy danh
+ * sách máy thật TỪ CHÍNH SỔ NÀY, nên nó báo "Available real devices:" rỗng rồi
+ * "Unknown device or simulator UDID" — một câu không nhắc gì tới tunnel. Mất
+ * gần một giờ mới lần ra, trong khi một lệnh GET đã trả lời xong.
+ */
+async function tunnelsRegistered(port: number): Promise<number | undefined> {
+  try {
+    const res = await fetch(`http://127.0.0.1:${port}/remotexpc/tunnels`, {
+      signal: AbortSignal.timeout(2_000),
+    });
+    if (!res.ok) return undefined;
+    const body = (await res.json()) as { metadata?: { totalTunnels?: number } };
+    return body.metadata?.totalTunnels;
+  } catch {
+    // Bản Appium khác có thể đổi đường dẫn API. Không đọc được thì im lặng bỏ
+    // qua: mất khả năng phát hiện còn hơn báo hỏng cho một tunnel đang tốt.
+    return undefined;
+  }
+}
+
 /** Có ai đang lắng nghe ở cổng đó không. Số cất lại không có nghĩa là còn sống. */
 function portAccepting(port: number): Promise<boolean> {
   return new Promise((resolve) => {
@@ -582,7 +610,23 @@ export async function iosTunnelCheck(): Promise<PreflightCheck> {
   const name = 'Tunnel cho WebView (iOS 17+)';
   const port = await tunnelRegistryPort();
   if (port !== undefined && (await portAccepting(port))) {
-    return { name, ok: true, detail: `Đang chạy ở 127.0.0.1:${port}.` };
+    const tunnels = await tunnelsRegistered(port);
+    if (tunnels === 0) {
+      return {
+        name,
+        ok: false,
+        fix: 'ios-tunnel',
+        detail: `Tunnel đang chạy ở 127.0.0.1:${port} nhưng chưa nhận máy nào — thường là do cáp `
+          + 'rớt một nhịp rồi cắm lại. Từ iOS 18 Appium lấy danh sách máy thật từ sổ này, nên máy '
+          + 'sẽ không chạy được dù cáp vẫn cắm. Dừng tunnel cũ (Ctrl-C ở cửa sổ Terminal đó) và '
+          + `chạy lại: ${IOS_TUNNEL_COMMAND}`,
+      };
+    }
+    return {
+      name,
+      ok: true,
+      detail: `Đang chạy ở 127.0.0.1:${port}${tunnels === undefined ? '' : `, giữ ${tunnels} máy`}.`,
+    };
   }
   return {
     name,

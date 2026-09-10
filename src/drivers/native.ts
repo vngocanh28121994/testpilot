@@ -155,6 +155,8 @@ class NativeHandle implements UiHandle {
   constructor(
     readonly candidate: LocatorCandidate,
     readonly el: WdioElement,
+    /** Element đang nằm trong WebView, tức là một node DOM chứ không phải view native. */
+    private readonly inWebview = false,
   ) {}
 
   async isVisible(): Promise<boolean> {
@@ -172,6 +174,21 @@ class NativeHandle implements UiHandle {
    * catching, not tidying away.
    */
   async value(): Promise<string | null> {
+    // Trong WebView thì khác hẳn: một <input> KHÔNG có text content, nên
+    // getText() luôn trả về chuỗi rỗng dù ô đang đầy chữ. Giá trị nằm ở thuộc
+    // tính `value` của node.
+    //
+    // Đo trên máy thật ngày 2026-09-10: tool gõ đúng 10 ký tự, màn hình hiện
+    // đúng 10 ký tự, mà bước kiểm lại đọc ra 0 — "Ô nhập không nhận đúng giá
+    // trị". Không bước nhập liệu nào của iOS hybrid qua nổi chỗ này. Android
+    // không dính vì ở đó handle là WebViewCdpHandle, đọc thẳng el.value.
+    if (this.inWebview) {
+      const prop = await this.el.getProperty('value').catch(() => null);
+      if (typeof prop === 'string') return prop;
+      // Không đọc được thuộc tính thì trả null: null nghĩa là "không phải ô
+      // nhập, đừng kết luận", còn "" là một lời khẳng định sai.
+      return null;
+    }
     return this.el.getText().catch(() => null);
   }
 
@@ -1102,7 +1119,7 @@ export class NativeUiDriver implements UiDriver {
       // so the same comparison is both expensive and wrong.
       const el = await this.b.$(selector);
       if (!(await el.isExisting())) return null;
-      return new NativeHandle(c, el);
+      return new NativeHandle(c, el, this.inWebview);
     } catch (err) {
       // A WebView that navigated or reloaded invalidates the context, and every
       // lookup then fails with "no such window" until it is re-acquired. The
