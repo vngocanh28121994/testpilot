@@ -31,4 +31,23 @@ describe('discovery chạy nền', () => {
     assert.match(source, /discoveryAttempted && !discoverySettled/);
     assert.match(source, /chưa trả lời xong sau \$\{Date\.now\(\) - discoveryStartedAt\}ms/);
   });
+
+  /**
+   * Hết giờ mà discovery còn chạy thì chờ thêm một nhịp.
+   *
+   * Hỏng ở đây là hỏng cả bước, và bước hỏng thì cả kịch bản dừng — nên vài
+   * giây chờ rẻ hơn nhiều so với thứ nó đánh đổi. Đo trên máy thật: tầng AI trả
+   * về ĐÚNG locator đã bị xoá (tin cậy 95) nhưng về sau hạn resolve, nên câu
+   * trả lời đúng bị vứt đi.
+   */
+  it('chờ thêm cho discovery dang dở trước khi báo hỏng', () => {
+    assert.match(source, /const DISCOVERY_GRACE_MS = 4_000;/);
+    assert.match(source, /if \(discoveryTask && !discoverySettled\) \{/);
+    assert.match(source, /Promise\.race\(\[\s*discoveryTask,/);
+  });
+
+  it('ứng viên về muộn vẫn phải qua verifySemantically như mọi ứng viên khác', () => {
+    const tail = source.slice(source.indexOf('if (discoveryTask && !discoverySettled)'));
+    assert.match(tail.slice(0, 900), /o\.verifyHealedMatch[\s\S]{0,140}verifySemantically/);
+  });
 });

@@ -55,6 +55,15 @@ export interface Resolution {
   attempts: number;
 }
 
+/**
+ * Chờ thêm bao lâu cho một discovery còn dang dở khi hạn resolve đã hết.
+ *
+ * Đủ để tầng AI kịp trả lời (đo được khoảng 2-3 giây trên máy thật), và chỉ
+ * tiêu tốn đúng lúc bước sắp hỏng — nên nó không làm chậm lượt chạy nào đang
+ * đi đúng đường.
+ */
+const DISCOVERY_GRACE_MS = 4_000;
+
 export class ElementNotFoundError extends Error {
   constructor(
     readonly elementId: string,
@@ -152,6 +161,7 @@ export class Resolver {
     let discovered: LocatorCandidate | null = null;
     let discoverySettled = false;
     let discoveryStartedAt = 0;
+    let discoveryTask: Promise<LocatorCandidate | null> | null = null;
     let discoveryAttempted = false;
     let lastUrl: string | undefined;
 
@@ -246,12 +256,13 @@ export class Resolver {
         // Chạy nền thì mỗi vòng lặp sau chỉ việc hỏi "có kết quả chưa" — không
         // tick nào bị chặn, và kết quả về muộn vẫn kịp dùng trong cùng lần
         // resolve này.
-        void this.tryDiscovery(
+        discoveryTask = this.tryDiscovery(
           elementId,
           o.discoveryAction,
           o.locatorParams,
           o.semanticContext,
-        )
+        );
+        void discoveryTask
           .then((c) => { discovered = c; })
           .catch(() => { discovered = null; })
           .finally(() => { discoverySettled = true; });
@@ -277,6 +288,32 @@ export class Resolver {
       await this.driver.isIdle().catch(() => false);
       await sleep(o.pollMs);
     } while (Date.now() < deadline);
+
+    // Hết giờ mà discovery còn đang chạy thì CHỜ THÊM một nhịp, đừng hỏng ngay.
+    //
+    // Hỏng ở đây là hỏng cả bước, và bước hỏng thì cả kịch bản dừng — nên vài
+    // giây chờ thêm rẻ hơn nhiều so với thứ nó đánh đổi. Chỉ trả giá đúng lúc
+    // sắp hỏng: đường đi bình thường không bao giờ chạm tới đoạn này.
+    //
+    // Đo trên máy thật ngày 2026-09-10: tầng AI trả về đúng locator đã bị xoá
+    // (placeholder="Email / Số tài khoản / Điện thoại", tin cậy 95) nhưng về
+    // sau hạn resolve, nên câu trả lời đúng bị vứt đi.
+    if (discoveryTask && !discoverySettled) {
+      const late = await Promise.race([
+        discoveryTask,
+        sleep(DISCOVERY_GRACE_MS).then(() => null),
+      ]);
+      if (late && !excluded.has(candidateKey(late))) {
+        const handle = await this.tryCandidate(late, o);
+        const verified = handle
+          && (!o.verifyHealedMatch
+            || (await this.verifySemantically(elementId, handle, o.locatorParams)));
+        if (handle && verified) {
+          console.log(`[discovery] "${elementId}": tìm được sau khi chờ thêm — ${late.strategy}=${late.value}`);
+          return { handle, candidate: late, healed: true, attempts };
+        }
+      }
+    }
 
     // Discovery vẫn đang chạy khi hết giờ là một câu trả lời, không phải im
     // lặng. Trước đây trường hợp này không để lại dấu vết nào, nên "discovery
