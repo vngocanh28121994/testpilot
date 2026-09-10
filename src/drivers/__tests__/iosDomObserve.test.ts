@@ -21,10 +21,23 @@ const cdp = readFileSync('src/drivers/WebViewCdpDriver.ts', 'utf8');
 
 describe('quan sát DOM trong WebView', () => {
   it('cả hai driver dùng chung một đoạn quan sát', () => {
-    assert.match(native, /import \{ observeDomInPage, type RawEl \}/);
+    assert.match(native, /import \{ DOM_OBSERVE_SCRIPT, observeDomInPage, type RawEl \}/);
     assert.match(cdp, /import \{ observeDomInPage, type RawEl \}/);
     assert.match(cdp, /this\.page\.evaluate\(observeDomInPage\)/);
-    assert.match(native, /this\.b\.execute\(observeDomInPage\)/);
+  });
+
+  /**
+   * Appium phải nhận CHUỖI, không nhận hàm.
+   *
+   * WebdriverIO tuần tự hoá hàm bằng toString(), mà tsx bọc mỗi hàm bằng
+   * __name() để giữ tên — bên trong WebView không có __name nên phần thân hỏng
+   * LẶNG LẼ: trả về mảng rỗng, không ném lỗi. Đo cùng lúc trên cùng trang:
+   * gọi bằng hàm 0 phần tử, gọi bằng chuỗi 51. Playwright không dính vì nó tự
+   * tuần tự hoá trong cùng tiến trình.
+   */
+  it('Appium nhận đoạn quét dưới dạng chuỗi', () => {
+    assert.match(native, /this\.b\.execute\(DOM_OBSERVE_SCRIPT\)/);
+    assert.doesNotMatch(native, /this\.b\.execute\(observeDomInPage\)/);
   });
 
   it('chỉ chạy khi đang trong WebView, ngoài ra vẫn đọc cây native', () => {

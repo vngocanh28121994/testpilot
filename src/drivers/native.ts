@@ -13,7 +13,7 @@ import type { ControlInspection, UiDriver, UiHandle, UiMatchSnapshot } from './d
 import { WebViewCdpDriver, WebViewCdpHandle, isCdpSessionLost } from './WebViewCdpDriver.js';
 import { SMART_DISMISS_SCRIPT, type PopupRule } from './PopupInterceptor.js';
 import { parseIosXml } from '../discovery/NativeObservationAdapter.js';
-import { observeDomInPage, type RawEl } from './domObserve.js';
+import { DOM_OBSERVE_SCRIPT, observeDomInPage, type RawEl } from './domObserve.js';
 import { checkAppVersion } from './appVersion.js';
 
 const execAsync = promisify(execCb);
@@ -1712,9 +1712,42 @@ export class NativeUiDriver implements UiDriver {
     // đủ ô nhập kèm placeholder. Android không dính vì nó quan sát DOM qua CDP;
     // đây là cùng đoạn mã đó, chạy qua Appium.
     if (this.inWebview) {
-      const raw = (await this.b.execute(observeDomInPage).catch(() => null)) as RawEl[] | null;
-      if (raw && raw.length > 0) return raw.map(domElementToObserved);
+      // Bảo đảm context THẬT SỰ đang ở WebView, đừng tin mỗi cái cờ.
+      //
+      // `this.webview` chỉ ghi lại ý định của driver. Mỗi lần asNative() chạy —
+      // chụp màn hình, dump cây, dọn hộp thoại native — Appium bị đẩy sang
+      // NATIVE_APP rồi mới quay lại; và ở đúng cửa sổ đó, một lệnh chạy trong
+      // trang trả về rỗng chứ không báo lỗi. Đo trên máy thật ngày 2026-09-10:
+      // "đang ở WebView nhưng DOM không trả về gì" xuất hiện ở MỌI lượt
+      // discovery, và nó lùi về cây native — nơi không có gì để chấm điểm.
+      // Bắt lỗi và NÓI RA, đừng nuốt.
+      //
+      // `.catch(() => null)` ở đây đã che mất nguyên nhân suốt bốn lượt truy:
+      // "DOM không trả về gì" có thể là chuyển context hỏng, script ném lỗi,
+      // hay thật sự không có phần tử nào — ba chuyện khác hẳn nhau, cùng một
+      // dòng log. Gọi tay thì script trả về 51 phần tử, nên nguyên nhân chắc
+      // chắn nằm ở đường đi chứ không ở đoạn quét.
+      let raw: RawEl[] | null = null;
+      try {
+        await this.b.switchContext(this.webview!);
+        raw = (await this.b.execute(DOM_OBSERVE_SCRIPT)) as RawEl[];
+      } catch (err) {
+        console.warn(`[observe] chạy đoạn quét DOM hỏng: ${(err as Error).message.slice(0, 200)}`);
+      }
+      if (raw && raw.length > 0) {
+        console.log(`[observe] DOM trong WebView: ${raw.length} phần tử`);
+        return raw.map(domElementToObserved);
+      }
+      // Nói ra trang lúc đó đang ở đâu và có bao nhiêu node. "Không trả về gì"
+      // có ít nhất ba nguyên nhân khác hẳn nhau — sai context, trang chưa
+      // render, hay đang ở trang khác — và nếu không ghi lại thì mỗi lần truy
+      // là một lần đoán.
+      console.warn('[observe] đang ở WebView nhưng DOM không trả về gì — lùi về cây native');
     }
+    // Nói ra nguồn dữ liệu, vì hai nguồn cho ra hai thế giới khác hẳn nhau: DOM
+    // có placeholder và formcontrolname để chấm điểm, còn cây native của một
+    // WKWebView chỉ là mấy hộp rỗng. Một lượt discovery thất bại mà không biết
+    // nó đã nhìn vào đâu thì không truy được — đúng chỗ đã mất ba lượt chạy.
     const xml = await this.getPageSource();
     // Cây của iOS là <XCUIElementTypeButton …>, của Android là <node …>. Trước
     // đây cả hai đều đưa qua parser của Android, nên trên iOS `observe()` luôn
@@ -1725,7 +1758,9 @@ export class NativeUiDriver implements UiDriver {
     // kết luận màn hình trống. Đo trên cây thật lưu trong artifact hôm nay:
     // 0 thẻ <node>, 30 thẻ XCUIElementType.
     if (this.opts.platform === 'ios') {
-      return parseIosXml(xml).map((el, i) => convertObservedElement(el, i));
+      const els = parseIosXml(xml).map((el, i) => convertObservedElement(el, i));
+      console.log(`[observe] cây native iOS: ${els.length} phần tử (inWebview=${this.inWebview})`);
+      return els;
     }
     return parseUiAutomatorXml(xml);
   }

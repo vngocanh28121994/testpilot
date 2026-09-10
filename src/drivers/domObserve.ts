@@ -100,3 +100,20 @@ export function observeDomInPage(): RawEl[] {
       };
     });
 }
+
+/**
+ * Cùng đoạn quét, nhưng ở dạng CHUỖI — và đây mới là dạng dùng được thật.
+ *
+ * WebdriverIO và Playwright đều nhận một hàm, nhưng để gửi được vào trang thì
+ * hàm phải đi qua `toString()`. Mà tsx/esbuild bọc mỗi hàm bằng `__name(...)`
+ * để giữ tên khi transpile, và bên trong WebView không có `__name` — nên phần
+ * thân hỏng LẶNG LẼ: trả về mảng rỗng, không ném lỗi, không dấu vết.
+ *
+ * Đo trên máy thật ngày 2026-09-10, cùng một lúc trên cùng một trang:
+ *
+ *   gọi bằng HÀM: 0 phần tử  |  gọi bằng CHUỖI: 51
+ *
+ * Bốn lượt truy đi tìm nguyên nhân ở context, ở trạng thái trang, ở bộ chọn —
+ * trong khi nó nằm ở đúng chỗ mà PopupInterceptor.ts đã ghi lại từ trước.
+ */
+export const DOM_OBSERVE_SCRIPT = `return (${observeDomInPage.toString()})();`;
