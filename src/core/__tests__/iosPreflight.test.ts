@@ -12,6 +12,7 @@
  * lâu, kèm chú thích rằng đó là câu trả lời phổ biến nhất; iOS thì chưa.
  */
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { describe, it } from 'node:test';
 import { IOS_TUNNEL_COMMAND, iosTunnelCheck, parseDevicectl } from '../preflight.js';
 
@@ -116,6 +117,18 @@ describe('điều kiện tunnel iOS', () => {
     // hỏng thì phải kèm lệnh, đạt thì phải kèm cổng.
     if (check.ok) assert.match(check.detail, /127\.0\.0\.1:\d+/);
     else assert.ok(check.detail.includes(IOS_TUNNEL_COMMAND), check.detail);
+  });
+
+  /**
+   * Đường dẫn tới file cất cổng ghép từ ba quy ước của Appium, và bản đầu tiên
+   * tôi bỏ quên thư mục con "strongbox". Kiểu sai này không kêu: dòng kiểm tra
+   * vẫn chạy, chỉ là luôn nói "chưa chạy lần nào" — đẩy người dùng đi dựng lại
+   * một tunnel vốn đang chạy. Nên phải canh đúng chuỗi đường dẫn.
+   */
+  it('đọc đúng chỗ Appium cất cổng', () => {
+    const source = readFileSync('src/core/preflight.ts', 'utf8');
+    assert.match(source, /'appium-xcuitest-driver-nodejs'/);
+    assert.match(source, /'strongbox', 'tunnelRegistryPort'/);
   });
 
   it('lệnh phải chạy bằng sudo — tool không tự chạy thay được', () => {

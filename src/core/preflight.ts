@@ -514,17 +514,29 @@ export const IOS_TUNNEL_COMMAND = 'sudo appium driver run xcuitest tunnel-creati
  * trình này.
  */
 async function tunnelRegistryPort(): Promise<number | undefined> {
-  // env-paths thêm hậu tố "-nodejs" vào tên container.
-  const file = path.join(
-    os.homedir(), 'Library', 'Application Support',
-    'appium-xcuitest-driver-nodejs', 'tunnelRegistryPort',
-  );
-  try {
-    const port = Number.parseInt((await readFile(file, 'utf8')).trim(), 10);
-    return Number.isInteger(port) && port > 0 && port < 65536 ? port : undefined;
-  } catch {
-    return undefined;
+  // Ba mảnh ghép lại, tất cả đều đọc ra từ chính mã của Appium chứ không đoán:
+  //  - env-paths thêm hậu tố "-nodejs" vào tên container;
+  //  - strongbox mặc định cất trong thư mục con "strongbox" (DEFAULT_SUFFIX);
+  //  - tên file là slugify("tunnelRegistryPort"), mà slugify chỉ đụng tới ký tự
+  //    không phải chữ-số, nên camelCase giữ nguyên.
+  //
+  // Bản đầu tôi bỏ quên mảnh giữa. Hậu quả không phải là báo lỗi mà là luôn
+  // luôn nói "chưa chạy lần nào" — kể cả khi tunnel đang chạy ngon lành, tức
+  // đẩy người dùng đi dựng lại một thứ vốn đã có. Thử cả hai đường để một bản
+  // Appium sau này bỏ hậu tố cũng không làm dòng kiểm tra này nói dối.
+  const base = path.join(os.homedir(), 'Library', 'Application Support', 'appium-xcuitest-driver-nodejs');
+  for (const file of [
+    path.join(base, 'strongbox', 'tunnelRegistryPort'),
+    path.join(base, 'tunnelRegistryPort'),
+  ]) {
+    try {
+      const port = Number.parseInt((await readFile(file, 'utf8')).trim(), 10);
+      if (Number.isInteger(port) && port > 0 && port < 65536) return port;
+    } catch {
+      // Không có file này thì thử đường còn lại.
+    }
   }
+  return undefined;
 }
 
 /** Có ai đang lắng nghe ở cổng đó không. Số cất lại không có nghĩa là còn sống. */
