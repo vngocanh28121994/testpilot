@@ -13,6 +13,7 @@ import type { ControlInspection, UiDriver, UiHandle, UiMatchSnapshot } from './d
 import { WebViewCdpDriver, WebViewCdpHandle, isCdpSessionLost } from './WebViewCdpDriver.js';
 import { SMART_DISMISS_SCRIPT, type PopupRule } from './PopupInterceptor.js';
 import { parseIosXml } from '../discovery/NativeObservationAdapter.js';
+import { observeDomInPage, type RawEl } from './domObserve.js';
 import { checkAppVersion } from './appVersion.js';
 
 const execAsync = promisify(execCb);
@@ -1702,6 +1703,18 @@ export class NativeUiDriver implements UiDriver {
         // Fall through to native XML on any CDP error
       }
     }
+    // Trong WebView thì DOM mới là thứ mô tả được màn hình.
+    //
+    // Cây XCUITest của một WKWebView chỉ là mấy hộp `XCUIElementTypeOther`:
+    // đo trên máy thật ngày 2026-09-10, màn đăng nhập cho 24 node, không một
+    // TextField, Button hay StaticText nào. Discovery nhìn vào đó chấm điểm cao
+    // nhất được 15 trên ngưỡng 40 rồi bó tay — trong khi DOM ngay bên dưới có
+    // đủ ô nhập kèm placeholder. Android không dính vì nó quan sát DOM qua CDP;
+    // đây là cùng đoạn mã đó, chạy qua Appium.
+    if (this.inWebview) {
+      const raw = (await this.b.execute(observeDomInPage).catch(() => null)) as RawEl[] | null;
+      if (raw && raw.length > 0) return raw.map(domElementToObserved);
+    }
     const xml = await this.getPageSource();
     // Cây của iOS là <XCUIElementTypeButton …>, của Android là <node …>. Trước
     // đây cả hai đều đưa qua parser của Android, nên trên iOS `observe()` luôn
@@ -1916,6 +1929,29 @@ function firstLine(message: string): string {
  * type that native.ts observe() returns, so CDP observations are compatible with
  * the existing crawler/registry pipeline.
  */
+/**
+ * Một phần tử DOM quan sát được → hình dạng `Observed` mà matcher đang dùng.
+ *
+ * Cố ý giữ đơn giản và tách khỏi bản của WebViewCdpDriver: bản đó còn dựng
+ * thêm ứng viên CSS và id nội bộ cho tầng discovery của Android. Ở đây chỉ cần
+ * đủ để matcher chấm điểm — vai trò, tên, chữ, placeholder — và thiếu thì thà
+ * thiếu rõ ràng còn hơn bịa ra một cấu trúc chỉ đúng một nửa.
+ */
+function domElementToObserved(el: RawEl, index: number): Observed {
+  const name = el.ariaLabel ?? el.name ?? el.customName;
+  return {
+    ...(el.testId ? { testId: el.testId } : {}),
+    role: el.tag,
+    ...(name ? { name } : {}),
+    ...(el.domText ? { text: el.domText } : {}),
+    ...(el.placeholder ? { placeholder: el.placeholder } : {}),
+    ...(el.css ? { css: el.css } : {}),
+    interactive: /^(a|button|input|select|textarea)$/i.test(el.tag) || Boolean(el.testId),
+    index,
+    container: false,
+  };
+}
+
 function convertObservedElement(
   el: import('../discovery/UiObservation.js').ObservedElement,
   index: number,
