@@ -57,4 +57,20 @@ describe('đóng overlay trên iOS', () => {
     const ios = run.slice(run.indexOf("platform: 'ios',"));
     assert.match(ios.slice(0, 2500), /popupRules: cfg\.web\.popups/);
   });
+
+  /**
+   * Đóng popup không được đắt tới mức làm hỏng thứ khác.
+   *
+   * Bản đầu cho dò DOM chạy mỗi vòng lặp của resolver. Trên iOS đó là hai lệnh
+   * `execute` qua Appium, mỗi vòng phình lên khoảng hai giây — nên trong ngân
+   * sách 10 giây resolver chỉ kịp 2 vòng thay vì 40, và discovery (chỉ khởi
+   * động từ vòng thứ ba) không bao giờ chạy. Đo trên máy thật: "after 2
+   * attempts" cho một bước kéo dài 16 giây.
+   */
+  it('dò popup DOM có tiết chế, không chạy mỗi vòng lặp', () => {
+    const fn = native.slice(native.indexOf('private async dismissIosOverlay'));
+    const body = fn.slice(0, fn.indexOf('\n  /**'));
+    assert.match(body, /now - this\.lastDomPopupCheck >= 1_000/);
+    assert.match(body, /this\.lastDomPopupCheck = now;/);
+  });
 });

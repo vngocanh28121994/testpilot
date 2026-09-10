@@ -264,6 +264,8 @@ export class NativeUiDriver implements UiDriver {
   private canShell = true;
   /** Playwright/CDP delegate for WebView operations — set when hybrid=true on Android. */
   private cdpDriver?: WebViewCdpDriver;
+  /** Lần cuối dò popup DOM trên iOS — xem dismissIosOverlay(). */
+  private lastDomPopupCheck = 0;
   /** Timestamp of last dismissOverlay() call — throttles context switching. */
   private lastOverlayCheck = 0;
   /** True once launch() has tried to reach a WebView through Appium and failed. */
@@ -989,11 +991,26 @@ export class NativeUiDriver implements UiDriver {
    */
   private async dismissIosOverlay(protect: string[]): Promise<boolean> {
     if (!this.browser) return false;
-    if (this.inWebview && (await this.dismissDomPopup(protect))) return true;
+
+    // Tiết chế cả đường DOM, không chỉ đường native.
+    //
+    // Trên Android phần DOM đi qua CDP nên gần như miễn phí và chạy được mỗi
+    // vòng. Trên iOS nó là hai lệnh `execute` qua Appium, mỗi lệnh vài trăm mili
+    // giây. Bản đầu tôi cho chạy mỗi vòng lặp của resolver: mỗi vòng phình lên
+    // khoảng hai giây, nên trong ngân sách 10 giây resolver chỉ kịp 2 vòng thay
+    // vì 40 — và discovery, thứ chỉ khởi động từ vòng thứ ba, không bao giờ
+    // chạy. Đo trên máy thật: "after 2 attempts" cho một bước dài 16 giây.
+    //
+    // Một popup không xuất hiện rồi biến mất trong vòng một giây, nên dò thưa
+    // hơn không bỏ sót gì đáng kể.
+    const now = Date.now();
+    if (this.inWebview && now - this.lastDomPopupCheck >= 1_000) {
+      this.lastDomPopupCheck = now;
+      if (await this.dismissDomPopup(protect)) return true;
+    }
 
     // Cùng cơ chế tiết chế như Android: đổi context liên tục còn hại hơn cái
     // hộp thoại nó định đóng.
-    const now = Date.now();
     if (now - this.lastOverlayCheck < 5000) return false;
     this.lastOverlayCheck = now;
     const before = this.webview;
