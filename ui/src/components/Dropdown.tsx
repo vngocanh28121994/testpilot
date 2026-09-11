@@ -18,6 +18,9 @@ import { cn } from '@/lib/utils';
  */
 const EMPTY = '\u0000empty';
 
+/** Dài hơn chừng này thì cuộn tay bắt đầu tốn công hơn là gõ vài chữ. */
+const SEARCH_FROM = 8;
+
 const toInner = (value: string) => (value === '' ? EMPTY : value);
 const fromInner = (value: string) => (value === EMPTY ? '' : value);
 
@@ -51,6 +54,7 @@ export function Dropdown({
   id,
   'aria-label': ariaLabel,
   'aria-labelledby': ariaLabelledBy,
+  searchable,
 }: {
   /** Bỏ trống để dropdown tự giữ giá trị — dùng khi nó nằm trong một form. */
   value?: string;
@@ -69,9 +73,24 @@ export function Dropdown({
   id?: string;
   'aria-label'?: string;
   'aria-labelledby'?: string;
+  /**
+   * Có ô tìm ở đầu danh sách. Mặc định bật khi danh sách dài.
+   *
+   * Danh sách feature file của dự án này đã hơn chục mục và còn dài ra; cuộn
+   * tay tìm `kiem-tra-hieu-qua-dau-tu-phai-sinh.feature` giữa chúng là việc
+   * không ai muốn làm lần thứ hai. Ngưỡng thay vì bắt từng chỗ gọi tự khai:
+   * danh sách nào dài thì tự có, không phải sửa 22 chỗ.
+   */
+  searchable?: boolean;
 }) {
   const [own, setOwn] = useState(defaultValue ?? '');
+  const [query, setQuery] = useState('');
   const current = value ?? own;
+  const withSearch = searchable ?? options.length > SEARCH_FROM;
+  const clean = query.trim().toLowerCase();
+  const shown = clean
+    ? options.filter((option) => option.label.toLowerCase().includes(clean))
+    : options;
 
   return (
     <Select
@@ -93,7 +112,24 @@ export function Dropdown({
       </SelectTrigger>
       {name && <input type="hidden" name={name} value={current} />}
       <SelectContent>
-        {options.map((option) => (
+        {withSearch && (
+          <div className="p-1">
+            <input
+              className="border-input w-full rounded border px-2 py-1 text-sm outline-none"
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              // Radix có sẵn typeahead: gõ chữ là nó nhảy tới mục khớp và nuốt
+              // luôn phím. Không chặn thì ô này gõ được đúng một ký tự.
+              onKeyDown={(event) => event.stopPropagation()}
+              placeholder="Tìm…"
+              aria-label="Tìm trong danh sách"
+            />
+          </div>
+        )}
+        {shown.length === 0 && (
+          <div className="text-muted-foreground px-2 py-1.5 text-sm">Không có mục nào khớp.</div>
+        )}
+        {shown.map((option) => (
           <SelectItem key={option.value} value={toInner(option.value)} disabled={option.disabled}>
             {option.label}
           </SelectItem>
