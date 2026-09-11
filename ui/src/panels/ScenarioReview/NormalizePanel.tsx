@@ -56,7 +56,7 @@ export function NormalizePanel({
 
   return (
     <div className="flex flex-col gap-3">
-      <div>
+      <div className="flex flex-col items-start gap-1">
         <Button
           type="button"
           size="sm"
@@ -67,6 +67,16 @@ export function NormalizePanel({
           <Wand2 className="size-4" />
           {normalize.isPending ? 'Đang chuẩn hoá…' : 'Chuẩn hoá'}
         </Button>
+        {/* Nói ra ranh giới giữa hai nút.
+            Bấm Lưu cũng chuẩn hoá — nó biên dịch bản nháp và nhờ AI sửa lỗi cú
+            pháp trước khi ghi. Không nói ra thì nút này trông như một bước bắt
+            buộc mà bỏ qua sẽ hỏng, còn người bỏ qua nó lại không hiểu vì sao
+            câu mình gõ bị đổi lúc lưu. Hai việc nó làm mà Lưu không làm: cho
+            xem trước từng câu sẽ bị sửa, và là nơi duy nhất duyệt action mới. */}
+        <span className="text-muted-foreground text-xs">
+          Xem trước từng câu sẽ bị sửa, và duyệt action mới. Bấm Lưu cũng tự chuẩn hoá,
+          nhưng sửa im lặng và không đề xuất action.
+        </span>
       </div>
 
       {result && (

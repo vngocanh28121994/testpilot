@@ -101,6 +101,24 @@ describe('NormalizePanel', () => {
   });
 });
 
+/**
+ * Hai nút cùng chuẩn hoá, và người dùng không có cách nào biết.
+ *
+ * `PUT /api/feature` gọi prepareExecutableDraft(): nó cũng chuẩn hoá, cũng nhờ
+ * AI sửa lỗi cú pháp, và từ chối ghi nếu không sửa nổi. Nên "Chuẩn hoá" KHÔNG
+ * phải bước bắt buộc — nhưng không nói ra thì nó trông như vậy, còn người bỏ
+ * qua nó lại không hiểu vì sao câu mình gõ bị đổi lúc lưu.
+ */
+describe('ranh giới giữa Chuẩn hoá và Lưu', () => {
+  it('nói rõ Lưu cũng chuẩn hoá, và Chuẩn hoá được thêm gì', async () => {
+    renderWithProviders(<NormalizePanel content={'Feature: x'} onApply={() => {}} />);
+    const hint = await screen.findByText(/Bấm Lưu cũng tự chuẩn hoá/);
+    expect(hint).toBeInTheDocument();
+    expect(hint.textContent).toMatch(/Xem trước/);
+    expect(hint.textContent).toMatch(/duyệt action mới/);
+  });
+});
+
 describe('SyntaxHelp', () => {
   /**
    * Bảng bị bóp về gần bằng 0 và biến mất.
