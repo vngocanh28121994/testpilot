@@ -112,10 +112,13 @@ describe('NormalizePanel', () => {
 describe('ranh giới giữa Chuẩn hoá và Lưu', () => {
   it('nói rõ Lưu cũng chuẩn hoá, và Chuẩn hoá được thêm gì', async () => {
     renderWithProviders(<NormalizePanel content={'Feature: x'} onApply={() => {}} />);
-    const hint = await screen.findByText(/Bấm Lưu cũng tự chuẩn hoá/);
+    const hint = await screen.findByText(/Bấm Lưu cũng chuẩn hoá/);
     expect(hint).toBeInTheDocument();
     expect(hint.textContent).toMatch(/Xem trước/);
     expect(hint.textContent).toMatch(/duyệt action mới/);
+    // Sau khi gộp, Lưu cũng áp dụng action đã duyệt — dòng này phải nói ra,
+    // nếu không người dùng vẫn tưởng phải bấm Chuẩn hoá thì macro mới chạy.
+    expect(hint.textContent).toMatch(/áp dụng action đã duyệt/);
   });
 });
 

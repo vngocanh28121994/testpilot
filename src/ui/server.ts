@@ -50,6 +50,7 @@ import { IOS_TUNNEL_COMMAND, preflight, preflightSummary } from '../core/preflig
 import { resolveFarmTarget } from '../farm/target.js';
 import { buildInventory } from '../core/builds.js';
 import { attachedFromDevicectl } from '../core/iosDevices.js';
+import { expandApprovedActions } from '../actions/expandActions.js';
 import { normalizeFeatureTags, tagTaxonomyView } from '../core/tagTaxonomy.js';
 import {
   assertFarmReady,
@@ -502,10 +503,20 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
       }
       const normalizedTags = normalizeFeatureTags(content);
       const registry = await Registry.load(cfg.paths.registry);
+      // Nở action đã duyệt TRƯỚC khi biên dịch, y như đường "Chuẩn hoá".
+      //
+      // Thiếu bước này thì một action đã duyệt chỉ chạy được nếu người dùng
+      // nhớ bấm "Chuẩn hoá" trước: bấm thẳng "Lưu" thì câu macro không nở, bản
+      // nháp biên dịch hỏng, và vòng tự sửa của AI viết lại nó thành câu khác.
+      // Cùng một bản nháp, hai nút, hai kết quả — và không ai biết trước.
+      const expanded = expandApprovedActions(
+        normalizedTags.content,
+        await ActionRegistry.load(cfg.paths.actionsDb),
+      );
       // Saving from the business editor is a compile operation, not a raw file
       // write. Resolve natural wording and binding mistakes first so the user
       // never has to understand the controlled vocabulary or registry ids.
-      const prepared = await prepareExecutableDraft(normalizedTags.content, registry, {
+      const prepared = await prepareExecutableDraft(expanded.content, registry, {
         model: pickModel(cfg.llm.model),
         uri: file,
         maxRepairs: 2,
@@ -1846,46 +1857,6 @@ async function compileScenarioPlan(content: string, model: string): Promise<Scen
       warnings: [...fallback.warnings, 'AI chưa phân tích được; đang dùng kế hoạch cục bộ an toàn.'],
     };
   }
-}
-
-function expandApprovedActions(
-  content: string,
-  actions: ActionRegistry,
-): {
-  content: string;
-  changes: DraftNormalization['changes'];
-  applied: DraftNormalization['appliedActions'];
-} {
-  const changes: DraftNormalization['changes'] = [];
-  const applied: DraftNormalization['appliedActions'] = [];
-  const output: string[] = [];
-  const lines = content.replace(/\r\n/g, '\n').split('\n');
-  for (let index = 0; index < lines.length; index += 1) {
-    const line = lines[index]!;
-    const match = line.match(/^(\s*)(Given|When|Then|And|But)\s+(.+)$/i);
-    if (!match) {
-      output.push(line);
-      continue;
-    }
-    const expanded = actions.expand(match[3]!.trim());
-    if (!expanded) {
-      output.push(line);
-      continue;
-    }
-    const indent = match[1] ?? '';
-    const keyword = match[2] ?? 'And';
-    expanded.steps.forEach((step, stepIndex) => {
-      output.push(`${indent}${stepIndex === 0 ? keyword : 'And'} ${step}`);
-    });
-    changes.push({
-      line: index + 1,
-      from: match[3]!.trim(),
-      to: expanded.steps.join(' → '),
-      reason: `Áp dụng action đã duyệt: ${expanded.action.label}`,
-    });
-    applied.push({ id: expanded.action.id, label: expanded.action.label, line: index + 1 });
-  }
-  return { content: output.join('\n'), changes, applied };
 }
 
 function isSensitiveStep(text: string): boolean {

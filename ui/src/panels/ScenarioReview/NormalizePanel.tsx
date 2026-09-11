@@ -74,8 +74,8 @@ export function NormalizePanel({
             câu mình gõ bị đổi lúc lưu. Hai việc nó làm mà Lưu không làm: cho
             xem trước từng câu sẽ bị sửa, và là nơi duy nhất duyệt action mới. */}
         <span className="text-muted-foreground text-xs">
-          Xem trước từng câu sẽ bị sửa, và duyệt action mới. Bấm Lưu cũng tự chuẩn hoá,
-          nhưng sửa im lặng và không đề xuất action.
+          Xem trước từng câu sẽ bị sửa, và duyệt action mới. Bấm Lưu cũng chuẩn hoá và
+          áp dụng action đã duyệt như ở đây, nhưng sửa im lặng và không đề xuất action mới.
         </span>
       </div>
 
