@@ -41,9 +41,13 @@ export function RunVideo({
 
   return (
     <figure className="mt-3 flex flex-col gap-2">
+      {/* Bản ghi của điện thoại là khung dọc, nên `max-w-full` cho ra một cột
+          cao gần bằng cả màn hình — phần còn lại của báo cáo bị đẩy xuống dưới
+          tầm mắt. Giới hạn theo CHIỀU CAO thay vì chiều ngang: video dọc thì
+          chiều cao mới là cái tràn. */}
       <video
         ref={video}
-        className="max-w-full"
+        className="max-h-[28rem] max-w-full self-start rounded"
         controls
         preload="metadata"
         src={url}

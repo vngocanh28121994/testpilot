@@ -72,3 +72,14 @@ describe('RunVideo', () => {
     expect(screen.queryByRole('button', { name: /Tìm kiếm Bảng giá/ })).not.toBeInTheDocument();
   });
 });
+
+/**
+ * Bản ghi của điện thoại là khung dọc, nên `max-w-full` một mình cho ra một cột
+ * cao gần bằng cả màn hình và đẩy phần còn lại của báo cáo xuống dưới tầm mắt.
+ */
+describe('RunVideo — khung dọc không được chiếm hết màn hình', () => {
+  it('giới hạn theo chiều cao, vì video dọc thì chiều cao mới là cái tràn', () => {
+    const { container } = render(<RunVideo url={report.wholeVideoUrls[0]!} report={report} />);
+    expect(container.querySelector('video')!.className).toContain('max-h-');
+  });
+});
