@@ -82,6 +82,20 @@ const Android = z.object({
   /** Absent = single-device mode driven by `deviceName`. See `devicesOf()`. */
   devices: z.array(Device).optional(),
   app: z.string().optional(),
+  /**
+   * Môi trường này dùng app ĐÃ CÀI SẴN trên máy, không cài đè bản trong config.
+   *
+   * Chỉ có nghĩa khi đặt trong một `environments.<env>`. Nó là cách người chạy
+   * nói ra thứ mà tool không tự biết được: chiếc máy này đang cài đúng bản của
+   * môi trường đó rồi. Các môi trường của app dùng chung bundle id nên trên máy
+   * không có gì phân biệt được chúng — đo trên máy thật thì cả hai đều là
+   * `com.tcbs.digital.tcinvest`, chỉ khác số phiên bản, mà số phiên bản thì
+   * không nói lên môi trường.
+   *
+   * Bật cờ này là nhận trách nhiệm đó. Đổi lại, lượt chạy in ra phiên bản đang
+   * nằm trên máy để đối chiếu, thay vì im lặng.
+   */
+  useInstalledApp: z.boolean().default(false),
   appPackage: z.string().optional(),
   appActivity: z.string().optional(),
   hybrid: z.boolean().default(false),
@@ -129,6 +143,20 @@ const Ios = z.object({
   /** Absent = single-device mode driven by `deviceName`. See `devicesOf()`. */
   devices: z.array(Device).optional(),
   app: z.string().optional(),
+  /**
+   * Môi trường này dùng app ĐÃ CÀI SẴN trên máy, không cài đè bản trong config.
+   *
+   * Chỉ có nghĩa khi đặt trong một `environments.<env>`. Nó là cách người chạy
+   * nói ra thứ mà tool không tự biết được: chiếc máy này đang cài đúng bản của
+   * môi trường đó rồi. Các môi trường của app dùng chung bundle id nên trên máy
+   * không có gì phân biệt được chúng — đo trên máy thật thì cả hai đều là
+   * `com.tcbs.digital.tcinvest`, chỉ khác số phiên bản, mà số phiên bản thì
+   * không nói lên môi trường.
+   *
+   * Bật cờ này là nhận trách nhiệm đó. Đổi lại, lượt chạy in ra phiên bản đang
+   * nằm trên máy để đối chiếu, thay vì im lặng.
+   */
+  useInstalledApp: z.boolean().default(false),
   bundleId: z.string().optional(),
   /**
    * Apple Developer Team ID, ten characters, e.g. "A1B2C3D4E5".
@@ -508,6 +536,13 @@ export function assertEnvPackage(
   if (!override || env === cfg.defaultEnv) return;
   const app = platform === 'ios' ? override.ios?.app : override.android?.app;
   if (app) return;
+  // Người chạy đã nói rõ: máy đang cài sẵn bản của môi trường này. Đó là thứ
+  // duy nhất phá được thế bí ở đây — tool không nhìn vào máy mà biết bản đang
+  // cài thuộc môi trường nào, vì mọi môi trường dùng chung bundle id. Chặn cả
+  // trường hợp này là chặn một việc hợp lệ, và người dùng không có đường nào
+  // khai báo điều mình biết.
+  const installed = platform === 'ios' ? override.ios?.useInstalledApp : override.android?.useInstalledApp;
+  if (installed) return;
 
   const key = `${platform}.app`;
   const inherited = platform === 'ios' ? cfg.ios.app : cfg.android.app;

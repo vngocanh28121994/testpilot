@@ -1,8 +1,13 @@
+import { execFile } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { createReadStream, existsSync } from 'node:fs';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { pipeline } from 'node:stream/promises';
+import os from 'node:os';
+import { promisify } from 'node:util';
+
+const exec = promisify(execFile);
 
 /**
  * Which environment's build is currently installed on each handset.
@@ -160,6 +165,44 @@ export async function appFingerprint(file: string | undefined): Promise<string |
     const hash = createHash('sha256');
     await pipeline(createReadStream(abs), hash);
     return hash.digest('hex');
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * Phiên bản app đang thật sự nằm trên máy, hỏi thẳng thiết bị.
+ *
+ * Dùng khi một môi trường khai `useInstalledApp`: tool không biết bản đang cài
+ * thuộc môi trường nào, nhưng ít nhất nói ra được nó là bản nào — để người chạy
+ * đối chiếu với thứ mình nghĩ là đang cài, thay vì chạy trong im lặng rồi hỏng
+ * ở màn đăng nhập.
+ *
+ * Hỏi không được thì trả về undefined: đây là dòng thông tin, không phải cổng
+ * chặn, và không đáng để làm hỏng một lượt chạy.
+ */
+export async function installedAppVersion(
+  platform: 'ios' | 'android',
+  udid: string,
+  id: string | undefined,
+): Promise<string | undefined> {
+  if (!id) return undefined;
+  try {
+    if (platform === 'ios') {
+      const file = path.join(os.tmpdir(), `tp-apps-${process.pid}-${Date.now()}.json`);
+      await exec('xcrun', [
+        'devicectl', 'device', 'info', 'apps', '--device', udid, '--quiet', '--json-output', file,
+      ], { timeout: 90_000 });
+      const parsed = JSON.parse(await readFile(file, 'utf8')) as {
+        result?: { apps?: { bundleIdentifier?: string; version?: string }[] };
+      };
+      const app = parsed.result?.apps?.find((a) => a.bundleIdentifier === id);
+      return app?.version;
+    }
+    const { stdout } = await exec('adb', ['-s', udid, 'shell', 'dumpsys', 'package', id], {
+      timeout: 30_000, encoding: 'utf8',
+    });
+    return /versionName=(\S+)/.exec(stdout)?.[1];
   } catch {
     return undefined;
   }

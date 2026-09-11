@@ -183,3 +183,40 @@ test('vân tay: đọc nội dung thật, không phải đường dẫn', async 
     await rm(dir, { recursive: true, force: true });
   }
 });
+
+/**
+ * Máy đã cài sẵn bản của môi trường đó — cái chặn không được cản.
+ *
+ * Chuyện thật trên máy người dùng: iPhone đang cài TCInvest 6.4.7 (bản SIT cài
+ * tay), còn `build/App.ipa` trong config là 6.4.6 của prod. Lượt chạy không cài
+ * gì cả — nó dùng app sẵn có — nên câu "chạy tiếp sẽ là đăng nhập account sit
+ * vào app prod" của cái chặn là sai, và nó chặn mất một việc hợp lệ.
+ *
+ * Tool không tự biết bản đang cài thuộc môi trường nào: mọi môi trường dùng
+ * chung bundle id `com.tcbs.digital.tcinvest`, chỉ khác số phiên bản, mà số
+ * phiên bản không nói lên môi trường. Nên cách duy nhất là để người chạy khai.
+ */
+test('môi trường khai dùng app cài sẵn thì không bị chặn', () => {
+  const cfg = ConfigSchema.parse({
+    web: { baseUrl: 'https://x.test' },
+    defaultEnv: 'prod',
+    ios: { app: 'build/App.ipa' },
+    android: { app: 'build/app.apk' },
+    environments: {
+      sit: { ios: { useInstalledApp: true } },
+    },
+  });
+  assert.doesNotThrow(() => assertEnvPackage(cfg, 'sit', 'ios'));
+  // Khai cho iOS không nói hộ Android: bên kia vẫn sẽ cài đè bản của prod.
+  assert.throws(() => assertEnvPackage(cfg, 'sit', 'android'), /android\.app/);
+});
+
+test('không khai gì thì vẫn bị chặn như cũ', () => {
+  const cfg = ConfigSchema.parse({
+    web: { baseUrl: 'https://x.test' },
+    defaultEnv: 'prod',
+    ios: { app: 'build/App.ipa' },
+    environments: { sit: {} },
+  });
+  assert.throws(() => assertEnvPackage(cfg, 'sit', 'ios'), /ios\.app/);
+});

@@ -13,7 +13,7 @@ import { Registry } from '../core/registry.js';
 import { ScenarioReviewStore, scenarioBlocks } from '../core/scenarioReview.js';
 import { KnownIssueStore } from '../core/knownIssues.js';
 import { adoptStoredApiKeys, Secrets, accountVariables, secretEnvName } from '../core/secrets.js';
-import { DeviceEnvLog, appFingerprint, needsReinstall } from '../core/deviceEnv.js';
+import { DeviceEnvLog, appFingerprint, installedAppVersion, needsReinstall } from '../core/deviceEnv.js';
 import { iosTunnelCheck } from '../core/preflight.js';
 import { canonicalTag } from '../core/tagTaxonomy.js';
 import type {
@@ -156,13 +156,27 @@ async function main(): Promise<void> {
   // Only local native runs: web has no package, and on Device Farm the farm
   // installs whatever it was uploaded and this process cannot second-guess it.
   const envLog = await DeviceEnvLog.load(cfg.paths.deviceEnvDb);
-  const appUnderTest = platform === 'ios' ? cfg.ios.app : platform === 'android' ? cfg.android.app : undefined;
+  // Môi trường có thể khai rằng máy đang cài sẵn đúng bản của nó. Khi đó lượt
+  // chạy KHÔNG được đưa bản trong config cho driver: đưa là cài đè, tức xoá
+  // đúng thứ vừa được khai là cần giữ.
+  const useInstalled = platform === 'ios'
+    ? Boolean(baseCfg.environments[envName]?.ios?.useInstalledApp)
+    : platform === 'android'
+      ? Boolean(baseCfg.environments[envName]?.android?.useInstalledApp)
+      : false;
+  const configuredApp = platform === 'ios' ? cfg.ios.app : platform === 'android' ? cfg.android.app : undefined;
+  const appUnderTest = useInstalled ? undefined : configuredApp;
   // Only when environments exist. A config that declares none has exactly one
   // build, so there is nothing to be on the wrong side of — and printing a line
   // about environments there is noise in every run that never asked.
+  //
+  // `useInstalled` cũng tắt phần này: sổ ghi "máy đang cài bản của môi trường
+  // nào" chỉ có nghĩa khi chính lượt chạy là người đi cài. Ở đây không ai cài,
+  // nên ghi vào sổ là ghi một điều mình không kiểm chứng được.
   const tracksEnv =
     platform !== 'web' &&
     !args.onFarm &&
+    !useInstalled &&
     Boolean(device.udid) &&
     Object.keys(baseCfg.environments).length > 0;
   // Đọc trước cả quyết định lẫn lúc ghi lại, để hai bên nói về đúng một file.
@@ -173,7 +187,25 @@ async function main(): Promise<void> {
       )
     : { reinstall: false, because: '' };
   const enforceAppInstall = decision.reinstall || (tracksEnv && args.reinstall);
-  if (tracksEnv) {
+  if (useInstalled) {
+    // Nói ra bản đang nằm trên máy. Không chứng minh được nó thuộc môi trường
+    // nào — mọi môi trường chung bundle id — nhưng người chạy biết mình cài gì,
+    // và một con số sai mắt thường nhìn ra ngay.
+    const key = platform === 'ios' ? 'ios.bundleId' : 'android.appPackage';
+    const id = platform === 'ios' ? cfg.ios.bundleId : cfg.android.appPackage;
+    const version = device.udid
+      ? await installedAppVersion(platform as 'ios' | 'android', device.udid, id)
+      : undefined;
+    // Không đọc được phiên bản thì nói ra vì sao. Im lặng bỏ qua là tệ nhất:
+    // người chạy vừa nhận trách nhiệm "máy đang cài đúng bản", mà thứ giúp họ
+    // kiểm lại lời đó thì biến mất không một lời giải thích.
+    const which = version
+      ? `đang là bản ${version}`
+      : id
+        ? 'không đọc được phiên bản trên máy'
+        : `chưa khai ${key} nên không đối chiếu được bản trên máy`;
+    console.log(`[run:env] ${envName} — dùng app đã cài sẵn trên máy, không cài đè (${which}).`);
+  } else if (tracksEnv) {
     console.log(
       enforceAppInstall
         ? `[run:env] ${envName} — cài lại app (${args.reinstall && !decision.reinstall ? '--reinstall' : decision.because})`
