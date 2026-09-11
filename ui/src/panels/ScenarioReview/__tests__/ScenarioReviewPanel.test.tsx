@@ -24,14 +24,15 @@ const render = () => renderWithRouter(<ScenarioReviewPanel search={{}} />, { pat
 
 describe('ScenarioReviewPanel — bộ lọc', () => {
   /**
-   * Trước đây là `<select multiple>` xổ hết mọi tag ra màn hình. Giờ là dropdown
-   * chọn một, cùng hình dáng với hai bộ lọc bên cạnh.
+   * Từng là `<select multiple>` xổ hết mọi tag ra màn hình, rồi thành dropdown
+   * chọn MỘT. Chọn một lại chặn đúng nhu cầu hay gặp nhất — "chỉ các case
+   * positive của MỘT chức năng" — dù bộ lọc bên dưới vốn đã AND nhiều tag.
    */
-  it('tag là dropdown chọn một, mặc định Tất cả tag', async () => {
+  it('tag chọn được nhiều, mặc định chưa chọn gì', async () => {
     await render();
     await screen.findByText('Đăng nhập thành công');
 
-    expect(screen.getByRole('combobox', { name: 'Lọc theo tag' })).toHaveTextContent('Tất cả tag');
+    expect(screen.getByRole('searchbox', { name: 'Lọc theo tag' })).toHaveValue('');
   });
 
   it('chọn tag rồi bấm Lọc thì đẩy tag vào URL và lọc bảng', async () => {
@@ -40,10 +41,25 @@ describe('ScenarioReviewPanel — bộ lọc', () => {
     await screen.findByText('Đăng nhập thành công');
     expect(screen.getAllByRole('row')).toHaveLength(3); // tiêu đề + 2 kịch bản
 
-    await chooseFromDropdown('Lọc theo tag', '@web');
+    await user.click(screen.getByRole('searchbox', { name: 'Lọc theo tag' }));
+    await user.click(await screen.findByRole('button', { name: '@web' }));
     await user.click(screen.getByRole('button', { name: 'Lọc' }));
 
     expect(router.state.location.search).toMatchObject({ tags: ['@web'] });
+  });
+
+  /**
+   * Mở lại một đường dẫn đã lọc phải thấy đúng các thẻ đang bật.
+   *
+   * Tag đã chọn sống ở state chứ không ở FormData — ô chọn nhiều không có giá
+   * trị đơn lẻ để FormData đọc — nên nó phải tự khởi tạo lại từ URL, nếu không
+   * bộ lọc nói một đằng còn bảng lọc một nẻo.
+   */
+  it('mở lại URL đã có tag thì hiện sẵn thẻ đó', async () => {
+    renderWithRouter(<ScenarioReviewPanel search={{ tags: ['@web'] }} />, { path: '/scenarios' });
+    await screen.findByText('Đăng nhập thành công');
+
+    expect(screen.getByRole('button', { name: 'Bỏ @web' })).toBeInTheDocument();
   });
 
   it('nút Lọc là primary, không phải nút chìm', async () => {

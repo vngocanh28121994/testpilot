@@ -1,4 +1,4 @@
-import { Fragment, useMemo, useState } from 'react';
+import { Fragment, useEffect, useMemo, useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Link, useNavigate } from '@tanstack/react-router';
 import { toast } from 'sonner';
@@ -13,6 +13,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Field } from '@/components/Field';
+import { TagFilter } from '@/components/TagFilter';
 import { Pagination } from '@/components/Pagination';
 import { StatusPill } from '@/components/StatusPill';
 import { TagChip } from '@/components/TagChip';
@@ -204,15 +205,22 @@ function ReviewBody({ state, search }: { state: StateResponse; search: ScenarioS
     setSelected((items) =>
       items.includes(id) ? items.filter((item) => item !== id) : [...items, id],
     );
+  // Tag đã chọn sống ở state chứ không ở FormData: form này gửi bằng nút "Lọc",
+  // mà một ô chọn nhiều thì không có giá trị đơn lẻ để FormData đọc. Khởi tạo
+  // từ URL để mở lại một đường dẫn đã lọc vẫn thấy đúng các thẻ đang bật.
+  const [pickedTags, setPickedTags] = useState<string[]>(search.tags ?? []);
+  useEffect(() => {
+    setPickedTags(search.tags ?? []);
+  }, [search.tags]);
+
   const applyFilters = (form: HTMLFormElement) => {
     const data = new FormData(form);
-    const tag = String(data.get('tag') || '');
     void navigate({
       search: {
         q: String(data.get('q') || '') || undefined,
         file: String(data.get('file') || '') || undefined,
         status: (String(data.get('status') || '') || undefined) as ScenarioSearch['status'],
-        tags: tag ? [tag] : undefined,
+        tags: pickedTags.length > 0 ? pickedTags : undefined,
         page: undefined,
       },
     });
@@ -294,17 +302,12 @@ function ReviewBody({ state, search }: { state: StateResponse; search: ScenarioS
                   ]}
                 />
               </Field>
+              {/* Bộ lọc bên dưới vốn đã là "và" trên nhiều tag
+                  (search.tags.every(...)); chỉ giao diện bó lại còn chọn một,
+                  nên "chỉ positive của MỘT chức năng" không lọc ra được dù mã
+                  hoàn toàn làm được. */}
               <Field label="Tag">
-                <Dropdown
-                  name="tag"
-                  aria-label="Lọc theo tag"
-                  defaultValue={search.tags?.[0] ?? ''}
-                  className="mt-0"
-                  options={[
-                    { value: '', label: 'Tất cả tag' },
-                    ...tagOptions.map((tag) => ({ value: tag, label: tag })),
-                  ]}
-                />
+                <TagFilter all={tagOptions} value={pickedTags} onChange={setPickedTags} />
               </Field>
               <Button type="submit">
                 <Filter className="size-4" />

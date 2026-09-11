@@ -41,10 +41,13 @@ describe('TagFilter', () => {
   });
 
   /** Nói ra ý nghĩa "và", vì bộ lọc nhiều giá trị dễ bị đọc thành "hoặc". */
-  it('nói rõ nhiều tag nghĩa là phải có đủ', () => {
+  it('nói rõ nhiều tag nghĩa là phải có đủ', async () => {
     renderWithProviders(
       <TagFilter all={ALL} value={['@feature-chuyen-tien', '@positive']} onChange={vi.fn()} />,
     );
+    // Câu này nằm trong bảng xổ ra, không nằm dưới ô: một dòng chữ hiện ra rồi
+    // biến mất theo số thẻ cũng đủ làm hàng lưới nhảy.
+    await userEvent.click(screen.getByLabelText('Lọc theo tag'));
     expect(screen.getByText(/đủ 2 tag/)).toBeInTheDocument();
   });
 
@@ -54,5 +57,31 @@ describe('TagFilter', () => {
     renderWithProviders(<TagFilter all={ALL} value={['@p0', '@positive']} onChange={onChange} />);
     await user.click(screen.getByLabelText('Bỏ @p0'));
     expect(onChange).toHaveBeenCalledWith(['@positive']);
+  });
+});
+
+/**
+ * Thẻ xếp chồng làm ô cao thêm mỗi dòng, và cả hàng lưới lệch theo: "Platform"
+ * bên trái đứng yên còn cột tag trôi xuống. Tag chức năng dài tới ba chục ký tự
+ * nên chuyện đó xảy ra ngay ở thẻ thứ hai.
+ */
+describe('TagFilter — chiều cao không đổi theo số thẻ', () => {
+  it('ô giữ nguyên một dòng dù đã chọn nhiều tag', () => {
+    const { container } = renderWithProviders(
+      <TagFilter all={ALL} value={['@feature-chuyen-tien', '@positive']} onChange={vi.fn()} />,
+    );
+    // Ô là khối bao quanh chính cái input, không phải khung ngoài cùng.
+    const box = container.querySelector('input')!.parentElement;
+    expect(box?.className).toContain('h-9');
+    expect(box?.className).toContain('overflow-x-auto');
+  });
+
+  it('Backspace ở ô rỗng gỡ thẻ cuối', async () => {
+    const user = userEvent.setup();
+    const onChange = vi.fn();
+    renderWithProviders(<TagFilter all={ALL} value={['@p0', '@positive']} onChange={onChange} />);
+    await user.click(screen.getByLabelText('Lọc theo tag'));
+    await user.keyboard('{Backspace}');
+    expect(onChange).toHaveBeenCalledWith(['@p0']);
   });
 });
