@@ -1075,8 +1075,12 @@ export class Executor {
       } catch (err) {
         lastError = err as Error;
         if (attempt >= 2) break;
+        // Kèm lý do: lượt thử thứ hai thường hỏng y hệt lượt đầu, và nếu dòng
+        // này im lặng thì cả hai lần đều không để lại gì để lần theo.
         console.warn(
-          `[flow] tìm kiếm "${query}" chưa mở được trang đích — làm mới thao tác tìm kiếm một lần.`,
+          `[flow] tìm kiếm "${query}" chưa mở được trang đích `
+          + `(${lastError.message.split('\n')[0]!.trim().slice(0, 160)}) `
+          + '— làm mới thao tác tìm kiếm một lần.',
         );
         await this.driver.dismissOverlay?.().catch(() => false);
         await sleep(500);
@@ -1235,7 +1239,7 @@ export class Executor {
             .catch(() => undefined);
           const presence = shot ? ` [ảnh: ${shot}]` : '';
           console.warn(
-            `[tap] "${actionLabel}": bấm lỗi, và ${provable
+            `[tap] "${actionLabel}": ${driverReason(error)}, và ${provable
               ? `"${expectation!.source}" cũng không thấy${presence} → coi là lỗi thật`
               : 'bước sau không chứng minh được kết quả → không thể xác nhận'}`,
           );
@@ -1899,4 +1903,21 @@ function verdictOf(runs: ScenarioResult['runs']): ScenarioResult['verdict'] {
   const failed = runs.some((r) => r.status === 'failed');
   if (passed && failed) return 'flaky';
   return passed ? 'passed' : 'failed';
+}
+
+/**
+ * Câu của driver, rút gọn đủ để đọc trong một dòng log.
+ *
+ * Trước đây chỗ này chỉ ghi "bấm lỗi". Một lượt chạy thật hỏng ở bước mở chức
+ * năng từ tìm kiếm, và để biết vì sao đã phải đi đọc 19 file cây XML kèm ảnh
+ * chụp — trong khi câu trả lời ("không có phần tử nào khớp") vốn nằm sẵn trong
+ * lỗi mà dòng log vứt đi. Log để trace, mà lại giấu đúng phần cần trace.
+ *
+ * Cắt ở dòng đầu và 160 ký tự: WebdriverIO đính kèm cả trang gợi ý và link tài
+ * liệu, dán nguyên vào thì dòng log dài hơn màn hình và không ai đọc nữa.
+ */
+function driverReason(error: unknown): string {
+  const raw = error instanceof Error ? error.message : String(error);
+  const first = raw.split('\n').map((l) => l.trim()).find(Boolean) ?? '';
+  return first ? `bấm lỗi (${first.slice(0, 160)})` : 'bấm lỗi';
 }
