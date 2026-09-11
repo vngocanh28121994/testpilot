@@ -27,7 +27,7 @@ import type { ObservationProvider } from '../../discovery/ElementDiscovery.js';
 import type { UiObservation, ObservedElement } from '../../discovery/UiObservation.js';
 import type { UiDriver, UiHandle } from '../../drivers/driver.js';
 import type { LocatorCandidate } from '../../core/types.js';
-import { deriveLocator } from '../../discovery/ai/SemanticElementDiscovery.js';
+import { deriveLocator, refineLocator } from '../../discovery/ai/locatorFromElement.js';
 
 /** Ô nhập, xét cả vai trò web lẫn native — cùng bộ discovery chạy trên cả hai. */
 function laODiaNhap(el: { role?: string }): boolean {
@@ -49,6 +49,15 @@ interface Ca {
    * lỗi thì bảng vẫn xanh.
    */
   aiTraVe?: { strategy: string; layTu: 'text' | 'placeholder' | 'accessibilityLabel' };
+  /**
+   * Locator mà model TỰ đề xuất, thay vì để tool suy ra từ phần tử.
+   *
+   * `candidate.suggestedLocator ?? deriveLocator(el)` — có đề xuất thì mọi hiểu
+   * biết trong deriveLocator bị bỏ qua. Đo trên máy thật: model chọn đúng ô
+   * nhập ba lượt liền (tin cậy 85 → 95 → 90) rồi khai `label="TCB,VNM,FPT…"`,
+   * và có lượt gán đúng chuỗi ấy cho cả một cái nút.
+   */
+  aiDeXuat?: { strategy: string; value: string };
   /** Locator registry đang giữ — đúng với giao diện CŨ, giờ không khớp gì nữa. */
   locatorCu: LocatorCandidate;
   /** Tên nghiệp vụ của phần tử, thứ duy nhất không đổi khi giao diện đổi. */
@@ -189,6 +198,29 @@ const BANG_NATIVE: Ca[] = [
   },
 ];
 
+const BANG_DE_XUAT: Ca[] = [
+  {
+    ten: 'model tự đề xuất label cho hint của ô nhập — phải sửa thành placeholder',
+    locatorCu: { strategy: 'testId', value: 'search-old', weight: 0.9, origin: 'authored' as const },
+    nhan: 'Ô mã cổ phiếu',
+    manHinhMoi: [{ id: 'o-tim', role: 'android.widget.EditText', text: 'TCB,VNM,FPT…' }],
+    dungLa: 'o-tim',
+    aiTraVe: { strategy: 'label', layTu: 'text' },
+    aiDeXuat: { strategy: 'label', value: 'TCB,VNM,FPT…' },
+  },
+  {
+    // Đề xuất đúng thì để yên: chốt này chỉ sửa chỗ khai sai loại, không phải
+    // một bộ lọc đè lên mọi thứ model nói.
+    ten: 'model đề xuất testId hợp lệ thì giữ nguyên',
+    locatorCu: { strategy: 'placeholder', value: 'cũ', weight: 0.5, origin: 'authored' as const },
+    nhan: 'Ô mã cổ phiếu',
+    manHinhMoi: [{ id: 'o-tim', role: 'input', testId: 'ma-ck', placeholder: 'TCB,VNM,FPT…' }],
+    dungLa: 'o-tim',
+    aiTraVe: { strategy: 'testId', layTu: 'text' },
+    aiDeXuat: { strategy: 'testId', value: 'ma-ck' },
+  },
+];
+
 const ELEMENT_ID = 'man.phanTu';
 
 function quanSat(manHinh: ManHinh[]): UiObservation {
@@ -292,7 +324,11 @@ async function chayThuHealing(ca: Ca) {
   const semantic = ca.aiTraVe
     ? {
         discover: async () => {
-          const locator = deriveLocator(quanSat([dich]).elements[0]!);
+          const el = quanSat([dich]).elements[0]!;
+          // Model thật có thể TỰ đề xuất locator; khi đó deriveLocator bị bỏ
+          // qua hoàn toàn. Ca `aiDeXuat` dựng lại đúng nhánh đó — nhánh đã làm
+          // hỏng ba lượt chạy liên tiếp.
+          const locator = refineLocator(el, ca.aiDeXuat);
           if (!locator) return { method: 'failed' as const, evidence: ['không suy ra được locator'] };
           return { method: 'ai' as const, locator, match: { confidence: 90 }, evidence: [] };
         },
@@ -326,7 +362,7 @@ async function chayThuHealing(ca: Ca) {
 }
 
 describe('healing khi giao diện đổi', () => {
-  for (const ca of [...BANG, ...BANG_AI, ...BANG_O_NHAP, ...BANG_NATIVE]) {
+  for (const ca of [...BANG, ...BANG_AI, ...BANG_O_NHAP, ...BANG_NATIVE, ...BANG_DE_XUAT]) {
     it(ca.ten, async () => {
       const r = await chayThuHealing(ca);
       assert.equal(r.thangCuoc, ca.dungLa, `phải tìm ra ${ca.dungLa}; lỗi: ${r.loi?.message ?? '—'}`);
@@ -345,7 +381,7 @@ describe('healing khi giao diện đổi', () => {
    * `xpath` mang giá trị là chữ thường là đúng cách lỗi hôm nay đã sinh ra.
    */
   it('không sinh ra xpath mang giá trị là chữ thường', async () => {
-    for (const ca of [...BANG, ...BANG_AI, ...BANG_O_NHAP, ...BANG_NATIVE]) {
+    for (const ca of [...BANG, ...BANG_AI, ...BANG_O_NHAP, ...BANG_NATIVE, ...BANG_DE_XUAT]) {
       const { daTim } = await chayThuHealing(ca);
       const bay = daTim.filter((c) => c.strategy === 'xpath' && !/^[/(]/.test(c.value));
       assert.deepEqual(bay, [], `${ca.ten}: có locator xpath không phải xpath`);

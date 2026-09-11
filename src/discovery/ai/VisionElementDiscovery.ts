@@ -1,3 +1,4 @@
+import { refineLocator } from './locatorFromElement.js';
 /**
  * Vision-based element discovery — item 20 (plan §11, §47.6).
  *
@@ -123,7 +124,8 @@ export class VisionElementDiscovery {
     );
     for (const line of verification.evidence) evidence.push(`  · ${line}`);
 
-    const locator = candidate.suggestedLocator ?? deriveLocator(el);
+    // Cùng một chốt với tầng ngữ nghĩa: xem chú thích ở refineLocator().
+    const locator = refineLocator(el, candidate.suggestedLocator);
 
     if (!verification.passed) {
       return {
@@ -190,16 +192,6 @@ function aiMatchScore(candidateId: string, confidence: number, reasoning: string
   return { candidateId, score: confidence, reasons: [reasoning], penalties: [] };
 }
 
-function deriveLocator(
-  el: ObservedElement,
-): { strategy: string; value: string } | undefined {
-  if (el.testId) return { strategy: 'testId', value: el.testId };
-  if (el.resourceId) return { strategy: 'resourceId', value: el.resourceId };
-  if (el.accessibilityLabel) return { strategy: 'label', value: el.accessibilityLabel };
-  if (el.text) return { strategy: 'text', value: el.text };
-  if (el.xpath) return { strategy: 'xpath', value: el.xpath };
-  return undefined;
-}
 
 /**
  * Find the element whose bounding box overlaps most with the vision result bounds.
