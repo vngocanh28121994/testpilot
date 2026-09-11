@@ -386,6 +386,14 @@ export const ConfigSchema = z.object({
       env: z.string().optional(),
       headed: z.boolean().default(false),
       locatorRetries: z.number().int().min(0).max(2).default(1),
+      /**
+       * Lấy app ở đâu: bản đã cài sẵn trên máy, hay bản đã tải lên.
+       *
+       * Mặc định là bản trên máy, vì đó là tình huống thường gặp nhất — máy
+       * test đã cài sẵn bản cần chạy, và cài đè 100–200 MB mỗi lượt vừa chậm
+       * vừa xoá dữ liệu app. Chọn "upload" khi vừa có bản build mới.
+       */
+      appSource: z.enum(['device', 'upload']).default('device'),
     })
     // A workflow with nothing to run on would generate a suite and then stop
     // without saying why, so it is rejected at the point the choice is made.
@@ -552,8 +560,9 @@ export function assertEnvPackage(
       `mặc định "${cfg.defaultEnv}".\n` +
       'Các môi trường của app này dùng chung bundle id, nên không có gì phân biệt được chúng ' +
       'trên máy:\nchạy tiếp sẽ là đăng nhập account ' + env + ' vào app ' + cfg.defaultEnv + '.\n' +
-      'Mở màn Bản build rồi tải bản build của môi trường này lên — hoặc, nếu máy đã cài\n' +
-      `sẵn bản đúng, chọn "ưu tiên bản có sẵn trên thiết bị" cho môi trường ${env}.`,
+      'Máy đã cài sẵn bản đúng rồi thì đổi "Nguồn app" thành "Bản có sẵn trên thiết bị"\n' +
+      'ngay cạnh ô chọn môi trường ở màn chạy.\n' +
+      'Còn nếu muốn tool tự cài, mở màn Bản build rồi tải bản build của môi trường này lên.',
   );
 }
 

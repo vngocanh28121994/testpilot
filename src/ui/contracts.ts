@@ -262,6 +262,8 @@ export interface StudioForm {
   }>;
   workflowPlatforms?: Array<'web' | 'android' | 'ios'>;
   workflowEnv?: string;
+  /** Bản đã cài sẵn trên máy, hay bản đã tải lên. */
+  workflowAppSource?: 'device' | 'upload';
   workflowHeaded?: boolean;
   workflowDeviceFarm?: { platform: 'android' | 'ios' } | null;
   workflowDevices?: { android?: string; ios?: string } | null;

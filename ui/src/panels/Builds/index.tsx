@@ -73,13 +73,11 @@ export default function BuildsPanel() {
   );
 }
 /**
- * Một ô: nguồn app của một môi trường trên một nền tảng.
+ * Một ô: bản build của một môi trường trên một nền tảng.
  *
- * Ô này trả lời đúng một câu — ưu tiên bản có sẵn trên thiết bị, hay bản được
- * upload? Hai lựa chọn để rõ ràng, không phải một ô tích: bỏ trống một ô tích
- * gộp mất hai trạng thái khác hẳn nhau — "tôi đã chọn dùng bản trên máy" và
- * "tôi chưa quyết định gì", mà ranh giới đó lại đúng là thứ bộ chặn lúc chạy
- * canh.
+ * Ô này chỉ trả lời "bản nào đang nằm ở đây". Câu "lượt này lấy app ở đâu" nằm
+ * ở màn chạy, cạnh ô chọn môi trường — nó đổi theo từng lượt, không phải thuộc
+ * tính của bản build; hỏi ở đây là hỏi ba lần cho cùng một quyết định.
  */
 export function BuildCell({
   row,
@@ -107,54 +105,12 @@ export function BuildCell({
     onError: (e) => toast.error((e as Error).message),
     onSettled: () => setProgress(null),
   });
-  const source = useMutation({
-    mutationFn: (useInstalled: boolean) =>
-      api.post(ROUTES.buildSource, { env: row.env, platform, useInstalled }),
-    onSuccess: () => onDone(),
-    onError: (e) => toast.error((e as Error).message),
-  });
 
   const build = row[platform];
   const missing = row.missing.find((item) => item.platform === platform);
-  const prefersInstalled = row.preferInstalled[platform];
-  // Môi trường mặc định là chính cấu hình gốc, không có khối override để ghi
-  // lựa chọn vào — nên ô đó chỉ có phần tải lên, như trước.
-  const choosable = Boolean(row.env);
-  const name = `source-${row.env || 'shared'}-${platform}`;
 
   return (
     <td className="p-3 align-top">
-      {choosable && (
-        <fieldset className="mb-3 flex flex-col gap-1" disabled={source.isPending}>
-          <legend className="text-muted-foreground mb-1 text-xs">
-            Ưu tiên bản nào?
-          </legend>
-          <label className="flex cursor-pointer items-center gap-2 text-xs">
-            <input
-              type="radio"
-              name={name}
-              checked={!prefersInstalled}
-              onChange={() => source.mutate(false)}
-            />
-            Bản được upload
-          </label>
-          <label className="flex cursor-pointer items-center gap-2 text-xs">
-            <input
-              type="radio"
-              name={name}
-              checked={prefersInstalled}
-              onChange={() => source.mutate(true)}
-            />
-            Bản có sẵn trên thiết bị
-          </label>
-          {prefersInstalled && (
-            <p className="text-muted-foreground text-xs">
-              Tool không kiểm được bản trên máy thuộc môi trường nào — mọi môi trường
-              dùng chung bundle id. Lượt chạy sẽ in ra phiên bản đang cài để bạn đối chiếu.
-            </p>
-          )}
-        </fieldset>
-      )}
       <div className="font-mono text-xs">
         {build?.path ?? (missing ? `✕ ${missing.path} — không thấy file` : 'Chưa có')}
       </div>

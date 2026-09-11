@@ -65,7 +65,11 @@ async function main(): Promise<void> {
   // Before anything is loaded, and before a device is touched. On Device Farm
   // the farm installs the package it was uploaded, so there is nothing here to
   // get wrong.
-  if (!args.onFarm) assertEnvPackage(baseCfg, envName, platform);
+  // `--app-source device` trả lời đúng câu mà cái chặn hỏi: lượt này không cài
+  // gì, nên không có chuyện cài nhầm bản của môi trường mặc định.
+  if (!args.onFarm && args.appSource !== 'device') {
+    assertEnvPackage(baseCfg, envName, platform);
+  }
 
   const registry = await Registry.load(cfg.paths.registry);
   const features = await loadFeatures(
@@ -159,11 +163,15 @@ async function main(): Promise<void> {
   // Môi trường có thể khai rằng máy đang cài sẵn đúng bản của nó. Khi đó lượt
   // chạy KHÔNG được đưa bản trong config cho driver: đưa là cài đè, tức xoá
   // đúng thứ vừa được khai là cần giữ.
-  const useInstalled = platform === 'ios'
-    ? Boolean(baseCfg.environments[envName]?.ios?.useInstalledApp)
-    : platform === 'android'
-      ? Boolean(baseCfg.environments[envName]?.android?.useInstalledApp)
-      : false;
+  const useInstalled = platform === 'web'
+    ? false
+    : args.appSource
+      ? args.appSource === 'device'
+      : Boolean(
+          platform === 'ios'
+            ? baseCfg.environments[envName]?.ios?.useInstalledApp
+            : baseCfg.environments[envName]?.android?.useInstalledApp,
+        );
   const configuredApp = platform === 'ios' ? cfg.ios.app : platform === 'android' ? cfg.android.app : undefined;
   const appUnderTest = useInstalled ? undefined : configuredApp;
   // Only when environments exist. A config that declares none has exactly one
@@ -1083,6 +1091,12 @@ interface Args {
   deferSharedWrites: boolean;
   /** Which environment to run against; see config.environments. */
   env?: string;
+  /**
+   * Lấy app ở đâu cho lượt chạy này: bản đã cài sẵn trên máy, hay bản đã tải
+   * lên. Không truyền thì theo `environments.<env>.<platform>.useInstalledApp`
+   * trong config — để script cũ không đổi hành vi chỉ vì cờ này ra đời.
+   */
+  appSource?: 'device' | 'upload';
   /** Run only this generated feature file; used by the Studio workflow. */
   feature?: string;
   /** Extra attempts allowed only for failures classified as locator failures. */
@@ -1101,6 +1115,11 @@ function parseArgs(argv: string[]): Args {
     raw === 'android' || raw === 'ios' ? raw : raw === 'web' ? 'web' : undefined;
   if (!platform) throw new Error(`--platform must be web | android | ios (got "${raw}").`);
 
+  const source = get('--app-source');
+  if (source && source !== 'device' && source !== 'upload') {
+    throw new Error(`--app-source must be device | upload (got "${source}").`);
+  }
+
   const device = get('--device');
   // Silently ignoring one of these would mean a run that looks targeted and is
   // not, so say so instead. The farm supplies its own handset; see resolveDevice.
@@ -1118,6 +1137,7 @@ function parseArgs(argv: string[]): Args {
     deferSharedWrites: argv.includes('--defer-shared-writes'),
     reinstall: argv.includes('--reinstall'),
     ...(get('--env') ? { env: get('--env')! } : {}),
+    ...(source ? { appSource: source as 'device' | 'upload' } : {}),
     ...(get('--feature') ? { feature: path.basename(get('--feature')!) } : {}),
     ...(get('--locator-retries')
       ? { locatorRetries: Math.max(0, Math.min(2, Number(get('--locator-retries')) || 0)) }

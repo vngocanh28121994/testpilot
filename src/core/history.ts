@@ -110,6 +110,8 @@ export interface WorkflowRun {
     env?: string;
     headed?: boolean;
     locatorRetries?: number;
+    /** Bản đã cài sẵn trên máy, hay bản đã tải lên. */
+    appSource?: 'device' | 'upload';
   };
   /**
    * The farm run this workflow handed off to, if any.

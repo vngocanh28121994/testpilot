@@ -117,6 +117,12 @@ function StudioFormPanel({ state }: { state: StateResponse }) {
     () => ({ ...cfg.workflow.devices }),
   );
   const [workflowEnv, setWorkflowEnv] = useState(cfg.workflow.env ?? cfg.defaultEnv);
+  // Workflow chạy không có ai ngồi cạnh, nên lựa chọn này được lưu vào cấu hình
+  // workflow thay vì sống trong một lượt bấm — nhưng vẫn hỏi ngay cạnh ô môi
+  // trường, đúng chỗ người ta đang quyết định chạy cái gì ở đâu.
+  const [workflowAppSource, setWorkflowAppSource] = useState<'device' | 'upload'>(
+    cfg.workflow.appSource ?? 'device',
+  );
   const [headed, setHeaded] = useState(cfg.workflow.headed);
   const job = useStreamJob('studio-workflow', STREAM_ROUTES.gen);
 
@@ -224,6 +230,7 @@ function StudioFormPanel({ state }: { state: StateResponse }) {
     })),
     workflowPlatforms: [...platforms],
     workflowEnv,
+    workflowAppSource,
     workflowHeaded: headed,
     workflowDeviceFarm: farm ? { platform: farm as 'android' | 'ios' } : null,
     // Gửi cả khi rỗng, để bỏ tick nền tảng nhiều máy cuối cùng thì xoá luôn cái
@@ -529,6 +536,20 @@ function StudioFormPanel({ state }: { state: StateResponse }) {
                     }
                   />
                 </Field>
+
+                {[...platforms].some((item) => item !== 'web') && (
+                  <Field label="Nguồn app">
+                    <Dropdown
+                      className="mt-0"
+                      value={workflowAppSource}
+                      onChange={(value) => setWorkflowAppSource(value as 'device' | 'upload')}
+                      options={[
+                        { value: 'device', label: 'Bản có sẵn trên thiết bị' },
+                        { value: 'upload', label: 'Bản build đã tải lên' },
+                      ]}
+                    />
+                  </Field>
+                )}
 
                 <CheckRow
                   label="Hiện trình duyệt (web)"

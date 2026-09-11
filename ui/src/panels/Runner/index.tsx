@@ -46,6 +46,15 @@ export default function RunnerPanel() {
   const [quarantined, setQuarantined] = useState(false);
   const [env, setEnv] = useState('');
   /**
+   * Lượt này lấy app ở đâu: bản đã cài sẵn trên máy, hay bản đã tải lên.
+   *
+   * Ở đây chứ không phải trong cấu hình, vì câu trả lời đổi theo từng lượt —
+   * sáng chạy trên bản vừa cài tay, chiều chạy lại sau khi có bản build mới.
+   * Mặc định là bản trên máy: cài đè 100–200 MB mỗi lượt vừa chậm vừa xoá sạch
+   * dữ liệu app, mà phần lớn lượt chạy không cần thế.
+   */
+  const [appSource, setAppSource] = useState<'device' | 'upload'>('device');
+  /**
    * Máy đã chọn, khi nhiều máy cùng cắm. Rỗng nghĩa là để preflight tự quyết —
    * đúng đường cũ, vì một máy duy nhất thì không có gì phải hỏi.
    */
@@ -140,6 +149,7 @@ export default function RunnerPanel() {
       headed,
       includeQuarantined: quarantined,
       ...(env ? { env } : {}),
+      ...(platform === 'web' ? {} : { appSource }),
       ...(() => {
         // Tích nhiều máy thì gửi cả danh sách: server thấy `devices.length > 1`
         // là rẽ sang run-parallel.ts. Trước đây chỗ này luôn gửi đúng một phần
@@ -295,6 +305,19 @@ export default function RunnerPanel() {
                       options={[
                         { value: '', label: 'Mặc định' },
                         ...environments.map((item) => ({ value: item, label: item })),
+                      ]}
+                    />
+                  </Field>
+                )}
+                {platform !== 'web' && (
+                  <Field label="Nguồn app">
+                    <Dropdown
+                      className="mt-0"
+                      value={appSource}
+                      onChange={(value) => setAppSource(value as 'device' | 'upload')}
+                      options={[
+                        { value: 'device', label: 'Bản có sẵn trên thiết bị' },
+                        { value: 'upload', label: 'Bản build đã tải lên' },
                       ]}
                     />
                   </Field>

@@ -32,6 +32,8 @@ interface Args {
   includeQuarantined: boolean;
   /** Which environment every device runs against; see config.environments. */
   env?: string;
+  /** Bản đã cài sẵn trên máy, hay bản đã tải lên. Chuyển thẳng cho từng lượt con. */
+  appSource?: 'device' | 'upload';
   /** Reinstall the app on every device even when already on this environment. */
   reinstall: boolean;
   /** Subset of device ids, as `id` or `platform:id`; all of them when omitted. */
@@ -217,6 +219,7 @@ function runOne(target: Target, args: Args, label: (t: Target) => string): Promi
       ...(args.config ? ['--config', args.config] : []),
       ...(args.tag ? ['--tag', args.tag] : []),
       ...(args.env ? ['--env', args.env] : []),
+      ...(args.appSource ? ['--app-source', args.appSource] : []),
       ...(args.reinstall ? ['--reinstall'] : []),
       ...(args.includeQuarantined ? ['--include-quarantined'] : []),
     ];
@@ -367,6 +370,7 @@ function parseArgs(argv: string[]): Args {
     ...(get('--config') ? { config: get('--config')! } : {}),
     ...(get('--tag') ? { tag: get('--tag')! } : {}),
     ...(get('--env') ? { env: get('--env')! } : {}),
+    ...(get('--app-source') ? { appSource: get('--app-source') as 'device' | 'upload' } : {}),
     reinstall: argv.includes('--reinstall'),
     includeQuarantined: argv.includes('--include-quarantined'),
     ...(only ? { only: only.split(',').map((s) => s.trim()).filter(Boolean) } : {}),

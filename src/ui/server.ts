@@ -427,6 +427,7 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
       const body = await readJson<{
         platform: string; tag?: string; headed?: boolean;
         includeQuarantined?: boolean; devices?: string[]; env?: string;
+        appSource?: 'device' | 'upload';
       }>(req);
       // Ticked devices arrive qualified as `platform:id`, because an id alone
       // cannot say which phone it means once both platforms are on offer.
@@ -442,7 +443,9 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
         const platforms = [...new Set(picked.map((d) => d.platform))].join(',');
         const tokens = picked.map((d) => `${d.platform}:${d.id}`);
         return stream(res, (log) =>
-          runSuiteParallel(platforms, tokens, body.tag, Boolean(body.includeQuarantined), log, body.env));
+          runSuiteParallel(
+            platforms, tokens, body.tag, Boolean(body.includeQuarantined), log, body.env, body.appSource,
+          ));
       }
 
       const one = picked[0];
@@ -459,6 +462,9 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
           log,
           named ? one!.id : undefined,
           body.env,
+          undefined,
+          undefined,
+          body.appSource,
         );
       });
     }
@@ -2005,6 +2011,8 @@ interface StudioForm {
   >;
   workflowPlatforms?: Array<'web' | 'android' | 'ios'>;
   workflowEnv?: string;
+  /** Bản đã cài sẵn trên máy, hay bản đã tải lên. */
+  workflowAppSource?: 'device' | 'upload';
   workflowHeaded?: boolean;
   /**
    * `null` is the unticked box, and is not the same as the field being absent:
@@ -2068,6 +2076,7 @@ async function applyForm(form: StudioForm): Promise<TestPilotConfig> {
       // answer ("run on the farm only"), not a form that forgot to say.
       platforms: form.workflowPlatforms ?? current.workflow.platforms,
       env: form.workflowEnv?.trim() || current.workflow.env || current.defaultEnv,
+      appSource: form.workflowAppSource ?? current.workflow.appSource,
       headed: form.workflowHeaded ?? current.workflow.headed,
       ...(form.workflowDeviceFarm !== undefined
         ? { deviceFarm: form.workflowDeviceFarm ?? undefined }
@@ -2126,6 +2135,7 @@ async function runWorkflow(
     env: cfg.workflow.env || cfg.defaultEnv,
     headed: cfg.workflow.headed,
     locatorRetries: cfg.workflow.locatorRetries,
+    appSource: cfg.workflow.appSource,
   };
   await history.save();
   stage(run);
@@ -2283,6 +2293,7 @@ async function continueWorkflow(
     env: cfg.workflow.env || cfg.defaultEnv,
     headed: cfg.workflow.headed,
     locatorRetries: cfg.workflow.locatorRetries,
+    appSource: cfg.workflow.appSource,
   };
   // The environment is checked here, before the first driver opens, because
   // everything expensive already happened: two model calls, a generated suite,
@@ -2346,6 +2357,7 @@ async function continueWorkflow(
       execution.env,
       run.generatedFile,
       execution.locatorRetries ?? 1,
+      execution.appSource,
     ));
   }
 
@@ -2891,6 +2903,13 @@ function runSuite(
   feature?: string,
   /** Extra scenario attempts, used only after a locator-classified failure. */
   locatorRetries?: number,
+  /**
+   * Lấy app ở đâu cho lượt này: bản đã cài sẵn trên máy, hay bản đã tải lên.
+   *
+   * Hỏi ở màn chạy chứ không phải ở cấu hình, vì câu trả lời đổi theo từng lượt:
+   * sáng chạy trên bản vừa cắm máy cài tay, chiều chạy lại trên bản build mới.
+   */
+  appSource?: 'device' | 'upload',
 ): Promise<RunSuiteOutcome> {
   return new Promise<RunSuiteOutcome>((resolve, reject) => {
     const bin = path.resolve('node_modules/.bin/tsx');
@@ -2902,6 +2921,7 @@ function runSuite(
       ...(env ? ['--env', env] : []),
       ...(feature ? ['--feature', feature] : []),
       ...(locatorRetries !== undefined ? ['--locator-retries', String(locatorRetries)] : []),
+      ...(appSource ? ['--app-source', appSource] : []),
       ...(tag ? ['--tag', tag] : []),
       ...(headed ? ['--headed'] : []),
       ...(includeQuarantined ? ['--include-quarantined'] : []),
@@ -2987,6 +3007,7 @@ function runSuiteParallel(
   includeQuarantined: boolean,
   log: (l: string) => void,
   env?: string,
+  appSource?: 'device' | 'upload',
 ) {
   return new Promise<void>((resolve, reject) => {
     const bin = path.resolve('node_modules/.bin/tsx');
@@ -2995,6 +3016,7 @@ function runSuiteParallel(
       '--platform', platform,
       '--devices', devices.join(','),
       ...(env ? ['--env', env] : []),
+      ...(appSource ? ['--app-source', appSource] : []),
       ...(tag ? ['--tag', tag] : []),
       ...(includeQuarantined ? ['--include-quarantined'] : []),
     ];
