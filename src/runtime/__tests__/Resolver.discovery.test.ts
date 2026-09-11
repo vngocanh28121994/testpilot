@@ -735,9 +735,16 @@ describe('mapDiscoveryStrategy', () => {
     assert.equal(mapDiscoveryStrategy('xpath'), 'xpath');
   });
 
-  it('falls back to xpath for unknown strategies', async () => {
+  /**
+   * KHÔNG còn rơi về xpath. Nhánh cũ dán nhãn `xpath` cho mọi chiến lược lạ
+   * trong khi giá trị vẫn là chữ, nên `{strategy:'text', value:'TCB,VNM,FPT…'}`
+   * thành `xpath="TCB,VNM,FPT…"` — một locator không bao giờ khớp, mang vẻ
+   * ngoài của một locator hợp lệ. Đo trên máy thật: AI tìm đúng ô nhập với tin
+   * cậy 90, đề xuất hỏng ở bước dán nhãn, cả kịch bản đỏ.
+   */
+  it('chiến lược lạ hiểu như khớp theo chữ, không bịa thành xpath', async () => {
     const { mapDiscoveryStrategy } = await import('../../discovery/DriverObservationAdapter.js');
-    assert.equal(mapDiscoveryStrategy('unknown-strategy'), 'xpath');
+    assert.equal(mapDiscoveryStrategy('unknown-strategy'), 'label');
   });
 });
 

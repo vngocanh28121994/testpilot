@@ -138,9 +138,32 @@ export function mapDiscoveryStrategy(
     testId: 'testId',
     resourceId: 'testId',     // stable ID, semantically equivalent to testId
     accessibility: 'label',   // accessibility label → label strategy
+    // `label` trong tập locator là "chữ nhìn thấy HOẶC nhãn trợ năng", nên cả
+    // hai tên này đều về đó. Thiếu chúng thì một đề xuất hợp lệ bị dán nhãn
+    // xpath và không bao giờ khớp được gì.
+    label: 'label',
+    text: 'label',
+    role: 'role',
+    relative: 'relative',
+    predicate: 'predicate',
     placeholder: 'placeholder',
     css: 'css',
     xpath: 'xpath',
   };
-  return MAP[strategy] ?? 'xpath';
+  const mapped = MAP[strategy];
+  if (mapped) return mapped;
+  // KHÔNG bịa ra xpath cho một chiến lược lạ.
+  //
+  // Nhánh mặc định cũ trả 'xpath' cho mọi thứ không có trong bảng, mà giá trị
+  // thì giữ nguyên — nên `{strategy:'text', value:'TCB,VNM,FPT...'}` biến thành
+  // `xpath="TCB,VNM,FPT..."`: một locator không bao giờ khớp, mang vẻ ngoài của
+  // một locator hợp lệ. Đo trên máy thật: AI tìm ĐÚNG ô nhập với tin cậy 90,
+  // rồi đề xuất bị hỏng ngay ở bước dán nhãn, và cả kịch bản đỏ.
+  //
+  // Nói ra rồi dùng 'label' — chữ là thứ duy nhất còn lại khi không biết nó
+  // thuộc loại gì, và 'label' là chiến lược khớp theo chữ.
+  console.warn(
+    `[discovery] chiến lược "${strategy}" không có trong bảng ánh xạ; hiểu như "label".`,
+  );
+  return 'label';
 }
