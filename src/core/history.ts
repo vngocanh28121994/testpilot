@@ -231,6 +231,38 @@ export class History {
     return closed;
   }
 
+  /**
+   * Đóng những lượt đang chờ duyệt mà một lượt mới vừa thay chỗ.
+   *
+   * `waiting_review` cố ý sống lâu hơn tiến trình sinh ra nó — đó là điểm dừng
+   * để người ta đi duyệt rồi quay lại. Nhưng không có gì kết thúc nó ngoài
+   * chính người đó bấm nút, nên bỏ dở một lần là banner "Workflow đang chờ bạn"
+   * hiện ở MỌI lần vào màn Kịch bản, mãi mãi. Trong history thật có một lượt
+   * treo như vậy hai ngày, trong khi người dùng đã duyệt tay và chạy test hàng
+   * chục lần từ đó.
+   *
+   * Khởi động một workflow mới là câu trả lời rõ ràng cho lượt chờ cũ: bộ
+   * testcase sắp tới sẽ thay bộ cũ. Đóng nó ở đây, thay vì bắt người dùng dọn
+   * tay một thứ họ đã bỏ lại từ lâu.
+   *
+   * Kịch bản đã sinh vẫn nằm nguyên trong danh sách duyệt: đóng lượt chờ là
+   * đóng cái cổng, không phải xoá việc đã làm.
+   */
+  supersedeWaiting(kind: WorkflowRun['kind']): number {
+    let closed = 0;
+    const now = new Date().toISOString();
+    for (const run of this.runs) {
+      if (run.kind !== kind) continue;
+      if (run.status !== 'waiting_review' && run.status !== 'waiting_input') continue;
+      run.status = 'failed';
+      run.finishedAt = now;
+      run.error = 'Một workflow mới đã thay chỗ lượt này. '
+        + 'Kịch bản đã sinh vẫn còn trong danh sách duyệt.';
+      closed += 1;
+    }
+    return closed;
+  }
+
   /** Creates a run in the `running` state and persists it immediately, so a
    *  crashed or killed process still leaves a visible trace in the table. */
   start(feature: string, kind: WorkflowRun['kind'], stageNames: readonly string[]): WorkflowRun {

@@ -2127,6 +2127,9 @@ async function runWorkflow(
   // Chỗ giữ chỗ nói rõ nó là chỗ giữ chỗ. "generated" trông y hệt một tên
   // feature, nên năm lượt chết sớm nằm cạnh nhau trong history đều mang đúng
   // chữ đó và không phân biệt được với nhau.
+  // Lượt chờ cũ được thay chỗ ngay tại đây, trước khi lượt mới có mặt trong sổ:
+  // xem chú thích ở supersedeWaiting().
+  const superseded = history.supersedeWaiting('workflow');
   const run = history.start(cfg.targetFeature || '(chưa đọc được tài liệu)', 'workflow', WORKFLOW_STAGES);
   run.execution = {
     platforms: cfg.workflow.platforms,
@@ -2138,6 +2141,9 @@ async function runWorkflow(
   };
   await history.save();
   stage(run);
+  if (superseded > 0) {
+    log(`${superseded} workflow đang chờ duyệt trước đó đã được thay chỗ bởi lượt này.`);
+  }
 
   // Workflow cùng bệnh với lượt chạy local: log chỉ tồn tại trên đường dây SSE
   // của tab đã bấm nút. Đưa nó vào sổ lượt chạy đang sống để một trang khác nối

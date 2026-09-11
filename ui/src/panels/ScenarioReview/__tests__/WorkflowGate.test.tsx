@@ -105,3 +105,30 @@ describe('WorkflowGate', () => {
     await waitFor(() => expect(router.state.location.pathname).toBe('/studio'));
   });
 });
+
+/**
+ * Banner treo vĩnh viễn nếu người dùng bỏ dở: không có gì kết thúc một lượt
+ * `waiting_review` ngoài chính họ bấm nút tiếp tục. Khởi động workflow mới thì
+ * lượt cũ tự được thay chỗ (History.supersedeWaiting), nhưng khi không có lượt
+ * mới nào thì vẫn cần một đường ra bằng tay.
+ */
+describe('WorkflowGate — đường ra cho lượt bỏ dở', () => {
+  it('có nút bỏ workflow đang chờ', async () => {
+    renderWithRouter(<WorkflowGate runs={[run({})]} />, { path: '/scenarios' });
+    expect(await screen.findByRole('button', { name: 'Bỏ workflow này' })).toBeInTheDocument();
+  });
+
+  it('bấm bỏ thì gọi đúng endpoint kèm runId', async () => {
+    const user = userEvent.setup();
+    const sent: unknown[] = [];
+    server.use(
+      http.post(ROUTES.workflowAbandon, async ({ request }) => {
+        sent.push(await request.json());
+        return HttpResponse.json({ ok: true });
+      }),
+    );
+    renderWithRouter(<WorkflowGate runs={[run({})]} />, { path: '/scenarios' });
+    await user.click(await screen.findByRole('button', { name: 'Bỏ workflow này' }));
+    await waitFor(() => expect(sent).toEqual([{ runId: 'wf-1' }]));
+  });
+});
