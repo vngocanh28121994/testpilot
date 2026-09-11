@@ -100,19 +100,40 @@ const exec = promisify(execFile);
 const PROBE_TIMEOUT_MS = 8000;
 
 /**
+ * Lệnh nói chuyện với iPhone cần lâu hơn thế nhiều.
+ *
+ * Mỗi lệnh `devicectl` phải dựng tunnel tới máy rồi bật developer disk image
+ * trước khi làm việc của nó — đo trên máy thật là 20–40 giây khi máy vừa ngủ
+ * dậy. Cắt ở 8 giây thì mọi lần kiểm tra đều "hỏng" vì hết giờ, và câu trả lời
+ * sai đó lại trông y hệt một chiếc máy thật sự có vấn đề.
+ */
+const DEVICE_PROBE_TIMEOUT_MS = 90_000;
+
+/**
  * Runs a command and never throws. A missing binary and a non-zero exit are
  * both just "this did not work", and every caller here wants to carry on and
  * report the other checks rather than abort the whole preflight.
+ *
+ * Lệnh hỏng vẫn giữ nguyên phần nó đã in ra. `devicectl` nói lý do thật sự ở
+ * đó — "profile has not been explicitly trusted by the user. (Security)" —
+ * trong khi dòng đầu của Error chỉ là "Command failed: xcrun …". Vứt phần in ra
+ * là vứt đúng câu cần đọc, và người dùng nhận lại nguyên si dòng lệnh.
  */
-async function tryRun(
+export async function tryRun(
   file: string,
   args: string[],
+  timeoutMs = PROBE_TIMEOUT_MS,
 ): Promise<{ ok: boolean; stdout: string; error?: string }> {
   try {
-    const { stdout } = await exec(file, args, { timeout: PROBE_TIMEOUT_MS, encoding: 'utf8' });
+    const { stdout } = await exec(file, args, { timeout: timeoutMs, encoding: 'utf8' });
     return { ok: true, stdout };
   } catch (err) {
-    return { ok: false, stdout: '', error: (err as Error).message.split('\n')[0]!.trim() };
+    const failure = err as Error & { stdout?: string; stderr?: string };
+    return {
+      ok: false,
+      stdout: failure.stdout ?? '',
+      error: [failure.message.split('\n')[0]!.trim(), failure.stderr ?? ''].join('\n').trim(),
+    };
   }
 }
 
@@ -677,6 +698,18 @@ export async function iosTunnelCheck(): Promise<PreflightCheck> {
  * `run` tách ra được để test dựng lại đúng các câu trả lời của devicectl mà
  * không cần một chiếc iPhone.
  */
+/**
+ * Rút lấy câu người đọc dùng được từ một đống log của devicectl.
+ *
+ * Nó in ra hàng chục dòng tunnel/disk-image trước khi tới lý do thật. Dòng
+ * `NSLocalizedFailureReason` là câu Apple viết cho người đọc; không có thì đành
+ * lấy dòng đầu, còn hơn dán cả trang log vào một dòng kiểm tra.
+ */
+function reasonOf(output: string): string {
+  const reason = /NSLocalizedFailureReason = (.+)/.exec(output)?.[1]?.trim();
+  return (reason ?? output.split('\n').find((line) => line.trim().length > 0) ?? '').slice(0, 200);
+}
+
 export async function iosWdaCheck(
   cfg: TestPilotConfig,
   udid: string,
@@ -688,7 +721,7 @@ export async function iosWdaCheck(
 
   const apps = await run('xcrun', [
     'devicectl', 'device', 'info', 'apps', '--device', udid, '--quiet', '--json-output', '-',
-  ]);
+  ], DEVICE_PROBE_TIMEOUT_MS);
   const installed = apps.ok && apps.stdout.includes(bundle);
   if (!installed) {
     return {
@@ -701,21 +734,25 @@ export async function iosWdaCheck(
 
   // Đang chạy sẵn thì để yên. Phần điều kiện này còn được dò lại trong lúc một
   // lượt chạy đang diễn ra, mà tắt WDA giữa chừng là giết chính lượt chạy đó.
-  const procs = await run('xcrun', ['devicectl', 'device', 'info', 'processes', '--device', udid]);
+  const procs = await run(
+    'xcrun',
+    ['devicectl', 'device', 'info', 'processes', '--device', udid],
+    DEVICE_PROBE_TIMEOUT_MS,
+  );
   if (procs.ok && /WebDriverAgentRunner-Runner/.test(procs.stdout)) {
     return { name, ok: true, detail: `${bundle} đang chạy trên máy.` };
   }
 
   const launch = await run('xcrun', [
     'devicectl', 'device', 'process', 'launch', '--device', udid, bundle,
-  ]);
+  ], DEVICE_PROBE_TIMEOUT_MS);
   if (launch.ok && /Launched application/i.test(launch.stdout)) {
     return { name, ok: true, detail: `${bundle} đã cài và mở được.` };
   }
 
   const output = `${launch.stdout}${launch.error ?? ''}`;
   if (!/Security|not.*trusted|invalid code signature|untrusted/i.test(output)) {
-    return { name, ok: false, detail: `Không mở được ${bundle}: ${output.slice(0, 160)}` };
+    return { name, ok: false, detail: `Không mở được WebDriverAgent trên máy. ${reasonOf(output)}` };
   }
   const team = await teamName();
   return {

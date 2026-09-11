@@ -10,7 +10,7 @@
  */
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { iosWdaCheck } from '../preflight.js';
+import { iosWdaCheck, tryRun } from '../preflight.js';
 import type { TestPilotConfig } from '../../config.js';
 
 const cfg = { ios: { wdaBundleId: 'com.tuoiha17.WebDriverAgentRunner' } } as TestPilotConfig;
@@ -103,5 +103,27 @@ describe('iosWdaCheck', () => {
     assert.equal(check.ok, false);
     assert.equal(check.fix, undefined);
     assert.match(check.detail, /device is locked/);
+  });
+});
+
+/**
+ * Lệnh hỏng phải giữ lại phần nó đã in ra.
+ *
+ * Đây là chỗ đã hỏng thật khi chạy thử trên máy: `devicectl` viết lý do vào
+ * stderr — "profile has not been explicitly trusted by the user. (Security)" —
+ * còn dòng đầu của Error chỉ là "Command failed: xcrun …". tryRun vứt stderr
+ * đi, nên phần kiểm tra không nhận ra kiểu hỏng mà nó sinh ra để bắt, và dán
+ * nguyên dòng lệnh vào mặt người dùng thay cho câu trả lời.
+ */
+describe('tryRun', () => {
+  it('giữ lại stderr của lệnh hỏng, không chỉ dòng "Command failed"', async () => {
+    const result = await tryRun('sh', ['-c', 'echo "profile has not been explicitly trusted (Security)" >&2; exit 1']);
+    assert.equal(result.ok, false);
+    assert.match(result.error ?? '', /explicitly trusted \(Security\)/);
+  });
+
+  it('giữ lại cả stdout của lệnh hỏng', async () => {
+    const result = await tryRun('sh', ['-c', 'echo đã-in-ra; exit 3']);
+    assert.match(result.stdout, /đã-in-ra/);
   });
 });
