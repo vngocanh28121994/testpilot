@@ -74,7 +74,14 @@ export function SyntaxHelp({ onInsert }: { onInsert?: (line: string) => void }) 
   for (const entry of shown) groups.set(entry.group, [...(groups.get(entry.group) ?? []), entry]);
 
   return (
-    <div className="flex min-h-0 flex-col gap-3">
+    // `shrink-0`, không phải `min-h-0`.
+    //
+    // Khung cha là một cột cuộn có chiều cao cố định, và mọi thứ trong đó —
+    // thẻ tag, ô Gherkin `h-80`, bảng Chuẩn hoá — đều không co được. Bảng này
+    // là thứ duy nhất co được, nên flexbox dồn toàn bộ phần thiếu chỗ vào nó:
+    // nó co về gần bằng 0, `overflow-auto` của chính nó giấu nốt phần còn lại,
+    // và người dùng chỉ còn thấy đúng một ô tìm kiếm không bao giờ ra kết quả.
+    <div className="flex shrink-0 flex-col gap-3">
       <div className="flex flex-col gap-1">
         <Input
           type="search"
@@ -90,7 +97,9 @@ export function SyntaxHelp({ onInsert }: { onInsert?: (line: string) => void }) 
         )}
       </div>
 
-      <div className="flex min-h-0 flex-col gap-4 overflow-auto">
+      {/* Cao có hạn và tự cuộn: bảng có hơn ba mươi mẫu câu cộng toàn bộ
+          element, thả tự do thì nó đẩy nút Lưu ra khỏi tầm mắt. */}
+      <div className="flex max-h-96 flex-col gap-4 overflow-auto">
         {shown.length === 0 && elements.length === 0 && (
           <p className="text-muted-foreground text-xs">Không có mục nào khớp “{query}”.</p>
         )}

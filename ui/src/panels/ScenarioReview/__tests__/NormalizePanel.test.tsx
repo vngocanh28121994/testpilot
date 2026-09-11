@@ -102,6 +102,21 @@ describe('NormalizePanel', () => {
 });
 
 describe('SyntaxHelp', () => {
+  /**
+   * Bảng bị bóp về gần bằng 0 và biến mất.
+   *
+   * Khung cha là một cột cuộn cao cố định, trong đó thẻ tag, ô Gherkin `h-80`
+   * và bảng Chuẩn hoá đều không co được — nên flexbox dồn toàn bộ phần thiếu
+   * chỗ vào bảng này, thứ duy nhất mang `min-h-0`. Người dùng chỉ còn thấy một
+   * ô tìm kiếm không bao giờ ra kết quả, và mất luôn đường tra mẫu câu.
+   */
+  it('không được phép co mất, dù khung cha thiếu chỗ', async () => {
+    const { container } = renderWithProviders(<SyntaxHelp />);
+    // Lúc đang tải nó chỉ là một dòng chữ; đợi bảng thật hiện ra rồi mới hỏi.
+    await screen.findByText('Thao tác');
+    assertShrinkProof(container.querySelector('div'));
+  });
+
   it('liệt kê mẫu câu theo nhóm và element gọi tên được', async () => {
     renderWithProviders(<SyntaxHelp />);
     expect(await screen.findByText('Thao tác')).toBeInTheDocument();
@@ -110,3 +125,10 @@ describe('SyntaxHelp', () => {
     expect(screen.getByText('Nút đăng nhập')).toBeInTheDocument();
   });
 });
+
+/** `min-h-0` ở gốc bảng cú pháp là đúng thứ đã làm nó biến mất. */
+function assertShrinkProof(root: Element | null): void {
+  expect(root).not.toBeNull();
+  expect(root!.className).toContain('shrink-0');
+  expect(root!.className).not.toContain('min-h-0');
+}
