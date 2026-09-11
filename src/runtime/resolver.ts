@@ -325,6 +325,16 @@ export class Resolver {
         sleep(DISCOVERY_GRACE_MS).then(() => null),
       ]);
       if (late && !excluded.has(candidateKey(late))) {
+        // Ghi vào `candidates` TRƯỚC khi thử, để nó có mặt trong "Tried:".
+        //
+        // Bốn lượt chạy thật liên tiếp báo `Tried: placeholder=Mã cổ phiếu` —
+        // đúng một locator cũ — trong khi tầng AI đã trả về đúng ô nhập ở dòng
+        // ngay trên. Câu trả lời về sau hạn nên rơi vào nhánh này, và nhánh này
+        // thử nó ngoài mảng `candidates`, nên thông báo lỗi khai rằng nó chưa
+        // từng được thử. Ba buổi chẩn đoán đã đi tìm lý do model "bỏ qua" một
+        // câu trả lời mà nó vẫn luôn đưa ra.
+        candidates.push(late);
+        attempts += 1;
         const handle = await this.tryCandidate(late, o);
         const verified = handle
           && (!o.verifyHealedMatch
@@ -333,6 +343,17 @@ export class Resolver {
           console.log(`[discovery] "${elementId}": tìm được sau khi chờ thêm — ${late.strategy}=${late.value}`);
           return { handle, candidate: late, healed: true, attempts };
         }
+        // Trượt ở đây thì phải nói ra trượt Ở ĐÂU.
+        //
+        // Nhánh này vốn im lặng hoàn toàn, nên "AI không trả lời", "locator
+        // không khớp gì trên màn hình" và "khớp nhưng bị kiểm tra ngữ nghĩa từ
+        // chối" để lại cùng một dấu vết: không dấu vết nào.
+        console.warn(
+          `[discovery] "${elementId}": ${late.strategy}="${late.value}" về sau hạn và `
+          + (handle
+            ? 'khớp được phần tử nhưng kiểm tra ngữ nghĩa từ chối.'
+            : 'không khớp phần tử nào trên màn hình lúc đó.'),
+        );
       }
     }
 
