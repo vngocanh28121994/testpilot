@@ -17,7 +17,8 @@ import type { ObservedElement } from '../UiObservation.js';
  */
 function isField(el: ObservedElement): boolean {
   const role = (el.role ?? '').toLowerCase();
-  return /input|textarea|textbox|searchfield|edittext|textfield|securetextfield/.test(role);
+  return /input|textarea|textbox|searchfield|searchbox|combobox|edittext|textfield|securetextfield/
+    .test(role);
 }
 
 /**
@@ -28,8 +29,19 @@ function isField(el: ObservedElement): boolean {
  * thấy là dữ liệu, không phải gợi ý, và khai nó thành placeholder là sai.
  */
 function placeholderCuaField(el: ObservedElement): string | undefined {
-  if (!isField(el) || el.value) return undefined;
-  return el.placeholder || el.text || el.accessibilityLabel || undefined;
+  if (el.value) return undefined;
+  // Mang `placeholder` thì tự nó đã là ô nhập — không phải hỏi vai trò.
+  //
+  // Danh sách vai trò ở isField() luôn thiếu một cái tên: ô mã cổ phiếu của
+  // Bảng giá khai `role="combobox"` (Material autocomplete), và ba lượt chạy
+  // thật đã hỏng chỉ vì chuỗi đó không có trong danh sách. Chừng nào còn bắt
+  // mọi thứ đi qua danh sách ấy thì còn phải chờ một lượt chạy hỏng nữa để
+  // biết tên thứ tư là gì.
+  if (el.placeholder) return el.placeholder;
+  // Cây native không có trường riêng: hint nằm chung ở `text`/content-desc.
+  // Chỗ này thì vai trò là thật sự cần — chữ trên một cái nút cũng ở `text`.
+  if (!isField(el)) return undefined;
+  return el.text || el.accessibilityLabel || undefined;
 }
 
 /**
@@ -50,6 +62,19 @@ export function refineLocator(
   el: ObservedElement,
   suggested?: { strategy: string; value: string },
 ): { strategy: string; value: string } | undefined {
+  // Nói ra hình dạng phần tử mà quyết định này dựa vào.
+  //
+  // Ba vòng sửa vừa rồi đều phải ĐOÁN xem `role`, `text`, `placeholder` của một
+  // ô nhập trên cây appium-mcp thật sự là gì, rồi chạy lại một lượt thật mới
+  // biết đoán trúng hay không. Một dòng ở đây đổi vòng lặp đó lấy một lần đọc.
+  if (process.env.TESTPILOT_DEBUG_LOCATOR) {
+    const goi = (v?: string) => (v ? `"${v.slice(0, 24)}"` : '—');
+    console.warn(
+      `[locator] role=${goi(el.role)} text=${goi(el.text)} ph=${goi(el.placeholder)} `
+      + `aria=${goi(el.accessibilityLabel)} value=${goi(el.value)} `
+      + `→ đề xuất ${suggested ? `${suggested.strategy}="${suggested.value.slice(0, 24)}"` : '(không có)'}`,
+    );
+  }
   if (!suggested) return deriveLocator(el);
   const hint = placeholderCuaField(el);
   const khaiTheoChu = suggested.strategy === 'label'

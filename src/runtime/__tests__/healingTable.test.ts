@@ -209,6 +209,23 @@ const BANG_DE_XUAT: Ca[] = [
     aiDeXuat: { strategy: 'label', value: 'TCB,VNM,FPT…' },
   },
   {
+    // Ca thật, local run 11/09 18:50 trên SM-S938B. Ô mã cổ phiếu của Bảng giá
+    // là một Material autocomplete, và nó khai `role="combobox"` — không nằm
+    // trong danh sách vai trò của isField(). Model chọn ĐÚNG ô (tin cậy 85)
+    // rồi khai `label="TCB,VNM,FPT..."`, chốt sửa loại bỏ qua vì vai trò lạ,
+    // và cả kịch bản đỏ. Dòng này giữ chỗ cho tên vai trò thứ tư, thứ năm:
+    // phần tử mang `placeholder` thì tự nó đã là ô nhập.
+    ten: 'combobox mang placeholder: không nằm trong danh sách vai trò vẫn phải sửa',
+    locatorCu: { strategy: 'testId', value: 'search-old', weight: 0.9, origin: 'authored' as const },
+    nhan: 'Ô mã cổ phiếu',
+    manHinhMoi: [
+      { id: 'o-tim', role: 'combobox', placeholder: 'TCB,VNM,FPT…' },
+    ],
+    dungLa: 'o-tim',
+    aiTraVe: { strategy: 'label', layTu: 'placeholder' },
+    aiDeXuat: { strategy: 'label', value: 'TCB,VNM,FPT…' },
+  },
+  {
     // Đề xuất đúng thì để yên: chốt này chỉ sửa chỗ khai sai loại, không phải
     // một bộ lọc đè lên mọi thứ model nói.
     ten: 'model đề xuất testId hợp lệ thì giữ nguyên',
