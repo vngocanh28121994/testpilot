@@ -22,6 +22,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { api, qs } from '@/api/client';
 import { ROUTES, STREAM_ROUTES } from '@/api/routes';
 import { DevicePicker } from '@/components/DevicePicker';
+import { TagFilter } from '@/components/TagFilter';
 import { DeviceChips, deviceToken, type DeviceTarget } from '@/components/DeviceChips';
 import { PrereqTools } from './PrereqTools';
 import { useAppState } from '@/hooks/useAppState';
@@ -41,7 +42,9 @@ const PAGE_DESCRIPTION = 'Chạy bộ test ngay trên máy này, trước khi đ
 export default function RunnerPanel() {
   const state = useAppState((s) => ({ config: s.config, features: s.features, reports: s.reports }));
   const [platform, setPlatform] = useState<'web' | 'android' | 'ios'>('web');
-  const [tag, setTag] = useState('');
+  // Nhiều tag, nối bằng '+' khi gửi xuống: đó là "và" ở tầng lọc — mỗi tag chọn
+  // thêm là hẹp phạm vi lại, đúng hướng người ta dùng một bộ lọc.
+  const [tags, setTags] = useState<string[]>([]);
   const [headed, setHeaded] = useState(false);
   const [quarantined, setQuarantined] = useState(false);
   const [env, setEnv] = useState('');
@@ -139,7 +142,7 @@ export default function RunnerPanel() {
       ),
     enabled: Boolean(state.data),
   });
-  const tags = useMemo(
+  const allTags = useMemo(
     () => [
       ...new Set(state.data?.features.flatMap((f) => f.scenarios.flatMap((s) => s.tags)) ?? []),
     ].sort(),
@@ -157,7 +160,7 @@ export default function RunnerPanel() {
       return toast.error('Chưa qua kiểm tra trước khi chạy. Hãy xử lý các mục đỏ rồi thử lại.');
     job.start({
       platform,
-      tag: tag || undefined,
+      tag: tags.length > 0 ? tags.join('+') : undefined,
       headed,
       includeQuarantined: quarantined,
       ...(env ? { env } : {}),
@@ -298,15 +301,7 @@ export default function RunnerPanel() {
                   />
                 </Field>
                 <Field label="Lọc theo tag">
-                  <Dropdown
-                    className="mt-0"
-                    value={tag}
-                    onChange={setTag}
-                    options={[
-                      { value: '', label: 'Tất cả tag' },
-                      ...tags.map((item) => ({ value: item, label: item })),
-                    ]}
-                  />
+                  <TagFilter all={allTags} value={tags} onChange={setTags} />
                 </Field>
                 {environments.length > 0 && (
                   <Field label="Môi trường">

@@ -1,0 +1,58 @@
+import { describe, expect, it, vi } from 'vitest';
+import userEvent from '@testing-library/user-event';
+import { screen } from '@testing-library/react';
+import { renderWithProviders } from '@/test/utils';
+import { TagFilter } from '../TagFilter';
+
+/**
+ * "Chạy đúng các case positive của MỘT chức năng" — nhu cầu thường gặp nhất mà
+ * dropdown chọn-một không diễn đạt được. Chọn @feature-x thì cả negative chạy
+ * theo; chọn @positive thì ra positive của mọi chức năng.
+ */
+const ALL = ['@feature-chuyen-tien', '@feature-them-ma', '@negative', '@p0', '@positive'];
+
+describe('TagFilter', () => {
+  it('tìm được trong danh sách dài', async () => {
+    const user = userEvent.setup();
+    renderWithProviders(<TagFilter all={ALL} value={[]} onChange={vi.fn()} />);
+    await user.type(screen.getByLabelText('Lọc theo tag'), 'chuyen');
+    expect(screen.getByRole('button', { name: '@feature-chuyen-tien' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '@positive' })).not.toBeInTheDocument();
+  });
+
+  it('chọn thêm tag thứ hai chứ không thay tag thứ nhất', async () => {
+    const user = userEvent.setup();
+    const onChange = vi.fn();
+    renderWithProviders(
+      <TagFilter all={ALL} value={['@feature-chuyen-tien']} onChange={onChange} />,
+    );
+    await user.click(screen.getByLabelText('Lọc theo tag'));
+    await user.click(screen.getByRole('button', { name: '@positive' }));
+    expect(onChange).toHaveBeenCalledWith(['@feature-chuyen-tien', '@positive']);
+  });
+
+  it('bấm lại một tag đã chọn thì bỏ chọn', async () => {
+    const user = userEvent.setup();
+    const onChange = vi.fn();
+    renderWithProviders(<TagFilter all={ALL} value={['@positive']} onChange={onChange} />);
+    await user.click(screen.getByLabelText('Lọc theo tag'));
+    await user.click(screen.getByRole('button', { name: '@positive' }));
+    expect(onChange).toHaveBeenCalledWith([]);
+  });
+
+  /** Nói ra ý nghĩa "và", vì bộ lọc nhiều giá trị dễ bị đọc thành "hoặc". */
+  it('nói rõ nhiều tag nghĩa là phải có đủ', () => {
+    renderWithProviders(
+      <TagFilter all={ALL} value={['@feature-chuyen-tien', '@positive']} onChange={vi.fn()} />,
+    );
+    expect(screen.getByText(/đủ 2 tag/)).toBeInTheDocument();
+  });
+
+  it('gỡ được một tag đã chọn', async () => {
+    const user = userEvent.setup();
+    const onChange = vi.fn();
+    renderWithProviders(<TagFilter all={ALL} value={['@p0', '@positive']} onChange={onChange} />);
+    await user.click(screen.getByLabelText('Bỏ @p0'));
+    expect(onChange).toHaveBeenCalledWith(['@positive']);
+  });
+});

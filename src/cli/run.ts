@@ -91,10 +91,24 @@ async function main(): Promise<void> {
   // dòng về những feature khác, kèm một câu "13 kịch bản chưa duyệt nên không
   // được chạy" — đọc như thể lượt chạy vừa bị chặn, trong khi nó vẫn chạy bình
   // thường và mười ba kịch bản kia chưa bao giờ nằm trong phạm vi được hỏi.
-  const wantedTags = args.tag ? args.tag.split(',').map(canonicalTag).filter(Boolean) : [];
+  //
+  // Bộ lọc tag đọc được cả "hoặc" lẫn "và":
+  //
+  //   --tag @p0,@p1              kịch bản nào mang @p0 HOẶC @p1
+  //   --tag @feature-x+@positive kịch bản mang ĐỦ CẢ HAI
+  //   --tag @a+@b,@c             (@a và @b) hoặc @c
+  //
+  // Dấu phẩy vốn đã là "hoặc" từ trước nên giữ nguyên. Dấu cộng là cái thiếu:
+  // muốn chạy "chỉ các case positive của MỘT chức năng" thì không có cách nào
+  // diễn đạt, và chọn hai tag kiểu cũ lại ra positive của mọi chức năng.
+  const wantedGroups = (args.tag ?? '')
+    .split(',')
+    .map((group) => group.split('+').map(canonicalTag).filter(Boolean))
+    .filter((group) => group.length > 0);
   const inScope = (scenario: { tags: string[]; platforms: string[] }) =>
     scenario.platforms.includes(platform)
-    && (wantedTags.length === 0 || wantedTags.some((tag) => scenario.tags.includes(tag)));
+    && (wantedGroups.length === 0
+      || wantedGroups.some((group) => group.every((tag) => scenario.tags.includes(tag))));
 
   const unapproved = features
     .flatMap((feature) => feature.unapproved)
