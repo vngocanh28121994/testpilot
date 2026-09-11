@@ -49,6 +49,7 @@ import { DeviceEnvLog } from '../core/deviceEnv.js';
 import { IOS_TUNNEL_COMMAND, preflight, preflightSummary } from '../core/preflight.js';
 import { resolveFarmTarget } from '../farm/target.js';
 import { buildInventory } from '../core/builds.js';
+import { attachedFromDevicectl } from '../core/iosDevices.js';
 import { normalizeFeatureTags, tagTaxonomyView } from '../core/tagTaxonomy.js';
 import {
   assertFarmReady,
@@ -3752,10 +3753,7 @@ async function usableIosUdids(): Promise<string[]> {
         connectionProperties?: { tunnelState?: string; pairingState?: string };
       }> };
     };
-    return (parsed.result?.devices ?? [])
-      .filter((d) => d.connectionProperties?.pairingState === 'paired')
-      .map((d) => d.hardwareProperties?.udid)
-      .filter((u): u is string => Boolean(u));
+    return attachedFromDevicectl(parsed);
   } catch {
     return [];
   } finally {
