@@ -87,3 +87,24 @@ describe('Farm — tạo pool', () => {
     expect(source).toMatch(/\{ \.\.\.response\.data!, platforms: \[platform\] \}/);
   });
 });
+
+/**
+ * Chạy xong thì không có lối nào sang báo cáo.
+ *
+ * Báo cáo vẫn được sinh đầy đủ — mỗi máy một bản, runDirs ghi đủ cả hai — và
+ * màn /farm/<runId> hiện được chúng. Nhưng ở màn Farm, chạy xong thì log dừng
+ * và hết; người dùng phải tự đoán ra là phải cuộn xuống danh sách "Lượt chạy"
+ * rồi bấm "Xem". Đây đúng là lúc họ muốn xem nhất.
+ */
+describe('Farm — đường sang báo cáo', () => {
+  it('hiện link báo cáo ngay khi lượt chạy kết thúc', () => {
+    expect(source).toMatch(/job\.status !== 'running' && job\.logs\.length > 0 && latestFarmRun/);
+    expect(source).toMatch(/Xem báo cáo/);
+    expect(source).toMatch(/params=\{\{ runId: latestFarmRun\.id \}\}/);
+  });
+
+  /** Nói luôn thu được báo cáo của mấy máy: một lượt farm chạy song song nhiều máy. */
+  it('nói số máy đã thu được báo cáo', () => {
+    expect(source).toMatch(/Đã thu báo cáo của \$\{latestFarmRun\.runDirs\.length\} máy/);
+  });
+});

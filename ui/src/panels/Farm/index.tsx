@@ -334,6 +334,9 @@ export default function FarmPanel() {
       ],
     }));
   const farmRuns = (state.data?.runs ?? []).filter((run) => run.kind === 'farm');
+  // Lượt farm mới nhất: đúng cái vừa chạy xong ở màn này. Lấy từ sổ lượt chạy
+  // chứ không từ job stream, vì stream không biết id của lượt nó vừa tạo.
+  const latestFarmRun = farmRuns[0];
 
   return (
     <AppShell title="AWS Device Farm" description={PAGE_DESCRIPTION}>
@@ -677,6 +680,28 @@ export default function FarmPanel() {
             </CardContent>
           </Card>
 
+          {/* Đường sang báo cáo, ngay chỗ lượt chạy vừa kết thúc.
+              Báo cáo vẫn được sinh đầy đủ — mỗi máy một bản, và runDirs ghi đủ
+              — nhưng chạy xong thì log dừng và không có lối nào dẫn sang. Người
+              dùng phải tự đoán ra là mình phải cuộn xuống danh sách "Lượt chạy"
+              rồi bấm "Xem". Đây là lúc họ muốn xem nhất. */}
+          {job.status !== 'running' && job.logs.length > 0 && latestFarmRun && (
+            <div className="border-border bg-card flex flex-wrap items-center gap-3 rounded-lg border p-4">
+              <StatusPill status={latestFarmRun.status} />
+              <span className="text-sm">
+                {latestFarmRun.runDirs?.length
+                  ? `Đã thu báo cáo của ${latestFarmRun.runDirs.length} máy.`
+                  : 'Lượt chạy đã kết thúc.'}
+              </span>
+              <Link
+                to="/farm/$runId"
+                params={{ runId: latestFarmRun.id }}
+                className="text-sm font-medium underline"
+              >
+                Xem báo cáo →
+              </Link>
+            </div>
+          )}
           {job.logs.length > 0 && (
             <LogView logs={job.logs} dropped={job.dropped} error={job.error} label="Log lượt chạy farm" />
           )}
