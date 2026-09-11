@@ -560,7 +560,7 @@ export async function createDevicePool(
   projectArn: string,
   name: string,
   deviceArns: string[],
-): Promise<{ arn: string; name: string }> {
+): Promise<{ arn: string; name: string; type: string }> {
   if (deviceArns.length === 0) throw new Error('Chọn ít nhất một device trước khi tạo pool.');
   const client = await makeClient(region);
   const created = await client.send(
@@ -578,7 +578,10 @@ export async function createDevicePool(
   );
   const arn = created.devicePool?.arn;
   if (!arn) throw new Error('Device Farm did not return a device pool ARN.');
-  return { arn, name: created.devicePool?.name ?? name };
+  // `type` đi kèm, vì giao diện in "<tên> (<loại>)" và thiếu nó thì pool vừa
+  // tạo hiện ra là "test (undefined)" — trông như hỏng, ngay sau một thao tác
+  // vừa thành công.
+  return { arn, name: created.devicePool?.name ?? name, type: created.devicePool?.type ?? 'PRIVATE' };
 }
 
 /* ------------------------------------------------------------------ */

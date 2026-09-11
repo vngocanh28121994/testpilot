@@ -233,9 +233,15 @@ export default function FarmPanel() {
   const [ticksPool, setTicksPool] = useState('');
   const poolMatchesTicks = Boolean(pool) && pool === ticksPool;
 
+  // Tạo pool gọi thẳng sang AWS — mất vài giây là chuyện thường. Không khoá thì
+  // màn hình đứng im, và phản xạ tự nhiên là bấm tiếp: mỗi lần bấm là thêm một
+  // pool trùng tên nằm lại trong project, và người dùng phải tự đi dọn trên
+  // AWS. Ba nút tải bên cạnh đã học bài này rồi; nút này thì chưa.
+  const [makingPool, setMakingPool] = useState(false);
   const makePool = async () => {
     if (!poolName || !project || selected.length === 0)
       return toast.error('Cần project, tên pool và ít nhất một thiết bị.');
+    setMakingPool(true);
     try {
       const response = await api.post<FarmApiResponse<FarmPool>>(ROUTES.farmPool, {
         region,
@@ -244,12 +250,17 @@ export default function FarmPanel() {
         deviceArns: selected,
       });
       if (!response.ok || !response.data) throw new Error(response.error);
-      setPools((items) => [...items, response.data!]);
+      // Danh sách thiết bị đã lọc theo nền tảng từ lúc tải, nên pool dựng từ
+      // chúng chắc chắn thuộc nền tảng đang chọn. Gắn luôn để nó không bị bộ
+      // lọc `shownPools` giấu mất ngay sau khi vừa tạo.
+      setPools((items) => [...items, { ...response.data!, platforms: [platform] }]);
       setPool(response.data.arn);
       setTicksPool(response.data.arn);
       toast.success(`Đã tạo ${response.data.name}. Lượt chạy sẽ dùng pool này.`);
     } catch (error) {
       toast.error((error as Error).message);
+    } finally {
+      setMakingPool(false);
     }
   };
   const start = () => {
@@ -465,7 +476,8 @@ export default function FarmPanel() {
                       onChange={setPool}
                       options={shownPools.map((item) => ({
                         value: item.arn,
-                        label: `${item.name} (${item.type})`,
+                        // Thiếu `type` thì in mỗi tên, đừng in "(undefined)".
+                        label: item.type ? `${item.name} (${item.type})` : item.name,
                       }))}
                     />
                   </Field>
@@ -531,9 +543,13 @@ export default function FarmPanel() {
                         value={poolName}
                         onChange={(e) => setPoolName(e.target.value)}
                       />
-                      <Button variant="outline" onClick={() => void makePool()}>
-                        <Plus className="size-4" />
-                        Tạo pool
+                      <Button
+                        variant="outline"
+                        disabled={makingPool}
+                        onClick={() => void makePool()}
+                      >
+                        <Plus className={cn('size-4', makingPool && 'animate-spin')} />
+                        {makingPool ? 'Đang tạo pool…' : 'Tạo pool'}
                       </Button>
                     </div>
                     {/* Nói ra khoảng cách giữa "đã tích" và "sẽ chạy".

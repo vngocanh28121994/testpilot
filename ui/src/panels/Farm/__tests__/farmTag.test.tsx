@@ -63,3 +63,27 @@ describe('Farm — tích thiết bị chưa phải là pool', () => {
     expect(source).toMatch(/Lượt chạy sẽ dùng pool này/);
   });
 });
+
+/**
+ * Pool vừa tạo hiện ra là "test (undefined)" — trông như hỏng, ngay sau một
+ * thao tác vừa thành công. createDevicePool chỉ trả {arn, name}, còn nhãn in
+ * "<tên> (<loại>)".
+ */
+describe('Farm — tạo pool', () => {
+  it('nút có trạng thái đang chạy, không để bấm hai lần', () => {
+    expect(source).toMatch(/const \[makingPool, setMakingPool\] = useState\(false\)/);
+    expect(source).toMatch(/disabled=\{makingPool\}/);
+    expect(source).toMatch(/Đang tạo pool…/);
+    // Mở khoá trong finally: hỏng giữa chừng mà nút vẫn khoá thì hết đường thử lại.
+    expect(source).toMatch(/finally \{\s*\n\s*setMakingPool\(false\);/);
+  });
+
+  it('không in "(undefined)" khi pool chưa có loại', () => {
+    expect(source).toMatch(/item\.type \? `\$\{item\.name\} \(\$\{item\.type\}\)` : item\.name/);
+  });
+
+  /** Pool dựng từ danh sách đã lọc theo nền tảng thì thuộc đúng nền tảng đó. */
+  it('gắn nền tảng cho pool vừa tạo, để bộ lọc không giấu mất', () => {
+    expect(source).toMatch(/\{ \.\.\.response\.data!, platforms: \[platform\] \}/);
+  });
+});
