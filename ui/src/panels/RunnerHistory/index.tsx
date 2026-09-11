@@ -7,7 +7,7 @@ import { when } from '@/lib/datetime';
 import { cn } from '@/lib/utils';
 import { LazyLog } from '@/components/LazyLog';
 import { ROUTES } from '@/api/routes';
-import { shotLabel } from '@/lib/shotName';
+import { RunShots } from '@/components/RunShots';
 import type { ReportView } from '@core/ui/contracts.js';
 
 export default function RunnerHistoryPanel({ runId }: { runId?: string }) {
@@ -110,22 +110,4 @@ export default function RunnerHistoryPanel({ runId }: { runId?: string }) {
   );
 }
 
-function ReportDetail({ report }: { report: ReportView }) { return <section className="mt-4"><div className="flex gap-2"><StatusPill status={report.status}/><a href={report.url} target="_blank" rel="noreferrer" className="text-sm underline">Mở report</a></div><iframe title={`Report ${report.id}`} src={report.url} className="border-border mt-3 h-[550px] w-full rounded border"/>{report.shotUrls && (
-      <div className="mt-4 grid grid-cols-2 gap-3 md:grid-cols-4">
-        {report.shotUrls.map((shot) => {
-          const label = shotLabel(shot.name, shot.onFailure);
-          return (
-            <a key={shot.url} href={shot.url} target="_blank" rel="noreferrer" className="flex flex-col gap-1">
-              <img
-                className="border-border rounded border"
-                src={shot.url}
-                // alt là toàn bộ thông tin còn lại khi ảnh không tải được.
-                alt={[label.scenario, label.detail].filter(Boolean).join(' — ')}
-              />
-              {label.scenario && <span className="text-xs font-medium">{label.scenario}</span>}
-              <span className="text-muted-foreground text-xs">{label.detail}</span>
-            </a>
-          );
-        })}
-      </div>
-    )}{report.networkLogUrl && <LazyLog url={report.networkLogUrl} summary="Network log" label="Network log" className="max-h-72"/>}{report.hasLog && <LazyLog url={`${ROUTES.runLog}?id=${encodeURIComponent(report.id)}`} label="Log lượt chạy" className="max-h-72"/>}</section>; }
+function ReportDetail({ report }: { report: ReportView }) { return <section className="mt-4"><div className="flex gap-2"><StatusPill status={report.status}/><a href={report.url} target="_blank" rel="noreferrer" className="text-sm underline">Mở report</a></div><iframe title={`Report ${report.id}`} src={report.url} className="border-border mt-3 h-[550px] w-full rounded border"/><RunShots report={report}/>{report.networkLogUrl && <LazyLog url={report.networkLogUrl} summary="Network log" label="Network log" className="max-h-72"/>}{report.hasLog && <LazyLog url={`${ROUTES.runLog}?id=${encodeURIComponent(report.id)}`} label="Log lượt chạy" className="max-h-72"/>}</section>; }
