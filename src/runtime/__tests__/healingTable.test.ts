@@ -161,6 +161,34 @@ const BANG_O_NHAP: Ca[] = [
   },
 ];
 
+/**
+ * Ca thật thứ ba, cùng một ngày: bản sửa trước chỉ nổ khi observation CÓ trường
+ * `placeholder` — mà cây native của Android thì không có. Hint của một EditText
+ * rỗng đi ra ở `text`, nhiều khi cả ở content-desc, nên nhánh nhãn trợ năng
+ * cướp mất và lại sinh ra `label="TCB,VNM,FPT…"`. Đo hai lượt liên tiếp: tin cậy
+ * 85 rồi 95, locator vẫn là `label`, bước vẫn hụt.
+ */
+const BANG_NATIVE: Ca[] = [
+  {
+    ten: 'ô nhập trên cây native: hint đi ra ở text, không có trường placeholder',
+    locatorCu: { strategy: 'testId', value: 'search-old', weight: 0.9, origin: 'authored' as const },
+    nhan: 'Ô mã cổ phiếu',
+    manHinhMoi: [{ id: 'o-tim', role: 'android.widget.EditText', text: 'TCB,VNM,FPT…' }],
+    dungLa: 'o-tim',
+    aiTraVe: { strategy: 'text', layTu: 'text' },
+  },
+  {
+    ten: 'ô nhập có hint ở cả content-desc',
+    locatorCu: { strategy: 'testId', value: 'search-old', weight: 0.9, origin: 'authored' as const },
+    nhan: 'Ô mã cổ phiếu',
+    manHinhMoi: [
+      { id: 'o-tim', role: 'android.widget.EditText', accessibilityLabel: 'TCB,VNM,FPT…' },
+    ],
+    dungLa: 'o-tim',
+    aiTraVe: { strategy: 'label', layTu: 'accessibilityLabel' },
+  },
+];
+
 const ELEMENT_ID = 'man.phanTu';
 
 function quanSat(manHinh: ManHinh[]): UiObservation {
@@ -192,7 +220,11 @@ function driverCua(manHinh: ManHinh[], daTim: LocatorCandidate[]): UiDriver {
   const khop = (c: LocatorCandidate): ManHinh | undefined => manHinh.find((el) => {
     switch (c.strategy) {
       case 'testId': return el.testId === c.value;
-      case 'placeholder': return el.placeholder === c.value;
+      // Native: descriptionContains — hint có thể nằm ở content-desc hoặc text.
+      // WebView: [placeholder="…"]. Ô nhập nào cũng khớp được bằng chuỗi gợi ý.
+      case 'placeholder':
+        return el.placeholder === c.value
+          || (laODiaNhap(el) && (el.text === c.value || el.accessibilityLabel === c.value));
       // Một Ô NHẬP không có chữ hiển thị trong DOM: thứ nhìn thấy là placeholder.
       // Cây native của Android thì lại phơi hint ra ở `text`, nên nếu driver giả
       // cho `label` khớp `text` của ô nhập, nó sẽ tha cho đúng loại locator đã
@@ -294,7 +326,7 @@ async function chayThuHealing(ca: Ca) {
 }
 
 describe('healing khi giao diện đổi', () => {
-  for (const ca of [...BANG, ...BANG_AI, ...BANG_O_NHAP]) {
+  for (const ca of [...BANG, ...BANG_AI, ...BANG_O_NHAP, ...BANG_NATIVE]) {
     it(ca.ten, async () => {
       const r = await chayThuHealing(ca);
       assert.equal(r.thangCuoc, ca.dungLa, `phải tìm ra ${ca.dungLa}; lỗi: ${r.loi?.message ?? '—'}`);
@@ -313,7 +345,7 @@ describe('healing khi giao diện đổi', () => {
    * `xpath` mang giá trị là chữ thường là đúng cách lỗi hôm nay đã sinh ra.
    */
   it('không sinh ra xpath mang giá trị là chữ thường', async () => {
-    for (const ca of [...BANG, ...BANG_AI, ...BANG_O_NHAP]) {
+    for (const ca of [...BANG, ...BANG_AI, ...BANG_O_NHAP, ...BANG_NATIVE]) {
       const { daTim } = await chayThuHealing(ca);
       const bay = daTim.filter((c) => c.strategy === 'xpath' && !/^[/(]/.test(c.value));
       assert.deepEqual(bay, [], `${ca.ten}: có locator xpath không phải xpath`);

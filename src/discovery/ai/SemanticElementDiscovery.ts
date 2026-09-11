@@ -198,11 +198,36 @@ function isField(el: ObservedElement): boolean {
   return /input|textarea|textbox|searchfield|edittext|textfield|securetextfield/.test(role);
 }
 
+/**
+ * Chuỗi gợi ý của một ô nhập đang rỗng, dù nó đi ra ở trường nào.
+ *
+ * DOM để nó ở `placeholder`. Cây native của Android để ở `text`, đôi khi ở
+ * content-desc. Ô đã có người gõ vào thì `value` khác rỗng — lúc đó chuỗi nhìn
+ * thấy là dữ liệu, không phải gợi ý, và khai nó thành placeholder là sai.
+ */
+function placeholderCuaField(el: ObservedElement): string | undefined {
+  if (!isField(el) || el.value) return undefined;
+  return el.placeholder || el.text || el.accessibilityLabel || undefined;
+}
+
 export function deriveLocator(
   el: ObservedElement,
 ): { strategy: string; value: string } | undefined {
   if (el.testId) return { strategy: 'testId', value: el.testId };
   if (el.resourceId) return { strategy: 'resourceId', value: el.resourceId };
+  // Ô nhập được xét TRƯỚC nhãn trợ năng.
+  //
+  // Trên cây native của Android, hint của một EditText rỗng đi ra ở `text`,
+  // nhiều khi cả ở content-desc — nên nhánh `accessibilityLabel` bên dưới cướp
+  // mất và lại sinh ra `label="TCB,VNM,FPT…"`, đúng thứ WebView không khớp
+  // được. Đo trên máy thật hai lượt liên tiếp: tin cậy 85 rồi 95, locator vẫn
+  // là `label`, bước vẫn hụt.
+  //
+  // `placeholder` chạy được trên cả hai đường — `[placeholder="…"]` trong
+  // WebView, `descriptionContains(…)` trên native — nên nó là cách khai an toàn
+  // cho một ô nhập đang rỗng.
+  const cuaONhap = placeholderCuaField(el);
+  if (cuaONhap) return { strategy: 'placeholder', value: cuaONhap };
   if (el.accessibilityLabel) return { strategy: 'label', value: el.accessibilityLabel };
   // Với MỘT Ô NHẬP, chuỗi nhìn thấy chính là placeholder — phải khai đúng như
   // vậy, đừng khai là chữ.
@@ -215,9 +240,6 @@ export function deriveLocator(
   //
   // Đo trên máy thật: AI tìm đúng ô mã cổ phiếu với tin cậy 85, rồi cả kịch bản
   // vẫn đỏ ở đúng bước đó.
-  if (el.placeholder && isField(el)) {
-    return { strategy: 'placeholder', value: el.placeholder };
-  }
   if (el.text) return { strategy: 'text', value: el.text };
   // A form field often has neither an id nor any words of its own — the caption
   // that names it lives in a sibling <legend>. Without these two the model could
