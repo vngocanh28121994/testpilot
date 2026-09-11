@@ -11,7 +11,6 @@ Feature: Chức năng Thêm mã cổ phiếu
     When I click "Thêm mã"
     Then I enter "VIC" into "Ô tìm kiếm mã cổ phiếu"
     And I click "Kết quả tìm kiếm đầu tiên"
-    And I click "Thêm mã"
     Then "Dòng cổ phiếu trong danh mục" shows "VIC" exactly "1" times
 
   @p0 @smoke @business-rule
