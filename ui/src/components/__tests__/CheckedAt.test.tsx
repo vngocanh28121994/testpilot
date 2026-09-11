@@ -23,10 +23,15 @@ describe('CheckedAt', () => {
     expect(screen.queryByText('đang kiểm…')).toBeNull();
   });
 
-  /** Lần đầu thì chưa có gì để giữ, và câu này là thứ duy nhất nói có việc đang chạy. */
-  it('lần kiểm đầu tiên thì nói đang kiểm', () => {
-    render(<CheckedAt busy />);
-    expect(screen.getByText('đang kiểm…')).toBeInTheDocument();
+  /**
+   * Lần kiểm đầu tiên là lúc người dùng nhìn thấy nhiều nhất: dấu thời gian
+   * sống trong state của màn hình, nên MỖI lần mở trang nó về rỗng và cú kiểm
+   * lúc mount rơi đúng vào đây. Một dòng chữ hiện ra rồi biến mất sau ~11ms chỉ
+   * tạo ra một cú giật, và nói lại điều mà nút đang quay đã nói.
+   */
+  it('lần kiểm đầu tiên thì không hiện gì', () => {
+    const { container } = render(<CheckedAt busy />);
+    expect(container).toBeEmptyDOMElement();
   });
 
   it('chưa dò lần nào thì không hiện gì', () => {

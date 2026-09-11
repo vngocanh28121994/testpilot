@@ -20,9 +20,13 @@ export function CheckedAt({ at, busy }: { at?: number; busy?: boolean }) {
   // 16:17:15", cả cụm co vào rồi giãn ra sau mỗi lần bấm. Một thông tin, hai
   // chỗ nói, kèm một cú giật.
   //
-  // Lần kiểm đầu tiên thì chưa có gì để giữ, và lúc đó câu này là thứ duy nhất
-  // nói rằng có việc đang chạy.
-  if (busy && !at) return <span className="text-muted-foreground text-xs">đang kiểm…</span>;
+  // Lần kiểm đầu tiên: không hiện gì cả.
+  //
+  // Đây mới là lúc người dùng nhìn thấy nhiều nhất, chứ không phải lúc bấm tay:
+  // dấu thời gian sống trong state của màn hình, nên MỖI lần mở trang nó về
+  // rỗng và cú kiểm lúc mount rơi đúng vào nhánh này. Chữ "đang kiểm…" hiện ra
+  // rồi biến mất sau ~11ms, kéo theo một cú giật, và nói lại đúng điều mà nút
+  // bên cạnh — đang khoá và đang quay — đã nói.
   if (!at) return null;
   return (
     <span className={busy ? 'text-muted-foreground/60 text-xs' : 'text-muted-foreground text-xs'}>
