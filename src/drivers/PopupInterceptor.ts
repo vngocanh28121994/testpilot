@@ -30,6 +30,12 @@ export interface PopupDismissResult {
  * positive/submit actions such as Agree, Confirm, Buy, or Continue are never
  * inferred as safe.
  */
+/** Đóng ngần này lần mà hộp thoại vẫn hiện lại thì coi như nó không đóng được. */
+const STUCK_LIMIT = 3;
+
+/** Nghỉ bao lâu trước khi thử lại một hộp thoại đã bị coi là không đóng được. */
+const STUCK_COOLDOWN_MS = 30_000;
+
 export class PopupInterceptor {
   private negativeUntil = 0;
   private negativePage?: Page;
@@ -45,6 +51,18 @@ export class PopupInterceptor {
    * went hunting through other candidates on a live account.
    */
   private lastSaid?: { text: string; at: number };
+  /**
+   * Hộp thoại vừa "đóng" gần nhất, và số lần đóng đi đóng lại y hệt.
+   *
+   * Một lượt chạy thật đã ghi 77 dòng "closed top #mat-dialog-1 via CLOSE" cho
+   * đúng một hộp thoại Bộ lọc, cùng một nút, cùng một nội dung. Mỗi lần báo
+   * thành công lại xoá bộ nhớ phủ định, nên bộ tắt popup không bao giờ nhận ra
+   * nó đang giậm chân — và lượt chạy quay vòng cho tới khi hết giờ.
+   *
+   * Đóng mà hộp thoại vẫn còn đó thì lần thứ tư không khác gì lần thứ ba: dừng
+   * lại và nói ra, để cái đang chặn lộ diện thay vì bị che sau một vòng lặp.
+   */
+  private stuck?: { key: string; times: number };
 
   constructor(
     private readonly rules: PopupRule[] = [],
@@ -127,6 +145,23 @@ export class PopupInterceptor {
     const semantic = await page.evaluate(script)
       .catch(() => null) as PopupDismissResult | null;
     if (semantic) {
+      const key = `${semantic.root}\u0000${semantic.control}\u0000${semantic.text ?? ''}`;
+      this.stuck = this.stuck?.key === key
+        ? { key, times: this.stuck.times + 1 }
+        : { key, times: 1 };
+      if (this.stuck.times > STUCK_LIMIT) {
+        // Chỉ nói một lần, rồi im: chính việc lặp lại là thứ đang cần dập.
+        if (this.stuck.times === STUCK_LIMIT + 1) {
+          this.log(
+            `[popup] ${semantic.root} đóng ${STUCK_LIMIT} lần vẫn hiện lại — thôi đóng nữa.`
+            + (semantic.text ? `\n[popup]   nội dung: "${semantic.text.slice(0, 120)}"` : ''),
+          );
+        }
+        this.negativePage = page;
+        this.negativeProtectKey = protectKey;
+        this.negativeUntil = Date.now() + STUCK_COOLDOWN_MS;
+        return null;
+      }
       this.clearNegativeCache();
       if (semantic.text) this.lastSaid = { text: semantic.text, at: Date.now() };
       this.log(

@@ -97,3 +97,51 @@ describe('PopupInterceptor', () => {
     assert.equal(evaluations, 2);
   });
 });
+
+/**
+ * Một hộp thoại đóng mãi không chịu đi.
+ *
+ * Lượt chạy thật ghi 77 dòng "closed top #mat-dialog-1 via CLOSE" cho đúng một
+ * hộp thoại Bộ lọc — cùng nút, cùng nội dung. Mỗi lần báo thành công lại xoá bộ
+ * nhớ phủ định, nên bộ tắt popup không bao giờ nhận ra nó đang giậm chân, và cả
+ * lượt chạy quay vòng tới lúc hết giờ.
+ *
+ * Lần thứ tư không khác gì lần thứ ba: phải dừng và nói ra, để thứ đang chặn lộ
+ * diện thay vì bị che sau một vòng lặp.
+ */
+describe('PopupInterceptor — hộp thoại không đóng được', () => {
+  const luonHien = () => {
+    const messages: string[] = [];
+    const page = {
+      evaluate: async () => ({
+        root: '#mat-dialog-1',
+        control: 'CLOSE',
+        text: 'BỘ LỌC TỪ TCBS CỦA BẠN',
+        source: 'semantic' as const,
+      }),
+      waitForTimeout: async () => {},
+      locator: () => { throw new Error('không dùng tới nhánh configured'); },
+    } as unknown as Page;
+    return { page, messages, interceptor: new PopupInterceptor([], (m) => messages.push(m)) };
+  };
+
+  it('thôi đóng sau vài lần cùng một hộp thoại hiện lại', async () => {
+    const { page, messages, interceptor } = luonHien();
+    const ketQua: unknown[] = [];
+    for (let i = 0; i < 10; i += 1) {
+      ketQua.push(await interceptor.dismissOne(page, [], { force: true }));
+    }
+    // Ba lần đầu vẫn thử đóng; từ lần thứ tư thì thôi.
+    assert.equal(ketQua.filter(Boolean).length, 3);
+    assert.equal(ketQua.slice(3).every((r) => r === null), true);
+  });
+
+  it('nói ra đúng một lần, kèm nội dung hộp thoại', async () => {
+    const { page, messages, interceptor } = luonHien();
+    for (let i = 0; i < 10; i += 1) await interceptor.dismissOne(page, [], { force: true });
+    const báo = messages.filter((m) => m.includes('vẫn hiện lại'));
+    assert.equal(báo.length, 1, 'chỉ được nói một lần, vì chính việc lặp là thứ đang dập');
+    assert.match(báo[0]!, /#mat-dialog-1/);
+    assert.match(báo[0]!, /BỘ LỌC TỪ TCBS/);
+  });
+});
