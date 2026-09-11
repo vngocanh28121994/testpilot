@@ -226,6 +226,13 @@ export default function FarmPanel() {
       setDevices,
       (data) => `${data.length} thiết bị.`,
     );
+  // Pool đang chọn có đúng là pool vừa tạo từ những máy đang tích không.
+  // Chỉ so bằng ARN của pool: chúng ta không biết thành phần của một pool có
+  // sẵn, và cũng không cần — điều đáng hỏi là "những cái tích này đã thành pool
+  // chưa", không phải "pool này gồm những máy nào".
+  const [ticksPool, setTicksPool] = useState('');
+  const poolMatchesTicks = Boolean(pool) && pool === ticksPool;
+
   const makePool = async () => {
     if (!poolName || !project || selected.length === 0)
       return toast.error('Cần project, tên pool và ít nhất một thiết bị.');
@@ -239,12 +246,28 @@ export default function FarmPanel() {
       if (!response.ok || !response.data) throw new Error(response.error);
       setPools((items) => [...items, response.data!]);
       setPool(response.data.arn);
-      toast.success(`Đã tạo ${response.data.name}.`);
+      setTicksPool(response.data.arn);
+      toast.success(`Đã tạo ${response.data.name}. Lượt chạy sẽ dùng pool này.`);
     } catch (error) {
       toast.error((error as Error).message);
     }
   };
   const start = () => {
+    // Tích thiết bị KHÔNG phải là chọn thiết bị cho lượt chạy.
+    //
+    // Danh sách này chỉ là nguyên liệu cho nút "Tạo pool"; lượt chạy đọc ô
+    // "Device pool" ở trên. Người dùng tích hai máy Android, bấm chạy, và lượt
+    // chạy dùng pool cũ còn sót trong ô kia — một pool iPhone. Ba lần upload
+    // mới biết, vì AWS chỉ nói ra sau khi đã nhận đủ gói.
+    //
+    // Nên chặn ngay tại đây, bằng đúng câu nói ra việc còn thiếu.
+    if (selected.length > 0 && !poolMatchesTicks) {
+      toast.error(
+        `Đã tích ${selected.length} thiết bị nhưng chưa tạo pool. `
+        + 'Đặt tên ở ô "Tên pool" rồi bấm "Tạo pool" — lượt chạy chỉ dùng pool ở ô Device pool.',
+      );
+      return;
+    }
     const env = Object.fromEntries(
       form.env.map(({ key, value }) => [key.trim(), value]).filter(([key]) => key),
     );
@@ -513,6 +536,25 @@ export default function FarmPanel() {
                         Tạo pool
                       </Button>
                     </div>
+                    {/* Nói ra khoảng cách giữa "đã tích" và "sẽ chạy".
+                        Danh sách tích trông y như chọn máy cho lượt chạy, nhưng
+                        nó chỉ là nguyên liệu để tạo pool — lượt chạy đọc ô
+                        Device pool ở trên. Người dùng tích hai máy Android rồi
+                        bấm chạy, và lượt chạy dùng một pool iPhone còn sót. */}
+                    {selected.length > 0 && (
+                      <p
+                        className={
+                          poolMatchesTicks
+                            ? 'text-muted-foreground text-xs'
+                            : 'text-status-fail text-xs'
+                        }
+                      >
+                        {poolMatchesTicks
+                          ? `Lượt chạy sẽ dùng pool vừa tạo từ ${selected.length} thiết bị này.`
+                          : `Đã tích ${selected.length} thiết bị nhưng chưa thành pool — `
+                            + 'đặt tên rồi bấm "Tạo pool". Lượt chạy chỉ dùng pool ở ô Device pool.'}
+                      </p>
+                    )}
                   </div>
                 </details>
               </CardContent>

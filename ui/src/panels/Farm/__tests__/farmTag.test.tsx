@@ -38,3 +38,28 @@ describe('Farm — lọc theo tag', () => {
     expect(source).toMatch(/next\.length > 0 \? \[\{ key: FARM_TAG_VAR/);
   });
 });
+
+/**
+ * Tích thiết bị KHÔNG phải là chọn thiết bị cho lượt chạy.
+ *
+ * Danh sách tích chỉ là nguyên liệu cho nút "Tạo pool"; lượt chạy đọc ô
+ * "Device pool" ở trên. Người dùng tích hai máy Android, bấm chạy, và lượt chạy
+ * dùng một pool iPhone còn sót trong ô kia — ba lần upload mới biết, vì AWS chỉ
+ * trả lời sau khi đã nhận đủ gói.
+ */
+describe('Farm — tích thiết bị chưa phải là pool', () => {
+  it('chặn lượt chạy khi đã tích mà chưa tạo pool', () => {
+    expect(source).toMatch(/if \(selected\.length > 0 && !poolMatchesTicks\)/);
+    expect(source).toMatch(/chưa tạo pool/);
+  });
+
+  it('nói ra ngay dưới danh sách, không đợi tới lúc bấm chạy', () => {
+    expect(source).toMatch(/Đã tích \$\{selected\.length\} thiết bị nhưng chưa thành pool/);
+  });
+
+  /** Tạo pool xong thì chính pool đó là thứ sẽ chạy — nói ra để khỏi đoán. */
+  it('tạo pool xong thì ghi nhận nó là pool của lượt chạy', () => {
+    expect(source).toMatch(/setTicksPool\(response\.data\.arn\)/);
+    expect(source).toMatch(/Lượt chạy sẽ dùng pool này/);
+  });
+});
