@@ -185,9 +185,27 @@ const Ios = z.object({
    * bằng devicectl. Cần `wdaBundleId` trỏ đúng bản đã cài, và nhớ profile của
    * Apple ID miễn phí chỉ sống 7 ngày.
    *
-   * ĐÃ THỬ VÀ KHÔNG CHẠY ĐƯỢC trên iPhone 12 Pro Max / iOS 26.5 ở đây: devicectl
-   * báo khởi chạy thành công nhưng runner tắt ngay, cổng 8100 không bao giờ mở.
-   * Bản runner cài sẵn không tự dựng được phiên XCTest ngoài xcodebuild.
+   * Đây là cách DUY NHẤT đo được để không phải bấm Tin cậy mỗi lượt chạy, và nó
+   * cần đúng một điều kiện: bản runner trên máy phải chạy độc lập được.
+   *
+   * Đường mặc định của Appium (xcodebuild build-for-testing) gỡ rồi cài lại
+   * runner ở MỖI lượt, nên container đổi, nên iOS coi là app mới chưa xác minh:
+   *
+   *   trước lượt chạy : 7FFF458B-5BA0-40AB-A805-BF1953BCB37F
+   *   sau lượt chạy   : 78B8D0B8-24AF-48C7-BC6B-9F46E8365EE3
+   *
+   * Cờ này bỏ hẳn xcodebuild nên không còn cài lại, container đứng yên, tin cậy
+   * còn nguyên. Nhưng bản runner do xcodebuild sinh ra thì bật lên rồi tắt
+   * trong dưới 3 giây — nó vốn để chạy bên trong một phiên XCTest, không phải
+   * chạy một mình. Đo trên máy thật, cùng một lệnh, chỉ khác bản runner:
+   *
+   *   runner do xcodebuild dựng : sau 3s = 0 tiến trình
+   *   runner dựng sẵn, ký lại   : sau 3s / 8s / 15s = 1 tiến trình
+   *
+   * Nên trước khi bật cờ này, chạy `bash scripts/prepare-wda.sh` để tải bản
+   * dựng sẵn của dự án WebDriverAgent, ký lại và cài lên máy. Sau đó bấm Tin
+   * cậy một lần — hai lượt chạy liên tiếp sau đó không phải chạm vào điện thoại
+   * nữa, container giữ nguyên F7CC329E-4E26-4B49-86EF-4D8E90096510.
    *
    * Nếu bật cờ này vì máy hỏi mật mã mỗi lượt chạy thì đó là nhầm chỗ: công tắc
    * quyết định chuyện đó nằm trên điện thoại — Cài đặt › Nhà phát triển › Tự

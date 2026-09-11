@@ -825,10 +825,13 @@ async function explainDriverStart(
   if (reusingWda && /wda|webdriveragent|status/i.test(err.message)) {
     return (
       'Bản WebDriverAgent đã cài trên máy không phản hồi (đang bật ios.usePreinstalledWDA).\n\n'
-      + 'Nó được khởi động bằng devicectl chứ không qua xcodebuild, và bản runner\n'
-      + 'cài sẵn thường bật lên rồi tắt ngay thay vì mở cổng 8100.\n\n'
-      + 'Cách xử lý: đặt ios.usePreinstalledWDA = false để build lại như cũ\n'
-      + '(đổi lại máy sẽ hỏi mật mã một lần mỗi lượt chạy).\n\n'
+      + 'Gần như luôn là vì bản runner trên máy do xcodebuild dựng ra: nó chỉ chạy\n'
+      + 'được bên trong một phiên XCTest, nên bật lên rồi tắt trong dưới 3 giây và\n'
+      + 'cổng 8100 không bao giờ mở.\n\n'
+      + 'Cách xử lý: chạy `bash scripts/prepare-wda.sh` để cài bản dựng sẵn (bản đó\n'
+      + 'chạy độc lập được), rồi bấm Tin cậy một lần trên máy.\n\n'
+      + 'Hoặc tạm đặt ios.usePreinstalledWDA = false để quay về đường xcodebuild —\n'
+      + 'đổi lại mỗi lượt chạy sẽ cài lại WDA và máy lại hỏi Tin cậy.\n\n'
       + `Nguyên văn lỗi: ${err.message}`
     );
   }
