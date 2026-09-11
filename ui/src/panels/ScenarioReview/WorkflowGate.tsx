@@ -41,6 +41,16 @@ function Gate({ run }: { run: RunHistoryEntry }) {
   const job = useWorkflowCompletion();
   const navigate = useNavigate();
 
+  // Bỏ hẳn lượt chờ này. Kịch bản đã sinh vẫn nằm nguyên trong danh sách duyệt:
+  // bỏ workflow là bỏ cái cổng, không phải bỏ việc đã làm.
+  const abandon = useMutation({
+    mutationFn: () => api.post(ROUTES.workflowAbandon, { runId: run.id }),
+    onSuccess: () => {
+      toast.success('Đã bỏ workflow đang chờ. Kịch bản đã sinh vẫn còn trong danh sách.');
+      void client.invalidateQueries({ queryKey: ['state'] });
+    },
+    onError: (error) => toast.error((error as Error).message),
+  });
   const questions = useQuery({
     queryKey: ['workflow-questions', run.id],
     queryFn: () =>
@@ -125,6 +135,18 @@ function Gate({ run }: { run: RunHistoryEntry }) {
                 {job.status === 'running'
                   ? 'Đang tiếp tục workflow…'
                   : 'Hoàn thành kịch bản và tiếp tục chạy'}
+              </Button>
+              {/* Đường ra cho một workflow bỏ dở.
+                  Không có nó thì banner này hiện ở MỌI lần vào màn Kịch bản, kể
+                  cả khi lượt chạy đã hai ngày tuổi và người ta đã sinh bộ
+                  testcase khác từ lâu — banner nói đúng sự thật, chỉ là không
+                  có cách nào làm cho nó thôi đúng. */}
+              <Button
+                variant="outline"
+                disabled={job.status === 'running' || abandon.isPending}
+                onClick={() => abandon.mutate()}
+              >
+                {abandon.isPending ? 'Đang bỏ…' : 'Bỏ workflow này'}
               </Button>
             </div>
             <WorkflowCompletion />

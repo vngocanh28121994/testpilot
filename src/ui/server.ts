@@ -388,6 +388,33 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
     }
 
     /**
+     * Bỏ một workflow đang chờ duyệt.
+     *
+     * Không có đường này thì một lượt chạy bỏ dở nằm lại vĩnh viễn: màn Kịch
+     * bản hiện banner "Workflow đang chờ bạn" ở MỌI lần vào, kể cả khi lượt đó
+     * đã hai ngày tuổi và người ta đã sinh bộ testcase khác từ lâu. Banner nói
+     * đúng sự thật, chỉ là không có cách nào làm cho nó thôi đúng.
+     *
+     * Kịch bản đã sinh vẫn nằm nguyên trong danh sách duyệt — bỏ workflow là bỏ
+     * cái cổng, không phải bỏ việc đã làm.
+     */
+    case 'POST /api/workflow/abandon': {
+      const { runId } = await readJson<{ runId: string }>(req);
+      if (!runId) return json(res, 400, { error: 'Thiếu workflow ID.' });
+      const history = await History.load();
+      const run = history.find(runId);
+      if (!run) return json(res, 404, { error: 'Không tìm thấy workflow.' });
+      if (run.status !== 'waiting_review' && run.status !== 'waiting_input') {
+        return json(res, 409, { error: `Workflow đang ở trạng thái “${run.status}”, không phải đang chờ.` });
+      }
+      run.status = 'failed';
+      run.error = 'Người dùng bỏ workflow đang chờ duyệt.';
+      run.finishedAt = new Date().toISOString();
+      await history.save();
+      return json(res, 200, { ok: true });
+    }
+
+    /**
      * Lượt chạy nào đang sống.
      *
      * Trang hỏi câu này lúc mở lên. Không có nó thì một lượt chạy vẫn đang bấm

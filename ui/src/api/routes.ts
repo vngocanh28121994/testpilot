@@ -33,6 +33,7 @@ export const ROUTES = {
   studioSave: '/api/studio/save',
   workflowQuestions: '/api/workflow/questions',
   workflowAnswers: '/api/workflow/answers',
+  workflowAbandon: '/api/workflow/abandon',
   confluenceAuth: '/api/confluence-auth',
   mcpTools: '/api/mcp/tools',
   runStop: '/api/run/stop',

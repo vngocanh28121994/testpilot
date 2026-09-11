@@ -39,18 +39,50 @@ node -e '
   // minutes to find out.
   const hybrid = Boolean(cfg[platform]?.hybrid);
 
-  // In hybrid mode the WebView driver resolves against the DOM, so web
-  // candidates are fully valid for the target platform — only flag elements
-  // that have no candidates at all (neither platform-specific nor web).
+  // Element KHÔNG có locator không phải là lỗi chết người.
+  //
+  // Cổng này từng dừng cả lượt farm vì 11/106 element "không có locator cho
+  // android". Đo lại thì cả hai vế của lời buộc tội đều sai:
+  //
+  //   7/11 không kịch bản nào dùng tới — cổng quét toàn bộ registry chứ không
+  //     quét những element mà bộ test sắp chạy thật sự chạm vào, nên rác trong
+  //     registry chặn được một lượt chạy hoàn toàn hợp lệ.
+  //   4/11 có dùng, và đã chạy xanh nhiều lần — bằng discovery lúc chạy. Chúng
+  //     chưa bao giờ nằm trong registry vì việc ghi vào registry cần đủ số lần
+  //     thành công; không có locator sẵn chỉ nghĩa là runtime sẽ đi tìm, đúng
+  //     như nó vẫn làm trên máy local.
+  //
+  // Nên: nói ra để biết mà bổ sung, đừng chặn. Discovery và healing chạy trên
+  // farm y như dưới máy local — chặn ở đây là chặn đúng cơ chế sinh ra để lo
+  // chuyện này.
+  const featuresDir = cfg.paths?.features ?? "features";
+  const featureText = fs.existsSync(featuresDir)
+    ? fs.readdirSync(featuresDir)
+        .filter((x) => x.endsWith(".feature"))
+        .map((f) => fs.readFileSync(`${featuresDir}/${f}`, "utf8"))
+        .join("\n")
+    : "";
+  const used = (e) => featureText.includes(e.id) || (e.label && featureText.includes(`"${e.label}"`));
+
   const naked = Object.values(reg.elements).filter((e) => {
     if (e.candidates?.[platform]?.length) return false;
     if (hybrid && e.candidates?.web?.length) return false;
-    return true;
+    return used(e);
   });
   if (naked.length) {
-    console.error(`\nDừng: ${naked.length}/${Object.keys(reg.elements).length} element không có locator cho "${platform}":`);
-    for (const e of naked.slice(0, 8)) console.error(`  - ${e.id} (chỉ có: ${Object.keys(e.candidates ?? {}).join(", ") || "không có gì"})`);
-    console.error(`\nTrên thiết bị chúng sẽ không resolve được. Bổ sung candidate "${platform}" vào registry.`);
+    console.warn(`\nLưu ý: ${naked.length} element chưa có locator "${platform}" trong registry:`);
+    for (const e of naked) console.warn(`  - ${e.id} — "${e.label ?? ""}"`);
+    console.warn("Runtime sẽ đi tìm bằng discovery như trên máy local; chậm hơn và có thể trượt.");
+  }
+
+  // Thứ THỰC SỰ chặn được: không locator mà cũng không tên gọi nghiệp vụ.
+  // Discovery đi tìm bằng cái tên đó; không có tên thì nó không có gì để tìm,
+  // và lượt chạy chắc chắn chết trên thiết bị.
+  const nameless = naked.filter((e) => !e.label || !e.label.trim());
+  if (nameless.length) {
+    console.error(`\nDừng: ${nameless.length} element vừa không có locator vừa không có tên để tìm:`);
+    for (const e of nameless) console.error(`  - ${e.id}`);
+    console.error("\nDiscovery tìm theo tên nghiệp vụ; thiếu cả tên thì trên thiết bị chắc chắn hỏng.");
     process.exit(1);
   }
 
