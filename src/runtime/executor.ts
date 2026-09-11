@@ -85,6 +85,17 @@ const HEALING_PROBE_LIMIT = 20;
 
 const DEFAULT_POSTCONDITION_TIMEOUT_MS = 12_000;
 
+/**
+ * Thời gian tối thiểu dành cho lượt resolve có discovery ở cuối một
+ * postcondition hụt.
+ *
+ * Discovery bắt đầu sau 2,5 giây dò hụt rồi cần thêm khoảng 4 giây để chốt
+ * (xem DISCOVERY_AFTER_MS và DISCOVERY_GRACE_MS trong resolver). Cấp ít hơn thế
+ * thì nó không kịp sinh ra ứng viên nào, và lượt chạy trả về "after 1 attempts"
+ * y như thể không có discovery.
+ */
+const MIN_DISCOVERY_BUDGET_MS = 6_500;
+
 interface ActionExpectation {
   elementId: string;
   locatorParams?: Record<string, string>;
@@ -1401,10 +1412,27 @@ export class Executor {
     const spent = await this.watchBriefly(expectation, timeoutMs);
     if (spent.seen) return;
 
-    // Carved out of the same budget, not added to it: a postcondition that is
-    // never going to hold must not now take three seconds longer to say so.
+    // Phần còn lại của ngân sách, nhưng có sàn.
+    //
+    // Trước đây đây là `max(0, timeoutMs - spent)` — chia thuần từ cùng một
+    // ngân sách. Khi bước này chạy trong một lượt thử lại, ngân sách là 2 giây,
+    // `watchBriefly` ăn trọn 2 giây, và resolve nhận đúng 0 ms. Mà discovery
+    // chỉ BẮT ĐẦU sau 2,5 giây dò hụt, nên nó chưa từng có cơ hội chạy: lỗi trả
+    // về là "Could not resolve … after 1 attempts".
+    //
+    // Đo trên một lượt Device Farm thật: `priceBoard.oMaCoPhieu` chỉ có một
+    // locator, `placeholder="Mã cổ phiếu"`, đã thắng 30 lần liên tiếp. Giao
+    // diện đổi placeholder, locator hụt, và cả kịch bản đỏ — trong khi thứ cần
+    // làm chỉ là nhìn màn hình một lượt và tìm lại ô nhập đó. Discovery làm
+    // được việc ấy; nó chỉ không được cấp thời gian.
+    //
+    // Sàn này là cái giá phải trả đúng ở nhánh hỏng: chậm thêm vài giây cho một
+    // postcondition không bao giờ đúng, đổi lấy việc một locator gãy không còn
+    // kéo theo cả kịch bản — mà trên farm, một kịch bản là vài phút và tiền
+    // thiết bị.
+    const remaining = Math.max(0, timeoutMs - spent.elapsedMs);
     const outcome = await this.resolver.resolve(expectation.elementId, {
-      timeoutMs: Math.max(0, timeoutMs - spent.elapsedMs),
+      timeoutMs: Math.max(remaining, MIN_DISCOVERY_BUDGET_MS),
       discoveryAction: expectation.action,
       locatorParams: expectation.locatorParams,
     });
