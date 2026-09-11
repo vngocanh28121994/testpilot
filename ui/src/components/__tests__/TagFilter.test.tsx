@@ -109,3 +109,21 @@ describe('TagFilter — nhiều thẻ', () => {
     expect(screen.getByRole('button', { name: '@negative' })).toBeInTheDocument();
   });
 });
+
+/**
+ * Hai thẻ tên dài chiếm hết bề ngang và ô "Thêm tag…" bị overflow-hidden xén
+ * mất — nhìn vào tưởng không thêm được tag nào nữa. Ô nhập không được phép co;
+ * thẻ cắt bớt chữ còn hơn mất chỗ gõ.
+ */
+describe('TagFilter — ô nhập không bị thẻ đẩy đi', () => {
+  it('thẻ co được, ô nhập thì không', () => {
+    const { container } = renderWithProviders(
+      <TagFilter all={ALL} value={['@feature-chuyen-tien', '@feature-them-ma']} onChange={vi.fn()} />,
+    );
+    const input = container.querySelector('input')!;
+    expect(input.className).toContain('shrink-0');
+    const badge = screen.getByLabelText('Bỏ @feature-chuyen-tien').parentElement!;
+    expect(badge.className).toContain('shrink');
+    expect(badge.className).not.toContain('shrink-0');
+  });
+});

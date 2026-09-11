@@ -61,7 +61,7 @@ export function TagFilter({
           còn lại gom thành "+N" — bấm vào là mở đúng bảng dùng để bỏ chọn. */}
       <div className="border-input bg-background flex h-9 items-center gap-1 overflow-hidden rounded-md border px-2">
         {value.slice(0, VISIBLE_TAGS).map((tag) => (
-          <Badge key={tag} variant="secondary" className="max-w-44 shrink-0 gap-1">
+          <Badge key={tag} variant="secondary" className="min-w-0 max-w-44 shrink gap-1">
             <span className="truncate">{tag}</span>
             <button
               type="button"
@@ -82,8 +82,12 @@ export function TagFilter({
             +{value.length - VISIBLE_TAGS}
           </button>
         )}
+        {/* `shrink-0`: thẻ co được, ô nhập thì không.
+            Để cả hai cùng co thì hai thẻ dài chiếm hết bề ngang và ô "Thêm
+            tag…" bị `overflow-hidden` xén mất — nhìn vào tưởng không thêm được
+            tag nào nữa. Thẻ cắt bớt chữ còn hơn mất chỗ gõ. */}
         <input
-          className="min-w-20 flex-1 bg-transparent text-sm outline-none"
+          className="w-20 shrink-0 grow bg-transparent text-sm outline-none"
           type="search"
           value={query}
           onChange={(event) => setQuery(event.target.value)}
