@@ -568,8 +568,12 @@ export async function createDevicePool(
       projectArn,
       name,
       description: 'Created by TestPilot',
+      // Pool liệt kê ARN là pool TĨNH, và AWS từ chối `maxDevices` cho loại đó:
+      // "A static device pool can not have max devices parameter". Số máy đã
+      // nằm sẵn trong danh sách ARN, nên tham số kia vừa thừa vừa làm hỏng.
+      // `maxDevices` chỉ dành cho pool động, loại mô tả bằng luật (hãng, OS…)
+      // và để AWS tự chọn máy.
       rules: [{ attribute: 'ARN', operator: 'IN', value: JSON.stringify(deviceArns) }],
-      maxDevices: deviceArns.length,
     }),
   );
   const arn = created.devicePool?.arn;
