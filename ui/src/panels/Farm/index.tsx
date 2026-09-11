@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from 'react';
+import { type ReactNode, useEffect, useMemo, useState } from 'react';
 import { Link } from '@tanstack/react-router';
 import { toast } from 'sonner';
 import {
@@ -26,6 +26,10 @@ import { Input } from '@/components/ui/input';
 import { api, qs } from '@/api/client';
 import { ROUTES, STREAM_ROUTES } from '@/api/routes';
 import { useAppState } from '@/hooks/useAppState';
+import { TagFilter } from '@/components/TagFilter';
+
+/** Tên biến mà farm/testspec.yml đọc để giới hạn phạm vi lượt chạy. */
+const FARM_TAG_VAR = 'TESTPILOT_TAG';
 import { useStreamJob } from '@/hooks/useStreamJob';
 import { when } from '@/lib/datetime';
 import type {
@@ -72,7 +76,12 @@ function expiringSoon(aws: AwsStatus): boolean {
 }
 
 export default function FarmPanel() {
-  const state = useAppState((s) => ({ config: s.config, appBuilds: s.appBuilds, runs: s.runs }));
+  const state = useAppState((s) => ({
+    config: s.config,
+    appBuilds: s.appBuilds,
+    runs: s.runs,
+    features: s.features,
+  }));
   const saved = state.data?.config.farm;
   const [region, setRegion] = useState(saved?.region ?? 'us-west-2');
   const [platform, setPlatform] = useState<'android' | 'ios'>(saved?.platform ?? 'android');
@@ -237,7 +246,28 @@ export default function FarmPanel() {
   const shownPools = pools.filter(
     (item) => !item.platforms?.length || item.platforms.includes(platform),
   );
+  /** Tên biến mà farm/testspec.yml đọc để giới hạn phạm vi. */
   const build = state.data?.appBuilds[platform];
+  const allTags = useMemo(
+    () => [
+      ...new Set(state.data?.features.flatMap((f) => f.scenarios.flatMap((s) => s.tags)) ?? []),
+    ].sort(),
+    [state.data],
+  );
+  // Tag sống trong chính danh sách biến môi trường, chỉ là được trình bày tử tế
+  // hơn. Giữ một nguồn duy nhất để hai chỗ không bao giờ nói khác nhau.
+  const farmTags = (form.env.find((entry) => entry.key === FARM_TAG_VAR)?.value ?? '')
+    .split('+')
+    .map((tag) => tag.trim())
+    .filter(Boolean);
+  const setFarmTags = (next: string[]) =>
+    setForm((old) => ({
+      ...old,
+      env: [
+        ...(next.length > 0 ? [{ key: FARM_TAG_VAR, value: next.join('+') }] : []),
+        ...old.env.filter((entry) => entry.key !== FARM_TAG_VAR),
+      ],
+    }));
   const farmRuns = (state.data?.runs ?? []).filter((run) => run.kind === 'farm');
 
   return (
@@ -515,9 +545,31 @@ export default function FarmPanel() {
                 />
               </div>
 
+              {/* Phạm vi chạy là một câu hỏi, không phải một biến môi trường.
+                  Trước đây muốn giới hạn tag trên farm thì phải tự gõ đúng tên
+                  biến TESTPILOT_TAG rồi tự gõ đúng tên tag — gõ sai một ký tự
+                  thì farm chạy cả bộ, và chỉ biết sau vài chục phút cùng tiền
+                  thiết bị. Cùng ô chọn với màn Local Runner, cùng cú pháp. */}
+              <section className="bg-card flex flex-col gap-2 rounded-lg border p-4">
+                <div className="flex flex-col gap-1">
+                  <h4 className="text-sm font-medium">Lọc theo tag</h4>
+                  <p className="text-muted-foreground text-xs">
+                    Bỏ trống là chạy cả bộ. Gửi xuống farm qua biến TESTPILOT_TAG.
+                  </p>
+                </div>
+                <TagFilter all={allTags} value={farmTags} onChange={setFarmTags} />
+              </section>
+
               <EnvEditor
-                entries={form.env}
-                onChange={(env) => setForm((old) => ({ ...old, env }))}
+                entries={form.env.filter((entry) => entry.key !== FARM_TAG_VAR)}
+                onChange={(env) =>
+                  setForm((old) => ({
+                    ...old,
+                    // Giữ lại dòng tag: bảng này không quản nó nữa, nhưng nó
+                    // vẫn phải đi cùng lượt chạy.
+                    env: [...old.env.filter((e) => e.key === FARM_TAG_VAR), ...env],
+                  }))
+                }
               />
 
               <div>
