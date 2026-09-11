@@ -53,6 +53,9 @@ import { generatePom } from '../pom/generator.js';
  * on purpose: they have different lifecycles, different infrastructure, and one
  * should never be able to block the other from reporting.
  */
+/** Bao nhiêu kịch bản liên tiếp hỏng giống hệt nhau thì dừng cả lượt. */
+const REPEATED_FAILURE_LIMIT = 3;
+
 async function main(): Promise<void> {
   await adoptStoredApiKeys();
   const args = parseArgs(process.argv.slice(2));
@@ -271,6 +274,10 @@ async function main(): Promise<void> {
   const healing = await HealingStore.load(cfg.paths.healingDb);
   await healing.backfill(cfg.paths.runs);
   const results: ScenarioResult[] = [];
+  // Dấu vân của lần hỏng gần nhất, để nhận ra khi cả bộ đang chết vì cùng một
+  // thứ. Xem chỗ dùng nó trong vòng chạy kịch bản bên dưới.
+  let lastFailureSignature = '';
+  let repeatedFailures = 0;
   const quarantined: RunReport['quarantined'] = [];
 
   try {
@@ -314,6 +321,36 @@ async function main(): Promise<void> {
         console.log(`[run:${result.verdict}] ${icon} ${scenario.name}`);
 
         const failedStep = result.runs.at(-1)?.steps.find((step) => step.status === 'failed');
+        // Cùng một bước hỏng cùng một lý do, ba kịch bản liền — dừng.
+        //
+        // Đo trên một lượt thật: chín kịch bản đều chết ở bước mở chức năng từ
+        // tìm kiếm vì màn hình báo "Không tìm thấy kết quả", và lượt chạy mất
+        // 48 phút để nói đúng cái điều mà năm phút đầu đã nói xong. Phần lớn
+        // thời gian là chờ hết giờ cho một phần tử không bao giờ xuất hiện, rồi
+        // thử lại, rồi healing thử tiếp — nhân cho chín.
+        //
+        // Ba chứ không phải hai: hai lần giống nhau vẫn có thể là trùng hợp
+        // (một màn hình chung như đăng nhập chập chờn), ba lần liên tiếp thì
+        // không còn là chuyện của kịch bản nữa.
+        const signature = failedStep
+          ? `${failedStep.step.text}\u0000${failedStep.error?.message.split('\n')[0]?.trim() ?? ''}`
+          : '';
+        if (signature && signature === lastFailureSignature) {
+          repeatedFailures += 1;
+        } else {
+          repeatedFailures = signature ? 1 : 0;
+          lastFailureSignature = signature;
+        }
+        if (repeatedFailures >= REPEATED_FAILURE_LIMIT) {
+          console.error(
+            `[run:abort] ${repeatedFailures} kịch bản liên tiếp hỏng ở cùng một bước với cùng một `
+            + 'lý do; dừng các kịch bản còn lại.\n'
+            + `  Bước: ${failedStep!.step.text}\n`
+            + `  Lý do: ${failedStep!.error?.message.split('\n')[0]?.trim() ?? '(không có)'}\n`
+            + '  Sửa chỗ đó rồi chạy lại — chạy tiếp chỉ lặp lại đúng lỗi này.',
+          );
+          break featureLoop;
+        }
         if (failedStep?.failureKind === 'environment') {
           console.error(
             '[run:abort] Lỗi setup/môi trường không thể được locator healing xử lý; ' +

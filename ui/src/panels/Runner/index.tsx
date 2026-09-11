@@ -107,11 +107,23 @@ export default function RunnerPanel() {
    */
   const live = useActiveRuns();
   const liveRun = live.data?.runs.find((r) => r.kind === 'run');
-  const attached = useRef(false);
+  //
+  // Nối lại MỖI KHI dòng chảy đứt, không phải một lần rồi thôi.
+  //
+  // Luồng SSE đứt là chuyện thường: máy ngủ, mạng chớp một nhịp, server nạp lại
+  // mã. Khi đó jobStore đặt status = 'done' — không phân biệt được "chạy xong"
+  // với "mất kết nối" — nên màn hình báo đã xong trong khi tiến trình vẫn đang
+  // bấm vào điện thoại thật. Đã xảy ra: người dùng thấy giao diện dừng từ lâu,
+  // còn lượt chạy thì vẫn đang ở kịch bản thứ chín.
+  //
+  // `/api/run/active` là trọng tài: còn tên trong đó nghĩa là server vẫn coi nó
+  // đang sống, và lúc đó tab này phải nối lại.
+  const lastAttachAt = useRef(0);
   useEffect(() => {
-    if (!liveRun || attached.current) return;
-    if (job.status !== 'idle' || job.logs.length > 0) return;
-    attached.current = true;
+    if (!liveRun || job.status === 'running') return;
+    // Chặn vòng lặp: một cú nối hỏng ngay sẽ lập tức kéo effect chạy lại.
+    if (Date.now() - lastAttachAt.current < 3_000) return;
+    lastAttachAt.current = Date.now();
     job.attach(`${ROUTES.runAttach}?id=${encodeURIComponent(liveRun.id)}`);
   }, [liveRun, job]);
   const preflight = useQuery({
