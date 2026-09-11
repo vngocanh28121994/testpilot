@@ -56,3 +56,31 @@ export function resolveFarmTarget(
 
   return { appPath, devicePoolArn };
 }
+
+/**
+ * Pool có chạy được bản build của nền tảng này không.
+ *
+ * Trả về câu giải thích khi KHÔNG, `undefined` khi được — hoặc khi không đọc
+ * nổi nền tảng của pool. Mất mạng hay thiếu quyền không nên biến thành một lời
+ * từ chối chạy.
+ *
+ * Chuyện có thật, ba lần liên tiếp: config giữ `devicePools.android` trỏ tới
+ * một pool tên "ios-iphone12" — chọn pool lúc để iOS rồi chuyển sang Android,
+ * ô pool giữ nguyên ARN cũ và lượt chạy ghi đè nó vào đúng khoá android. Mỗi
+ * lần chạy lại là dựng gói, nén, upload APK, upload test package, upload
+ * testspec — rồi AWS mới trả lời "Android application requires an Android
+ * device".
+ */
+export function poolPlatformMismatch(
+  pools: Array<{ arn: string; name: string; platforms: string[] }>,
+  poolArn: string,
+  platform: 'android' | 'ios',
+): string | undefined {
+  const pool = pools.find((item) => item.arn === poolArn);
+  if (!pool || pool.platforms.length === 0) return undefined;
+  if (pool.platforms.includes(platform)) return undefined;
+  return `Device pool "${pool.name}" chỉ có máy ${pool.platforms.join(', ')}, `
+    + `không chạy được bản build ${platform}.\n`
+    + 'Mở tab Device Farm, chọn một pool khác cho nền tảng này — hoặc tích thiết bị '
+    + 'rồi đặt tên và bấm "Tạo pool từ thiết bị đã chọn".';
+}

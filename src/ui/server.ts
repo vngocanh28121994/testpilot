@@ -47,7 +47,7 @@ import {
 import { adoptStoredApiKeys, Secrets, farmSecretEnv, secretEnvName } from '../core/secrets.js';
 import { DeviceEnvLog } from '../core/deviceEnv.js';
 import { IOS_TUNNEL_COMMAND, preflight, preflightSummary } from '../core/preflight.js';
-import { resolveFarmTarget } from '../farm/target.js';
+import { poolPlatformMismatch, resolveFarmTarget } from '../farm/target.js';
 import { buildInventory } from '../core/builds.js';
 import { attachedFromDevicectl } from '../core/iosDevices.js';
 import { expandApprovedActions } from '../actions/expandActions.js';
@@ -1017,6 +1017,7 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
         const target = resolveFarmTarget(saved, saved.farm.platform);
         cfg = { ...saved, farm: { ...saved.farm, ...target } };
         assertFarmReady(cfg.farm);
+        await assertPoolMatchesPlatform(cfg.farm.region, cfg.farm.projectArn, target.devicePoolArn, cfg.farm.platform);
       } catch (err) {
         return json(res, 400, { error: (err as Error).message });
       }
@@ -2643,6 +2644,24 @@ interface FarmForm {
   env?: Record<string, string>;
   /** Rebuild the Appium zip before scheduling. */
   bundle?: boolean;
+}
+
+/**
+ * Hỏi AWS xem pool chứa máy gì, rồi để poolPlatformMismatch() phán.
+ *
+ * `listDevicePools` vốn đã tính sẵn nền tảng của từng pool (nó phải giải các
+ * ARN trong rules ra bảng thiết bị mới biết được). Dữ liệu có sẵn, chỉ là chưa
+ * ai hỏi. Hỏi ở đây, mất một lượt gọi API, tiết kiệm vài phút và ba lần upload.
+ */
+async function assertPoolMatchesPlatform(
+  region: string,
+  projectArn: string,
+  poolArn: string,
+  platform: 'android' | 'ios',
+): Promise<void> {
+  const pools = await listDevicePools(region, projectArn).catch(() => []);
+  const problem = poolPlatformMismatch(pools, poolArn, platform);
+  if (problem) throw new Error(problem);
 }
 
 async function applyFarmForm(form: FarmForm): Promise<TestPilotConfig> {

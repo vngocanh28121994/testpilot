@@ -267,6 +267,16 @@ export default function FarmPanel() {
   const shownPools = pools.filter(
     (item) => !item.platforms?.length || item.platforms.includes(platform),
   );
+  // Đổi nền tảng thì bỏ luôn pool không còn hợp lệ.
+  //
+  // Danh sách đã lọc theo nền tảng, nhưng GIÁ TRỊ đang chọn thì không — chọn
+  // pool lúc để iOS rồi chuyển sang Android, ô trông như trống mà vẫn giữ ARN
+  // cũ. Lượt chạy gửi platform=android kèm pool iOS, config ghi lại y như vậy,
+  // và AWS chỉ nói ra sau khi đã upload xong: "Android application requires an
+  // Android device". Đúng chuyện vừa xảy ra.
+  useEffect(() => {
+    if (pool && !shownPools.some((item) => item.arn === pool)) setPool('');
+  }, [platform, pools]);
   /** Tên biến mà farm/testspec.yml đọc để giới hạn phạm vi. */
   const build = state.data?.appBuilds[platform];
   const allTags = useMemo(
@@ -298,8 +308,15 @@ export default function FarmPanel() {
           <GroupHeading title="Kết nối và thiết bị">
             Chọn tài khoản AWS, rồi chọn project và device pool sẽ nhận lượt chạy.
           </GroupHeading>
-          <div className="grid items-start gap-6 xl:grid-cols-2">
-            <Card aria-labelledby="aws-title">
+          {/* `items-stretch` (mặc định) + `h-full` cho từng thẻ: hai cột cao bằng
+              nhau.
+              Với `items-start`, mỗi thẻ cao đúng bằng nội dung của nó — thẻ bên
+              trái ngắn hơn nhiều so với thẻ có danh sách thiết bị bên phải, và
+              phần dưới nó là một mảng trống giữa hai đường viền lệch nhau. Cho
+              thẻ ngắn giãn ra thì chỗ trống nằm BÊN TRONG thẻ, không còn là một
+              lỗ hổng trong bố cục. */}
+          <div className="grid gap-6 xl:grid-cols-2">
+            <Card className="h-full" aria-labelledby="aws-title">
               <CardHeader>
                 <CardTitle id="aws-title">Kết nối AWS</CardTitle>
                 <CardDescription>
@@ -398,7 +415,7 @@ export default function FarmPanel() {
               </CardContent>
             </Card>
 
-            <Card aria-labelledby="device-title">
+            <Card className="h-full" aria-labelledby="device-title">
               <CardHeader>
                 <CardTitle id="device-title">Hệ điều hành & thiết bị</CardTitle>
                 <CardDescription>

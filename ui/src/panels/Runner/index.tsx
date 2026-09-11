@@ -274,8 +274,15 @@ export default function RunnerPanel() {
   return (
     <AppShell title="Local Runner" description={PAGE_DESCRIPTION}>
       <section aria-label="Local Runner" className="flex flex-1 flex-col gap-6">
-        <div className="grid items-start gap-6 xl:grid-cols-2">
-          <Card aria-labelledby="run-config-title">
+        {/* `items-stretch` (mặc định) + `h-full` cho từng thẻ: hai cột cao bằng
+            nhau.
+            Với `items-start`, mỗi thẻ cao đúng bằng nội dung của nó — thẻ bên
+            trái ngắn hơn nhiều so với thẻ có danh sách thiết bị bên phải, và
+            phần dưới nó là một mảng trống giữa hai đường viền lệch nhau. Cho
+            thẻ ngắn giãn ra thì chỗ trống nằm BÊN TRONG thẻ, không còn là một
+            lỗ hổng trong bố cục. */}
+          <div className="grid gap-6 xl:grid-cols-2">
+          <Card className="h-full" aria-labelledby="run-config-title">
             <CardHeader>
               <CardTitle id="run-config-title">Cấu hình lượt chạy</CardTitle>
               <CardDescription>Chọn platform và phạm vi test sẽ chạy.</CardDescription>
@@ -429,7 +436,7 @@ function PreflightCard({
   onPick: (id: string) => void;
 }) {
   return (
-    <Card aria-labelledby="preflight-title">
+    <Card className="h-full" aria-labelledby="preflight-title">
       <CardHeader>
         <CardTitle id="preflight-title">Trước khi chạy</CardTitle>
         <CardDescription>
