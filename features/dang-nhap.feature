@@ -29,7 +29,6 @@ Feature: Đăng nhập TCInvest
     And I click "THÊM MÃ"
     And I enter "ADS" into "Ô mã cổ phiếu"
     And I tap "Kết quả tìm kiếm đầu tiên"
-    And I click "THÊM MÃ"
     Then "ADS" is visible
     And I click "Icon ... tại dòng ADS"
     And I click "Xoá khỏi danh mục"
