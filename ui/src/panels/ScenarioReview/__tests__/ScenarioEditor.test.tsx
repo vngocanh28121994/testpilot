@@ -88,3 +88,39 @@ describe('ScenarioEditor', () => {
     expect(editor().value).toContain('I tap');
   });
 });
+
+describe('bảng cú pháp khi dùng để chèn', () => {
+  /**
+   * Nằm TRÊN ô soạn: đây là thứ người ta tra trước khi gõ, và nằm dưới cùng thì
+   * phải cuộn qua cả ô soạn mới thấy. Master cũng đặt nó ở đây.
+   */
+  it('đứng trước ô soạn trong thứ tự đọc', async () => {
+    open();
+    const search = await screen.findByRole('searchbox', { name: 'Tìm trong bảng cú pháp' });
+    const gherkin = screen.getByLabelText('Nội dung kịch bản');
+    // compareDocumentPosition: 4 = search đứng trước gherkin trong tài liệu.
+    expect(search.compareDocumentPosition(gherkin) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  /** Không gõ gì thì bảng không chiếm chỗ — 141 dòng đẩy ô soạn khỏi tầm mắt. */
+  it('chưa gõ thì chưa xổ ra', async () => {
+    open();
+    await screen.findByRole('searchbox', { name: 'Tìm trong bảng cú pháp' });
+    expect(screen.queryByText('Thao tác')).not.toBeInTheDocument();
+  });
+
+  /**
+   * Còn chữ trong ô tìm thì bảng còn mở, kể cả khi tiêu điểm đã rời đi. Đóng
+   * theo tiêu điểm làm bảng sập ngay lúc người dùng bấm vào ô soạn để đặt con
+   * trỏ — đúng lúc họ vừa tìm xong câu muốn chèn.
+   */
+  it('bấm sang ô soạn vẫn không đóng, chừng nào ô tìm còn chữ', async () => {
+    const user = userEvent.setup();
+    open();
+    const search = await screen.findByRole('searchbox', { name: 'Tìm trong bảng cú pháp' });
+    await user.type(search, 'tap');
+    await screen.findByRole('button', { name: /I tap/ });
+    editor().focus();
+    expect(screen.getByRole('button', { name: /I tap/ })).toBeInTheDocument();
+  });
+});

@@ -229,6 +229,11 @@ export function ScenarioEditor({
             )}
           </div>
 
+          {/* Trên ô soạn, không dưới: đây là thứ người ta tra TRƯỚC khi gõ, và
+              nằm dưới cùng thì phải cuộn qua cả ô soạn mới thấy. Master cũng
+              đặt nó ở đây. */}
+          <SyntaxHelp onInsert={insert} />
+
           <div className="flex flex-col gap-1">
             <div className="flex items-center justify-between">
               <span className="text-sm font-medium">Gherkin</span>
@@ -247,7 +252,6 @@ export function ScenarioEditor({
           {/* Chuẩn hoá đứng cạnh ô soạn, không nằm ở trang khác: câu sai cú pháp
               phải lộ ra trước khi bấm Lưu, chứ không phải lúc chạy. */}
           <NormalizePanel content={draft} onApply={setDraft} />
-          <SyntaxHelp onInsert={insert} />
         </div>
 
         <div className="flex items-center gap-2 border-t p-4">
