@@ -7,9 +7,10 @@ import type {
   ModelKeyRequest,
   OkResponse,
   SaveConfigResponse,
+  StateResponse,
   TestPilotConfig,
 } from '@core/ui/contracts.js';
-import { api } from '@/api/client';
+import { api, qs } from '@/api/client';
 import { ROUTES } from '@/api/routes';
 import { stateQueryKey } from '@/hooks/useAppState';
 
@@ -48,10 +49,21 @@ export function useSaveModelKey() {
   });
 }
 
+/**
+ * Lưu cấu hình, kèm bản mà màn này đang dựa vào.
+ *
+ * `baseRevision` lấy từ chính /api/state mà màn này đã đọc, nên nó là "bản tôi
+ * nhìn thấy lúc mở". Server từ chối nếu file đã đổi kể từ đó — chuyện xảy ra
+ * thật khi người dùng tải một bản build lên ở màn Bản build giữa chừng: trước
+ * đây cú Lưu này ghi đè mất, im lặng và trả về 200.
+ */
 export function useSaveConfig() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (config: TestPilotConfig) => api.put<SaveConfigResponse>(ROUTES.config, config),
+    mutationFn: (config: TestPilotConfig) => {
+      const seen = qc.getQueryData<StateResponse>(stateQueryKey)?.configRevision;
+      return api.put<SaveConfigResponse>(`${ROUTES.config}${qs({ baseRevision: seen })}`, config);
+    },
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: stateQueryKey });
       toast.success('Đã lưu.');

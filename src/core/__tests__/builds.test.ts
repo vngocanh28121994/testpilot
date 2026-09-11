@@ -104,3 +104,30 @@ test('every configured environment gets a row, in config order', async () => {
   assert.deepEqual(inv.environments.map((e) => e.isDefault), [false, false, true]);
   await rm(ROOT, { recursive: true, force: true });
 });
+
+/**
+ * Lựa chọn "ưu tiên bản có sẵn trên thiết bị" phải đi ra được tới bảng.
+ *
+ * Bảng là nơi người dùng đưa ra lựa chọn đó, nên nó cũng phải là nơi đọc lại
+ * được — nếu không thì bấm xong không biết mình đang ở lựa chọn nào, và ô tích
+ * quay về mặc định sau mỗi lần tải lại trang.
+ */
+test('bảng nói ra môi trường nào đang ưu tiên bản trên máy', async () => {
+  const cfg = ConfigSchema.parse({
+    web: { baseUrl: 'https://x.test' },
+    defaultEnv: 'prod',
+    ios: { app: 'build/App.ipa' },
+    environments: {
+      sit: { ios: { useInstalledApp: true } },
+      uat: { ios: { app: 'build/uat/app.ipa' } },
+      prod: {},
+    },
+  });
+  const rows = (await buildInventory(cfg, 'build')).environments;
+  const of = (env: string) => rows.find((r) => r.env === env)!;
+  assert.equal(of('sit').preferInstalled.ios, true);
+  assert.equal(of('sit').preferInstalled.android, false);
+  // Khai cho iOS không kéo theo Android, và môi trường khai file thì vẫn là file.
+  assert.equal(of('uat').preferInstalled.ios, false);
+  assert.equal(of('prod').preferInstalled.ios, false);
+});

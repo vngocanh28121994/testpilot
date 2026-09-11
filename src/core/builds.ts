@@ -33,6 +33,14 @@ export interface EnvBuilds {
   ios: EnvBuild | null;
   /** Configured but not on disk. Worth saying: Appium fails on this minutes in. */
   missing: Array<{ platform: 'android' | 'ios'; path: string }>;
+  /**
+   * Môi trường này ưu tiên bản đã cài sẵn trên máy, thay vì bản tải lên.
+   *
+   * Có thật hai thứ cùng tồn tại: một file build nằm đây, và một lời khai rằng
+   * máy đang cài đúng bản cần chạy. Khi mâu thuẫn thì lời khai thắng — nó là
+   * thứ người dùng vừa chọn, còn file chỉ là thứ có sẵn.
+   */
+  preferInstalled: { android: boolean; ios: boolean };
 }
 
 export interface BuildInventory {
@@ -65,7 +73,17 @@ export async function buildInventory(
   for (const env of rows) {
     const isDefault = env === '' || env === cfg.defaultEnv;
     const override = cfg.environments[env];
-    const row: EnvBuilds = { env, isDefault, android: null, ios: null, missing: [] };
+    const row: EnvBuilds = {
+      env,
+      isDefault,
+      android: null,
+      ios: null,
+      missing: [],
+      preferInstalled: {
+        android: Boolean(override?.android?.useInstalledApp),
+        ios: Boolean(override?.ios?.useInstalledApp),
+      },
+    };
 
     for (const platform of ['android', 'ios'] as const) {
       // The default environment's build *is* the base config's: one package,

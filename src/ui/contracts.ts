@@ -172,6 +172,8 @@ export interface StateResponse {
   config: TestPilotConfig;
   /** Khác null khi file config hỏng — UI vẫn render được với giá trị mặc định. */
   configError: string | null;
+  /** Dấu vân của file config lúc đọc. Gửi lại khi Lưu để không ghi đè bản mới hơn. */
+  configRevision?: string;
   configFile: string;
   features: FeatureSummary[];
   elements: number;
@@ -228,6 +230,8 @@ export interface BuildInventoryRow {
   android: Build;
   ios: Build;
   missing: Array<{ platform: 'android' | 'ios'; path: string }>;
+  /** Môi trường ưu tiên bản đã cài sẵn trên máy thay vì bản tải lên. */
+  preferInstalled: { android: boolean; ios: boolean };
 }
 
 export interface BuildsResponse {

@@ -24,6 +24,7 @@ export const ROUTES = {
   models: '/api/models',
   builds: '/api/builds',
   appUpload: '/api/app/upload',
+  buildSource: '/api/builds/source',
   feature: '/api/feature',
   featureNormalize: '/api/feature/normalize',
   featureReview: '/api/feature/review',

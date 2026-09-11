@@ -552,7 +552,8 @@ export function assertEnvPackage(
       `mặc định "${cfg.defaultEnv}".\n` +
       'Các môi trường của app này dùng chung bundle id, nên không có gì phân biệt được chúng ' +
       'trên máy:\nchạy tiếp sẽ là đăng nhập account ' + env + ' vào app ' + cfg.defaultEnv + '.\n' +
-      'Mở Scenario Studio → Môi trường → Chọn file… để tải bản build của môi trường này lên.',
+      'Mở màn Bản build rồi tải bản build của môi trường này lên — hoặc, nếu máy đã cài\n' +
+      `sẵn bản đúng, chọn "ưu tiên bản có sẵn trên thiết bị" cho môi trường ${env}.`,
   );
 }
 

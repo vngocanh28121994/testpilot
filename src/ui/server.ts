@@ -206,6 +206,21 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
 
     case 'PUT /api/config': {
       const body = await readJson<TestPilotConfig>(req);
+      // Bản mà trình duyệt dựa vào khi mở màn Cấu hình. Thiếu nó thì vẫn ghi —
+      // CLI và script cũ không biết gửi, và chặn chúng lại là phá việc đang chạy.
+      const baseRevision = url.searchParams.get('baseRevision');
+      if (baseRevision) {
+        const current = await configRevision();
+        if (current && current !== baseRevision) {
+          return json(res, 409, {
+            error:
+              'Cấu hình đã thay đổi ở nơi khác kể từ lúc bạn mở màn này — '
+              + 'ví dụ vừa tải một bản build lên ở màn Bản build. '
+              + 'Tải lại trang rồi sửa tiếp, để thay đổi kia không bị ghi đè.',
+            revision: current,
+          });
+        }
+      }
       const parsed = ConfigSchema.safeParse(body);
       if (!parsed.success) {
         return json(res, 400, {
@@ -834,6 +849,32 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
       return json(res, 200, await buildInventory(await loadConfig(CONFIG_FILE)));
 
     /**
+     * Nguồn app cho một môi trường: bản tải lên, hay bản đã cài sẵn trên máy.
+     *
+     * Đây là chỗ người dùng khai điều mà tool không tự biết được. Mọi môi trường
+     * của app dùng chung bundle id, nên nhìn vào máy không biết bản đang cài
+     * thuộc môi trường nào — chỉ người cài mới biết.
+     */
+    case 'POST /api/builds/source': {
+      const body = await readJson<{ env: string; platform: 'android' | 'ios'; useInstalled: boolean }>(req);
+      if (body.platform !== 'android' && body.platform !== 'ios') {
+        return json(res, 400, { error: 'Nền tảng không hợp lệ.' });
+      }
+      const cfg = await loadConfig(CONFIG_FILE);
+      const env = cfg.environments[body.env];
+      if (!env) return json(res, 404, { error: `Không có môi trường "${body.env}".` });
+      cfg.environments[body.env] = {
+        ...env,
+        [body.platform]: {
+          ...(body.platform === 'android' ? env.android : env.ios),
+          useInstalledApp: body.useInstalled,
+        },
+      };
+      await saveConfig(cfg, CONFIG_FILE);
+      return json(res, 200, await buildInventory(cfg));
+    }
+
+    /**
      * Nội dung log của một lượt chạy, lấy riêng khi người dùng bung nó ra.
      *
      * Tách khỏi /api/state vì log là thứ dài nhất mà lại ít được xem nhất: gửi
@@ -1047,6 +1088,7 @@ async function state(): Promise<StateResponse> {
   return {
     config,
     configError,
+    configRevision: await configRevision(),
     configFile: path.resolve(CONFIG_FILE),
     features,
     elements,
@@ -1302,6 +1344,26 @@ async function listFeatures(cfg: TestPilotConfig) {
   );
   await reviews.save();
   return result;
+}
+
+/**
+ * Dấu vân của file config lúc này, để phát hiện ghi đè lên một bản đã cũ.
+ *
+ * Chuyện đã xảy ra và dựng lại được: mở màn Cấu hình → sang màn Bản build tải
+ * một bản lên (server ghi vào config ngay) → quay lại bấm Lưu. Màn Cấu hình gửi
+ * lại đúng bản nó chụp lúc mở, trong đó chưa có bản build kia, và server ghi đè
+ * toàn bộ. HTTP 200, không một lời nào, và `build/sit/app-sit.ipa` nằm lại trên
+ * đĩa như một file mồ côi không ai trỏ tới.
+ *
+ * Đọc thẳng file thay vì hash cấu hình đã parse: mặc định của schema có thể đổi
+ * theo phiên bản, còn file thì là thứ hai bên thật sự tranh nhau ghi.
+ */
+async function configRevision(): Promise<string | undefined> {
+  try {
+    return createHash('sha256').update(await readFile(CONFIG_FILE, 'utf8')).digest('hex');
+  } catch {
+    return undefined;
+  }
 }
 
 function featureRevision(content: string): string {
