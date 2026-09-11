@@ -221,6 +221,30 @@ export interface ReportView {
   hasLog: boolean;
   networkLogUrl: string | null;
   videoUrls?: string[];
+  /**
+   * Bản ghi của CẢ lượt chạy, tách khỏi `videoUrls`.
+   *
+   * Chỉ loại này mới có đoạn cài đặt để bỏ qua và nhiều kịch bản để đánh mốc;
+   * clip riêng của một kịch bản thì vốn đã bắt đầu ở đúng chỗ của nó.
+   */
+  wholeVideoUrls?: string[];
+  /**
+   * Mốc từng kịch bản trong bản ghi cả lượt, tính từ lúc kịch bản đầu tiên bắt
+   * đầu — không phải từ đầu file.
+   */
+  chapters?: Array<{ name: string; status: string; at: number }>;
+  /**
+   * Số giây từ lúc kịch bản đầu tiên bắt đầu tới hết lượt chạy.
+   *
+   * Dùng để nhảy qua đoạn cài đặt: dựng phiên Appium mất khoảng mười tám giây
+   * trên máy thật, và suốt quãng đó màn hình không có gì liên quan tới bài test.
+   *
+   * Server đã gửi ba trường này từ lâu, kèm chú thích "để player của giao diện
+   * cư xử như trong báo cáo thay vì thả người đọc xuống giây 0 của màn cài đặt"
+   * — nhưng contract không khai, nên giao diện không nhìn thấy và màn chi tiết
+   * farm vẫn vẽ một thẻ <video> trần.
+   */
+  testSeconds?: number;
   shotUrls?: Array<{ name: string; url: string; onFailure: boolean }>;
 }
 
