@@ -27,6 +27,12 @@ import type { ObservationProvider } from '../../discovery/ElementDiscovery.js';
 import type { UiObservation, ObservedElement } from '../../discovery/UiObservation.js';
 import type { UiDriver, UiHandle } from '../../drivers/driver.js';
 import type { LocatorCandidate } from '../../core/types.js';
+import { deriveLocator } from '../../discovery/ai/SemanticElementDiscovery.js';
+
+/** Ô nhập, xét cả vai trò web lẫn native — cùng bộ discovery chạy trên cả hai. */
+function laODiaNhap(el: { role?: string }): boolean {
+  return /input|textarea|textbox|searchfield|edittext|textfield/i.test(el.role ?? '');
+}
 
 /** Một phần tử trên màn hình mới, khai đúng những gì người dùng nhìn thấy. */
 type ManHinh = Partial<ObservedElement> & { id: string };
@@ -111,11 +117,14 @@ const BANG: Ca[] = [
 
 const BANG_AI: Ca[] = [
   {
-    ten: 'AI trả strategy "text" — chữ hiển thị là thứ duy nhất định danh',
-    locatorCu: { strategy: 'testId', value: 'search-old', weight: 0.9, origin: 'authored' as const },
-    nhan: 'Ô mã cổ phiếu',
-    manHinhMoi: [{ id: 'o-tim', role: 'textbox', text: 'TCB,VNM,FPT…' }],
-    dungLa: 'o-tim',
+    // Phần tử KHÔNG phải ô nhập: ở đây chữ hiển thị đúng là thứ định danh, và
+    // khớp-theo-chữ là chiến lược đúng. Dòng này canh việc `text` được hiểu như
+    // `label` thay vì bị dán nhãn `xpath`.
+    ten: 'AI trả strategy "text" cho một nút — chữ hiển thị là thứ định danh',
+    locatorCu: { strategy: 'testId', value: 'btn-old', weight: 0.9, origin: 'authored' as const },
+    nhan: 'Thêm mã',
+    manHinhMoi: [{ id: 'nut-them', role: 'button', text: 'Thêm mã' }],
+    dungLa: 'nut-them',
     aiTraVe: { strategy: 'text', layTu: 'text' },
   },
   {
@@ -125,6 +134,30 @@ const BANG_AI: Ca[] = [
     manHinhMoi: [{ id: 'nut-them', role: 'button', accessibilityLabel: 'Thêm mã' }],
     dungLa: 'nut-them',
     aiTraVe: { strategy: 'label', layTu: 'accessibilityLabel' },
+  },
+];
+
+/**
+ * Ca thật thứ hai trong cùng một ngày: AI tìm ĐÚNG ô nhập rồi khai sai loại
+ * locator. Cây native của Android phơi hint của một EditText rỗng ra ở thuộc
+ * tính `text`, nên bộ chọn locator thấy chữ và khai là khớp-theo-chữ — trong
+ * khi app là hybrid, bước resolve chạy trong WebView, và ở đó placeholder không
+ * phải chữ hiển thị cũng không phải aria-label.
+ */
+const BANG_O_NHAP: Ca[] = [
+  {
+    ten: 'ô nhập rỗng: chuỗi nhìn thấy là placeholder, không phải chữ',
+    locatorCu: { strategy: 'testId', value: 'search-old', weight: 0.9, origin: 'authored' as const },
+    nhan: 'Ô mã cổ phiếu',
+    // Cùng một chuỗi nằm ở cả `text` (cây native) lẫn `placeholder` (DOM).
+    manHinhMoi: [
+      { id: 'o-tim', role: 'input', text: 'TCB,VNM,FPT…', placeholder: 'TCB,VNM,FPT…' },
+    ],
+    dungLa: 'o-tim',
+    // Tầng AI thật chọn chiến lược qua deriveLocator; ở đây ép nó đi qua đúng
+    // nhánh đó bằng cách khai `text`, và bảng phải thấy locator thắng cuộc là
+    // `placeholder` chứ không phải `label`.
+    aiTraVe: { strategy: 'text', layTu: 'text' },
   },
 ];
 
@@ -160,7 +193,13 @@ function driverCua(manHinh: ManHinh[], daTim: LocatorCandidate[]): UiDriver {
     switch (c.strategy) {
       case 'testId': return el.testId === c.value;
       case 'placeholder': return el.placeholder === c.value;
-      case 'label': return el.accessibilityLabel === c.value || el.text === c.value;
+      // Một Ô NHẬP không có chữ hiển thị trong DOM: thứ nhìn thấy là placeholder.
+      // Cây native của Android thì lại phơi hint ra ở `text`, nên nếu driver giả
+      // cho `label` khớp `text` của ô nhập, nó sẽ tha cho đúng loại locator đã
+      // làm hỏng một lượt chạy thật.
+      case 'label':
+        return el.accessibilityLabel === c.value
+          || (!laODiaNhap(el) && el.text === c.value);
       case 'role': return el.role === c.value;
       // Một xpath thật luôn bắt đầu bằng '/' hoặc '('. Chuỗi chữ thường thì
       // không, và driver thật cũng sẽ không khớp được gì.
@@ -213,14 +252,18 @@ async function chayThuHealing(ca: Ca) {
   // Nó đứng ở đúng chỗ tầng AI thật đứng, nên chỗ nối AI → locator nằm trong
   // đường đi được đo.
   const dich = ca.manHinhMoi.find((el) => el.id === ca.dungLa)!;
+  // Gọi CHÍNH deriveLocator của tầng AI thật, thay vì tự khai một chiến lược.
+  //
+  // Bản trước tự trả `{strategy: ca.aiTraVe.strategy}` — nên nó đi vòng qua
+  // đúng đoạn mã cần đo. Thử phá lại phần ưu tiên placeholder thì bảng vẫn
+  // xanh: một dòng test trang trí, không phải một dòng canh cửa.
   const semantic = ca.aiTraVe
     ? {
-        discover: async () => ({
-          method: 'ai' as const,
-          locator: { strategy: ca.aiTraVe!.strategy, value: String(dich[ca.aiTraVe!.layTu] ?? '') },
-          match: { confidence: 90 },
-          evidence: [],
-        }),
+        discover: async () => {
+          const locator = deriveLocator(quanSat([dich]).elements[0]!);
+          if (!locator) return { method: 'failed' as const, evidence: ['không suy ra được locator'] };
+          return { method: 'ai' as const, locator, match: { confidence: 90 }, evidence: [] };
+        },
       }
     : undefined;
 
@@ -251,7 +294,7 @@ async function chayThuHealing(ca: Ca) {
 }
 
 describe('healing khi giao diện đổi', () => {
-  for (const ca of [...BANG, ...BANG_AI]) {
+  for (const ca of [...BANG, ...BANG_AI, ...BANG_O_NHAP]) {
     it(ca.ten, async () => {
       const r = await chayThuHealing(ca);
       assert.equal(r.thangCuoc, ca.dungLa, `phải tìm ra ${ca.dungLa}; lỗi: ${r.loi?.message ?? '—'}`);
@@ -270,7 +313,7 @@ describe('healing khi giao diện đổi', () => {
    * `xpath` mang giá trị là chữ thường là đúng cách lỗi hôm nay đã sinh ra.
    */
   it('không sinh ra xpath mang giá trị là chữ thường', async () => {
-    for (const ca of [...BANG, ...BANG_AI]) {
+    for (const ca of [...BANG, ...BANG_AI, ...BANG_O_NHAP]) {
       const { daTim } = await chayThuHealing(ca);
       const bay = daTim.filter((c) => c.strategy === 'xpath' && !/^[/(]/.test(c.value));
       assert.deepEqual(bay, [], `${ca.ten}: có locator xpath không phải xpath`);

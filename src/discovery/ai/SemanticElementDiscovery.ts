@@ -186,12 +186,38 @@ import type { ObservedElement } from '../UiObservation.js';
  * Derive a stable locator from the element's attributes, in priority order.
  * Falls back to xpath as a last resort.
  */
-function deriveLocator(
+/**
+ * Phần tử này có phải một ô nhập không.
+ *
+ * Xét cả vai trò web (`input`, `textarea`) lẫn native (`EditText`,
+ * `XCUIElementTypeTextField`): cùng một bộ discovery chạy trên cả hai, và một
+ * ô nhập ở đâu thì cũng là ô nhập.
+ */
+function isField(el: ObservedElement): boolean {
+  const role = (el.role ?? '').toLowerCase();
+  return /input|textarea|textbox|searchfield|edittext|textfield|securetextfield/.test(role);
+}
+
+export function deriveLocator(
   el: ObservedElement,
 ): { strategy: string; value: string } | undefined {
   if (el.testId) return { strategy: 'testId', value: el.testId };
   if (el.resourceId) return { strategy: 'resourceId', value: el.resourceId };
   if (el.accessibilityLabel) return { strategy: 'label', value: el.accessibilityLabel };
+  // Với MỘT Ô NHẬP, chuỗi nhìn thấy chính là placeholder — phải khai đúng như
+  // vậy, đừng khai là chữ.
+  //
+  // Cây native của Android phơi hint của một EditText rỗng ra ở thuộc tính
+  // `text`, nên chỗ này thấy `text = "TCB,VNM,FPT…"` và chọn khớp-theo-chữ.
+  // Nhưng app là hybrid: bước resolve chạy trong WebView, nơi `label` khớp chữ
+  // hiển thị hoặc aria-label — mà placeholder không phải hai thứ đó. Kết quả là
+  // một locator đúng phần tử, đúng chuỗi, và không bao giờ khớp.
+  //
+  // Đo trên máy thật: AI tìm đúng ô mã cổ phiếu với tin cậy 85, rồi cả kịch bản
+  // vẫn đỏ ở đúng bước đó.
+  if (el.placeholder && isField(el)) {
+    return { strategy: 'placeholder', value: el.placeholder };
+  }
   if (el.text) return { strategy: 'text', value: el.text };
   // A form field often has neither an id nor any words of its own — the caption
   // that names it lives in a sibling <legend>. Without these two the model could
