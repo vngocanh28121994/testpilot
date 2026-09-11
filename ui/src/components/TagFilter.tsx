@@ -18,6 +18,9 @@ import { Badge } from '@/components/ui/badge';
  * `@feature-chuyen-tien-noi-bo` giữa một rừng thẻ là việc không ai muốn làm lần
  * thứ hai.
  */
+/** Bao nhiêu thẻ hiện nguyên hình trong ô trước khi gom phần còn lại thành "+N". */
+const VISIBLE_TAGS = 2;
+
 export function TagFilter({
   all,
   value,
@@ -51,15 +54,15 @@ export function TagFilter({
         if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setOpen(false);
       }}
     >
-      {/* Thẻ nằm TRONG ô, cuộn ngang — không xếp chồng lên nhau.
-          Xếp chồng thì mỗi thẻ đẩy ô cao thêm một dòng, ô này phình ra và cả
-          hàng lưới lệch theo: "Platform" bên trái đứng yên còn cột này trôi
-          xuống. Tag chức năng dài tới ba chục ký tự nên chuyện đó xảy ra ngay
-          ở thẻ thứ hai. */}
-      <div className="border-input bg-background flex h-9 items-center gap-1 overflow-x-auto rounded-md border px-2">
-        {value.map((tag) => (
-          <Badge key={tag} variant="secondary" className="shrink-0 gap-1">
-            {tag}
+      {/* Một dòng, không cuộn ngang, không xếp chồng.
+          Xếp chồng thì mỗi thẻ đẩy ô cao thêm một dòng và cả hàng lưới lệch
+          theo. Cuộn ngang thì thanh cuộn ăn mất gần một nửa trong 36px chiều
+          cao, cắt đôi chính những cái thẻ nó cho cuộn. Nên: hiện hai thẻ đầu,
+          còn lại gom thành "+N" — bấm vào là mở đúng bảng dùng để bỏ chọn. */}
+      <div className="border-input bg-background flex h-9 items-center gap-1 overflow-hidden rounded-md border px-2">
+        {value.slice(0, VISIBLE_TAGS).map((tag) => (
+          <Badge key={tag} variant="secondary" className="max-w-44 shrink-0 gap-1">
+            <span className="truncate">{tag}</span>
             <button
               type="button"
               aria-label={`Bỏ ${tag}`}
@@ -69,8 +72,18 @@ export function TagFilter({
             </button>
           </Badge>
         ))}
+        {value.length > VISIBLE_TAGS && (
+          <button
+            type="button"
+            className="bg-muted text-muted-foreground shrink-0 rounded px-1.5 py-0.5 text-xs"
+            aria-label={`Còn ${value.length - VISIBLE_TAGS} tag nữa`}
+            onClick={() => setOpen(true)}
+          >
+            +{value.length - VISIBLE_TAGS}
+          </button>
+        )}
         <input
-          className="min-w-24 flex-1 bg-transparent text-sm outline-none"
+          className="min-w-20 flex-1 bg-transparent text-sm outline-none"
           type="search"
           value={query}
           onChange={(event) => setQuery(event.target.value)}

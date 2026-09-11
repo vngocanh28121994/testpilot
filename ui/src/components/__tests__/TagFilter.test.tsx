@@ -73,7 +73,9 @@ describe('TagFilter — chiều cao không đổi theo số thẻ', () => {
     // Ô là khối bao quanh chính cái input, không phải khung ngoài cùng.
     const box = container.querySelector('input')!.parentElement;
     expect(box?.className).toContain('h-9');
-    expect(box?.className).toContain('overflow-x-auto');
+    // Cuộn ngang thì thanh cuộn ăn mất gần nửa chiều cao 36px và cắt đôi
+    // chính những cái thẻ nó cho cuộn — đã thử và phải bỏ.
+    expect(box?.className).toContain('overflow-hidden');
   });
 
   it('Backspace ở ô rỗng gỡ thẻ cuối', async () => {
@@ -83,5 +85,27 @@ describe('TagFilter — chiều cao không đổi theo số thẻ', () => {
     await user.click(screen.getByLabelText('Lọc theo tag'));
     await user.keyboard('{Backspace}');
     expect(onChange).toHaveBeenCalledWith(['@p0']);
+  });
+});
+
+/** Nhiều thẻ quá thì gom lại, chứ không cuộn và cũng không xuống dòng. */
+describe('TagFilter — nhiều thẻ', () => {
+  it('hiện hai thẻ đầu, phần còn lại gom thành +N', () => {
+    renderWithProviders(
+      <TagFilter all={ALL} value={['@p0', '@positive', '@negative', '@feature-them-ma']} onChange={vi.fn()} />,
+    );
+    expect(screen.getByLabelText('Bỏ @p0')).toBeInTheDocument();
+    expect(screen.getByLabelText('Bỏ @positive')).toBeInTheDocument();
+    expect(screen.queryByLabelText('Bỏ @negative')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Còn 2 tag nữa' })).toHaveTextContent('+2');
+  });
+
+  it('bấm +N mở bảng để bỏ chọn', async () => {
+    const user = userEvent.setup();
+    renderWithProviders(
+      <TagFilter all={ALL} value={['@p0', '@positive', '@negative']} onChange={vi.fn()} />,
+    );
+    await user.click(screen.getByRole('button', { name: 'Còn 1 tag nữa' }));
+    expect(screen.getByRole('button', { name: '@negative' })).toBeInTheDocument();
   });
 });
