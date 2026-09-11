@@ -10,10 +10,23 @@ describe('CheckedAt', () => {
     expect(screen.getByText(/đã kiểm lúc \d{1,2}:\d{2}:\d{2}/)).toBeInTheDocument();
   });
 
-  it('đang chạy thì nói đang chạy, không hiện giờ cũ', () => {
-    render(<CheckedAt at={Date.now()} busy />);
+  /**
+   * Nút bấm ngay cạnh vốn đã bị khoá và có vòng quay, nên chữ "đang kiểm…" nói
+   * lại đúng điều đó — và vì nó ngắn hơn hẳn "đã kiểm lúc 16:17:15", cả cụm co
+   * vào rồi giãn ra sau mỗi lần bấm. Giữ dấu thời gian, chỉ làm mờ.
+   */
+  it('đang chạy mà đã có giờ cũ thì giữ nguyên, chỉ mờ đi', () => {
+    render(<CheckedAt at={new Date('2026-09-09T15:30:08').getTime()} busy />);
+    const stamp = screen.getByText(/đã kiểm lúc/);
+    expect(stamp).toBeInTheDocument();
+    expect(stamp.className).toContain('text-muted-foreground/60');
+    expect(screen.queryByText('đang kiểm…')).toBeNull();
+  });
+
+  /** Lần đầu thì chưa có gì để giữ, và câu này là thứ duy nhất nói có việc đang chạy. */
+  it('lần kiểm đầu tiên thì nói đang kiểm', () => {
+    render(<CheckedAt busy />);
     expect(screen.getByText('đang kiểm…')).toBeInTheDocument();
-    expect(screen.queryByText(/đã kiểm lúc/)).toBeNull();
   });
 
   it('chưa dò lần nào thì không hiện gì', () => {
