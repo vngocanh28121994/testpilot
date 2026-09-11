@@ -42,7 +42,7 @@ describe('ScenarioReviewPanel — bộ lọc', () => {
     expect(screen.getAllByRole('row')).toHaveLength(3); // tiêu đề + 2 kịch bản
 
     await user.click(screen.getByRole('searchbox', { name: 'Lọc theo tag' }));
-    await user.click(await screen.findByRole('button', { name: '@web' }));
+    await user.click(await screen.findByRole('checkbox', { name: '@web' }));
     await user.click(screen.getByRole('button', { name: 'Lọc' }));
 
     expect(router.state.location.search).toMatchObject({ tags: ['@web'] });

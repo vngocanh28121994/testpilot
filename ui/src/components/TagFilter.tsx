@@ -124,20 +124,37 @@ export function TagFilter({
               Không có tag nào khớp “{query}”.
             </span>
           )}
-          {shown.map((tag) => (
-            <button
-              key={tag}
-              type="button"
-              className="hover:bg-muted flex items-center gap-2 rounded px-2 py-1 text-left text-sm"
-              onClick={() => toggle(tag)}
-            >
-              <Check
-                className={value.includes(tag) ? 'size-3.5' : 'size-3.5 opacity-0'}
-                aria-hidden
-              />
-              {tag}
-            </button>
-          ))}
+          {/* Ô tích thật, không phải dấu tích tàng hình.
+              Trước đây mục chưa chọn để một khoảng trống bằng đúng dấu tích —
+              nhìn vào thấy một cột lồi lõm không rõ nghĩa, và không có gì nói
+              rằng mỗi dòng là một thứ bật/tắt được. */}
+          {shown.map((tag) => {
+            const picked = value.includes(tag);
+            return (
+              <button
+                key={tag}
+                type="button"
+                role="checkbox"
+                aria-checked={picked}
+                className="hover:bg-muted flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-sm"
+                onClick={() => toggle(tag)}
+              >
+                <span
+                  aria-hidden
+                  className={
+                    picked
+                      ? 'bg-primary text-primary-foreground flex size-4 shrink-0 items-center justify-center rounded-sm'
+                      : 'border-input flex size-4 shrink-0 items-center justify-center rounded-sm border'
+                  }
+                >
+                  {picked && <Check className="size-3" />}
+                </span>
+                {/* Một dòng: tên tag chức năng dài tới ba chục ký tự, để nó
+                    xuống dòng thì danh sách cao gấp đôi và khó lướt mắt. */}
+                <span className="truncate">{tag}</span>
+              </button>
+            );
+          })}
         </div>
       )}
     </div>

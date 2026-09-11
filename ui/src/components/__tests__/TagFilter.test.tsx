@@ -16,8 +16,8 @@ describe('TagFilter', () => {
     const user = userEvent.setup();
     renderWithProviders(<TagFilter all={ALL} value={[]} onChange={vi.fn()} />);
     await user.type(screen.getByLabelText('Lọc theo tag'), 'chuyen');
-    expect(screen.getByRole('button', { name: '@feature-chuyen-tien' })).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: '@positive' })).not.toBeInTheDocument();
+    expect(screen.getByRole('checkbox', { name: '@feature-chuyen-tien' })).toBeInTheDocument();
+    expect(screen.queryByRole('checkbox', { name: '@positive' })).not.toBeInTheDocument();
   });
 
   it('chọn thêm tag thứ hai chứ không thay tag thứ nhất', async () => {
@@ -27,7 +27,7 @@ describe('TagFilter', () => {
       <TagFilter all={ALL} value={['@feature-chuyen-tien']} onChange={onChange} />,
     );
     await user.click(screen.getByLabelText('Lọc theo tag'));
-    await user.click(screen.getByRole('button', { name: '@positive' }));
+    await user.click(screen.getByRole('checkbox', { name: '@positive' }));
     expect(onChange).toHaveBeenCalledWith(['@feature-chuyen-tien', '@positive']);
   });
 
@@ -36,7 +36,7 @@ describe('TagFilter', () => {
     const onChange = vi.fn();
     renderWithProviders(<TagFilter all={ALL} value={['@positive']} onChange={onChange} />);
     await user.click(screen.getByLabelText('Lọc theo tag'));
-    await user.click(screen.getByRole('button', { name: '@positive' }));
+    await user.click(screen.getByRole('checkbox', { name: '@positive' }));
     expect(onChange).toHaveBeenCalledWith([]);
   });
 
@@ -106,7 +106,7 @@ describe('TagFilter — nhiều thẻ', () => {
       <TagFilter all={ALL} value={['@p0', '@positive', '@negative']} onChange={vi.fn()} />,
     );
     await user.click(screen.getByRole('button', { name: 'Còn 1 tag nữa' }));
-    expect(screen.getByRole('button', { name: '@negative' })).toBeInTheDocument();
+    expect(screen.getByRole('checkbox', { name: '@negative' })).toBeInTheDocument();
   });
 });
 
@@ -125,5 +125,21 @@ describe('TagFilter — ô nhập không bị thẻ đẩy đi', () => {
     const badge = screen.getByLabelText('Bỏ @feature-chuyen-tien').parentElement!;
     expect(badge.className).toContain('shrink');
     expect(badge.className).not.toContain('shrink-0');
+  });
+});
+
+/**
+ * Mục chưa chọn từng để một khoảng trống bằng đúng dấu tích: nhìn vào thấy một
+ * cột lồi lõm không rõ nghĩa, và không có gì nói rằng mỗi dòng là một thứ
+ * bật/tắt được.
+ */
+describe('TagFilter — mỗi dòng là một ô tích thật', () => {
+  it('nói ra trạng thái tích cho cả dòng chưa chọn lẫn đã chọn', async () => {
+    const user = userEvent.setup();
+    renderWithProviders(<TagFilter all={ALL} value={['@positive']} onChange={vi.fn()} />);
+    await user.click(screen.getByLabelText('Lọc theo tag'));
+
+    expect(screen.getByRole('checkbox', { name: '@positive' })).toBeChecked();
+    expect(screen.getByRole('checkbox', { name: '@negative' })).not.toBeChecked();
   });
 });
