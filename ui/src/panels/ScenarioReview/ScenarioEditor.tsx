@@ -146,7 +146,10 @@ export function ScenarioEditor({
           <SheetDescription>{filename}</SheetDescription>
         </SheetHeader>
 
-        <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-auto px-4">
+        {/* `pb-4`: khung này cuộn, và mục cuối cùng của nó dính sát vào thanh
+            nút bên dưới — không có khoảng thở nào giữa "Chuẩn hoá" và đường kẻ
+            của thanh Lưu/Huỷ. */}
+        <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-auto px-4 pb-4">
           {/* Chỉ hiện khi đang thêm mới: sửa một kịch bản có sẵn thì file đích
               đã biết rồi, đưa ra một ô chọn ở đó chỉ mời người ta chuyển nhầm. */}
           {target && onTargetChange && (
