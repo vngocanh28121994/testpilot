@@ -42,12 +42,23 @@ describe('discovery chạy nền', () => {
    */
   it('chờ thêm cho discovery dang dở trước khi báo hỏng', () => {
     assert.match(source, /const DISCOVERY_GRACE_MS = 4_000;/);
-    assert.match(source, /if \(discoveryTask && !discoverySettled\) \{/);
+    assert.match(source, /if \(!late && discoveryTask && !discoverySettled\) \{/);
     assert.match(source, /Promise\.race\(\[\s*discoveryTask,/);
   });
 
+  /**
+   * Điều kiện ở đây từng là `discoveryTask && !discoverySettled` — tức chỉ nhận
+   * trường hợp discovery CÒN ĐANG CHẠY. Một câu trả lời về trong nhịp ngủ của
+   * vòng cuối thì đã settled, nên nó rơi ra ngoài; năm lượt chạy thật ngày 11/09
+   * mất đúng kiểu đó. Nay hỏi theo "đã đưa cho driver lần nào chưa", nên phần
+   * canh thật nằm ở dòng dưới và ở lateDiscovery.test.ts.
+   */
+  it('ứng viên chưa từng thử vẫn được quét lại sau khi hết giờ', () => {
+    assert.match(source, /if \(daThu\.has\(candidateKey\(candidate\)\)/);
+  });
+
   it('ứng viên về muộn vẫn phải qua verifySemantically như mọi ứng viên khác', () => {
-    const tail = source.slice(source.indexOf('if (discoveryTask && !discoverySettled)'));
-    assert.match(tail.slice(0, 900), /o\.verifyHealedMatch[\s\S]{0,140}verifySemantically/);
+    const tail = source.slice(source.indexOf('if (!late && discoveryTask'));
+    assert.match(tail.slice(0, 1400), /o\.verifyHealedMatch[\s\S]{0,140}verifySemantically/);
   });
 });

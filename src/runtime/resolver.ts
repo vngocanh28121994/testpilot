@@ -647,6 +647,59 @@ export class Resolver {
       this.driver.platform,
       candidate.weight,
     );
+    if (resolution.previous) this.lanBaiHoc(elementId, resolution.previous, persisted);
+  }
+
+  /**
+   * Chữa được một bản ghi thì chia bài học cho những bản ghi cùng chỉ một control.
+   *
+   * Healing vốn chữa một BẢN GHI, không chữa một control. Candidate lưu theo
+   * `elementId`, nên hai id cùng trỏ vào một ô nhập ngoài đời thì mỗi lần giao
+   * diện đổi phải học lại từ đầu ở từng id — và lần thứ hai thường khó hơn lần
+   * đầu. Đo trên máy thật 11/09: cùng một ô `mat-autocomplete-trigger` được
+   * đăng ký hai lần,
+   *
+   *   priceBoard.oMaCoPhieu      nhãn "Ô mã cổ phiếu"
+   *   addStockModal.searchInput  nhãn "Ô tìm kiếm mã cổ phiếu"
+   *
+   * và cả hai cùng giữ locator chết `placeholder="Mã cổ phiếu"`. Bản ghi thứ
+   * nhất chữa được sang `placeholder="TCB,VNM,FPT..."`; bản ghi thứ hai thì
+   * không, vì nhãn của nó đẩy model sang ô tìm kiếm toàn cục đang hiển thị trên
+   * cùng màn hình — một ô có thật, sai thật, và bị luật head-word gạt đúng. Nó
+   * không có đường nào đi tới ô đúng, dù câu trả lời đã nằm sẵn trong registry.
+   *
+   * Khoá nối chính là locator vừa chết: hai bản ghi cùng ôm một locator chết
+   * trên cùng màn hình thì gần như chắc chắn là một control. Ở đó không cần hỏi
+   * model lần nào nữa.
+   *
+   * Chép sang dưới dạng ứng viên chưa duyệt, trọng số thấp — nó vẫn phải tự
+   * chứng minh qua confirmResolution như mọi locator khác, nên một lần chữa sai
+   * không thể lan ra cả registry.
+   */
+  private lanBaiHoc(
+    healedId: string,
+    dead: LocatorCandidate,
+    fresh: LocatorCandidate,
+  ): void {
+    const platform = this.driver.platform;
+    const screen = this.registry.element(healedId).screen;
+    for (const other of Object.values(this.registry.raw.elements)) {
+      if (other.id === healedId || other.screen !== screen) continue;
+      const list = other.candidates?.[platform] ?? [];
+      const omLocatorChet = list.some(
+        (c) => c.strategy === dead.strategy && c.value === dead.value,
+      );
+      if (!omLocatorChet) continue;
+      if (list.some((c) => c.strategy === fresh.strategy && c.value === fresh.value)) continue;
+      this.registry.upsertElement({
+        ...other,
+        candidates: { [platform]: [asUnapprovedFallback(fresh)] },
+      });
+      console.log(
+        `[healing] "${other.id}" cùng giữ locator đã chết ${dead.strategy}="${dead.value}" `
+        + `với "${healedId}" — chép sang ${fresh.strategy}="${fresh.value}" để thử, chưa duyệt.`,
+      );
+    }
   }
 
   /** Mark an outcome-invalid runtime candidate so it cannot silently win later. */
