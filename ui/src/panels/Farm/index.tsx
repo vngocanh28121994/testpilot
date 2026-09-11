@@ -1,4 +1,4 @@
-import { type ReactNode, useEffect, useMemo, useState } from 'react';
+import { type ReactNode, useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from '@tanstack/react-router';
 import { toast } from 'sonner';
 import {
@@ -159,6 +159,8 @@ export default function FarmPanel() {
     url: string,
     apply: (data: T) => void,
     done: (data: T) => string,
+    /** Lần tự tải: im lặng khi xong. Người dùng không bấm gì thì không cần báo. */
+    quiet = false,
   ) {
     setLoading(key);
     try {
@@ -166,7 +168,7 @@ export default function FarmPanel() {
       apply(data);
       // Nói ra kết quả, không chỉ ngừng quay: "0 project" và "chưa bấm" trông
       // giống hệt nhau trên một cái dropdown rỗng.
-      toast.success(done(data));
+      if (!quiet) toast.success(done(data));
       return data;
     } catch (error) {
       toast.error((error as Error).message);
@@ -186,17 +188,36 @@ export default function FarmPanel() {
         )
       : Promise.resolve(undefined);
 
-  const loadProjects = async () => {
+  const loadProjects = async (quiet = false) => {
     const data = await load<FarmProject[]>(
       'projects',
       `${ROUTES.farmProjects}${qs({ region })}`,
       setProjects,
       (items) => `${items.length} project.`,
+      quiet,
     );
     // Đã có project được chọn sẵn thì tải luôn pool của nó — bản cũ làm vậy, và
     // đúng: người ta bấm "Tải project" để đi tiếp, không phải để dừng ở đó.
     if (data && project) await loadPools();
   };
+
+  //
+  // Tự tải project khi credential đã dùng được.
+  //
+  // Trước đây danh sách chỉ sống trong state của màn này: rời sang màn khác rồi
+  // quay lại là rỗng, và người dùng phải bấm "Tải project" mỗi lần vào — trong
+  // khi câu trả lời không hề đổi giữa hai lần vào cách nhau vài giây.
+  //
+  // Vẫn giữ nút, nhưng đổi vai: nó là "tải lại", cho lúc vừa tạo project mới
+  // trên AWS. Tự tải một lần cho mỗi region, và chỉ khi credential đã dùng được
+  // — gọi lúc chưa đăng nhập chỉ đổi một dropdown rỗng lấy một toast lỗi.
+  const autoLoaded = useRef('');
+  useEffect(() => {
+    if (!aws?.ok || !region) return;
+    if (autoLoaded.current === region) return;
+    autoLoaded.current = region;
+    void loadProjects(true);
+  }, [aws?.ok, region, loadProjects]);
 
   const loadDevices = () =>
     load<FarmDevice[]>(
@@ -363,7 +384,7 @@ export default function FarmPanel() {
                     onClick={() => void loadProjects()}
                   >
                     <Download className="size-4" />
-                    {loading === 'projects' ? 'Đang tải project…' : 'Tải project'}
+                    {loading === 'projects' ? 'Đang tải project…' : 'Tải lại project'}
                   </Button>
                   <Button
                     variant="outline"
