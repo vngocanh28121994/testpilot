@@ -174,6 +174,8 @@ export class Resolver {
     let discoveryTask: Promise<LocatorCandidate | null> | null = null;
     let discoveryAttempted = false;
     let lastUrl: string | undefined;
+    /** Ứng viên đã thực sự đưa cho driver, để biết cái nào chưa từng được thử. */
+    const daThu = new Set<string>();
 
     // Deliberately no popup sweep before the first look.
     //
@@ -201,6 +203,7 @@ export class Resolver {
 
       for (const candidate of candidates) {
         attempts += 1;
+        daThu.add(candidateKey(candidate));
         const handle = await this.tryCandidate(candidate, o);
         if (!handle) continue;
 
@@ -319,42 +322,57 @@ export class Resolver {
     // Đo trên máy thật ngày 2026-09-10: tầng AI trả về đúng locator đã bị xoá
     // (placeholder="Email / Số tài khoản / Điện thoại", tin cậy 95) nhưng về
     // sau hạn resolve, nên câu trả lời đúng bị vứt đi.
-    if (discoveryTask && !discoverySettled) {
-      const late = await Promise.race([
+    // Ứng viên chưa từng đưa cho driver thì phải được thử, dù đã hết giờ.
+    //
+    // Năm lượt chạy thật ngày 11/09 báo `Tried: placeholder=Mã cổ phiếu` trong
+    // khi dòng ngay trên là tầng AI trả về ĐÚNG ô nhập. Câu trả lời ấy rơi vào
+    // một khe giữa hai nhánh, theo hai biến thể của cùng một chuyện:
+    //
+    //   - về trong nhịp `sleep` của vòng cuối: đã settled nên nhánh "chờ thêm"
+    //     bỏ qua, mà cũng chưa kịp vào `candidates` nên vòng lặp không thấy;
+    //   - vào được `candidates` bằng `unshift` ở CUỐI vòng chót, rồi vòng lặp
+    //     hết hạn trước khi duyệt tới — nằm trong danh sách "đã thử" mà chưa
+    //     từng được đưa cho driver một lần nào.
+    //
+    // Cả hai đều kết thúc bằng một thông báo lỗi khai rằng locator đúng chưa
+    // từng được thử, nên ba buổi chẩn đoán đã đi tìm lý do model "bỏ qua" một
+    // câu trả lời mà nó vẫn luôn đưa ra. Hỏi theo "đã đưa cho driver chưa" thì
+    // cả hai biến thể cùng được trả lời, và biến thể thứ ba sau này cũng vậy.
+    let late: LocatorCandidate | null = discovered;
+    discovered = null;
+    if (!late && discoveryTask && !discoverySettled) {
+      late = await Promise.race([
         discoveryTask,
         sleep(DISCOVERY_GRACE_MS).then(() => null),
       ]);
-      if (late && !excluded.has(candidateKey(late))) {
-        // Ghi vào `candidates` TRƯỚC khi thử, để nó có mặt trong "Tried:".
-        //
-        // Bốn lượt chạy thật liên tiếp báo `Tried: placeholder=Mã cổ phiếu` —
-        // đúng một locator cũ — trong khi tầng AI đã trả về đúng ô nhập ở dòng
-        // ngay trên. Câu trả lời về sau hạn nên rơi vào nhánh này, và nhánh này
-        // thử nó ngoài mảng `candidates`, nên thông báo lỗi khai rằng nó chưa
-        // từng được thử. Ba buổi chẩn đoán đã đi tìm lý do model "bỏ qua" một
-        // câu trả lời mà nó vẫn luôn đưa ra.
-        candidates.push(late);
-        attempts += 1;
-        const handle = await this.tryCandidate(late, o);
-        const verified = handle
-          && (!o.verifyHealedMatch
-            || (await this.verifySemantically(elementId, handle, o.locatorParams)));
-        if (handle && verified) {
-          console.log(`[discovery] "${elementId}": tìm được sau khi chờ thêm — ${late.strategy}=${late.value}`);
-          return { handle, candidate: late, healed: true, attempts };
-        }
-        // Trượt ở đây thì phải nói ra trượt Ở ĐÂU.
-        //
-        // Nhánh này vốn im lặng hoàn toàn, nên "AI không trả lời", "locator
-        // không khớp gì trên màn hình" và "khớp nhưng bị kiểm tra ngữ nghĩa từ
-        // chối" để lại cùng một dấu vết: không dấu vết nào.
-        console.warn(
-          `[discovery] "${elementId}": ${late.strategy}="${late.value}" về sau hạn và `
-          + (handle
-            ? 'khớp được phần tử nhưng kiểm tra ngữ nghĩa từ chối.'
-            : 'không khớp phần tử nào trên màn hình lúc đó.'),
-        );
+    }
+    if (late && !excluded.has(candidateKey(late)) && !candidates.some((c) => candidateKey(c) === candidateKey(late!))) {
+      candidates.push(late);
+    }
+
+    for (const candidate of candidates) {
+      if (daThu.has(candidateKey(candidate)) || excluded.has(candidateKey(candidate))) continue;
+      attempts += 1;
+      daThu.add(candidateKey(candidate));
+      const handle = await this.tryCandidate(candidate, o);
+      const verified = handle
+        && (!o.verifyHealedMatch
+          || (await this.verifySemantically(elementId, handle, o.locatorParams)));
+      if (handle && verified) {
+        console.log(`[discovery] "${elementId}": tìm được sau khi chờ thêm — ${candidate.strategy}=${candidate.value}`);
+        return { handle, candidate, healed: true, attempts };
       }
+      // Trượt ở đây thì phải nói ra trượt Ở ĐÂU.
+      //
+      // Nhánh này vốn im lặng hoàn toàn, nên "AI không trả lời", "locator không
+      // khớp gì trên màn hình" và "khớp nhưng bị kiểm tra ngữ nghĩa từ chối" để
+      // lại cùng một dấu vết: không dấu vết nào.
+      console.warn(
+        `[discovery] "${elementId}": ${candidate.strategy}="${candidate.value}" về sau hạn và `
+        + (handle
+          ? 'khớp được phần tử nhưng kiểm tra ngữ nghĩa từ chối.'
+          : 'không khớp phần tử nào trên màn hình lúc đó.'),
+      );
     }
 
     // Discovery vẫn đang chạy khi hết giờ là một câu trả lời, không phải im
