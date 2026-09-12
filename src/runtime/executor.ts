@@ -65,6 +65,17 @@ export const DEFAULT_EXECUTOR: ExecutorOptions = {
  * Chosen against a ~2s toast: 150ms leaves roughly a dozen looks inside it.
  */
 const TRANSIENT_WATCH_MS = 3_000;
+
+/**
+ * Ảnh nhánh thoát còn dùng lại được trong bao lâu.
+ *
+ * Giữa lúc nhánh thoát chụp ảnh và lúc bước hỏng rơi vào handler chỉ có một
+ * lần `throw` — đo trên máy thật là cùng một dấu giây. 5 giây rộng rãi cho
+ * đường đi đó mà vẫn hẹp hơn mọi thao tác nào có thể làm màn hình đổi sang
+ * trạng thái khác ở giữa, nên không có chuyện report cho xem một màn hình đã
+ * cũ.
+ */
+const DECLINED_SHOT_REUSE_MS = 5_000;
 const TRANSIENT_POLL_MS = 150;
 /**
  * How long a list may take to settle after the action that changed it.
@@ -112,6 +123,15 @@ export class Executor {
    * attach the previous screenshot to whatever ran next.
    */
   private lastShot?: string;
+  /**
+   * Ảnh nhánh thoát vừa chụp, để bước hỏng ngay sau đó khỏi chụp lại.
+   *
+   * Hai chỗ cùng chụp một khoảnh khắc: nhánh thoát khi bấm lỗi, rồi handler
+   * bước hỏng. Đo trên một lượt chạy thật — hai file cùng dấu giây 03:09:59,
+   * 256 686 và 256 738 byte, cùng một màn hình. Mỗi ca fail trả giá hai lần
+   * cho một bức ảnh, và report hiện nó hai lần liền nhau.
+   */
+  private lastDeclinedShot?: { path: string; at: number };
   /**
    * Set by a tap that completed without anything proving it had an effect.
    * Carried on the instance for the same reason as `lastShot`: the step loop
@@ -290,9 +310,21 @@ export class Executor {
       } catch (err) {
         const e = err as Error;
         const stem = `${scenarioId}-a${attempt}-l${step.line}-fail`;
+        // Dùng lại ảnh nhánh thoát vừa chụp, nếu nó còn nóng.
+        //
+        // Đường đi phổ biến nhất tới đây là: bấm lỗi → nhánh thoát chụp một
+        // ảnh → ném lỗi → rơi vào chính handler này. Hai lần chụp cách nhau
+        // chưa tới một giây và cho cùng một màn hình. Ngoài đường đó (bước
+        // assert hỏng, bấm hỏng kiểu khác) thì không có ảnh sẵn và vẫn chụp
+        // như cũ.
+        const conNong = this.lastDeclinedShot
+          && Date.now() - this.lastDeclinedShot.at < DECLINED_SHOT_REUSE_MS;
         const shot = this.opts.screenshotOnFailure
-          ? await this.driver.screenshot(stem).catch(() => undefined)
+          ? (conNong
+            ? this.lastDeclinedShot!.path
+            : await this.driver.screenshot(stem).catch(() => undefined))
           : undefined;
+        this.lastDeclinedShot = undefined;
         // Captured beside the screenshot, not instead of it: the picture shows
         // what the screen looked like, the tree shows what was matchable.
         if (this.opts.screenshotOnFailure) {
@@ -1248,6 +1280,7 @@ export class Executor {
           // than the state left behind after everything else gave up.
           const shot = await this.driver.screenshot?.(`tap-declined-${Date.now()}`)
             .catch(() => undefined);
+          if (shot) this.lastDeclinedShot = { path: shot, at: Date.now() };
           const presence = shot ? ` [ảnh: ${shot}]` : '';
           console.warn(
             `[tap] "${actionLabel}": ${driverReason(error)}, và ${provable

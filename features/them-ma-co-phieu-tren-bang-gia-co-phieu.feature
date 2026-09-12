@@ -53,7 +53,6 @@ Feature: Thêm mã cổ phiếu trên Bảng giá cổ phiếu
     When I click "Thêm mã"
     And I enter "VIC" into "Ô tìm kiếm mã cổ phiếu"
     And I click "Kết quả tìm kiếm đầu tiên"
-    And I click "Thêm mã"
     And I enter "VIC" into "Ô tìm kiếm mã cổ phiếu"
     And I click "Kết quả tìm kiếm đầu tiên"
     Then "Dòng cổ phiếu trong danh mục" shows "VIC" exactly "1" times
