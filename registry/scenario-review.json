@@ -33,10 +33,10 @@
       "id": "dang-nhap.feature::Tìm kiếm Bảng giá cổ phiếu sau đăng nhập",
       "filename": "dang-nhap.feature",
       "scenarioName": "Tìm kiếm Bảng giá cổ phiếu sau đăng nhập",
-      "contentHash": "a0aa19f090fb476c06dab91db4c9e2cbbf318d09c40d6d46919f4ac98fc0e001",
-      "status": "approved",
+      "contentHash": "27e6fd2e9ca26ddbbf2083c232ac183009b3fa3bce592c0d8fe446c1f607d478",
+      "status": "pending",
       "source": "legacy",
-      "updatedAt": "2026-09-09T03:16:57.504Z"
+      "updatedAt": "2026-09-11T19:36:17.867Z"
     },
     "dang-nhap.feature::Kiểm tra tài sản trái phiếu": {
       "id": "dang-nhap.feature::Kiểm tra tài sản trái phiếu",
@@ -80,10 +80,10 @@
       "id": "chuc-nang-them-ma-co-phieu.feature::Thêm mã cổ phiếu mới vào danh mục",
       "filename": "chuc-nang-them-ma-co-phieu.feature",
       "scenarioName": "Thêm mã cổ phiếu mới vào danh mục",
-      "contentHash": "84a473b9d35d1f7833298e2531439c0da40acb84819d08fab01db5aef2316425",
+      "contentHash": "c3ff0820677786ceea5687d157e757c9b8a83cd1a3341ac5f9cf2a76c642a73b",
       "status": "pending",
-      "source": "manual",
-      "updatedAt": "2026-08-26T08:15:55.577Z"
+      "source": "legacy",
+      "updatedAt": "2026-09-11T20:00:19.362Z"
     },
     "chuc-nang-them-ma-co-phieu.feature::Tìm kiếm mã cổ phiếu theo tên doanh nghiệp": {
       "id": "chuc-nang-them-ma-co-phieu.feature::Tìm kiếm mã cổ phiếu theo tên doanh nghiệp",
@@ -220,81 +220,200 @@
       "filename": "chuyen-tien-noi-bo.feature",
       "scenarioName": "Chuyển tiền thành công từ tài khoản Thường sang Ký Quỹ",
       "contentHash": "6ff3d3733987ceb5cc21967556fad43aed09ccc10ec064064c425c95584313e4",
-      "status": "pending",
+      "status": "approved",
       "source": "generated",
-      "updatedAt": "2026-09-09T06:54:49.379Z"
+      "updatedAt": "2026-09-11T04:28:45.287Z",
+      "reviewedAt": "2026-09-11T04:28:45.287Z"
     },
     "chuyen-tien-noi-bo.feature::Chuyển tiền thành công từ tài khoản Ký Quỹ sang Thường": {
       "id": "chuyen-tien-noi-bo.feature::Chuyển tiền thành công từ tài khoản Ký Quỹ sang Thường",
       "filename": "chuyen-tien-noi-bo.feature",
       "scenarioName": "Chuyển tiền thành công từ tài khoản Ký Quỹ sang Thường",
       "contentHash": "4579c753c9be6293030d73714c40b0d2fb0cfd1eaed07caaf84fc1578d4c1de5",
-      "status": "pending",
+      "status": "approved",
       "source": "generated",
-      "updatedAt": "2026-09-09T06:54:49.379Z"
+      "updatedAt": "2026-09-11T04:28:45.287Z",
+      "reviewedAt": "2026-09-11T04:28:45.287Z"
     },
     "chuyen-tien-noi-bo.feature::Chọn tiểu khoản nguồn và đích cho giao dịch chuyển tiền": {
       "id": "chuyen-tien-noi-bo.feature::Chọn tiểu khoản nguồn và đích cho giao dịch chuyển tiền",
       "filename": "chuyen-tien-noi-bo.feature",
       "scenarioName": "Chọn tiểu khoản nguồn và đích cho giao dịch chuyển tiền",
       "contentHash": "ff75da0c90fbbef7b7d1d8a8451ca1c77249903f86db26b4f36d52f124e51121",
-      "status": "pending",
+      "status": "approved",
       "source": "generated",
-      "updatedAt": "2026-09-09T06:54:49.379Z"
+      "updatedAt": "2026-09-11T04:28:45.287Z",
+      "reviewedAt": "2026-09-11T04:28:45.287Z"
     },
     "chuyen-tien-noi-bo.feature::Tiểu khoản đã chọn ở nguồn không xuất hiện trong dropdown đích": {
       "id": "chuyen-tien-noi-bo.feature::Tiểu khoản đã chọn ở nguồn không xuất hiện trong dropdown đích",
       "filename": "chuyen-tien-noi-bo.feature",
       "scenarioName": "Tiểu khoản đã chọn ở nguồn không xuất hiện trong dropdown đích",
       "contentHash": "307aabebe450275a086d915e0cbc127dbebb1ca2c0a70fcf39cf9329d0bf32df",
-      "status": "pending",
+      "status": "approved",
       "source": "generated",
-      "updatedAt": "2026-09-09T06:54:49.379Z"
+      "updatedAt": "2026-09-11T04:28:45.287Z",
+      "reviewedAt": "2026-09-11T04:28:45.287Z"
     },
     "chuyen-tien-noi-bo.feature::Tiểu khoản đã chọn ở đích không xuất hiện trong dropdown nguồn": {
       "id": "chuyen-tien-noi-bo.feature::Tiểu khoản đã chọn ở đích không xuất hiện trong dropdown nguồn",
       "filename": "chuyen-tien-noi-bo.feature",
       "scenarioName": "Tiểu khoản đã chọn ở đích không xuất hiện trong dropdown nguồn",
       "contentHash": "570e46c928675af42b495a45f8dabdeaf3f3133cac10d5388b00354829bd0084",
-      "status": "pending",
+      "status": "approved",
       "source": "generated",
-      "updatedAt": "2026-09-09T06:54:49.379Z"
+      "updatedAt": "2026-09-11T04:28:45.287Z",
+      "reviewedAt": "2026-09-11T04:28:45.287Z"
     },
     "chuyen-tien-noi-bo.feature::Số tiền được chuyển thay đổi theo tiểu khoản nguồn đã chọn": {
       "id": "chuyen-tien-noi-bo.feature::Số tiền được chuyển thay đổi theo tiểu khoản nguồn đã chọn",
       "filename": "chuyen-tien-noi-bo.feature",
       "scenarioName": "Số tiền được chuyển thay đổi theo tiểu khoản nguồn đã chọn",
       "contentHash": "033620974f378f87083dcaa087f115cbc2c6ab3c124fe189d0279055176dc854",
-      "status": "pending",
+      "status": "approved",
       "source": "generated",
-      "updatedAt": "2026-09-09T06:54:49.379Z"
+      "updatedAt": "2026-09-11T04:28:45.288Z",
+      "reviewedAt": "2026-09-11T04:28:45.288Z"
     },
     "chuyen-tien-noi-bo.feature::Không cho chuyển khi số tiền vượt quá số tiền được chuyển": {
       "id": "chuyen-tien-noi-bo.feature::Không cho chuyển khi số tiền vượt quá số tiền được chuyển",
       "filename": "chuyen-tien-noi-bo.feature",
       "scenarioName": "Không cho chuyển khi số tiền vượt quá số tiền được chuyển",
       "contentHash": "80cb6459a1df046dfdec08edee1f47a0b76eca6738cd18f5ddffd89196ea57dd",
-      "status": "pending",
+      "status": "approved",
       "source": "generated",
-      "updatedAt": "2026-09-09T06:54:49.379Z"
+      "updatedAt": "2026-09-11T04:28:45.288Z",
+      "reviewedAt": "2026-09-11T04:28:45.288Z"
     },
     "chuyen-tien-noi-bo.feature::Chuyển sang màn hình xác nhận khi số tiền hợp lệ": {
       "id": "chuyen-tien-noi-bo.feature::Chuyển sang màn hình xác nhận khi số tiền hợp lệ",
       "filename": "chuyen-tien-noi-bo.feature",
       "scenarioName": "Chuyển sang màn hình xác nhận khi số tiền hợp lệ",
       "contentHash": "329faf1cbc116ce287aa01f48d7098bd2acc1fc2082f0053887b235f4636c611",
-      "status": "pending",
+      "status": "approved",
       "source": "generated",
-      "updatedAt": "2026-09-09T06:54:49.379Z"
+      "updatedAt": "2026-09-11T04:28:45.288Z",
+      "reviewedAt": "2026-09-11T04:28:45.288Z"
     },
     "chuyen-tien-noi-bo.feature::Quay lại màn hình Chuyển tiền từ màn hình xác nhận": {
       "id": "chuyen-tien-noi-bo.feature::Quay lại màn hình Chuyển tiền từ màn hình xác nhận",
       "filename": "chuyen-tien-noi-bo.feature",
       "scenarioName": "Quay lại màn hình Chuyển tiền từ màn hình xác nhận",
       "contentHash": "7036cf04bee481ebdba67f3da3fb641f8978a6460372d2dcd9c212f4bef6cd9a",
-      "status": "pending",
+      "status": "approved",
       "source": "generated",
-      "updatedAt": "2026-09-09T06:54:49.379Z"
+      "updatedAt": "2026-09-11T04:28:45.288Z",
+      "reviewedAt": "2026-09-11T04:28:45.288Z"
+    },
+    "them-ma-co-phieu-tren-bang-gia-co-phieu.feature::Thêm mã cổ phiếu chưa có vào danh mục": {
+      "id": "them-ma-co-phieu-tren-bang-gia-co-phieu.feature::Thêm mã cổ phiếu chưa có vào danh mục",
+      "filename": "them-ma-co-phieu-tren-bang-gia-co-phieu.feature",
+      "scenarioName": "Thêm mã cổ phiếu chưa có vào danh mục",
+      "contentHash": "426584dfecf15b3b2ffe40bcea24327f2e41303d832323c03a9d1fbf0fec70a2",
+      "status": "approved",
+      "source": "generated",
+      "updatedAt": "2026-09-11T20:05:06.424Z",
+      "reviewedAt": "2026-09-11T20:05:06.424Z"
+    },
+    "them-ma-co-phieu-tren-bang-gia-co-phieu.feature::Mở chức năng Thêm mã cổ phiếu từ nút cộng": {
+      "id": "them-ma-co-phieu-tren-bang-gia-co-phieu.feature::Mở chức năng Thêm mã cổ phiếu từ nút cộng",
+      "filename": "them-ma-co-phieu-tren-bang-gia-co-phieu.feature",
+      "scenarioName": "Mở chức năng Thêm mã cổ phiếu từ nút cộng",
+      "contentHash": "bb04599df97d938edbefec25ed3931cbe98e41a092e90ea3d3aaa81495cf4ae1",
+      "status": "approved",
+      "source": "generated",
+      "updatedAt": "2026-09-11T20:05:06.424Z",
+      "reviewedAt": "2026-09-11T20:05:06.424Z"
+    },
+    "them-ma-co-phieu-tren-bang-gia-co-phieu.feature::Nhập từ khóa tìm kiếm hiển thị kết quả": {
+      "id": "them-ma-co-phieu-tren-bang-gia-co-phieu.feature::Nhập từ khóa tìm kiếm hiển thị kết quả",
+      "filename": "them-ma-co-phieu-tren-bang-gia-co-phieu.feature",
+      "scenarioName": "Nhập từ khóa tìm kiếm hiển thị kết quả",
+      "contentHash": "edfdaef60e2d3f6e6e89da4000784f489b5a7b39ff0d341c090e3fa29461075a",
+      "status": "approved",
+      "source": "generated",
+      "updatedAt": "2026-09-11T20:05:06.424Z",
+      "reviewedAt": "2026-09-11T20:05:06.424Z"
+    },
+    "them-ma-co-phieu-tren-bang-gia-co-phieu.feature::Kết quả khớp theo mã được ưu tiên hiển thị": {
+      "id": "them-ma-co-phieu-tren-bang-gia-co-phieu.feature::Kết quả khớp theo mã được ưu tiên hiển thị",
+      "filename": "them-ma-co-phieu-tren-bang-gia-co-phieu.feature",
+      "scenarioName": "Kết quả khớp theo mã được ưu tiên hiển thị",
+      "contentHash": "070aaa6ca6042a7565e5b674bd5c795e54515b825106df4ddcb7c4e55c52a4b9",
+      "status": "approved",
+      "source": "generated",
+      "updatedAt": "2026-09-11T20:05:06.424Z",
+      "reviewedAt": "2026-09-11T20:05:06.424Z"
+    },
+    "them-ma-co-phieu-tren-bang-gia-co-phieu.feature::Tìm kiếm theo tên doanh nghiệp hiển thị kết quả": {
+      "id": "them-ma-co-phieu-tren-bang-gia-co-phieu.feature::Tìm kiếm theo tên doanh nghiệp hiển thị kết quả",
+      "filename": "them-ma-co-phieu-tren-bang-gia-co-phieu.feature",
+      "scenarioName": "Tìm kiếm theo tên doanh nghiệp hiển thị kết quả",
+      "contentHash": "c4a74289d4892963cff75b49d1ed3d622bbc2debea38aa5b1ddd80f536e122fc",
+      "status": "approved",
+      "source": "generated",
+      "updatedAt": "2026-09-11T20:05:06.424Z",
+      "reviewedAt": "2026-09-11T20:05:06.424Z"
+    },
+    "them-ma-co-phieu-tren-bang-gia-co-phieu.feature::Chỉ hiển thị tối đa 5 kết quả tìm kiếm": {
+      "id": "them-ma-co-phieu-tren-bang-gia-co-phieu.feature::Chỉ hiển thị tối đa 5 kết quả tìm kiếm",
+      "filename": "them-ma-co-phieu-tren-bang-gia-co-phieu.feature",
+      "scenarioName": "Chỉ hiển thị tối đa 5 kết quả tìm kiếm",
+      "contentHash": "aaa26d8914aa7daf6621a72321c1960477bd306b470a0034828e40820663444f",
+      "status": "approved",
+      "source": "generated",
+      "updatedAt": "2026-09-11T20:05:06.424Z",
+      "reviewedAt": "2026-09-11T20:05:06.424Z"
+    },
+    "them-ma-co-phieu-tren-bang-gia-co-phieu.feature::Không có kết quả trùng lặp trong danh sách gợi ý": {
+      "id": "them-ma-co-phieu-tren-bang-gia-co-phieu.feature::Không có kết quả trùng lặp trong danh sách gợi ý",
+      "filename": "them-ma-co-phieu-tren-bang-gia-co-phieu.feature",
+      "scenarioName": "Không có kết quả trùng lặp trong danh sách gợi ý",
+      "contentHash": "7ecfa18a58ad781badd06e44917a4455dac1982f0f6473b50aad79dedac05186",
+      "status": "approved",
+      "source": "generated",
+      "updatedAt": "2026-09-11T20:05:06.424Z",
+      "reviewedAt": "2026-09-11T20:05:06.424Z"
+    },
+    "them-ma-co-phieu-tren-bang-gia-co-phieu.feature::Chọn mã đã có trong danh mục thì không thêm mới và focus vào dòng đó": {
+      "id": "them-ma-co-phieu-tren-bang-gia-co-phieu.feature::Chọn mã đã có trong danh mục thì không thêm mới và focus vào dòng đó",
+      "filename": "them-ma-co-phieu-tren-bang-gia-co-phieu.feature",
+      "scenarioName": "Chọn mã đã có trong danh mục thì không thêm mới và focus vào dòng đó",
+      "contentHash": "3802d1c3569aecee3d2206090c1a92dfc2f776ceb8dd195f2e2c7f21e472007f",
+      "status": "approved",
+      "source": "generated",
+      "updatedAt": "2026-09-11T20:05:06.424Z",
+      "reviewedAt": "2026-09-11T20:05:06.424Z"
+    },
+    "them-ma-co-phieu-tren-bang-gia-co-phieu.feature::Mở menu tuỳ chọn của dòng mã cổ phiếu": {
+      "id": "them-ma-co-phieu-tren-bang-gia-co-phieu.feature::Mở menu tuỳ chọn của dòng mã cổ phiếu",
+      "filename": "them-ma-co-phieu-tren-bang-gia-co-phieu.feature",
+      "scenarioName": "Mở menu tuỳ chọn của dòng mã cổ phiếu",
+      "contentHash": "ac71a718d81f06442489b6fecd0966776b6bd486314d6e22ebf8b373b66f46de",
+      "status": "approved",
+      "source": "generated",
+      "updatedAt": "2026-09-11T20:05:06.424Z",
+      "reviewedAt": "2026-09-11T20:05:06.424Z"
+    },
+    "them-ma-co-phieu-tren-bang-gia-co-phieu.feature::Xoá mã khỏi danh mục hiện tại": {
+      "id": "them-ma-co-phieu-tren-bang-gia-co-phieu.feature::Xoá mã khỏi danh mục hiện tại",
+      "filename": "them-ma-co-phieu-tren-bang-gia-co-phieu.feature",
+      "scenarioName": "Xoá mã khỏi danh mục hiện tại",
+      "contentHash": "56bc74a1ab49f9084c55a48125161f39ff1b02993d4b242dddbd8b2c3f8d5335",
+      "status": "approved",
+      "source": "generated",
+      "updatedAt": "2026-09-11T20:05:06.425Z",
+      "reviewedAt": "2026-09-11T20:05:06.425Z"
+    },
+    "them-ma-co-phieu-tren-bang-gia-co-phieu.feature::Xoá mã không ảnh hưởng tới danh mục khác": {
+      "id": "them-ma-co-phieu-tren-bang-gia-co-phieu.feature::Xoá mã không ảnh hưởng tới danh mục khác",
+      "filename": "them-ma-co-phieu-tren-bang-gia-co-phieu.feature",
+      "scenarioName": "Xoá mã không ảnh hưởng tới danh mục khác",
+      "contentHash": "bbaf197622ca0a92ce0578633ee8b1d3096c055cc806a01c480a347c5922c11e",
+      "status": "approved",
+      "source": "generated",
+      "updatedAt": "2026-09-11T20:05:06.425Z",
+      "reviewedAt": "2026-09-11T20:05:06.425Z"
     }
   }
 }

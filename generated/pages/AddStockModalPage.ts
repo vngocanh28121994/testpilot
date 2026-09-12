@@ -80,4 +80,11 @@ export class AddStockModalPage {
   async assertStockSearchFirstResultText(expected: string, mode: 'equals' | 'contains' | 'notContains' = 'contains'): Promise<void> {
     await this.page.assertText('priceBoard.stockSearchFirstResult', expected, mode);
   }
+
+  /** Danh sách gợi ý mã cổ phiếu
+   * @testpilot-element addStockSearch.suggestionList action=assertVisible
+   */
+  async assertSuggestionListVisible(): Promise<void> {
+    await this.page.assertVisible('addStockSearch.suggestionList');
+  }
 }

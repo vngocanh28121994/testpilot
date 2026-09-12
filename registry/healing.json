@@ -334,7 +334,23 @@
     "2026-09-08T18-41-45Z-web-feature-chuyen-tien-noi-bo": "2026-09-08T18:44:09.059Z",
     "2026-09-09T04-41-56Z-web-feature-chuyen-tien-noi-bo": "2026-09-09T04:43:01.852Z",
     "2026-09-09T04-45-44Z-web-feature-chuyen-tien-noi-bo": "2026-09-09T04:46:38.962Z",
-    "2026-09-09T09-16-58Z-ios-feature-dang-nhap-iphone-12-pro-max": "2026-09-09T09:18:04.359Z"
+    "2026-09-09T09-16-58Z-ios-feature-dang-nhap-iphone-12-pro-max": "2026-09-09T09:18:04.359Z",
+    "2026-09-11T04-53-37Z-ios-feature-dang-nhap-iphone-12-pro-max": "2026-09-11T04:56:03.907Z",
+    "2026-09-11T04-56-14Z-ios-feature-dang-nhap-iphone-12-pro-max": "2026-09-11T04:57:58.101Z",
+    "2026-09-11T08-13-27Z-web-feature-chuyen-tien-noi-bo-positive": "2026-09-11T08:15:35.585Z",
+    "2026-09-11T08-15-36Z-web-feature-chuyen-tien-noi-bo": "2026-09-11T08:19:32.094Z",
+    "2026-09-11T10-44-13Z-android-feature-tim-kiem-bang-gia-google-pixel-11-pro-xl": "2026-09-11T10:46:26.463Z",
+    "2026-09-11T10-44-16Z-android-feature-tim-kiem-bang-gia-google-pixel-8a": "2026-09-11T10:46:50.670Z",
+    "2026-09-11T17-56-33Z-android-feature-tim-kiem-bang-gia-sm-s938b": "2026-09-11T17:58:09.420Z",
+    "2026-09-11T18-25-51Z-android-feature-tim-kiem-bang-gia-sm-s938b": "2026-09-11T18:28:13.757Z",
+    "2026-09-11T18-38-13Z-android-feature-tim-kiem-bang-gia-sm-s938b": "2026-09-11T18:39:30.160Z",
+    "2026-09-11T18-44-59Z-android-feature-tim-kiem-bang-gia-sm-s938b": "2026-09-11T18:46:22.548Z",
+    "2026-09-11T18-50-32Z-android-feature-tim-kiem-bang-gia-sm-s938b": "2026-09-11T18:51:40.725Z",
+    "2026-09-11T19-02-11Z-android-feature-tim-kiem-bang-gia-sm-s938b": "2026-09-11T19:03:25.227Z",
+    "2026-09-11T19-07-24Z-android-feature-tim-kiem-bang-gia-sm-s938b": "2026-09-11T19:08:36.813Z",
+    "2026-09-11T19-15-40Z-android-feature-tim-kiem-bang-gia-sm-s938b": "2026-09-11T19:16:57.175Z",
+    "2026-09-11T19-26-04Z-android-feature-tim-kiem-bang-gia-sm-s938b": "2026-09-11T19:27:05.626Z",
+    "2026-09-11T20-06-18Z-android-sm-s938b": "2026-09-11T20:11:15.132Z"
   },
   "entries": {
     "home.totalAssets::android::6dbfe0a6bf0ea4c4": {
@@ -823,15 +839,120 @@
         "weight": 0.8,
         "origin": "llm"
       },
-      "successes": 3,
+      "successes": 4,
       "runIds": [
         "2026-09-09T04-41-56Z-web-feature-chuyen-tien-noi-bo",
-        "2026-09-09T04-45-44Z-web-feature-chuyen-tien-noi-bo"
+        "2026-09-09T04-45-44Z-web-feature-chuyen-tien-noi-bo",
+        "2026-09-11T08-15-36Z-web-feature-chuyen-tien-noi-bo"
       ],
       "firstSeen": "2026-09-09T04:43:01.852Z",
-      "lastSeen": "2026-09-09T04:46:38.962Z",
+      "lastSeen": "2026-09-11T08:19:32.094Z",
       "devices": {
-        "Pixel 7": 3
+        "Pixel 7": 4
+      }
+    },
+    "login.usernameField::ios::98d8e6a48693ca68": {
+      "elementId": "login.usernameField",
+      "platform": "ios",
+      "from": {
+        "strategy": "placeholder",
+        "value": "Email / Số tài khoản / Điện thoại",
+        "weight": 0.95,
+        "origin": "authored"
+      },
+      "to": {
+        "strategy": "css",
+        "value": "input[type='text']",
+        "weight": 0.5,
+        "origin": "authored"
+      },
+      "successes": 1,
+      "runIds": [
+        "2026-09-11T04-53-37Z-ios-feature-dang-nhap-iphone-12-pro-max"
+      ],
+      "firstSeen": "2026-09-11T04:56:03.907Z",
+      "lastSeen": "2026-09-11T04:56:03.907Z",
+      "devices": {
+        "iPhone của Anh": 1
+      }
+    },
+    "home.searchFirstResult::web::94e6c4fc8969bbf5": {
+      "elementId": "home.searchFirstResult",
+      "platform": "web",
+      "from": {
+        "strategy": "css",
+        "value": ".searched-feature-block .feature-item:first-child .title",
+        "weight": 0.9,
+        "origin": "authored"
+      },
+      "to": {
+        "strategy": "css",
+        "value": ".searched-feature-block .feature-item",
+        "weight": 0.75,
+        "origin": "authored"
+      },
+      "successes": 2,
+      "runIds": [
+        "2026-09-11T08-15-36Z-web-feature-chuyen-tien-noi-bo"
+      ],
+      "firstSeen": "2026-09-11T08:19:32.094Z",
+      "lastSeen": "2026-09-11T08:19:32.094Z",
+      "devices": {
+        "Pixel 7": 2
+      }
+    },
+    "login.submitButton::android::5516cb3f7b189785": {
+      "elementId": "login.submitButton",
+      "platform": "android",
+      "from": {
+        "strategy": "css",
+        "value": "button.btn-login",
+        "weight": 0.95,
+        "origin": "authored"
+      },
+      "to": {
+        "strategy": "label",
+        "value": "Đăng nhập",
+        "weight": 0.75,
+        "origin": "authored"
+      },
+      "successes": 3,
+      "runIds": [
+        "2026-09-11T10-44-13Z-android-feature-tim-kiem-bang-gia-google-pixel-11-pro-xl",
+        "2026-09-11T10-44-16Z-android-feature-tim-kiem-bang-gia-google-pixel-8a"
+      ],
+      "firstSeen": "2026-09-11T10:46:26.463Z",
+      "lastSeen": "2026-09-11T10:46:50.670Z",
+      "devices": {
+        "65260DLDV004P0": 2,
+        "3C011JEKB15075": 1
+      }
+    },
+    "priceBoard.addStockButton::android::33c8e668b246029d": {
+      "elementId": "priceBoard.addStockButton",
+      "platform": "android",
+      "from": {
+        "strategy": "css",
+        "value": "#wt-filter-tcprice-el-mb tcbs-icon[name='Circle add']",
+        "weight": 0.98,
+        "origin": "authored"
+      },
+      "to": {
+        "strategy": "label",
+        "value": "THÊM MÃ",
+        "weight": 0.75,
+        "origin": "authored"
+      },
+      "successes": 10,
+      "runIds": [
+        "2026-09-11T19-15-40Z-android-feature-tim-kiem-bang-gia-sm-s938b",
+        "2026-09-11T19-26-04Z-android-feature-tim-kiem-bang-gia-sm-s938b",
+        "2026-09-11T20-06-18Z-android-sm-s938b"
+      ],
+      "firstSeen": "2026-09-11T19:16:57.175Z",
+      "lastSeen": "2026-09-11T20:11:15.132Z",
+      "devices": {
+        "SM_S938B": 10
       }
     }
   }

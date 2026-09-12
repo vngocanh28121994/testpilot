@@ -12,9 +12,26 @@
           "confidence": 0.44,
           "verifiedAt": "2026-08-24T10:29:30.723Z",
           "platform": "web"
+        },
+        {
+          "strategy": "label",
+          "value": "TCB,VNM,FPT...",
+          "source": "ai-discovered",
+          "status": "suggested",
+          "confidence": 0.85,
+          "verifiedAt": "2026-09-11T18:51:04.577Z"
+        },
+        {
+          "strategy": "placeholder",
+          "value": "TCB,VNM,FPT...",
+          "source": "runtime-observed",
+          "status": "healed",
+          "confidence": 0.79,
+          "verifiedAt": "2026-09-11T19:26:25.283Z",
+          "platform": "web"
         }
       ],
-      "lastUpdatedAt": "2026-08-24T10:29:30.724Z"
+      "lastUpdatedAt": "2026-09-11T19:26:25.284Z"
     },
     "priceBoard.ads": {
       "element": "priceBoard.ads",
@@ -38,13 +55,13 @@
           "strategy": "css",
           "value": ".mat-autocomplete-panel mat-option[role='option']",
           "source": "runtime-observed",
-          "status": "healed",
+          "status": "rejected",
           "confidence": 0.6,
-          "verifiedAt": "2026-08-26T10:33:39.989Z",
+          "verifiedAt": "2026-09-11T20:06:46.044Z",
           "platform": "web"
         }
       ],
-      "lastUpdatedAt": "2026-08-26T10:33:39.989Z"
+      "lastUpdatedAt": "2026-09-11T20:09:37.837Z"
     },
     "priceBoard.addStockButton": {
       "element": "priceBoard.addStockButton",
@@ -57,9 +74,17 @@
           "confidence": 0.79,
           "verifiedAt": "2026-08-26T10:32:10.540Z",
           "platform": "web"
+        },
+        {
+          "strategy": "label",
+          "value": "TCB,VNM,FPT...",
+          "source": "ai-discovered",
+          "status": "suggested",
+          "confidence": 0.85,
+          "verifiedAt": "2026-09-11T18:45:44.869Z"
         }
       ],
-      "lastUpdatedAt": "2026-08-26T10:32:10.540Z"
+      "lastUpdatedAt": "2026-09-11T18:45:44.869Z"
     },
     "priceBoard.xoaKhoiDanhMuc": {
       "element": "priceBoard.xoaKhoiDanhMuc",
@@ -508,9 +533,18 @@
           "confidence": 0.79,
           "verifiedAt": "2026-08-26T10:34:15.907Z",
           "platform": "web"
+        },
+        {
+          "strategy": "placeholder",
+          "value": "TCB,VNM,FPT...",
+          "source": "runtime-observed",
+          "status": "healed",
+          "confidence": 0.79,
+          "verifiedAt": "2026-09-11T20:09:17.317Z",
+          "platform": "web"
         }
       ],
-      "lastUpdatedAt": "2026-08-26T10:34:15.907Z"
+      "lastUpdatedAt": "2026-09-11T20:09:17.317Z"
     },
     "priceBoard.vicHose": {
       "element": "priceBoard.vicHose",
@@ -536,11 +570,11 @@
           "source": "runtime-observed",
           "status": "healed",
           "confidence": 0.6,
-          "verifiedAt": "2026-09-09T04:46:19.725Z",
+          "verifiedAt": "2026-09-11T08:19:28.565Z",
           "platform": "web"
         }
       ],
-      "lastUpdatedAt": "2026-09-09T04:46:19.725Z"
+      "lastUpdatedAt": "2026-09-11T08:19:28.565Z"
     },
     "transfer.soTien": {
       "element": "transfer.soTien",
@@ -551,11 +585,11 @@
           "source": "runtime-observed",
           "status": "healed",
           "confidence": 0.6,
-          "verifiedAt": "2026-09-08T18:43:00.757Z",
+          "verifiedAt": "2026-09-11T08:19:29.870Z",
           "platform": "web"
         }
       ],
-      "lastUpdatedAt": "2026-09-08T18:43:00.757Z"
+      "lastUpdatedAt": "2026-09-11T08:19:29.870Z"
     },
     "transfer.tienChuyenPhi0": {
       "element": "transfer.tienChuyenPhi0",
@@ -566,11 +600,26 @@
           "source": "runtime-observed",
           "status": "healed",
           "confidence": 0.6,
-          "verifiedAt": "2026-09-08T18:43:10.391Z",
+          "verifiedAt": "2026-09-11T08:18:31.959Z",
           "platform": "web"
         }
       ],
-      "lastUpdatedAt": "2026-09-08T18:43:10.391Z"
+      "lastUpdatedAt": "2026-09-11T08:18:31.959Z"
+    },
+    "login.usernameField": {
+      "element": "login.usernameField",
+      "locators": [
+        {
+          "strategy": "testId",
+          "value": "username",
+          "source": "runtime-observed",
+          "status": "healed",
+          "confidence": 0.62,
+          "verifiedAt": "2026-09-11T04:57:55.635Z",
+          "platform": "web"
+        }
+      ],
+      "lastUpdatedAt": "2026-09-11T04:57:55.635Z"
     }
   }
 }

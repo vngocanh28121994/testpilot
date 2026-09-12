@@ -127,4 +127,32 @@ export class PriceBoardPage {
   async assertAdsVisible(): Promise<void> {
     await this.page.assertVisible('priceBoard.ads');
   }
+
+  /** Nút tùy chọn dòng
+   * @testpilot-element priceBoard.rowOptionsButton action=tap
+   */
+  async tapRowOptionsButton(): Promise<void> {
+    await this.page.tap('priceBoard.rowOptionsButton');
+  }
+
+  /** Xoá khỏi danh mục
+   * @testpilot-element priceBoard.xoaKhoiDanhMuc action=assertVisible
+   */
+  async assertXoaKhoiDanhMucVisible(): Promise<void> {
+    await this.page.assertVisible('priceBoard.xoaKhoiDanhMuc');
+  }
+
+  /** Dòng cổ phiếu trong danh mục
+   * @testpilot-element priceBoard.stockRow action=rememberNumber
+   */
+  async doStockRow(): Promise<void> {
+    await this.page.tap('priceBoard.stockRow');
+  }
+
+  /** Dòng cổ phiếu trong danh mục
+   * @testpilot-element priceBoard.stockRow action=assertNumberDelta
+   */
+  async doStockRow(): Promise<void> {
+    await this.page.tap('priceBoard.stockRow');
+  }
 }

@@ -3,8 +3,6 @@ import { describe, test } from 'node:test';
 import { createPageContext } from '../support/driver.js';
 import { LoginPage } from '../pages/LoginPage.js';
 import { HomePage } from '../pages/HomePage.js';
-import { PriceBoardPage } from '../pages/PriceBoardPage.js';
-import { AddStockModalPage } from '../pages/AddStockModalPage.js';
 
 describe("Đăng nhập TCInvest", () => {
   test("Đăng nhập thành công vào tài khoản", async () => {
@@ -12,8 +10,6 @@ describe("Đăng nhập TCInvest", () => {
     try {
       const loginPage = new LoginPage(ctx);
       const homePage = new HomePage(ctx);
-      const priceBoardPage = new PriceBoardPage(ctx);
-      const addStockModalPage = new AddStockModalPage(ctx);
       await ctx.launch();
       // app already launched via ctx.launch()
       await loginPage.enterUsernameField(ctx.variable("account.tcbs.username"));
@@ -31,8 +27,6 @@ describe("Đăng nhập TCInvest", () => {
     try {
       const loginPage = new LoginPage(ctx);
       const homePage = new HomePage(ctx);
-      const priceBoardPage = new PriceBoardPage(ctx);
-      const addStockModalPage = new AddStockModalPage(ctx);
       await ctx.launch();
       // app already launched via ctx.launch()
       await loginPage.enterUsernameField("0123456789");
@@ -44,39 +38,11 @@ describe("Đăng nhập TCInvest", () => {
     }
   });
 
-  test("Tìm kiếm Bảng giá cổ phiếu sau đăng nhập", async () => {
-    const ctx = await createPageContext();
-    try {
-      const loginPage = new LoginPage(ctx);
-      const homePage = new HomePage(ctx);
-      const priceBoardPage = new PriceBoardPage(ctx);
-      const addStockModalPage = new AddStockModalPage(ctx);
-      await ctx.launch();
-      // app already launched via ctx.launch()
-      await ctx.ensureLoggedIn("tcbs");
-      await ctx.openFeatureFromSearch("Bảng giá cổ phiếu");
-      await ctx.screenshot("price-board-after-search");
-      await priceBoardPage.assertCoSoTabVisible();
-      await priceBoardPage.tapAddStockButton();
-      await addStockModalPage.enterOMaCoPhieu("ADS");
-      await addStockModalPage.tapStockSearchFirstResult();
-      await priceBoardPage.tapAddStockButton();
-      await priceBoardPage.assertTextVisible("ADS");
-      await priceBoardPage.openRowMenu("ADS");
-      await priceBoardPage.tapXoaKhoiDanhMuc();
-      await priceBoardPage.assertTextNotVisible("ADS");
-    } finally {
-      await ctx.close();
-    }
-  });
-
   test("Kiểm tra tài sản trái phiếu", async () => {
     const ctx = await createPageContext();
     try {
       const loginPage = new LoginPage(ctx);
       const homePage = new HomePage(ctx);
-      const priceBoardPage = new PriceBoardPage(ctx);
-      const addStockModalPage = new AddStockModalPage(ctx);
       await ctx.launch();
       // app already launched via ctx.launch()
       await ctx.ensureLoggedIn("tcbs");
