@@ -76,14 +76,17 @@ describe('report — bấm kịch bản là xuống chi tiết', () => {
   });
 
   /**
-   * Một liên kết chết còn tệ hơn không có liên kết: nó hứa một chỗ để tới rồi
-   * không đưa đi đâu cả. Kịch bản xanh không quay video thì không có khối chi
-   * tiết nào, nên tên nó phải là chữ thường.
+   * Ca xanh trơn — không video, không gì cả — vẫn phải dẫn đi đâu đó.
+   *
+   * Bản đầu của mục này để ca xanh không có khối chi tiết nào, nên tên nó là
+   * chữ thường và bảy trong mười một dòng của một lượt chạy thật không bấm được.
+   * Từ khi có mục "Bằng chứng kịch bản xanh" thì mọi dòng đều có đích.
    */
-  it('kịch bản không có chi tiết thì tên không phải liên kết', async () => {
+  it('ca xanh trơn vẫn dẫn tới khối bằng chứng của nó', async () => {
     const html = await dungBaoCao([kichBan('x', 'Ca xanh trơn', 'passed')]);
-    assert.equal(lienKet(html).size, 0);
-    assert.match(html, /Ca xanh trơn/, 'tên vẫn phải hiện ra');
+    const chet = [...lienKet(html)].filter((href) => !neo(html).has(href));
+    assert.deepEqual(chet, [], `liên kết không có đích: ${chet.join(', ')}`);
+    assert.equal(lienKet(html).size, 1, 'dòng nào cũng phải bấm được');
   });
 
   /**

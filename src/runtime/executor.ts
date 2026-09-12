@@ -133,6 +133,14 @@ export class Executor {
    */
   private lastDeclinedShot?: { path: string; at: number };
   /**
+   * Bằng chứng của bước assert vừa chạy: locator thắng và chữ đọc được.
+   *
+   * Thu ngay tại lúc resolve, không phải sau khi bước kết thúc — sau đó màn
+   * hình đã có thể đổi, và thứ đọc được lúc ấy không còn là thứ đã làm cho
+   * bước này xanh.
+   */
+  private lastEvidence?: { locator: string; saw?: string };
+  /**
    * Set by a tap that completed without anything proving it had an effect.
    * Carried on the instance for the same reason as `lastShot`: the step loop
    * needs it to grade the step, but it is produced deep inside the tap path.
@@ -200,8 +208,17 @@ export class Executor {
       // taken from — the value is already captured, but keeping the order
       // explicit stops a later edit from moving the collection down here.
       const healingObservation = this.takeHealingObservation();
-      const video = await this.driver.endScenario?.(`${scenario.id}-a${attempt}`);
       const failed = stepResults.some((s) => s.status === 'failed');
+      // Một ảnh cho mỗi kịch bản xanh, chụp ở trạng thái cuối.
+      //
+      // Ca đỏ xưa nay có ảnh, cây DOM và video; ca xanh chỉ có chữ "passed".
+      // Phải chụp TRƯỚC `endScenario` — hàm đó đóng trang, và ảnh chụp sau khi
+      // trang đóng là ảnh của một màn hình không còn nữa. Ca đỏ đã có ảnh riêng
+      // ở handler bước hỏng nên ở đây chỉ lo phần xanh.
+      const proof = failed
+        ? undefined
+        : await this.driver.screenshot?.(`${scenario.id}-a${attempt}-pass`).catch(() => undefined);
+      const video = await this.driver.endScenario?.(`${scenario.id}-a${attempt}`);
 
       runs.push({
         attempt,
@@ -210,6 +227,7 @@ export class Executor {
         startedAt,
         durationMs: Date.now() - t0,
         ...(video ? { video } : {}),
+        ...(proof ? { proof } : {}),
         ...(healingObservation ? { healingObservation } : {}),
       });
 
@@ -274,6 +292,10 @@ export class Executor {
       const t0 = Date.now();
       this.lastShot = undefined;
       this.lastUnverified = false;
+      // Xoá ở ĐẦU mỗi bước, không chỉ sau khi gắn: một bước hỏng giữa chừng mà
+      // để sót bằng chứng của bước trước thì report gán nhầm chứng cứ cho bước
+      // sai — tệ hơn hẳn việc không có chứng cứ.
+      this.lastEvidence = undefined;
       try {
         const expectation = ['tap', 'hover', 'dragDrop', 'openFeatureFromSearch'].includes(step.intent.kind)
           ? expectationAfter(steps, index)
@@ -296,7 +318,9 @@ export class Executor {
           attempts: 1,
           ...(heal ? { heal } : {}),
           ...(this.lastShot ? { screenshot: this.lastShot } : {}),
+          ...(this.lastEvidence ? { evidence: this.lastEvidence } : {}),
         });
+        this.lastEvidence = undefined;
         if (step.intent.kind === 'tap' && 'element' in step.intent) {
           const def = this.resolver.registry.element(step.intent.element);
           this.tappedSoFar.push({ elementId: def.id, label: def.label });
@@ -476,6 +500,15 @@ export class Executor {
         r.healed && r.previous
           ? { elementId: id, from: r.previous, to: r.candidate }
           : undefined;
+      if (action === 'assert-visible') {
+        // Chữ đọc không được thì vẫn ghi locator: một nút icon không có chữ nào
+        // để đọc, mà "khớp bằng locator nào" tự nó đã là bằng chứng.
+        const saw = await r.handle.text().catch(() => undefined);
+        this.lastEvidence = {
+          locator: `${r.candidate.strategy}=${r.candidate.value}`,
+          ...(saw && saw.trim() ? { saw: saw.trim().slice(0, 200) } : {}),
+        };
+      }
       return {
         r,
         heal,

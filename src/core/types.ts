@@ -363,6 +363,15 @@ export interface StepResult {
   /** Drives retry policy: assertions never become green merely by rerunning. */
   failureKind?: 'locator' | 'assertion' | 'interaction' | 'environment';
   screenshot?: string;
+  /**
+   * Vì sao bước này xanh: locator nào thắng, và nó đọc ra cái gì.
+   *
+   * Không có nó thì một bước assert chỉ để lại `{status: passed, durationMs:
+   * 84}` — nói rằng đã tìm thấy, không nói thấy cái gì. Muốn kiểm chứng lại một
+   * kết quả xanh thì không còn gì để xem, trong khi mọi thứ cần thiết đang nằm
+   * sẵn trong tay ở đúng khoảnh khắc đó.
+   */
+  evidence?: { locator: string; saw?: string };
 }
 
 /**
@@ -397,6 +406,14 @@ export interface ScenarioResult {
     startedAt: string;
     durationMs: number;
     video?: string;
+    /**
+     * Ảnh chụp lúc lượt chạy XANH kết thúc — trạng thái chứng minh kết quả.
+     *
+     * Ca đỏ xưa nay có ảnh, có cây DOM, có video; ca xanh không có gì ngoài chữ
+     * "passed". Một ảnh cho mỗi kịch bản xanh là thứ dán được vào ticket để nói
+     * "nó chạy đúng, đây là bằng chứng".
+     */
+    proof?: string;
     /** Present only when this attempt failed after a step proved nothing. */
     healingObservation?: StepHealingObservation;
   }>;

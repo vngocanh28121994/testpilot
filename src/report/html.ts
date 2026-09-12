@@ -231,6 +231,9 @@ ${quarantine(report)}
 <h2>Failures</h2>
 ${failures(report.results, outDir)}
 
+<h2>Bằng chứng kịch bản xanh</h2>
+${proofs(report.results, outDir)}
+
 <h2>Bản ghi màn hình</h2>
 ${recordings(report.results, outDir)}
 
@@ -309,7 +312,7 @@ function row(r: ScenarioResult, v?: FlakeVerdict, knownIssueNote?: string): stri
       : '';
   // Tên kịch bản thành liên kết, nhưng chỉ khi thật sự có chỗ để tới: một
   // liên kết chết còn tệ hơn không có liên kết.
-  const name = hasDetail(r)
+  const name = hasDetail()
     ? `<a class="sc-link" href="#${detailAnchor(r)}">${esc(r.scenario.name)}</a>`
     : esc(r.scenario.name);
   return `<tr>
@@ -363,8 +366,50 @@ function detailAnchor(r: ScenarioResult): string {
 }
 
 /** Kịch bản này có khối chi tiết để mà trỏ tới không. */
-function hasDetail(r: ScenarioResult): boolean {
-  return r.verdict !== 'passed' || r.runs.some((run) => run.video);
+function hasDetail(): boolean {
+  // Ca đỏ có khối trong Failures, ca xanh có khối trong Bằng chứng — nay không
+  // còn dòng nào trơ trọi không dẫn đi đâu.
+  return true;
+}
+
+/**
+ * Bằng chứng cho những kịch bản ĐÃ XANH.
+ *
+ * Trước đây một ca xanh chỉ để lại `{status: passed, durationMs: 84}` — nói
+ * rằng đã tìm thấy, không nói thấy cái gì. Muốn kiểm chứng lại một kết quả xanh
+ * thì không còn gì để xem, trong khi ca đỏ có ảnh, cây DOM và video. Một bộ
+ * test mà chỉ chứng minh được phần hỏng của mình thì phần xanh chỉ là lời hứa.
+ */
+function proofs(results: ScenarioResult[], outDir: string): string {
+  const good = results.filter((r) => r.verdict === 'passed');
+  if (good.length === 0) return '<p class="empty">Không có kịch bản nào xanh.</p>';
+
+  return good
+    .map((r) => {
+      const last = r.runs[r.runs.length - 1];
+      // Chỉ những bước tự khai được nó đã thấy gì. Bước bấm hay bước nhập không
+      // chứng minh điều gì về sản phẩm; bước assert mới là chỗ kịch bản phát
+      // biểu một điều và điều đó đúng.
+      const said = (last?.steps ?? []).filter((st) => st.evidence);
+      const shot = last?.proof ? assetHref(outDir, last.proof) : '';
+      const rows = said
+        .map((st) => `<tr>
+    <td><code>${esc(st.step.keyword)} ${esc(st.step.text)}</code></td>
+    <td><code>${esc(st.evidence!.locator)}</code></td>
+    <td>${st.evidence!.saw ? esc(st.evidence!.saw) : '<span class="empty">—</span>'}</td>
+  </tr>`)
+        .join('\n');
+      return `<details id="${detailAnchor(r)}">
+  <summary><strong>${esc(r.scenario.name)}</strong> — ${esc(r.platform)}/${esc(r.device)}</summary>
+  ${rows
+    ? `<div class="wrap"><table>
+<thead><tr><th>Bước</th><th>Khớp bằng</th><th>Đọc được</th></tr></thead>
+<tbody>${rows}</tbody></table></div>`
+    : '<p class="empty">Kịch bản này không có bước assert nào để ghi lại.</p>'}
+  ${shot ? `<div class="media"><figure class="shot"><figcaption><b>${esc(r.scenario.name)}</b><span class="shot-what">Trạng thái lúc kết thúc — bấm để xem cỡ thật</span></figcaption><a href="${esc(shot)}" target="_blank"><img src="${esc(shot)}" loading="lazy" alt="Trạng thái cuối — ${esc(r.scenario.name)}"></a></figure></div>` : ''}
+</details>`;
+    })
+    .join('\n');
 }
 
 function failures(results: ScenarioResult[], outDir: string): string {
@@ -448,7 +493,7 @@ function recordings(results: ScenarioResult[], outDir: string): string {
   const withVideo = results.filter((r) => r.verdict === 'passed' && r.runs.some((x) => x.video));
   const perScenario = withVideo
     .map(
-      (r) => `<details id="${detailAnchor(r)}">
+      (r) => `<details>
   <summary><strong>${esc(r.scenario.name)}</strong> — ${esc(r.platform)}/${esc(r.device)}</summary>
   <div class="media">${videoFigures(r, outDir)}</div>
 </details>`,
