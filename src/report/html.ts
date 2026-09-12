@@ -191,6 +191,15 @@ function render(
   font-variant-numeric:tabular-nums;
 }
 .chapters button:hover { background:var(--card); }
+/* Tên kịch bản dẫn xuống chi tiết: gạch chân mờ để nhận ra là bấm được mà
+   không biến cả cột thành một dãy màu xanh chói. */
+.sc-link { color:inherit; text-decoration:underline; text-decoration-color:var(--muted); text-underline-offset:3px; }
+.sc-link:hover { text-decoration-color:currentColor; }
+/* Khối vừa được nhảy tới tự sáng lên một nhịp, để mắt bắt được nó giữa một
+   trang dài toàn khối giống nhau. */
+@keyframes sc-flash { from { background:var(--card); } to { background:transparent; } }
+details:target { animation:sc-flash 1.2s ease-out; }
+@media (prefers-reduced-motion: reduce) { details:target { animation:none; } }
 </style></head>
 <body><main>
 <h1>TestPilot run ${esc(report.runId)}</h1>
@@ -233,7 +242,7 @@ ${unverified(report)}
 
 <h2>Câu hỏi lượt chạy chưa tự quyết được</h2>
 ${openQuestions(report)}
-</main>${KNOWN_ISSUE_SCRIPT}</body></html>`;
+</main>${KEO_TOI_CHI_TIET_SCRIPT}${KNOWN_ISSUE_SCRIPT}</body></html>`;
 }
 
 /**
@@ -298,8 +307,13 @@ function row(r: ScenarioResult, v?: FlakeVerdict, knownIssueNote?: string): stri
     : r.verdict === 'failed'
       ? `<button class="ki" data-scenario="${esc(r.scenario.id)}" type="button">+ Đánh dấu</button>`
       : '';
+  // Tên kịch bản thành liên kết, nhưng chỉ khi thật sự có chỗ để tới: một
+  // liên kết chết còn tệ hơn không có liên kết.
+  const name = hasDetail(r)
+    ? `<a class="sc-link" href="#${detailAnchor(r)}">${esc(r.scenario.name)}</a>`
+    : esc(r.scenario.name);
   return `<tr>
-  <td>${esc(r.scenario.name)}${flakeTag}</td>
+  <td>${name}${flakeTag}</td>
   <td class="ki-col">${mark}</td>
   <td>${esc(r.platform)}</td>
   <td>${esc(r.device)}</td>
@@ -331,6 +345,26 @@ function quarantine(report: RunReport): string {
   <ul>${rows}</ul>
   <p class="empty">Chạy kèm <code>--include-quarantined</code> để ép chạy lại chúng.</p>
 </div>`;
+}
+
+/**
+ * Neo trỏ từ một dòng trong bảng Scenarios xuống đúng khối chi tiết của nó.
+ *
+ * Bảng liệt kê mọi kịch bản, còn chi tiết nằm rải ở hai mục bên dưới (Failures
+ * và Bản ghi màn hình). Với một lượt chạy mười mấy kịch bản thì tìm đúng khối
+ * của một dòng là cuộn và dò bằng mắt — trong khi cái tên cần tìm đang nằm
+ * ngay dưới con trỏ.
+ *
+ * Khoá gồm cả platform và device vì cùng một kịch bản chạy trên nhiều máy sẽ
+ * cho nhiều khối chi tiết khác nhau; thiếu chúng thì neo trỏ nhầm máy.
+ */
+function detailAnchor(r: ScenarioResult): string {
+  return `sc-${`${r.scenario.id}-${r.platform}-${r.device}`.replace(/[^A-Za-z0-9_-]+/g, '-')}`;
+}
+
+/** Kịch bản này có khối chi tiết để mà trỏ tới không. */
+function hasDetail(r: ScenarioResult): boolean {
+  return r.verdict !== 'passed' || r.runs.some((run) => run.video);
 }
 
 function failures(results: ScenarioResult[], outDir: string): string {
@@ -368,7 +402,7 @@ function failures(results: ScenarioResult[], outDir: string): string {
 
       // Only the first is expanded: a run with ten failures should open as a
       // list you can scan, not as ten screenshots you have to scroll past.
-      return `<details${i === 0 ? ' open' : ''}>
+      return `<details id="${detailAnchor(r)}"${i === 0 ? ' open' : ''}>
   <summary class="fail-head"><strong>${i + 1}/${bad.length} ${esc(r.scenario.name)}</strong>${where}</summary>
   ${step ? `<p><code>${esc(step.step.keyword)} ${esc(step.step.text)}</code> — line ${step.step.line}</p>
   <pre>${esc(step.error?.message ?? '')}</pre>` : '<p class="empty">No failing step recorded.</p>'}
@@ -414,7 +448,7 @@ function recordings(results: ScenarioResult[], outDir: string): string {
   const withVideo = results.filter((r) => r.verdict === 'passed' && r.runs.some((x) => x.video));
   const perScenario = withVideo
     .map(
-      (r) => `<details>
+      (r) => `<details id="${detailAnchor(r)}">
   <summary><strong>${esc(r.scenario.name)}</strong> — ${esc(r.platform)}/${esc(r.device)}</summary>
   <div class="media">${videoFigures(r, outDir)}</div>
 </details>`,
@@ -544,6 +578,43 @@ function esc(s: string): string {
  * File này cũng được mở trực tiếp từ đĩa (file://), nơi không có server nào để
  * gọi. Trường hợp đó phải nói ra, không được im lặng như thể đã lưu.
  */
+/**
+ * Bấm tên kịch bản là cuộn thẳng xuống chi tiết của nó.
+ *
+ * Một `<details>` đang đóng thì nhảy neo bằng hash không bung nó ra — trình
+ * duyệt chỉ tự mở khi neo nằm BÊN TRONG, mà neo ở đây đặt trên chính thẻ
+ * `<details>` để trỏ được cả khối. Nên phải tự mở, rồi mới cuộn.
+ *
+ * Chạy cả khi trang vừa nạp với sẵn một hash: đó là đường đi của một liên kết
+ * được dán vào ticket hay gửi cho người khác.
+ */
+const KEO_TOI_CHI_TIET_SCRIPT = `<script>
+(function () {
+  function moVaCuon(id, muot) {
+    var dich = document.getElementById(id);
+    if (!dich) return false;
+    if (dich.tagName === 'DETAILS') dich.open = true;
+    dich.scrollIntoView({ behavior: muot ? 'smooth' : 'auto', block: 'start' });
+    return true;
+  }
+  document.addEventListener('click', function (e) {
+    var a = e.target.closest ? e.target.closest('a.sc-link') : null;
+    if (!a) return;
+    var id = decodeURIComponent((a.getAttribute('href') || '').slice(1));
+    if (!id) return;
+    // Chỉ nuốt sự kiện khi thật sự tới được đích; không thì để trình duyệt xử
+    // lý như một liên kết bình thường.
+    if (moVaCuon(id, true)) {
+      e.preventDefault();
+      if (history.replaceState) history.replaceState(null, '', '#' + id);
+    }
+  });
+  if (location.hash.length > 1) {
+    moVaCuon(decodeURIComponent(location.hash.slice(1)), false);
+  }
+})();
+</script>`;
+
 const KNOWN_ISSUE_SCRIPT = `<script>
 document.addEventListener('click', async (event) => {
   const button = event.target.closest('.ki');
