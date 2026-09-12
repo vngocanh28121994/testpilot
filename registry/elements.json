@@ -1842,17 +1842,16 @@
         "web": [
           {
             "strategy": "css",
-            "value": "[data-walkthrough=\"mb-item-more\"]",
+            "value": "mat-icon.mat-menu-trigger",
             "weight": 0.9,
-            "origin": "llm",
-            "approved": false
+            "origin": "authored"
           },
           {
-            "strategy": "role",
-            "value": "button",
-            "name": "…",
-            "weight": 0.7,
-            "origin": "llm"
+            "strategy": "css",
+            "value": "[data-walkthrough=\"mb-item-more\"]",
+            "weight": 0.5,
+            "origin": "llm",
+            "approved": false
           }
         ],
         "android": [],
@@ -1964,11 +1963,10 @@
       "candidates": {
         "web": [
           {
-            "strategy": "role",
-            "value": "button",
-            "name": "…",
-            "weight": 0.7,
-            "origin": "llm"
+            "strategy": "css",
+            "value": "mat-icon.mat-menu-trigger",
+            "weight": 0.9,
+            "origin": "authored"
           }
         ],
         "android": [],

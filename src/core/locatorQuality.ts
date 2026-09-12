@@ -20,7 +20,24 @@ export function assessLocatorQuality(candidate: LocatorCandidate): LocatorQualit
 
   switch (candidate.strategy) {
     case 'testId': score = 98; reasons.push('developer-authored test id'); break;
-    case 'role': score = candidate.name ? 92 : 74; reasons.push(candidate.name ? 'role with accessible name' : 'role without name'); break;
+    case 'role': {
+      // Một cái tên toàn dấu câu thì không định danh được gì.
+      //
+      // Model lấy nguyên dấu ba chấm trong nhãn "Icon ... tại dòng ADS" làm tên
+      // rồi ghi vào registry: `role=button name="…"`. Trên màn hình không có nút
+      // nào tên là "…", nên phần tử ấy chưa từng resolve được lần nào — mà
+      // locator vẫn đứng đó với 74 điểm, đủ để được lưu và được coi là dùng
+      // tốt. Hai element đang ở tình trạng đó khi luật này được thêm.
+      const coChu = candidate.name !== undefined && /[\p{L}\p{N}]/u.test(candidate.name);
+      if (candidate.name !== undefined && !coChu) {
+        score = 30;
+        reasons.push('role with a name that identifies nothing');
+      } else {
+        score = coChu ? 92 : 74;
+        reasons.push(coChu ? 'role with accessible name' : 'role without name');
+      }
+      break;
+    }
     case 'relative': score = 86; reasons.push('structured row/container relation'); break;
     case 'placeholder': score = 82; reasons.push('semantic field placeholder'); break;
     case 'label': score = 70; reasons.push('human-visible label may change'); break;

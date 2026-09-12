@@ -32,6 +32,30 @@ describe('locator quality gate', () => {
     assert.equal(quality.promotable, false);
   });
 
+  /**
+   * Đo trên registry thật: `priceBoard.rowOptionsButton` và
+   * `priceBoard.stockOptionsButton` cùng mang `role=button name="…"` — model
+   * lấy nguyên dấu ba chấm trong nhãn "Icon ... tại dòng ADS" làm tên. Trên màn
+   * hình không có nút nào tên là "…", nên cả hai element chưa từng resolve
+   * được lần nào, mà locator vẫn được chấm 74 điểm: đủ để lưu, và đủ để coi là
+   * dùng tốt.
+   */
+  it('role kèm tên toàn dấu câu thì không được lưu', () => {
+    const quality = assessLocatorQuality({
+      strategy: 'role', value: 'button', name: '…', weight: 0.7, origin: 'llm',
+    });
+    assert.equal(quality.persistable, false, 'không được ghi vào registry');
+    assert.equal(quality.promotable, false);
+  });
+
+  it('role kèm tên thật vẫn là locator tốt', () => {
+    const quality = assessLocatorQuality({
+      strategy: 'role', value: 'button', name: 'Đăng nhập', weight: 0.85, origin: 'authored',
+    });
+    assert.equal(quality.stable, true, 'role + tên thật là cách định danh chuẩn nhất của ARIA');
+    assert.equal(quality.promotable, true);
+  });
+
   it('keeps an unapproved healed locator below authored primary weight', () => {
     const fallback = asUnapprovedFallback({
       strategy: 'testId',
