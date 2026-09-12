@@ -315,8 +315,20 @@ function row(r: ScenarioResult, v?: FlakeVerdict, knownIssueNote?: string): stri
   const name = hasDetail()
     ? `<a class="sc-link" href="#${detailAnchor(r)}">${esc(r.scenario.name)}</a>`
     : esc(r.scenario.name);
+  // Một kịch bản xanh vẫn có thể chứa bước chẳng chứng minh được gì.
+  //
+  // `verdictOf` chỉ nhìn passed/failed, nên bước `unverified` không hề chạm tới
+  // verdict: dòng bảng ghi "passed" còn sự thật nằm ở một mục khác tít bên dưới
+  // trang. Người đọc bảng không có lý do gì để cuộn xuống tìm, nên trên thực tế
+  // nó là một dòng xanh không ai chất vấn.
+  const chuaChungMinh = (r.runs.at(-1)?.steps ?? [])
+    .filter((st) => st.status === 'unverified').length;
+  const canhBao = chuaChungMinh
+    ? ` <span class="v-unverified" title="Bước bấm không chứng minh được là nó đã thay đổi điều gì">`
+      + `⚠ ${chuaChungMinh} bước chưa chứng minh</span>`
+    : '';
   return `<tr>
-  <td>${name}${flakeTag}</td>
+  <td>${name}${canhBao}${flakeTag}</td>
   <td class="ki-col">${mark}</td>
   <td>${esc(r.platform)}</td>
   <td>${esc(r.device)}</td>
@@ -390,13 +402,16 @@ function proofs(results: ScenarioResult[], outDir: string): string {
       // Chỉ những bước tự khai được nó đã thấy gì. Bước bấm hay bước nhập không
       // chứng minh điều gì về sản phẩm; bước assert mới là chỗ kịch bản phát
       // biểu một điều và điều đó đúng.
-      const said = (last?.steps ?? []).filter((st) => st.evidence);
+      // Kèm cả bước KHÔNG chứng minh được gì. Khối tên là "bằng chứng" mà chỉ
+      // liệt kê phần chứng minh được thì nó đang chọn lọc để trông đẹp hơn sự
+      // thật — đúng thứ khiến một kết quả xanh đáng ngờ.
+      const said = (last?.steps ?? []).filter((st) => st.evidence || st.status === 'unverified');
       const shot = last?.proof ? assetHref(outDir, last.proof) : '';
       const rows = said
         .map((st) => `<tr>
     <td><code>${esc(st.step.keyword)} ${esc(st.step.text)}</code></td>
-    <td><code>${esc(st.evidence!.locator)}</code></td>
-    <td>${st.evidence!.saw ? esc(st.evidence!.saw) : '<span class="empty">—</span>'}</td>
+    <td>${st.evidence ? `<code>${esc(st.evidence.locator)}</code>` : '<span class="v-unverified">chưa chứng minh được thay đổi</span>'}</td>
+    <td>${st.evidence?.saw ? esc(st.evidence.saw) : '<span class="empty">—</span>'}</td>
   </tr>`)
         .join('\n');
       return `<details id="${detailAnchor(r)}">

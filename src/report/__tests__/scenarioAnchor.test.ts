@@ -21,6 +21,7 @@ function kichBan(
   ten: string,
   status: 'passed' | 'failed',
   video?: string,
+  trangThaiBuoc: 'passed' | 'failed' | 'unverified' = status,
 ): ScenarioResult {
   return {
     scenario: { id, name: ten, tags: [], steps: [], platforms: ['android'] },
@@ -35,7 +36,7 @@ function kichBan(
       ...(video ? { video } : {}),
       steps: [{
         step: { text: 'I open the app', keyword: 'Given', intent: { kind: 'launch' }, line: 5 },
-        status,
+        status: trangThaiBuoc,
         durationMs: 10,
         attempts: 1,
         ...(status === 'failed' ? { error: { message: 'hỏng' } } : {}),
@@ -100,6 +101,20 @@ describe('report — bấm kịch bản là xuống chi tiết', () => {
       { ...hai, device: 'Pixel_8' } as ScenarioResult,
     ]);
     assert.equal(neo(html).size, 2, 'hai máy phải cho hai neo');
+  });
+
+  /**
+   * `verdictOf` chỉ nhìn passed/failed, nên một lượt chạy chứa bước
+   * `unverified` vẫn ra verdict "passed". Sự thật nằm ở một mục khác tít bên
+   * dưới trang, mà người đọc bảng không có lý do gì để cuộn xuống tìm — trên
+   * thực tế đó là một dòng xanh không ai chất vấn.
+   */
+  it('dòng xanh có bước chưa chứng minh được thì phải nói ra ngay tại dòng', async () => {
+    const html = await dungBaoCao([
+      kichBan('u', 'Ca xanh nhưng có bước mù', 'passed', undefined, 'unverified'),
+    ]);
+    assert.match(html, /bước chưa chứng minh/, 'dòng bảng phải mang cảnh báo');
+    assert.match(html, /chưa chứng minh được thay đổi/, 'khối bằng chứng phải liệt kê bước đó');
   });
 
   it('bung <details> đang đóng rồi mới cuộn', async () => {
