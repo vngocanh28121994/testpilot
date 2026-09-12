@@ -350,7 +350,8 @@
     "2026-09-11T19-07-24Z-android-feature-tim-kiem-bang-gia-sm-s938b": "2026-09-11T19:08:36.813Z",
     "2026-09-11T19-15-40Z-android-feature-tim-kiem-bang-gia-sm-s938b": "2026-09-11T19:16:57.175Z",
     "2026-09-11T19-26-04Z-android-feature-tim-kiem-bang-gia-sm-s938b": "2026-09-11T19:27:05.626Z",
-    "2026-09-11T20-06-18Z-android-sm-s938b": "2026-09-11T20:11:15.132Z"
+    "2026-09-11T20-06-18Z-android-sm-s938b": "2026-09-11T20:11:15.132Z",
+    "2026-09-12T04-54-52Z-web-feature-them-ma-co-phieu-tren-bang-gia-co-phieu": "2026-09-12T05:03:28.228Z"
   },
   "entries": {
     "home.totalAssets::android::6dbfe0a6bf0ea4c4": {
@@ -953,6 +954,59 @@
       "lastSeen": "2026-09-11T20:11:15.132Z",
       "devices": {
         "SM_S938B": 10
+      }
+    },
+    "addStockModal.searchInput::web::f11216c2a8ddd286": {
+      "elementId": "addStockModal.searchInput",
+      "platform": "web",
+      "from": {
+        "strategy": "placeholder",
+        "value": "TCB,VNM,FPT...",
+        "weight": 0.79,
+        "origin": "healed",
+        "approved": false
+      },
+      "to": {
+        "strategy": "placeholder",
+        "value": "Mã cổ phiếu",
+        "weight": 0.79,
+        "origin": "healed",
+        "approved": false
+      },
+      "successes": 7,
+      "runIds": [
+        "2026-09-12T04-54-52Z-web-feature-them-ma-co-phieu-tren-bang-gia-co-phieu"
+      ],
+      "firstSeen": "2026-09-12T05:03:28.228Z",
+      "lastSeen": "2026-09-12T05:03:28.228Z",
+      "devices": {
+        "Pixel 7": 7
+      }
+    },
+    "priceBoard.rowOptionsButton::web::06abf1a104f69229": {
+      "elementId": "priceBoard.rowOptionsButton",
+      "platform": "web",
+      "from": {
+        "strategy": "css",
+        "value": "mat-icon.mat-menu-trigger",
+        "weight": 0.9,
+        "origin": "authored"
+      },
+      "to": {
+        "strategy": "css",
+        "value": "[data-walkthrough=\"mb-item-more\"]",
+        "weight": 0.5,
+        "origin": "llm",
+        "approved": false
+      },
+      "successes": 4,
+      "runIds": [
+        "2026-09-12T04-54-52Z-web-feature-them-ma-co-phieu-tren-bang-gia-co-phieu"
+      ],
+      "firstSeen": "2026-09-12T05:03:28.228Z",
+      "lastSeen": "2026-09-12T05:03:28.228Z",
+      "devices": {
+        "Pixel 7": 4
       }
     }
   }

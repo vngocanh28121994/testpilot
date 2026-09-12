@@ -379,11 +379,10 @@
       "id": "them-ma-co-phieu-tren-bang-gia-co-phieu.feature::Chọn mã đã có trong danh mục thì không thêm mới và focus vào dòng đó",
       "filename": "them-ma-co-phieu-tren-bang-gia-co-phieu.feature",
       "scenarioName": "Chọn mã đã có trong danh mục thì không thêm mới và focus vào dòng đó",
-      "contentHash": "3802d1c3569aecee3d2206090c1a92dfc2f776ceb8dd195f2e2c7f21e472007f",
-      "status": "approved",
-      "source": "generated",
-      "updatedAt": "2026-09-11T20:05:06.424Z",
-      "reviewedAt": "2026-09-11T20:05:06.424Z"
+      "contentHash": "6d66bd01ea882fc360768489e4c384edb78eb7939978fbf346c732f7b9a781e9",
+      "status": "pending",
+      "source": "legacy",
+      "updatedAt": "2026-09-12T04:43:13.929Z"
     },
     "them-ma-co-phieu-tren-bang-gia-co-phieu.feature::Mở menu tuỳ chọn của dòng mã cổ phiếu": {
       "id": "them-ma-co-phieu-tren-bang-gia-co-phieu.feature::Mở menu tuỳ chọn của dòng mã cổ phiếu",

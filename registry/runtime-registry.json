@@ -55,13 +55,13 @@
           "strategy": "css",
           "value": ".mat-autocomplete-panel mat-option[role='option']",
           "source": "runtime-observed",
-          "status": "rejected",
+          "status": "healed",
           "confidence": 0.6,
-          "verifiedAt": "2026-09-11T20:06:46.044Z",
+          "verifiedAt": "2026-09-12T04:55:34.838Z",
           "platform": "web"
         }
       ],
-      "lastUpdatedAt": "2026-09-11T20:09:37.837Z"
+      "lastUpdatedAt": "2026-09-12T04:55:34.838Z"
     },
     "priceBoard.addStockButton": {
       "element": "priceBoard.addStockButton",
@@ -93,13 +93,13 @@
           "strategy": "label",
           "value": "Xoá khỏi danh mục",
           "source": "runtime-observed",
-          "status": "healed",
+          "status": "rejected",
           "confidence": 0.6,
-          "verifiedAt": "2026-08-26T10:35:02.641Z",
+          "verifiedAt": "2026-09-12T05:00:55.867Z",
           "platform": "web"
         }
       ],
-      "lastUpdatedAt": "2026-08-26T10:35:02.641Z"
+      "lastUpdatedAt": "2026-09-12T05:03:04.153Z"
     },
     "priceBoard.iconTaiDongAds": {
       "element": "priceBoard.iconTaiDongAds",
@@ -531,7 +531,7 @@
           "source": "runtime-observed",
           "status": "healed",
           "confidence": 0.79,
-          "verifiedAt": "2026-08-26T10:34:15.907Z",
+          "verifiedAt": "2026-09-12T04:59:27.660Z",
           "platform": "web"
         },
         {
@@ -544,7 +544,7 @@
           "platform": "web"
         }
       ],
-      "lastUpdatedAt": "2026-09-11T20:09:17.317Z"
+      "lastUpdatedAt": "2026-09-12T04:59:27.660Z"
     },
     "priceBoard.vicHose": {
       "element": "priceBoard.vicHose",

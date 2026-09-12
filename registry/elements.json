@@ -108,10 +108,10 @@
         ]
       },
       "health": {
-        "resolutions": 529,
+        "resolutions": 530,
         "heals": 26,
         "winners": {
-          "placeholder:Email / Số tài khoản / Điện thoại": 493,
+          "placeholder:Email / Số tài khoản / Điện thoại": 494,
           "predicate:new UiSelector().className(\"android.widget.EditText\").instance(0)": 10,
           "css:input[type='text']": 25,
           "testId:username": 1
@@ -148,10 +148,10 @@
         ]
       },
       "health": {
-        "resolutions": 493,
+        "resolutions": 494,
         "heals": 0,
         "winners": {
-          "placeholder:Mật khẩu": 485,
+          "placeholder:Mật khẩu": 486,
           "predicate:new UiSelector().className(\"android.widget.EditText\").instance(1)": 8
         }
       }
@@ -198,12 +198,12 @@
         ]
       },
       "health": {
-        "resolutions": 469,
+        "resolutions": 470,
         "heals": 1,
         "winners": {
           "role:button": 50,
           "predicate:new UiSelector().className(\"android.widget.Button\").text(\"ĐĂNG NHẬP\")": 8,
-          "css:button.btn-login": 410,
+          "css:button.btn-login": 411,
           "css:section.header-content button.btn-login": 1
         },
         "lastHealedAt": "2026-08-14T07:18:24.612Z"
@@ -441,10 +441,10 @@
         ]
       },
       "health": {
-        "resolutions": 801,
+        "resolutions": 812,
         "heals": 1,
         "winners": {
-          "css:div.search-box": 800,
+          "css:div.search-box": 811,
           "placeholder:Tìm kiếm": 1
         },
         "lastHealedAt": "2026-08-14T07:18:31.972Z"
@@ -479,10 +479,10 @@
         ]
       },
       "health": {
-        "resolutions": 834,
+        "resolutions": 845,
         "heals": 0,
         "winners": {
-          "placeholder:Tìm tính năng, mã CK...": 834
+          "placeholder:Tìm tính năng, mã CK...": 845
         }
       },
       "typeDelay": 100
@@ -516,10 +516,10 @@
         ]
       },
       "health": {
-        "resolutions": 1008,
+        "resolutions": 1030,
         "heals": 8,
         "winners": {
-          "css:.searched-feature-block .feature-item:first-child .title": 1000,
+          "css:.searched-feature-block .feature-item:first-child .title": 1022,
           "placeholder:Tìm kiếm": 2,
           "css:.searched-feature-block .feature-item": 6
         },
@@ -705,10 +705,10 @@
         ]
       },
       "health": {
-        "resolutions": 242,
+        "resolutions": 249,
         "heals": 64,
         "winners": {
-          "css:#wt-filter-tcprice-el-mb tcbs-icon[name='Circle add']": 178,
+          "css:#wt-filter-tcprice-el-mb tcbs-icon[name='Circle add']": 185,
           "css:tcbs-icon[name='Circle add']": 54,
           "label:THÊM MÃ": 10
         },
@@ -768,10 +768,10 @@
         ]
       },
       "health": {
-        "resolutions": 887,
+        "resolutions": 898,
         "heals": 1,
         "winners": {
-          "label:Tổng tài sản": 879,
+          "label:Tổng tài sản": 890,
           "predicate:new UiSelector().textContains(\"Tổng tài sản\").className(\"android.widget.TextView\")": 7,
           "predicate:new UiSelector().textContains(\"Tổng tài sản\")": 1
         },
@@ -827,10 +827,10 @@
         ]
       },
       "health": {
-        "resolutions": 120,
+        "resolutions": 121,
         "heals": 0,
         "winners": {
-          "css:.mat-autocomplete-panel mat-option[role='option']": 120
+          "css:.mat-autocomplete-panel mat-option[role='option']": 121
         }
       },
       "provenance": "generated"
@@ -915,10 +915,10 @@
         ]
       },
       "health": {
-        "resolutions": 26,
+        "resolutions": 28,
         "heals": 0,
         "winners": {
-          "label:Xoá khỏi danh mục": 26
+          "label:Xoá khỏi danh mục": 28
         }
       },
       "provenance": "generated"
@@ -1723,10 +1723,10 @@
         "ios": []
       },
       "health": {
-        "resolutions": 116,
+        "resolutions": 120,
         "heals": 0,
         "winners": {
-          "css:.content-row": 116
+          "css:.content-row": 120
         }
       },
       "provenance": "generated"
@@ -1772,12 +1772,13 @@
         "ios": []
       },
       "health": {
-        "resolutions": 183,
-        "heals": 0,
+        "resolutions": 190,
+        "heals": 7,
         "winners": {
-          "placeholder:Mã cổ phiếu": 175,
+          "placeholder:Mã cổ phiếu": 182,
           "placeholder:TCB,VNM,FPT...": 8
-        }
+        },
+        "lastHealedAt": "2026-09-12T04:59:27.660Z"
       },
       "typeDelay": 80,
       "provenance": "generated"
@@ -1857,7 +1858,15 @@
         "android": [],
         "ios": []
       },
-      "provenance": "imported"
+      "provenance": "imported",
+      "health": {
+        "resolutions": 4,
+        "heals": 4,
+        "winners": {
+          "css:[data-walkthrough=\"mb-item-more\"]": 4
+        },
+        "lastHealedAt": "2026-09-12T05:02:50.187Z"
+      }
     },
     "addStockModal.clearButton": {
       "id": "addStockModal.clearButton",
@@ -2036,10 +2045,10 @@
         "ios": []
       },
       "health": {
-        "resolutions": 77,
+        "resolutions": 82,
         "heals": 0,
         "winners": {
-          "css:.mat-autocomplete-panel mat-option[role='option']": 77
+          "css:.mat-autocomplete-panel mat-option[role='option']": 82
         }
       },
       "provenance": "generated"
