@@ -75,6 +75,35 @@ describe('Studio — bàn giao sang màn duyệt', () => {
     await waitFor(() => expect(screen.queryByText(/Đang chạy workflow/)).not.toBeInTheDocument());
     expect(router.state.location.pathname).toBe('/studio');
   });
+
+  /**
+   * Cờ handoff cũ chỉ sống đúng cho lần chạy đầu tiên của một lần mount.
+   * Workflow đầu kết thúc làm cờ thành `true` vĩnh viễn, nên lần chạy thứ hai
+   * có dừng chờ duyệt cũng bị xem như một kết quả cũ và đứng im ở Studio.
+   */
+  it('vẫn chuyển sang màn duyệt ở workflow thứ hai trong cùng phiên Studio', async () => {
+    let call = 0;
+    server.use(
+      http.post(STREAM_ROUTES.gen, () => {
+        call += 1;
+        const status = call === 1 ? 'passed' : 'waiting_review';
+        return sse([
+          ['run', { id: `run-${call}`, status, stages: [], generatedFile: 'chuyen-tien-noi-bo.feature' }],
+          ['done', { ok: true }],
+        ]);
+      }),
+    );
+    const user = userEvent.setup();
+    const { router } = await renderWithRouter(<StudioPanel />, { path: '/studio' });
+
+    await user.click(await screen.findByRole('button', { name: 'Bắt đầu chạy workflow' }));
+    await waitFor(() => expect(call).toBe(1));
+    await screen.findByRole('button', { name: 'Bắt đầu chạy workflow' });
+    expect(router.state.location.pathname).toBe('/studio');
+
+    await user.click(screen.getByRole('button', { name: 'Bắt đầu chạy workflow' }));
+    await waitFor(() => expect(router.state.location.pathname).toBe('/scenarios'));
+  });
 });
 
 /**

@@ -7,11 +7,15 @@
  * hiện trên màn hình y như đang chạy.
  */
 import assert from 'node:assert/strict';
-import { mkdtempSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { describe, it } from 'node:test';
 import { History } from '../history.js';
+import { closeInterruptedRuns, writeRunMeta } from '../runstore.js';
+import { readRunCheckpoint, writeRunCheckpoint } from '../runCheckpoint.js';
+import { recoverInterruptedRunReports } from '../interruptedReport.js';
+import type { ScenarioResult } from '../types.js';
 
 function historyWith(runs: unknown[]): string {
   const dir = mkdtempSync(path.join(tmpdir(), 'tp-hist-'));
@@ -62,5 +66,105 @@ describe('History.closeInterrupted', () => {
   it('lượt đã xong thì không đụng tới', async () => {
     const history = await History.load(historyWith([run({ status: 'passed' })]));
     assert.equal(history.closeInterrupted(), 0);
+  });
+});
+
+function passedResult(id: string, name: string): ScenarioResult {
+  return {
+    scenario: { id, name, tags: [], steps: [], platforms: ['web'] },
+    platform: 'web',
+    device: 'Chrome',
+    verdict: 'passed',
+    runs: [{
+      attempt: 1,
+      status: 'passed',
+      steps: [],
+      startedAt: '2026-09-12T00:00:00.000Z',
+      durationMs: 10,
+    }],
+  } as ScenarioResult;
+}
+
+describe('báo cáo cho local run bị gián đoạn', () => {
+  it('checkpoint được thay nguyên tử và đọc lại đầy đủ', async () => {
+    const dir = mkdtempSync(path.join(tmpdir(), 'tp-checkpoint-'));
+    const base = {
+      reportRunId: 'report-1',
+      startedAt: '2026-09-12T00:00:00.000Z',
+      platform: 'web' as const,
+      device: 'Chrome',
+      planned: [{ id: 'a', name: 'Ca A' }],
+      results: [] as ScenarioResult[],
+      quarantined: [],
+      openQuestions: [],
+    };
+    await writeRunCheckpoint(dir, base);
+    await writeRunCheckpoint(dir, { ...base, results: [passedResult('a', 'Ca A')] });
+
+    const checkpoint = await readRunCheckpoint(dir);
+    assert.equal(checkpoint?.results.length, 1);
+    assert.equal(checkpoint?.results[0]?.scenario.name, 'Ca A');
+    assert.equal(existsSync(path.join(dir, 'run-state.json')), true);
+  });
+
+  it('dựng report từ kết quả có cấu trúc và phân biệt interrupted/not run', async () => {
+    const root = mkdtempSync(path.join(tmpdir(), 'tp-runs-'));
+    const dir = path.join(root, 'run-a');
+    await writeRunMeta(dir, {
+      id: 'run-a', platform: 'web', kind: 'run', status: 'running',
+      startedAt: '2026-09-12T00:00:00.000Z',
+    });
+    await writeRunCheckpoint(dir, {
+      reportRunId: 'report-a',
+      startedAt: '2026-09-12T00:00:00.000Z',
+      platform: 'web',
+      device: 'Chrome',
+      planned: [
+        { id: 'done', name: 'Đã chạy' },
+        { id: 'active', name: 'Đang chạy thì crash' },
+        { id: 'later', name: 'Chưa chạy' },
+      ],
+      results: [passedResult('done', 'Đã chạy')],
+      quarantined: [],
+      openQuestions: [],
+      currentScenario: { id: 'active', name: 'Đang chạy thì crash' },
+    });
+
+    const closed = await closeInterruptedRuns(root);
+    assert.deepEqual(closed, ['run-a']);
+    assert.deepEqual(await recoverInterruptedRunReports(root, closed), ['run-a']);
+
+    const json = JSON.parse(readFileSync(path.join(dir, 'report.json'), 'utf8'));
+    assert.equal(json.report.status, 'interrupted');
+    assert.equal(json.report.results.length, 1);
+    assert.equal(json.report.interruption.activeScenario.name, 'Đang chạy thì crash');
+    assert.deepEqual(json.report.interruption.notRun.map((item: { name: string }) => item.name), ['Chưa chạy']);
+    const html = readFileSync(path.join(dir, 'index.html'), 'utf8');
+    assert.match(html, /Lượt chạy bị gián đoạn/);
+    assert.match(html, /Đang chạy thì crash/);
+    assert.match(html, /not run/);
+  });
+
+  it('run cũ không có checkpoint vẫn có report giới hạn từ log', async () => {
+    const root = mkdtempSync(path.join(tmpdir(), 'tp-runs-legacy-'));
+    const dir = path.join(root, 'run-old');
+    await writeRunMeta(dir, {
+      id: 'run-old', platform: 'web', kind: 'run', status: 'interrupted',
+      startedAt: '2026-09-12T00:00:00.000Z',
+      finishedAt: '2026-09-12T00:01:00.000Z',
+    });
+    writeFileSync(path.join(dir, 'log.txt'), [
+      '[run:running] … Ca xanh',
+      '[run:passed] ✓ Ca xanh',
+      '[run:running] … Ca đang chạy',
+    ].join('\n'), 'utf8');
+
+    assert.deepEqual(await recoverInterruptedRunReports(root, ['run-old']), ['run-old']);
+    const json = JSON.parse(readFileSync(path.join(dir, 'report.json'), 'utf8'));
+    assert.equal(json.report.interruption.source, 'log');
+    assert.deepEqual(json.report.interruption.logRecoveredResults, [
+      { name: 'Ca xanh', verdict: 'passed' },
+    ]);
+    assert.equal(json.report.interruption.activeScenario.name, 'Ca đang chạy');
   });
 });

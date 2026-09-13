@@ -2,7 +2,19 @@ import { Fragment, useEffect, useMemo, useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Link, useNavigate } from '@tanstack/react-router';
 import { toast } from 'sonner';
-import { Check, FileCode, Filter, MoreHorizontal, Pencil, Plus, Trash2, TriangleAlert, X } from 'lucide-react';
+import {
+  Check,
+  ChevronDown,
+  ChevronRight,
+  FileCode,
+  Filter,
+  MoreHorizontal,
+  Pencil,
+  Plus,
+  Trash2,
+  TriangleAlert,
+  X,
+} from 'lucide-react';
 import { AppShell } from '@/components/layout/AppShell';
 import { Dropdown } from '@/components/Dropdown';
 import {
@@ -25,6 +37,7 @@ import { ROUTES } from '@/api/routes';
 import { useAppState } from '@/hooks/useAppState';
 import { WorkflowGate } from './WorkflowGate';
 import { ScenarioEditor, type CreateTarget } from './ScenarioEditor';
+import { ScenarioEditorFields } from './ScenarioEditorFields';
 import {
   appendScenario,
   extractScenario,
@@ -73,6 +86,8 @@ function ReviewBody({ state, search }: { state: StateResponse; search: ScenarioS
   const navigate = useNavigate({ from: '/scenarios' });
   const client = useQueryClient();
   const [selected, setSelected] = useState<string[]>([]);
+  /** Các hàng đang bung editor nhanh ngay trong danh sách. */
+  const [expanded, setExpanded] = useState<string[]>([]);
   /**
    * Phiên sửa đang mở, hoặc null. Giữ cả tên file và tên kịch bản vì lúc lưu
    * phải ghép khối đã sửa trở lại đúng chỗ trong nội dung file mới nhất.
@@ -241,6 +256,11 @@ function ReviewBody({ state, search }: { state: StateResponse; search: ScenarioS
     );
   const goToPage = (nextPage: number) =>
     void navigate({ search: { ...search, page: nextPage === 1 ? undefined : nextPage } });
+
+  const toggleInlineEditor = (id: string) =>
+    setExpanded((items) =>
+      items.includes(id) ? items.filter((item) => item !== id) : [...items, id],
+    );
 
   return (
     <AppShell
@@ -446,7 +466,26 @@ function ReviewBody({ state, search }: { state: StateResponse; search: ScenarioS
                               {feature.name}
                             </span>
                           </td>
-                          <td className="p-2 font-medium">{scenario.name}</td>
+                          <td className="p-2 font-medium">
+                            {/* Master cho đọc/sửa testcase bằng một click vào
+                                chính tên của nó. Giữ lại affordance đó ở V2:
+                                menu `…` vẫn mở panel đầy đủ, còn tên bung một
+                                editor nhanh ngay dưới hàng đang đọc. */}
+                            <button
+                              type="button"
+                              className="hover:text-primary flex w-full items-center gap-1.5 text-left"
+                              aria-expanded={expanded.includes(id)}
+                              aria-label={`${expanded.includes(id) ? 'Đóng' : 'Sửa trực tiếp'} ${scenario.name}`}
+                              onClick={() => toggleInlineEditor(id)}
+                            >
+                              {expanded.includes(id) ? (
+                                <ChevronDown className="size-4 shrink-0" />
+                              ) : (
+                                <ChevronRight className="size-4 shrink-0" />
+                              )}
+                              <span>{scenario.name}</span>
+                            </button>
+                          </td>
                           <td className="p-2">
                             {scenario.tags.length > 0 ? (
                               <span className="flex flex-wrap gap-1">
@@ -599,6 +638,33 @@ function ReviewBody({ state, search }: { state: StateResponse; search: ScenarioS
                         {/* Ô soạn thảo khoá theo id của HÀNG, không theo tên file:
                             một file có nhiều kịch bản, khoá theo tên file thì một
                             cú bấm mở ô ở mọi hàng của file đó. */}
+                        {expanded.includes(id) && (
+                          <InlineScenarioEditor
+                            key={`${id}::inline`}
+                            scenarioName={scenario.name}
+                            block={extractScenario(feature.content, scenario.name)}
+                            tagSuggestions={(state.tagTaxonomy?.definitions ?? []).map(
+                              (item) => item.name,
+                            )}
+                            saving={save.isPending}
+                            onClose={() =>
+                              setExpanded((items) => items.filter((item) => item !== id))
+                            }
+                            onSave={(block) =>
+                              save.mutate(
+                                {
+                                  filename: feature.name,
+                                  content: replaceScenario(feature.content, scenario.name, block),
+                                  baseRevision: feature.revision,
+                                },
+                                {
+                                  onSuccess: () =>
+                                    setExpanded((items) => items.filter((item) => item !== id)),
+                                },
+                              )
+                            }
+                          />
+                        )}
                       </Fragment>
                     );
                   })}
@@ -688,4 +754,43 @@ function ReviewBody({ state, search }: { state: StateResponse; search: ScenarioS
 
 function idFor(filename: string, scenarioName: string): string {
   return `${filename}::${scenarioName}`;
+}
+
+/** Editor nhanh nằm ngay dưới hàng, tương đương hành vi danh sách của master. */
+function InlineScenarioEditor({
+  scenarioName,
+  block,
+  tagSuggestions,
+  saving,
+  onSave,
+  onClose,
+}: {
+  scenarioName: string;
+  block: string;
+  tagSuggestions: string[];
+  saving: boolean;
+  onSave: (block: string) => void;
+  onClose: () => void;
+}) {
+  return (
+    <tr className="border-t bg-muted/20">
+      <td colSpan={7} className="p-3">
+        <div className="flex flex-col gap-3 rounded-lg border bg-background p-3 shadow-sm">
+          <ScenarioEditorFields
+            block={block}
+            tagSuggestions={tagSuggestions}
+            saving={saving}
+            onSave={onSave}
+            onClose={onClose}
+            editorLabel={`Nội dung trực tiếp của ${scenarioName}`}
+            editorClassName="h-56"
+            bodyClassName="px-0 pb-0"
+            actionsClassName="px-0 pb-0"
+            saveLabel="Lưu"
+            closeLabel="Đóng"
+          />
+        </div>
+      </td>
+    </tr>
+  );
 }

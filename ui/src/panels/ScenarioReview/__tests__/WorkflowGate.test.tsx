@@ -115,7 +115,10 @@ describe('WorkflowGate', () => {
 describe('WorkflowGate — đường ra cho lượt bỏ dở', () => {
   it('có nút bỏ workflow đang chờ', async () => {
     renderWithRouter(<WorkflowGate runs={[run({})]} />, { path: '/scenarios' });
-    expect(await screen.findByRole('button', { name: 'Bỏ workflow này' })).toBeInTheDocument();
+    const abandon = await screen.findByRole('button', { name: 'Bỏ workflow' });
+    expect(abandon).toBeInTheDocument();
+    expect(abandon).toHaveClass('h-8', 'text-muted-foreground');
+    expect(screen.getByText(/testcase đã sinh vẫn được giữ lại/)).toBeInTheDocument();
   });
 
   it('bấm bỏ thì gọi đúng endpoint kèm runId', async () => {
@@ -128,7 +131,7 @@ describe('WorkflowGate — đường ra cho lượt bỏ dở', () => {
       }),
     );
     renderWithRouter(<WorkflowGate runs={[run({})]} />, { path: '/scenarios' });
-    await user.click(await screen.findByRole('button', { name: 'Bỏ workflow này' }));
+    await user.click(await screen.findByRole('button', { name: 'Bỏ workflow' }));
     await waitFor(() => expect(sent).toEqual([{ runId: 'wf-1' }]));
   });
 });

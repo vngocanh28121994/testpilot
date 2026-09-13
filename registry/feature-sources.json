@@ -1,0 +1,25 @@
+{
+  "version": 1,
+  "entries": {
+    "confluence:digital-horus.atlassian.net:196994": {
+      "sourceKey": "confluence:digital-horus.atlassian.net:196994",
+      "refs": [
+        "confluence:digital-horus.atlassian.net:196994"
+      ],
+      "file": "them-ma-co-phieu.feature",
+      "featureId": "them-ma-co-phieu",
+      "displayName": "Thêm mã cổ phiếu trên Bảng giá cổ phiếu",
+      "updatedAt": "2026-09-12T19:39:59.490Z"
+    },
+    "confluence:digital-horus.atlassian.net:983041": {
+      "sourceKey": "confluence:digital-horus.atlassian.net:983041",
+      "refs": [
+        "confluence:digital-horus.atlassian.net:983041"
+      ],
+      "file": "chuyen-tien-noi-bo.feature",
+      "featureId": "chuyen-tien-noi-bo",
+      "displayName": "Chuyển tiền nội bộ",
+      "updatedAt": "2026-09-12T19:37:28.260Z"
+    }
+  }
+}

@@ -15,6 +15,7 @@ import { after, before, describe, it } from 'node:test';
 import { chromium, type Browser, type Page } from 'playwright';
 import { domSelector } from '../native.js';
 import { labelContainsXPath } from '../../core/labelXPath.js';
+import { WebUiDriver } from '../web.js';
 
 let browser: Browser;
 let page: Page;
@@ -146,6 +147,28 @@ describe('domSelector — thông báo mang dữ liệu bên trong', () => {
     assert.equal(labelContainsXPath('Đóng'), undefined);
     assert.equal(labelContainsXPath('Lưu mua'), undefined);
     assert.ok(labelContainsXPath('Đã lưu lệnh mua'));
+  });
+
+  it('finds a short-lived data-bearing toast before exact fallbacks consume it', async () => {
+    const driver = new WebUiDriver({ baseUrl: 'http://localhost', artifactsDir: '/tmp' });
+    (driver as unknown as { page: Page }).page = page;
+    await page.setContent(`<!doctype html><body>
+      <h1>Đặt lệnh</h1>
+      <div id="toast">Đã lưu lệnh Mua TCB 28000 x 100 = 2,800,000 vào Sổ lệnh chờ gửi</div>
+    </body>`);
+    await page.evaluate(() => {
+      window.setTimeout(() => document.querySelector('#toast')?.remove(), 1_200);
+    });
+
+    const found = await driver.find({
+      strategy: 'label',
+      value: 'Đã lưu lệnh mua',
+      weight: 1,
+      origin: 'authored',
+    });
+
+    assert.ok(found, 'toast biến mất trước khi nhánh partial-text được kiểm tra');
+    assert.equal(await found.text(), 'Đã lưu lệnh Mua TCB 28000 x 100 = 2,800,000 vào Sổ lệnh chờ gửi');
   });
 });
 

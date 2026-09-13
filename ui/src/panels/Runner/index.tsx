@@ -120,10 +120,12 @@ export default function RunnerPanel() {
   // còn lượt chạy thì vẫn đang ở kịch bản thứ chín.
   //
   // `/api/run/active` là trọng tài: còn tên trong đó nghĩa là server vẫn coi nó
-  // đang sống, và lúc đó tab này phải nối lại.
+  // đang sống, và lúc đó tab này phải nối lại. Riêng một job đã nhận `done` là
+  // kết quả cuối cùng: cache active có thể còn cũ vài giây, không được dùng ảnh
+  // chụp cũ đó để nối lại rồi xoá log vừa chạy xong.
   const lastAttachAt = useRef(0);
   useEffect(() => {
-    if (!liveRun || job.status === 'running') return;
+    if (!liveRun || job.status === 'running' || job.status === 'done') return;
     // Chặn vòng lặp: một cú nối hỏng ngay sẽ lập tức kéo effect chạy lại.
     if (Date.now() - lastAttachAt.current < 3_000) return;
     lastAttachAt.current = Date.now();
@@ -405,7 +407,13 @@ export default function RunnerPanel() {
           />
         </div>
 
-        <JobLog logs={job.logs} dropped={job.dropped} error={job.error} />
+        <JobLog
+          logs={job.logs}
+          dropped={job.dropped}
+          error={job.error}
+          status={job.status}
+          reports={reports}
+        />
         <History reports={reports} />
       </section>
     </AppShell>
@@ -519,16 +527,59 @@ function JobLog({
   logs,
   dropped,
   error,
+  status,
+  reports,
 }: {
   logs: string[];
   dropped: number;
   error: string | null;
+  status: 'idle' | 'running' | 'done' | 'error';
+  reports: ReportView[];
 }) {
   if (!logs.length && !error) return null;
+
+  // CLI emits the absolute run directory as an internal marker. Match by its
+  // basename because `/api/state` deliberately exposes only the safe run id.
+  // A parallel run may emit more than one directory, hence an array here.
+  const runIds = new Set(
+    logs.flatMap((line) => {
+      const dir = /^\[run:dir\]\s+(.+)$/.exec(line)?.[1]?.trim();
+      return dir ? [dir.split(/[\\/]/).filter(Boolean).at(-1)!] : [];
+    }),
+  );
+  const completedReports = reports.filter((report) => runIds.has(report.id));
+  const failed = completedReports.some(
+    (report) => report.status === 'failed' || (report.counters?.failed ?? 0) > 0,
+  );
+
   return (
     <Card aria-labelledby="run-log-title">
       <CardHeader>
-        <CardTitle id="run-log-title">Log chạy</CardTitle>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <CardTitle id="run-log-title">Log chạy</CardTitle>
+          {status === 'done' && (
+            <div role="status" className="flex flex-wrap items-center gap-2">
+              <Badge
+                variant={failed ? 'outline' : 'default'}
+                className={cn(failed && 'text-destructive')}
+              >
+                {failed ? <XCircle /> : <CheckCircle2 />}
+                {failed ? 'Đã chạy xong, có lỗi' : 'Đã chạy xong'}
+              </Badge>
+              {completedReports.map((report, index) => (
+                <a
+                  key={report.id}
+                  href={report.url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-primary text-sm underline underline-offset-4"
+                >
+                  {completedReports.length > 1 ? `Xem report ${index + 1}` : 'Xem report'}
+                </a>
+              ))}
+            </div>
+          )}
+        </div>
       </CardHeader>
       <CardContent>
         <LogView logs={logs} dropped={dropped} error={error} label="Log chạy" />

@@ -108,10 +108,10 @@
         ]
       },
       "health": {
-        "resolutions": 530,
+        "resolutions": 532,
         "heals": 26,
         "winners": {
-          "placeholder:Email / Số tài khoản / Điện thoại": 494,
+          "placeholder:Email / Số tài khoản / Điện thoại": 496,
           "predicate:new UiSelector().className(\"android.widget.EditText\").instance(0)": 10,
           "css:input[type='text']": 25,
           "testId:username": 1
@@ -148,10 +148,10 @@
         ]
       },
       "health": {
-        "resolutions": 494,
+        "resolutions": 496,
         "heals": 0,
         "winners": {
-          "placeholder:Mật khẩu": 486,
+          "placeholder:Mật khẩu": 488,
           "predicate:new UiSelector().className(\"android.widget.EditText\").instance(1)": 8
         }
       }
@@ -198,12 +198,12 @@
         ]
       },
       "health": {
-        "resolutions": 470,
+        "resolutions": 472,
         "heals": 1,
         "winners": {
           "role:button": 50,
           "predicate:new UiSelector().className(\"android.widget.Button\").text(\"ĐĂNG NHẬP\")": 8,
-          "css:button.btn-login": 411,
+          "css:button.btn-login": 413,
           "css:section.header-content button.btn-login": 1
         },
         "lastHealedAt": "2026-08-14T07:18:24.612Z"
@@ -441,10 +441,10 @@
         ]
       },
       "health": {
-        "resolutions": 812,
+        "resolutions": 814,
         "heals": 1,
         "winners": {
-          "css:div.search-box": 811,
+          "css:div.search-box": 813,
           "placeholder:Tìm kiếm": 1
         },
         "lastHealedAt": "2026-08-14T07:18:31.972Z"
@@ -479,10 +479,10 @@
         ]
       },
       "health": {
-        "resolutions": 845,
+        "resolutions": 847,
         "heals": 0,
         "winners": {
-          "placeholder:Tìm tính năng, mã CK...": 845
+          "placeholder:Tìm tính năng, mã CK...": 847
         }
       },
       "typeDelay": 100
@@ -516,10 +516,10 @@
         ]
       },
       "health": {
-        "resolutions": 1030,
+        "resolutions": 1034,
         "heals": 8,
         "winners": {
-          "css:.searched-feature-block .feature-item:first-child .title": 1022,
+          "css:.searched-feature-block .feature-item:first-child .title": 1026,
           "placeholder:Tìm kiếm": 2,
           "css:.searched-feature-block .feature-item": 6
         },
@@ -768,10 +768,10 @@
         ]
       },
       "health": {
-        "resolutions": 898,
+        "resolutions": 900,
         "heals": 1,
         "winners": {
-          "label:Tổng tài sản": 890,
+          "label:Tổng tài sản": 892,
           "predicate:new UiSelector().textContains(\"Tổng tài sản\").className(\"android.widget.TextView\")": 7,
           "predicate:new UiSelector().textContains(\"Tổng tài sản\")": 1
         },
@@ -1187,7 +1187,8 @@
         "winners": {
           "label:Menu": 5
         }
-      }
+      },
+      "provenance": "generated"
     },
     "home.datLenhCoPhieu": {
       "id": "home.datLenhCoPhieu",
@@ -1228,10 +1229,10 @@
         ]
       },
       "health": {
-        "resolutions": 70,
+        "resolutions": 72,
         "heals": 0,
         "winners": {
-          "label:Đặt lệnh": 70
+          "label:Đặt lệnh": 72
         }
       }
     },
@@ -1297,10 +1298,10 @@
         ]
       },
       "health": {
-        "resolutions": 34,
+        "resolutions": 36,
         "heals": 0,
         "winners": {
-          "label:Lệnh thường": 34
+          "label:Lệnh thường": 36
         }
       }
     },
@@ -1320,10 +1321,10 @@
         ]
       },
       "health": {
-        "resolutions": 103,
+        "resolutions": 109,
         "heals": 0,
         "winners": {
-          "label:Lưu lệnh": 103
+          "label:Lưu lệnh": 109
         }
       }
     },
@@ -1349,10 +1350,10 @@
         ]
       },
       "health": {
-        "resolutions": 18,
+        "resolutions": 20,
         "heals": 0,
         "winners": {
-          "label:KL đặt": 18
+          "label:KL đặt": 20
         }
       }
     },
@@ -1372,10 +1373,10 @@
         ]
       },
       "health": {
-        "resolutions": 18,
+        "resolutions": 20,
         "heals": 0,
         "winners": {
-          "label:Giá đặt": 18
+          "label:Giá đặt": 20
         }
       }
     },
@@ -1448,11 +1449,11 @@
         ]
       },
       "health": {
-        "resolutions": 26,
+        "resolutions": 28,
         "heals": 1,
         "winners": {
           "testId:ticker": 6,
-          "placeholder:Nhập mã": 20
+          "placeholder:Nhập mã": 22
         },
         "lastHealedAt": "2026-08-21T01:37:13.492Z"
       }
@@ -1491,10 +1492,10 @@
         ]
       },
       "health": {
-        "resolutions": 511,
+        "resolutions": 515,
         "heals": 0,
         "winners": {
-          "label:{{text}}": 511
+          "label:{{text}}": 515
         }
       }
     },
@@ -2874,6 +2875,77 @@
       "screen": "transfer",
       "candidates": {},
       "provenance": "generated"
+    },
+    "transfer.refreshAvailableAmountButton": {
+      "id": "transfer.refreshAvailableAmountButton",
+      "label": "Icon refresh bên cạnh số tiền 'Được chuyển'",
+      "screen": "transfer",
+      "candidates": {
+        "web": [],
+        "android": [],
+        "ios": []
+      },
+      "provenance": "generated"
+    },
+    "transfer.amountDecreaseButton": {
+      "id": "transfer.amountDecreaseButton",
+      "label": "Nút trừ (-) tại ô Số tiền",
+      "screen": "transfer",
+      "candidates": {
+        "web": [],
+        "android": [],
+        "ios": []
+      },
+      "provenance": "generated"
+    },
+    "transfer.amountIncreaseButton": {
+      "id": "transfer.amountIncreaseButton",
+      "label": "Nút cộng (+) tại ô Số tiền",
+      "screen": "transfer",
+      "candidates": {
+        "web": [],
+        "android": [],
+        "ios": []
+      },
+      "provenance": "generated"
+    },
+    "stockOptionsMenu.rowActionMenu": {
+      "id": "stockOptionsMenu.rowActionMenu",
+      "label": "Icon ... tại dòng {{rowText}}",
+      "provenance": "byproduct",
+      "screen": "stockOptionsMenu",
+      "template": {
+        "kind": "rowAction",
+        "action": "..."
+      },
+      "candidates": {
+        "web": [
+          {
+            "strategy": "relative",
+            "value": "row(\"{{rowText}}\") >> \"...\":metadata",
+            "weight": 0.95,
+            "origin": "authored"
+          },
+          {
+            "strategy": "relative",
+            "value": "row(\"{{rowText}}\") >> \"...\":accessible",
+            "weight": 0.85,
+            "origin": "authored"
+          },
+          {
+            "strategy": "relative",
+            "value": "row(\"{{rowText}}\") >> \"...\":actions",
+            "weight": 0.75,
+            "origin": "authored"
+          },
+          {
+            "strategy": "relative",
+            "value": "row(\"{{rowText}}\") >> \"...\":last",
+            "weight": 0.65,
+            "origin": "authored"
+          }
+        ]
+      }
     }
   }
 }

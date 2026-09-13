@@ -128,6 +128,18 @@ export class ScenarioReviewStore {
     return result;
   }
 
+  /** Remove review state when a duplicate feature file is deliberately retired. */
+  forgetFile(filename: string): number {
+    let removed = 0;
+    for (const [key, entry] of Object.entries(this.db.entries)) {
+      if (entry.filename !== filename) continue;
+      delete this.db.entries[key];
+      removed += 1;
+    }
+    if (removed > 0) this.dirty = true;
+    return removed;
+  }
+
   review(
     filename: string,
     scenarioName: string,

@@ -125,6 +125,9 @@ function StudioFormPanel({ state }: { state: StateResponse }) {
   );
   const [headed, setHeaded] = useState(cfg.workflow.headed);
   const job = useStreamJob('studio-workflow', STREAM_ROUTES.gen);
+  // Bật ngay tại hành động bắt đầu/attach. Mỗi lượt workflow cần một lần
+  // handoff riêng; kết quả của lượt trước không được chặn lượt chạy sau.
+  const reviewHandoffArmed = useRef(false);
 
   /**
    * Nối lại workflow còn sống ở server — cùng bệnh, cùng thuốc với Local
@@ -138,6 +141,7 @@ function StudioFormPanel({ state }: { state: StateResponse }) {
     if (!liveWorkflow || attached.current) return;
     if (job.status !== 'idle' || job.logs.length > 0) return;
     attached.current = true;
+    reviewHandoffArmed.current = true;
     job.attach(`${ROUTES.runAttach}?id=${encodeURIComponent(liveWorkflow.id)}`);
   }, [liveWorkflow, job]);
   const completion = useWorkflowCompletion();
@@ -182,10 +186,9 @@ function StudioFormPanel({ state }: { state: StateResponse }) {
   // Không so với trạng thái "đang chạy" của lần render trước: một luồng nhanh
   // có thể không bao giờ được render ở trạng thái đó — React gộp các lần cập
   // nhật — và khi ấy cú chuyển màn lặng lẽ không xảy ra.
-  const alreadyFinished = useRef(job.status === 'done' || job.status === 'error');
   useEffect(() => {
-    if (job.status !== 'done' || alreadyFinished.current) return;
-    alreadyFinished.current = true;
+    if (job.status !== 'done' || !reviewHandoffArmed.current) return;
+    reviewHandoffArmed.current = false;
 
     const status = job.run?.status;
     if (status !== 'waiting_review' && status !== 'waiting_input') return;
@@ -237,6 +240,11 @@ function StudioFormPanel({ state }: { state: StateResponse }) {
     // ghim cũ, thay vì để lượt chạy nhắm vào một máy không ai dùng nữa.
     workflowDevices: devices,
   });
+
+  const startWorkflow = () => {
+    reviewHandoffArmed.current = true;
+    void job.start(makeForm());
+  };
 
   const save = useMutation({
     mutationFn: () => api.post<StudioSaveResponse>(ROUTES.studioSave, makeForm()),
@@ -561,7 +569,7 @@ function StudioFormPanel({ state }: { state: StateResponse }) {
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
-            <Button disabled={job.status === 'running'} onClick={() => job.start(makeForm())}>
+            <Button disabled={job.status === 'running'} onClick={startWorkflow}>
               <Play className="size-4" />
               {job.status === 'running' ? 'Đang chạy workflow…' : 'Bắt đầu chạy workflow'}
             </Button>
@@ -606,7 +614,7 @@ function StudioFormPanel({ state }: { state: StateResponse }) {
                 Không ai nói đã xong hay đã hỏng.
               */}
               {job.status === 'error' && (
-                <FailureBanner error={job.error} onRetry={() => job.start(makeForm())} />
+                <FailureBanner error={job.error} onRetry={startWorkflow} />
               )}
               {job.status === 'done' && job.run?.status === 'passed' && (
                 <StatusBanner

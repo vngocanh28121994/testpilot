@@ -19,6 +19,7 @@ import { reconcileGeneratedModel, type ReconciledModel } from './reconcile.js';
 import { enrichDocsWithVisualEvidence } from './visual.js';
 import { prepareExecutableDraft } from './draft.js';
 import { loadExistingScenarios } from './existingScenarios.js';
+import { FeatureSourceStore } from './featureSources.js';
 
 /**
  * docs -> element registry -> .feature file -> bound steps.
@@ -102,6 +103,16 @@ export async function runGenPipeline(
     return found;
   });
 
+  const featureSourcesFile = path.join(path.dirname(cfg.paths.scenarioReviewDb), 'feature-sources.json');
+  const featureSources = await FeatureSourceStore.load(featureSourcesFile);
+  const ownedFeature = featureSources.entry(docs);
+  if (ownedFeature) {
+    ev.log(
+      `Nguồn tài liệu đã thuộc ${ownedFeature.file}; lượt sinh này sẽ cập nhật đúng feature đó ` +
+        'dù AI đặt tên khác.',
+    );
+  }
+
   ev.log(`Model: ${model} · effort: ${cfg.llm.effort}`);
   ev.log(
     'Đang áp dụng quy tắc TestPilot: phủ hết yêu cầu bắt buộc, gộp case trùng, ' +
@@ -131,7 +142,9 @@ export async function runGenPipeline(
     // scenarios are not presented to it as somebody else's work. It is a guess
     // because the final name comes from the `Feature:` line the model has not
     // written yet; naming the target in the Studio form makes it exact.
-    const likelyTarget = slug(cfg.targetFeature || docs[0]?.title || '');
+    const likelyTarget = ownedFeature
+      ? path.basename(ownedFeature.file, '.feature')
+      : slug(cfg.targetFeature || docs[0]?.title || '');
     const existingScenarios = await loadExistingScenarios(cfg.paths.features, likelyTarget);
     const known = await Registry.load(cfg.paths.registry)
       .then((reg) => ({
@@ -249,7 +262,9 @@ export async function runGenPipeline(
     docs[0]?.title ||
     'generated';
 
-  const name = slug(cfg.targetFeature || generatedFeatureName);
+  const name = ownedFeature
+    ? path.basename(ownedFeature.file, '.feature')
+    : slug(cfg.targetFeature || generatedFeatureName);
   const file = path.join(cfg.paths.features, `${name}.feature`);
 
   // Compile in memory first. The reviewer must never receive a draft that
@@ -300,6 +315,8 @@ export async function runGenPipeline(
     await mkdir(cfg.paths.features, { recursive: true });
     const out = file;
     await writeFile(out, gherkin.trimEnd() + '\n', 'utf8');
+    featureSources.bind(docs, path.basename(out), generatedFeatureName);
+    await featureSources.save();
     const coverageDir = path.join(path.dirname(cfg.paths.scenarioReviewDb), 'coverage');
     await mkdir(coverageDir, { recursive: true });
     await writeFile(

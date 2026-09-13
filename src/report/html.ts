@@ -98,9 +98,14 @@ function render(
 ): string {
   const byKey = new Map(verdicts.map((v) => [`${v.scenarioId}::${v.platform}::${v.device}`, v]));
   const counts = {
-    passed: report.results.filter((r) => r.verdict === 'passed').length,
-    flaky: report.results.filter((r) => r.verdict === 'flaky').length,
-    failed: report.results.filter((r) => r.verdict === 'failed').length,
+    passed: report.results.filter((r) => r.verdict === 'passed').length
+      + recoveredCount(report, 'passed'),
+    flaky: report.results.filter((r) => r.verdict === 'flaky').length
+      + recoveredCount(report, 'flaky'),
+    failed: report.results.filter((r) => r.verdict === 'failed').length
+      + recoveredCount(report, 'failed'),
+    interrupted: report.interruption?.activeScenario ? 1 : 0,
+    notRun: report.interruption?.notRun.length ?? 0,
   };
 
   return `<!doctype html>
@@ -135,6 +140,7 @@ function render(
   .ki-on{font-size:.72rem;padding:.1rem .5rem;border-radius:999px;
          background:#fdf6e3;color:#9a6b00;border:1px solid #e5d7a3;white-space:nowrap}
   .passed b{color:var(--pass)} .failed b{color:var(--fail)} .flaky b{color:var(--flake)}
+  .interrupted b,.not-run b{color:var(--flake)}
   h2 { font-size:1.05rem; margin:2rem 0 .75rem; }
   table { width:100%; border-collapse:collapse; font-size:.875rem; }
   th,td { text-align:left; padding:.5rem .6rem; border-bottom:1px solid var(--line); vertical-align:top; }
@@ -142,6 +148,7 @@ function render(
   .wrap { overflow-x:auto; }
   .tag { font-size:.75rem; padding:.1rem .45rem; border-radius:999px; border:1px solid var(--line); }
   .v-passed{color:var(--pass)} .v-failed{color:var(--fail)} .v-flaky{color:var(--flake)}
+  .v-interrupted,.v-not-run{color:var(--flake)}
   /* A healed step succeeded, so it is not red — but it leaned on a spare
      locator, which is worth noticing rather than reading as a plain pass. */
   .v-healed{color:var(--flake)}
@@ -205,10 +212,16 @@ details:target { animation:sc-flash 1.2s ease-out; }
 <h1>TestPilot run ${esc(report.runId)}</h1>
 <p class="sub">${esc(report.startedAt)} → ${esc(report.finishedAt)}</p>
 
+${interruptionSummary(report)}
+
 <div class="tiles">
   <div class="tile passed"><b>${counts.passed}</b>passed</div>
   <div class="tile flaky"><b>${counts.flaky}</b>flaky</div>
   <div class="tile failed"><b>${counts.failed}</b>failed</div>
+  ${report.status === 'interrupted'
+    ? `<div class="tile interrupted"><b>${counts.interrupted}</b>interrupted</div>
+  <div class="tile not-run"><b>${report.interruption?.source === 'checkpoint' ? counts.notRun : '?'}</b>not run</div>`
+    : ''}
 </div>
 
 <h2>Scenarios</h2>
@@ -224,15 +237,16 @@ ${report.results
     ),
   )
   .join('\n')}
+${interruptedRows(report)}
 </tbody></table></div>
 
 ${quarantine(report)}
 
 <h2>Failures</h2>
-${failures(report.results, outDir)}
+${failureDetails(report, outDir)}
 
 <h2>Bằng chứng kịch bản xanh</h2>
-${proofs(report.results, outDir)}
+${passingDetails(report, outDir)}
 
 <h2>Bản ghi màn hình</h2>
 ${recordings(report.results, outDir)}
@@ -246,6 +260,68 @@ ${unverified(report)}
 <h2>Câu hỏi lượt chạy chưa tự quyết được</h2>
 ${openQuestions(report)}
 </main>${KEO_TOI_CHI_TIET_SCRIPT}${KNOWN_ISSUE_SCRIPT}</body></html>`;
+}
+
+function recoveredCount(report: RunReport, verdict: 'passed' | 'failed' | 'flaky'): number {
+  return report.interruption?.logRecoveredResults?.filter((result) => result.verdict === verdict).length ?? 0;
+}
+
+function interruptionSummary(report: RunReport): string {
+  const interruption = report.interruption;
+  if (report.status !== 'interrupted' || !interruption) return '';
+  const source = interruption.source === 'checkpoint'
+    ? 'Kết quả đã hoàn thành được đọc từ checkpoint có cấu trúc.'
+    : interruption.source === 'log'
+      ? 'Run này có trước cơ chế checkpoint; tên và verdict đã hoàn thành được khôi phục giới hạn từ log. Không thể xác định chắc chắn số scenario chưa chạy.'
+      : 'Không còn checkpoint hoặc marker kết quả trong log; báo cáo chỉ phản ánh metadata còn lại.';
+  return `<div class="warn">
+  <p><strong>Lượt chạy bị gián đoạn.</strong> ${esc(interruption.reason)}</p>
+  ${interruption.activeScenario
+    ? `<p>Điểm dừng: <strong>${esc(interruption.activeScenario.name)}</strong>.</p>`
+    : ''}
+  <p>${esc(source)}</p>
+</div>`;
+}
+
+function interruptedRows(report: RunReport): string {
+  const interruption = report.interruption;
+  if (!interruption) return '';
+  const common = (status: string, item: { name: string }, verdict: string) => `<tr>
+  <td>${esc(item.name)}</td>
+  <td class="ki-col"></td>
+  <td>${esc(interruption.platform)}</td>
+  <td>${esc(interruption.device ?? '—')}</td>
+  <td class="v-${status}">${verdict}</td>
+  <td>—</td>
+  <td>0</td>
+</tr>`;
+  const recovered = (interruption.logRecoveredResults ?? []).map((item) =>
+    common(item.verdict, item, `${item.verdict} (từ log)`));
+  const active = interruption.activeScenario
+    ? [common('interrupted', interruption.activeScenario, 'interrupted')]
+    : [];
+  const notRun = interruption.notRun.map((item) => common('not-run', item, 'not run'));
+  return [...recovered, ...active, ...notRun].join('\n');
+}
+
+function failureDetails(report: RunReport, outDir: string): string {
+  const legacy = report.interruption?.logRecoveredResults?.filter((result) => result.verdict === 'failed') ?? [];
+  if (legacy.length === 0) return failures(report.results, outDir);
+  return `<div class="warn">
+  <p><strong>${legacy.length} scenario failed.</strong> Run này có trước cơ chế checkpoint nên chỉ
+     khôi phục được verdict từ log; step detail không còn đủ để dựng lại an toàn.</p>
+  <ul>${legacy.map((result) => `<li>${esc(result.name)}</li>`).join('')}</ul>
+</div>`;
+}
+
+function passingDetails(report: RunReport, outDir: string): string {
+  const legacy = report.interruption?.logRecoveredResults?.filter((result) => result.verdict === 'passed') ?? [];
+  if (legacy.length === 0) return proofs(report.results, outDir);
+  return `<div class="warn">
+  <p><strong>${legacy.length} scenario passed theo marker trong log.</strong> Ảnh proof và step detail
+     không được giả lập vì run này chưa có checkpoint có cấu trúc.</p>
+  <ul>${legacy.map((result) => `<li>${esc(result.name)}</li>`).join('')}</ul>
+</div>`;
 }
 
 /**

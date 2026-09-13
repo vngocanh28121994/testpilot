@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { PlayCircle } from 'lucide-react';
+import { PlayCircle, X } from 'lucide-react';
 import { useNavigate } from '@tanstack/react-router';
 import { WorkflowCompletion, useWorkflowCompletion } from '@/components/WorkflowCompletion';
 import { Button } from '@/components/ui/button';
@@ -118,9 +118,10 @@ function Gate({ run }: { run: RunHistoryEntry }) {
             một quyết định mới làm được nửa là cách hỏng âm thầm nhất. */}
         {pending.length === 0 && (
           <div className="flex flex-col gap-3">
-            <div>
+            <div className="flex flex-wrap items-center gap-2">
               <Button
                 size="sm"
+                className="whitespace-nowrap"
                 disabled={job.status === 'running'}
                 onClick={() => {
                   job.start({ runId: run.id });
@@ -142,13 +143,19 @@ function Gate({ run }: { run: RunHistoryEntry }) {
                   testcase khác từ lâu — banner nói đúng sự thật, chỉ là không
                   có cách nào làm cho nó thôi đúng. */}
               <Button
-                variant="outline"
+                size="sm"
+                variant="ghost"
+                className="text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
                 disabled={job.status === 'running' || abandon.isPending}
                 onClick={() => abandon.mutate()}
               >
-                {abandon.isPending ? 'Đang bỏ…' : 'Bỏ workflow này'}
+                <X className="size-4" />
+                {abandon.isPending ? 'Đang bỏ…' : 'Bỏ workflow'}
               </Button>
             </div>
+            <p className="text-muted-foreground text-xs">
+              Bỏ workflow chỉ dừng lượt chạy này; các testcase đã sinh vẫn được giữ lại.
+            </p>
             <WorkflowCompletion />
           </div>
         )}

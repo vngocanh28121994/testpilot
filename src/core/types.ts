@@ -445,6 +445,12 @@ export interface RunReport {
   runId: string;
   startedAt: string;
   finishedAt: string;
+  /**
+   * Absent on reports written before interruption recovery existed. Those
+   * reports are completed by definition: the old runner only wrote a report at
+   * the very end.
+   */
+  status?: 'completed' | 'interrupted';
   results: ScenarioResult[];
   healSuggestions: HealSuggestion[];
   /** Decisions the run deferred; see OpenQuestion. Never blocks the run. */
@@ -455,6 +461,26 @@ export interface RunReport {
    * toward zero while every report it produces still says everything passed.
    */
   quarantined: Array<{ id: string; name: string; platform: Platform; device: string }>;
+  /** Why an incomplete run stopped, and what was left when it did. */
+  interruption?: {
+    reason: string;
+    platform: Platform;
+    device?: string;
+    /** Scenario that had started but never produced a terminal result. */
+    activeScenario?: { id?: string; name: string };
+    /** Planned scenarios that never started. Available for checkpointed runs. */
+    notRun: Array<{ id?: string; name: string }>;
+    /**
+     * Compatibility fallback for runs created before run-state.json existed.
+     * These names/verdicts come from terminal log markers and are deliberately
+     * kept separate from structured ScenarioResult records.
+     */
+    logRecoveredResults?: Array<{
+      name: string;
+      verdict: 'passed' | 'failed' | 'flaky';
+    }>;
+    source: 'checkpoint' | 'log' | 'metadata';
+  };
 }
 
 export interface HealSuggestion {

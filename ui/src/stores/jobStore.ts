@@ -26,6 +26,7 @@ import { queryClient } from '@/lib/queryClient';
 
 /** Farm run dài sinh hàng chục nghìn dòng; app cũ append thẳng vào DOM và chậm thấy rõ. */
 const MAX_LOG_LINES = 5_000;
+const STREAM_ENDED_EARLY = 'Mất kết nối tới lượt chạy. Đang thử nối lại…';
 
 export type JobStatus = 'idle' | 'running' | 'done' | 'error';
 
@@ -96,7 +97,12 @@ export const useJobStore = create<JobState>((set, get) => ({
 
     try {
       await streamJob(path, body, (frame) => patch((job) => applyFrame(job, frame)), controller.signal);
-      patch((job) => ({ ...job, status: job.status === 'error' ? 'error' : 'done', controller: null }));
+      // Chỉ frame `done` mới chứng minh lượt chạy đã kết thúc. Một response bị
+      // cắt giữa chừng cũng làm reader trả EOF; gọi trường hợp đó là `done` sẽ
+      // khiến Runner không nối lại và bỏ mặc tiến trình vẫn chạy ở server.
+      patch((job) => job.status === 'running'
+        ? { ...job, status: 'error', error: STREAM_ENDED_EARLY, controller: null }
+        : { ...job, controller: null });
     } catch (err) {
       const aborted = controller.signal.aborted;
       patch((job) => ({
@@ -127,7 +133,9 @@ export const useJobStore = create<JobState>((set, get) => ({
     patch(() => ({ ...EMPTY, status: 'running', controller }));
     try {
       await streamJob(path, undefined, (frame) => patch((job) => applyFrame(job, frame)), controller.signal, 'GET');
-      patch((job) => ({ ...job, status: job.status === 'error' ? 'error' : 'done', controller: null }));
+      patch((job) => job.status === 'running'
+        ? { ...job, status: 'error', error: STREAM_ENDED_EARLY, controller: null }
+        : { ...job, controller: null });
     } catch (err) {
       const aborted = controller.signal.aborted;
       patch((job) => ({

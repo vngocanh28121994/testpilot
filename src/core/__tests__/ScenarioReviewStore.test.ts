@@ -83,6 +83,21 @@ test('generated batches are pending even when text matches an approved version',
   assert.deepEqual(generated.map((item) => item.status), ['pending', 'pending']);
 });
 
+test('retiring a duplicate feature removes only its review entries', async () => {
+  const dir = await mkdtemp(path.join(os.tmpdir(), 'scenario-review-'));
+  const file = path.join(dir, 'review.json');
+  const store = await ScenarioReviewStore.load(file);
+  store.syncFile('canonical.feature', feature(), { defaultStatus: 'pending', source: 'manual' });
+  store.syncFile('duplicate.feature', feature(), { defaultStatus: 'pending', source: 'manual' });
+  assert.equal(store.forgetFile('duplicate.feature'), 2);
+  assert.equal(store.forgetFile('duplicate.feature'), 0);
+  await store.save();
+
+  const reloaded = await ScenarioReviewStore.load(file);
+  assert.ok(reloaded.entry('canonical.feature', 'Kịch bản một'));
+  assert.equal(reloaded.entry('duplicate.feature', 'Kịch bản một'), undefined);
+});
+
 test('POM sync emits only approved scenarios', async () => {
   const dir = await mkdtemp(path.join(os.tmpdir(), 'scenario-pom-'));
   const featuresDir = path.join(dir, 'features');

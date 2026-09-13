@@ -351,7 +351,38 @@
     "2026-09-11T19-15-40Z-android-feature-tim-kiem-bang-gia-sm-s938b": "2026-09-11T19:16:57.175Z",
     "2026-09-11T19-26-04Z-android-feature-tim-kiem-bang-gia-sm-s938b": "2026-09-11T19:27:05.626Z",
     "2026-09-11T20-06-18Z-android-sm-s938b": "2026-09-11T20:11:15.132Z",
-    "2026-09-12T04-54-52Z-web-feature-them-ma-co-phieu-tren-bang-gia-co-phieu": "2026-09-12T05:03:28.228Z"
+    "2026-09-12T04-54-52Z-web-feature-them-ma-co-phieu-tren-bang-gia-co-phieu": "2026-09-12T05:03:28.228Z",
+    "2026-09-09T17-12-56Z-web-feature-dang-nhap": "2026-09-09T17:13:31.318Z",
+    "2026-09-10T02-10-30Z-ios-feature-dang-nhap-iphone-12-pro-max": "2026-09-10T02:13:25.095Z",
+    "2026-09-10T03-27-49Z-ios-feature-dang-nhap-iphone-12-pro-max": "2026-09-10T03:28:47.413Z",
+    "2026-09-10T03-32-36Z-ios-feature-dang-nhap-iphone-12-pro-max": "2026-09-10T03:33:34.591Z",
+    "2026-09-10T04-26-55Z-ios-feature-dang-nhap-iphone-12-pro-max": "2026-09-10T04:28:46.997Z",
+    "2026-09-10T08-24-39Z-ios-feature-dang-nhap-iphone-12-pro-max": "2026-09-10T08:28:00.360Z",
+    "2026-09-10T08-35-35Z-ios-feature-dang-nhap-iphone-12-pro-max": "2026-09-10T08:37:25.167Z",
+    "2026-09-10T09-23-23Z-ios-feature-dang-nhap-iphone-12-pro-max": "2026-09-10T09:25:03.009Z",
+    "2026-09-10T09-37-12Z-ios-feature-dang-nhap-iphone-12-pro-max": "2026-09-10T09:38:51.144Z",
+    "2026-09-10T09-41-55Z-ios-feature-dang-nhap-iphone-12-pro-max": "2026-09-10T09:43:44.030Z",
+    "2026-09-10T09-54-50Z-ios-feature-dang-nhap-iphone-12-pro-max": "2026-09-10T09:56:35.565Z",
+    "2026-09-10T10-00-06Z-ios-feature-dang-nhap-iphone-12-pro-max": "2026-09-10T10:01:32.548Z",
+    "2026-09-10T10-20-21Z-ios-feature-dang-nhap-iphone-12-pro-max": "2026-09-10T10:22:09.995Z",
+    "2026-09-10T10-24-26Z-ios-feature-dang-nhap-iphone-12-pro-max": "2026-09-10T10:26:20.844Z",
+    "2026-09-10T10-28-38Z-ios-feature-dang-nhap-iphone-12-pro-max": "2026-09-10T10:30:50.354Z",
+    "2026-09-10T10-34-28Z-ios-feature-dang-nhap-iphone-12-pro-max": "2026-09-10T10:36:37.033Z",
+    "2026-09-10T10-37-47Z-ios-feature-dang-nhap-iphone-12-pro-max": "2026-09-10T10:39:54.469Z",
+    "2026-09-10T10-44-41Z-ios-feature-dang-nhap-iphone-12-pro-max": "2026-09-10T10:46:46.056Z",
+    "2026-09-10T10-48-00Z-ios-feature-dang-nhap-iphone-12-pro-max": "2026-09-10T10:49:53.878Z",
+    "2026-09-10T10-51-16Z-ios-feature-dang-nhap-iphone-12-pro-max": "2026-09-10T10:53:29.012Z",
+    "2026-09-10T10-54-52Z-ios-feature-dang-nhap-iphone-12-pro-max": "2026-09-10T10:57:17.110Z",
+    "2026-09-10T10-59-28Z-ios-feature-dang-nhap-iphone-12-pro-max": "2026-09-10T11:01:28.032Z",
+    "2026-09-10T11-03-16Z-ios-feature-dang-nhap-iphone-12-pro-max": "2026-09-10T11:05:16.015Z",
+    "2026-09-10T12-14-07Z-ios-feature-dang-nhap-iphone-12-pro-max": "2026-09-10T12:16:39.824Z",
+    "2026-09-10T16-34-42Z-ios-feature-dang-nhap-iphone-12-pro-max": "2026-09-10T16:37:13.122Z",
+    "2026-09-10T16-43-31Z-ios-feature-dang-nhap-iphone-12-pro-max": "2026-09-10T16:45:06.106Z",
+    "2026-09-10T16-52-25Z-ios-feature-dang-nhap-iphone-12-pro-max": "2026-09-10T16:53:59.891Z",
+    "2026-09-10T16-55-32Z-ios-feature-dang-nhap-iphone-12-pro-max": "2026-09-10T16:56:57.704Z",
+    "2026-09-10T17-19-04Z-ios-feature-dang-nhap-iphone-12-pro-max": "2026-09-10T17:21:36.195Z",
+    "2026-09-12T19-43-46Z-web": "2026-09-12T20:00:12.929Z",
+    "2026-09-12T20-51-18Z-web-feature-dat-lenh": "2026-09-12T20:55:24.468Z"
   },
   "entries": {
     "home.totalAssets::android::6dbfe0a6bf0ea4c4": {
@@ -867,14 +898,15 @@
         "weight": 0.5,
         "origin": "authored"
       },
-      "successes": 1,
+      "successes": 2,
       "runIds": [
-        "2026-09-11T04-53-37Z-ios-feature-dang-nhap-iphone-12-pro-max"
+        "2026-09-11T04-53-37Z-ios-feature-dang-nhap-iphone-12-pro-max",
+        "2026-09-10T17-19-04Z-ios-feature-dang-nhap-iphone-12-pro-max"
       ],
       "firstSeen": "2026-09-11T04:56:03.907Z",
-      "lastSeen": "2026-09-11T04:56:03.907Z",
+      "lastSeen": "2026-09-10T17:21:36.195Z",
       "devices": {
-        "iPhone của Anh": 1
+        "iPhone của Anh": 2
       }
     },
     "home.searchFirstResult::web::94e6c4fc8969bbf5": {
@@ -1007,6 +1039,30 @@
       "lastSeen": "2026-09-12T05:03:28.228Z",
       "devices": {
         "Pixel 7": 4
+      }
+    },
+    "login.usernameField::ios::dd2010f765da12cb": {
+      "elementId": "login.usernameField",
+      "platform": "ios",
+      "from": {
+        "strategy": "placeholder",
+        "value": "KHONG-TON-TAI-abc123"
+      },
+      "to": {
+        "strategy": "placeholder",
+        "value": "Email / Số tài khoản / Điện thoại",
+        "weight": 0.79,
+        "origin": "healed",
+        "approved": false
+      },
+      "successes": 1,
+      "runIds": [
+        "2026-09-10T10-00-06Z-ios-feature-dang-nhap-iphone-12-pro-max"
+      ],
+      "firstSeen": "2026-09-10T10:01:32.548Z",
+      "lastSeen": "2026-09-10T10:01:32.548Z",
+      "devices": {
+        "iPhone của Anh": 1
       }
     }
   }

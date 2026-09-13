@@ -3,11 +3,14 @@ import { firstJsonObject } from '../llm/json.js';
 import type { SourceDoc } from '../ingest/types.js';
 import { completeJson, completeText } from '../llm/client.js';
 import { FEATURE_SYSTEM, documentContext } from './prompt.js';
+import { requirementSourceKey } from './featureSources.js';
 
 export type RequirementPriority = 'P0' | 'P1';
 
 export interface CoverageRequirement {
   id: string;
+  /** Stable across regenerated source-unit numbering and model wording. */
+  key?: string;
   sourceId: string;
   priority: RequirementPriority;
   rule: string;
@@ -24,6 +27,8 @@ export interface CoverageMap {
 
 export interface CoverageMapping {
   requirementId: string;
+  /** Durable join key; requirementId may change when source units are reordered. */
+  requirementKey: string;
   status: 'covered' | 'missing' | 'unclear';
   scenarios: string[];
   evidence: string[];
@@ -165,6 +170,7 @@ export async function extractCoverageMap(
 
     requirements.push({
       id: `REQ-${String(requirements.length + 1).padStart(3, '0')}`,
+      key: requirementSourceKey(unit.sourceRef, unit.quote),
       sourceId: unit.id,
       priority,
       rule: clean(item?.rule) || unit.quote,
@@ -208,13 +214,14 @@ export async function auditFeatureCoverage(
     );
     const claimed = mapping?.status;
     const status: CoverageMapping['status'] =
-      claimed === 'covered' && evidence.length > 0
+      claimed === 'covered' && evidence.length >= minimumEvidenceCount(requirement)
         ? 'covered'
         : claimed === 'unclear'
           ? 'unclear'
           : 'missing';
     return {
       requirementId: requirement.id,
+      requirementKey: requirementIdentity(requirement),
       status,
       scenarios: stringArray(mapping?.scenarios),
       evidence,
@@ -291,6 +298,27 @@ export async function enforceFeatureCoverage(
 
 function coveredCount(audit: CoverageAudit): number {
   return audit.mappings.filter((mapping) => mapping.status === 'covered').length;
+}
+
+/**
+ * A compound outcome cannot be proven by one convenient half.
+ *
+ * This deterministic floor catches requirements such as "removed from the
+ * current watchlist, without affecting other watchlists" even when an LLM
+ * reviewer claims the deletion-only assertion covers the whole sentence.
+ */
+function minimumEvidenceCount(requirement: CoverageRequirement): number {
+  const text = `${requirement.rule} ${requirement.expectedResult} ${requirement.sourceQuote}`;
+  const currentAndOther = /danh\s*mục\s*hiện\s*tại/iu.test(text)
+    && /danh\s*mục\s*khác/iu.test(text);
+  const explicitUnaffected = /không\s*ảnh\s*hưởng/iu.test(text)
+    && /(?:sau\s*khi|xo[áa]|loại\s*bỏ)/iu.test(text);
+  return currentAndOther || explicitUnaffected ? 2 : 1;
+}
+
+/** Backfill old coverage JSON lazily so existing projects remain reviewable. */
+function requirementIdentity(requirement: CoverageRequirement): string {
+  return requirement.key ?? requirementSourceKey(requirement.sourceRef, requirement.sourceQuote);
 }
 
 export function coveragePromptBlock(requirements: CoverageRequirement[]): string {
@@ -375,7 +403,7 @@ function inferExpectedResult(quote: string): string {
 }
 
 function requirementLine(requirement: CoverageRequirement): string {
-  return `${requirement.id} [${requirement.priority}] ` +
+  return `${requirement.id} key=${requirementIdentity(requirement)} [${requirement.priority}] ` +
     `rule=${JSON.stringify(requirement.rule)}; expected=${JSON.stringify(requirement.expectedResult)}; ` +
     `source=${JSON.stringify(requirement.sourceQuote)}`;
 }

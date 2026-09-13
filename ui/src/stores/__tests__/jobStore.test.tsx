@@ -122,4 +122,14 @@ describe('jobStore', () => {
     expect(job?.error).toBe('hỏng rồi');
     expect(job?.logs.at(-1)).toContain('hỏng rồi');
   });
+
+  it('không gọi EOF giữa stream là chạy xong', async () => {
+    server.use(http.post(URL_, () => sse([['log', 'đang chạy']])));
+
+    await useJobStore.getState().start('j1', URL_);
+
+    const job = useJobStore.getState().jobs['j1'];
+    expect(job?.status).toBe('error');
+    expect(job?.error).toContain('Mất kết nối');
+  });
 });

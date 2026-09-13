@@ -1,7 +1,8 @@
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import { OrphanTracker } from '../core/orphans.js';
 import { activeRuns, beginActiveRun, endActiveRun, findActiveRun } from './activeRuns.js';
-import { closeInterruptedRuns } from '../core/runstore.js';
+import { closeInterruptedRuns, reindex } from '../core/runstore.js';
+import { recoverInterruptedRunReports } from '../core/interruptedReport.js';
 import { firstJsonObject } from '../llm/json.js';
 import net from 'node:net';
 import os from 'node:os';
@@ -172,6 +173,13 @@ const orphans = OrphanTracker.load();
     const runs = await closeInterruptedRuns(cfgForCleanup.paths.runs);
     if (runs.length > 0) {
       console.log(`[cleanup] đóng ${runs.length} lượt chạy local bị treo: ${runs.join(', ')}`);
+      const reports = await recoverInterruptedRunReports(cfgForCleanup.paths.runs, runs);
+      if (reports.length > 0) {
+        console.log(`[cleanup] tạo ${reports.length} báo cáo gián đoạn: ${reports.join(', ')}`);
+      }
+      // listRuns normally trusts its cached index. Refresh it now so the
+      // recovered run appears in Local Runner on the first request.
+      await reindex(cfgForCleanup.paths.runs);
     }
   }
 }

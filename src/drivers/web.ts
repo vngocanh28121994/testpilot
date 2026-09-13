@@ -587,26 +587,18 @@ export class WebUiDriver implements UiDriver {
 
   private async probe(c: LocatorCandidate, locator: Locator): Promise<UiHandle | null> {
     const first = locator.first();
-    // A resolver owns the overall waiting budget and retries all candidates.
-    // Playwright defines timeout:0 as "wait forever", so never use it here.
-    // Keep a single probe short to avoid one missing selector freezing a run.
-    //
-    // Label associations get longer: they are nine XPath arms walking the whole
-    // document, and on a busy Angular page one spelling measured ~350ms — past
-    // the general budget while the element was sitting right there. A cheap
-    // selector still fails fast; only the strategy that is known to cost more
-    // is given more.
-    const budget = c.strategy === 'label' ? 900 : 250;
-    try {
-      await first.waitFor({ state: 'attached', timeout: budget });
-    } catch {
-      return null;
-    }
+    // One-shot by contract: Resolver owns every wait and retry. `waitFor` here
+    // used to spend 900 ms on EACH absent label arm. A dynamic toast only lives
+    // for about two seconds and its partial-text arm is intentionally last, so
+    // the driver waited for several exact misses until the visible proof had
+    // disappeared, then retried the whole business scenario. Count what exists
+    // now; the outer resolver will poll again when nothing exists yet.
+    const count = await locator.count().catch(() => 0);
+    if (count === 0) return null;
     // Happy path: the first match is usually on screen, and one question to the
     // page settles it. Only when it is off-screen — a drawer item sharing its
     // label with the visible tab — is it worth counting and scanning the rest.
     if (!(await isHittable(first))) {
-      const count = await locator.count().catch(() => 1);
       for (let i = 1; i < count; i++) {
         const nth = locator.nth(i);
         if (await isHittable(nth)) return new WebHandle(c, nth);

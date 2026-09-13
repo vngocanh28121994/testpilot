@@ -45,6 +45,11 @@ import { FlakeDetector } from '../flaky/detector.js';
 import { HealingStore } from '../healing/HealingStore.js';
 import { writeHtmlReport } from '../report/html.js';
 import { linkLatest, prune, runDirFor, writeRunMeta } from '../core/runstore.js';
+import {
+  removeRunCheckpoint,
+  writeRunCheckpoint,
+  type PlannedScenario,
+} from '../core/runCheckpoint.js';
 import { writeLearned } from '../core/learned.js';
 import { generatePom } from '../pom/generator.js';
 
@@ -293,6 +298,29 @@ async function main(): Promise<void> {
   let lastFailureSignature = '';
   let repeatedFailures = 0;
   const quarantined: RunReport['quarantined'] = [];
+  const reportRunId = randomUUID().slice(0, 8);
+  const planned: PlannedScenario[] = features.flatMap((feature) =>
+    feature.scenarios.filter(inScope).map((scenario) => ({
+      id: scenario.id,
+      name: scenario.name,
+    })));
+  const checkpoint = async (currentScenario?: PlannedScenario) => {
+    await writeRunCheckpoint(runDir, {
+      reportRunId,
+      startedAt,
+      platform,
+      device: driver.device,
+      planned,
+      results,
+      quarantined,
+      openQuestions,
+      ...(currentScenario ? { currentScenario } : {}),
+    });
+  };
+
+  // Exists before driver.start(): a browser/Appium startup crash must still
+  // leave enough structured state to produce an interrupted report.
+  await checkpoint();
 
   try {
     await driver.start();
@@ -323,14 +351,20 @@ async function main(): Promise<void> {
             platform,
             device: driver.device,
           });
+          await checkpoint();
           continue;
         }
 
+        const currentScenario = { id: scenario.id, name: scenario.name };
+        await checkpoint(currentScenario);
         console.log(`[run:running] … ${scenario.name}`);
         let result = await executor.runScenario(scenario, feature.background);
         result = await attemptStepHealing(
           result, scenario, feature.background, executor, registry, openQuestions);
         results.push(result);
+        // Clear currentScenario only after the complete ScenarioResult is
+        // durable. A crash between these writes truthfully leaves it in-flight.
+        await checkpoint();
         const icon = result.verdict === 'passed' ? '✓' : result.verdict === 'flaky' ? '~' : '✗';
         console.log(`[run:${result.verdict}] ${icon} ${scenario.name}`);
 
@@ -405,9 +439,10 @@ async function main(): Promise<void> {
   if (!args.deferSharedWrites) await healing.save();
 
   const report: RunReport = {
-    runId: randomUUID().slice(0, 8),
+    runId: reportRunId,
     startedAt,
     finishedAt: new Date().toISOString(),
+    status: 'completed',
     results,
     // The run report is an immutable snapshot. Cross-run proposals belong to
     // Healing Center; this report renders its own step.heal events directly.
@@ -549,6 +584,7 @@ async function main(): Promise<void> {
       quarantined: quarantined.length,
     },
   });
+  await removeRunCheckpoint(runDir);
   await linkLatest(cfg.paths.reports, platform, runDir);
   // Pruning after the report is written, never before: a crash during cleanup
   // must not be able to cost you the run you just did.

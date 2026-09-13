@@ -113,6 +113,10 @@ VIẾT KỊCH BẢN
   Một testcase dựa trên phỏng đoán trông y hệt một testcase đúng, và sẽ xanh hoặc đỏ
   vì lý do không ai kiểm chứng được. Một câu hỏi thì người đọc trả lời được trong vài
   giây. Chỉ hỏi khi thực sự thiếu thông tin, không hỏi lại thứ tài liệu đã nêu rõ.
+- Không tự đặt tên giả như "Danh mục khác", "Tài khoản A" hoặc "Nhóm B" để làm
+  testcase chạy được. Nếu quy tắc so sánh hai đối tượng nhưng nguồn và dữ liệu test
+  không cho biết hai đối tượng cụ thể, phải dùng # HỎI thay vì biến placeholder do
+  model nghĩ ra thành tên element hoặc option thật.
 - Không thực hiện hành động tài chính không thể hoàn tác; dừng trước bước xác nhận cuối.`;
 
 export const FEATURE_SYSTEM = `Bạn là chuyên gia thiết kế Gherkin nghiệp vụ cho TestPilot.
