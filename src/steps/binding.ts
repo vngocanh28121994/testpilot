@@ -1,13 +1,12 @@
 import { AstBuilder, GherkinClassicTokenMatcher, Parser } from '@cucumber/gherkin';
 import { IdGenerator } from '@cucumber/messages';
-import type { FeatureSpec, Platform, ScenarioSpec, StepSpec } from '../core/types.js';
+import type { FeatureSpec, ScenarioSpec, StepSpec } from '../core/types.js';
 import type { Registry } from '../core/registry.js';
 import { normalizeTagList, tagCategory } from '../core/tagTaxonomy.js';
+import { platformsForTags } from '../core/tagScope.js';
 import { STEP_RULES } from './vocabulary.js';
 import { parseContextualRowAction } from '../core/contextual.js';
 import { normalizeHumanText } from '../core/text.js';
-
-const ALL_PLATFORMS: Platform[] = ['web', 'android', 'ios'];
 
 export class StepBindingError extends Error {
   constructor(
@@ -209,12 +208,12 @@ export function parseFeature(uri: string, source: string, registry: Registry): F
     dynamicValues: new Set(),
   };
   const scenarios: ScenarioSpec[] = [];
-  // Only ownership and platform constraints inherit from Feature. Priority,
+  // Only ownership, platform and runtime constraints inherit from Feature. Priority,
   // smoke/type and operational tags describe one scenario; inheriting them is
   // how an old `@smoke` accidentally turned every case in a file into smoke.
   const featureTags = normalizeTagList(feature.tags.map((t) => t.name)).filter((tag) => {
     const category = tagCategory(tag);
-    return category === 'feature' || category === 'platform';
+    return category === 'feature' || category === 'platform' || category === 'runtime';
   });
 
   for (const child of feature.children) {
@@ -228,7 +227,7 @@ export function parseFeature(uri: string, source: string, registry: Registry): F
     if (!sc) continue;
 
     const tags = normalizeTagList([...featureTags, ...sc.tags.map((t) => t.name)]);
-    const platforms = platformsFromTags(tags);
+    const platforms = platformsForTags(tags);
     const scenarioContext: { screen?: string; dynamicValues: Set<string> } = {
       ...backgroundContext,
       dynamicValues: new Set(backgroundContext.dynamicValues),
@@ -310,12 +309,6 @@ function isReusableRuntimeValue(value: string): boolean {
 
 function substitute(text: string, subs: Map<string, string>): string {
   return text.replace(/<([^>]+)>/g, (whole, key: string) => subs.get(key) ?? whole);
-}
-
-function platformsFromTags(tags: string[]): Platform[] {
-  const wanted = ALL_PLATFORMS.filter((p) => tags.includes(`@${p}`));
-  // No platform tag means "runs everywhere" — the common case for a business rule.
-  return wanted.length > 0 ? wanted : [...ALL_PLATFORMS];
 }
 
 function normalizeKeyword(kw: string): StepSpec['keyword'] {

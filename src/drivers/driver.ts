@@ -1,5 +1,5 @@
 import type { Observed } from '../crawl/observe.js';
-import type { ControlType, LocatorCandidate, Platform } from '../core/types.js';
+import type { ControlType, LocatorCandidate, NativeFixture, Platform } from '../core/types.js';
 
 export interface ControlInspection {
   type: ControlType;
@@ -66,6 +66,16 @@ export interface UiDriver {
 
   start(): Promise<void>;
   stop(): Promise<void>;
+
+  /**
+   * Selects where the next scenario is driven. Hybrid drivers normally address
+   * the WebView; an opt-in @native scenario addresses the OS accessibility tree
+   * without changing the global app configuration.
+   */
+  setScenarioMode?(mode: 'default' | 'native'): Promise<void>;
+
+  /** Run a typed OS/simulator fixture; never exposes an arbitrary mobile command to Gherkin. */
+  runNativeFixture?(fixture: NativeFixture): Promise<void>;
 
   /** Open the app / navigate to the entry point. */
   launch(target?: string): Promise<void>;

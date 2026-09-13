@@ -193,6 +193,7 @@ export class Executor {
     background: StepSpec[] = [],
     patches: ReadonlyArray<{ afterLine: number; step: string; elementId: string }> = [],
   ): Promise<ScenarioResult> {
+    await this.driver.setScenarioMode?.(scenario.tags.includes('@native') ? 'native' : 'default');
     const runs: ScenarioResult['runs'] = [];
     const steps = applyStepPatches([...background, ...scenario.steps], patches);
 
@@ -700,6 +701,20 @@ export class Executor {
 
       case 'back':
         await d.back();
+        return undefined;
+
+      case 'simulateBiometricSuccess':
+        if (!d.runNativeFixture) {
+          throw new Error('Driver hiện tại không hỗ trợ giả lập sinh trắc học native.');
+        }
+        await d.runNativeFixture({ kind: 'biometricSuccess', biometric: intent.biometric });
+        return undefined;
+
+      case 'injectCameraImage':
+        if (!d.runNativeFixture) {
+          throw new Error('Driver hiện tại không hỗ trợ inject ảnh vào camera native.');
+        }
+        await d.runNativeFixture({ kind: 'cameraImage', path: this.expand(intent.path) });
         return undefined;
 
       case 'focusRegion': {
@@ -1897,6 +1912,8 @@ function expectationAfter(steps: StepSpec[], currentIndex: number): ActionExpect
       case 'swipe':
       case 'scroll':
       case 'back':
+      case 'simulateBiometricSuccess':
+      case 'injectCameraImage':
         return undefined;
     }
   }

@@ -5,6 +5,7 @@ import {
   canonicalTag,
   normalizeFeatureTags,
   normalizeTagList,
+  tagCategory,
 } from '../tagTaxonomy.js';
 
 describe('central tag taxonomy', () => {
@@ -19,6 +20,27 @@ describe('central tag taxonomy', () => {
       normalizeTagList(['@p2', '@p0', '@negative', '@positive', '@web']),
       ['@p0', '@negative', '@web'],
     );
+  });
+
+  it('recognizes @native as execution metadata instead of a feature name', () => {
+    assert.equal(canonicalTag('@native'), '@native');
+    assert.equal(tagCategory('@native'), 'runtime');
+    assert.deepEqual(
+      normalizeTagList(['@native', '@regression', '@android']),
+      ['@regression', '@android', '@native'],
+    );
+  });
+
+  it('preserves authored native scope when generated tags are reconciled', () => {
+    const source = `@native\nFeature: Cài đặt OTP\n\n  @native @regression @p1 @positive\n  Scenario: Cài đặt thành công\n    Then "OTP" is visible\n`;
+    const tagged = applyGeneratedTagPolicy(
+      source,
+      'Cài đặt OTP',
+      [{ id: 'REQ-001', priority: 'P1', rule: 'Cài đặt OTP', expectedResult: 'Thành công' }],
+      [{ requirementId: 'REQ-001', scenarios: ['Cài đặt thành công'] }],
+    );
+    assert.match(tagged, /^@feature-cai-dat-otp @native$/m);
+    assert.match(tagged, /^  @p1 @regression @positive @native$/m);
   });
 
   it('normalizes old/manual tag lines without rewriting scenario steps', () => {

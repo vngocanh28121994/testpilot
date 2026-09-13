@@ -1,13 +1,13 @@
 import { exec as execCb } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { mkdir, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, realpath, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { labelXPaths } from '../core/labelXPath.js';
 import { iosTunnelCheck } from '../core/preflight.js';
 import { promisify } from 'node:util';
 import { remote } from 'webdriverio';
 import type { Observed } from '../crawl/observe.js';
-import type { LocatorCandidate, Platform } from '../core/types.js';
+import type { LocatorCandidate, NativeFixture, Platform } from '../core/types.js';
 import { relativeRowLocatorXPath } from '../core/contextual.js';
 import type { ControlInspection, UiDriver, UiHandle, UiMatchSnapshot } from './driver.js';
 import { WebViewCdpDriver, WebViewCdpHandle, isCdpSessionLost } from './WebViewCdpDriver.js';
@@ -133,6 +133,8 @@ export interface NativeDriverOptions {
    * launch and translates locators to CSS/XPath instead of UiSelector.
    */
   hybrid?: boolean;
+  /** Enables Android Emulator VirtualScene image injection. */
+  injectedImageProperties?: Record<string, string>;
   /** WebViews attach a second or two after the activity does. */
   webviewTimeoutMs?: number;
   /**
@@ -275,11 +277,13 @@ export class NativeUiDriver implements UiDriver {
   private lastOverlayCheck = 0;
   /** True once launch() has tried to reach a WebView through Appium and failed. */
   private webviewUnavailable = false;
+  /** @native scenarios stay in the OS accessibility tree for their whole lifetime. */
+  private nativeScenario = false;
 
   /** Exposed as 'web' when we are inside a WebView so the resolver picks CSS/label
    *  candidates instead of UiSelector predicates that are meaningless in that context. */
   get platform(): Platform {
-    return this.inWebview || this.cdpConnected ? 'web' : this.opts.platform;
+    return !this.nativeScenario && (this.inWebview || this.cdpConnected) ? 'web' : this.opts.platform;
   }
 
   constructor(private readonly opts: NativeDriverOptions) {
@@ -464,6 +468,9 @@ export class NativeUiDriver implements UiDriver {
               'appium:enableWebviewDetailsCollection': false,
             }
           : {}),
+        ...(isAndroid && this.opts.injectedImageProperties
+          ? { 'appium:injectedImageProperties': this.opts.injectedImageProperties }
+          : {}),
       },
     });
     } catch (err: unknown) {
@@ -540,6 +547,62 @@ export class NativeUiDriver implements UiDriver {
     }
   }
 
+  async setScenarioMode(mode: 'default' | 'native'): Promise<void> {
+    this.nativeScenario = mode === 'native';
+    if (!this.nativeScenario || !this.browser) return;
+
+    // CDP is an independent connection to the same WebView. Leaving it alive
+    // would make find()/observe() silently route native locators back into the
+    // DOM even after Appium switched to NATIVE_APP.
+    await this.cdpDriver?.disconnect().catch(() => {});
+    if (this.inWebview) await this.b.switchContext('NATIVE_APP');
+    this.webview = undefined;
+  }
+
+  async runNativeFixture(fixture: NativeFixture): Promise<void> {
+    if (!this.nativeScenario) {
+      throw new Error('Fixture native chỉ được dùng trong scenario có tag @native.');
+    }
+
+    await this.asNative(async () => {
+      if (fixture.kind === 'biometricSuccess') {
+        if (this.opts.platform === 'android') {
+          if (fixture.biometric !== 'fingerprint') {
+            throw new Error('Android Emulator chỉ giả lập được fingerprint; Face ID/Touch ID cần iOS Simulator.');
+          }
+          await this.b.execute('mobile: fingerprint', { fingerprintId: 1 });
+          return;
+        }
+
+        if (fixture.biometric === 'fingerprint') {
+          throw new Error('iOS Simulator cần chỉ rõ touchId hoặc faceId, không dùng fingerprint chung.');
+        }
+        await this.b.execute('mobile: enrollBiometric', { isEnabled: true });
+        await this.b.execute('mobile: sendBiometricMatch', {
+          type: fixture.biometric,
+          match: true,
+        });
+        return;
+      }
+
+      if (this.opts.platform !== 'android') {
+        throw new Error('Inject ảnh QR hiện chỉ được Appium hỗ trợ trên Android Emulator.');
+      }
+      if (!this.opts.injectedImageProperties) {
+        throw new Error(
+          'Chưa bật camera injection. Thêm "android.injectedImageProperties": {} vào testpilot.config.json '
+          + 'và chạy bằng Android Emulator.',
+        );
+      }
+      const resolved = await safeWorkspacePng(fixture.path);
+      const image = await readFile(resolved);
+      if (image.length > 5 * 1024 * 1024) {
+        throw new Error(`Ảnh QR vượt quá giới hạn 5 MB: ${fixture.path}`);
+      }
+      await this.b.execute('mobile: injectEmulatorCameraImage', { payload: image.toString('base64') });
+    });
+  }
+
   async stop(): Promise<void> {
     // Written before the session goes away, and unconditionally: the run that
     // most needs a network log is the one that failed, and that is exactly the
@@ -566,6 +629,14 @@ export class NativeUiDriver implements UiDriver {
 
   async launch(_target?: string): Promise<void> {
     const id = this.opts.bundleId ?? this.opts.appPackage;
+    if (this.nativeScenario) {
+      if (id) await this.activateApp(id);
+      await this.clearBlockingDialogs();
+      if (this.inWebview) await this.b.switchContext('NATIVE_APP');
+      this.webview = undefined;
+      await this.cdpDriver?.disconnect().catch(() => {});
+      return;
+    }
     if (id) {
       if (this.opts.isolation === 'restart' && this.opts.platform === 'android') {
         // Warm-start the app (FLAG_ACTIVITY_REORDER_TO_FRONT) so the process is
@@ -1235,7 +1306,7 @@ export class NativeUiDriver implements UiDriver {
   async find(c: LocatorCandidate): Promise<UiHandle | null> {
     // CDP-first path for WebView: Playwright sees the full Angular DOM (formcontrolname,
     // data-testid, aria-label) while chromedriver is blind to those attributes.
-    if ((this.inWebview || this.cdpConnected) && this.cdpDriver) {
+    if (!this.nativeScenario && (this.inWebview || this.cdpConnected) && this.cdpDriver) {
       try {
         const handle = await this.cdpDriver.find(c);
         if (handle !== null) return handle;
@@ -1298,7 +1369,7 @@ export class NativeUiDriver implements UiDriver {
   }
 
   async inspectMatches(candidate: LocatorCandidate): Promise<UiMatchSnapshot> {
-    if ((this.inWebview || this.cdpConnected) && this.cdpDriver) {
+    if (!this.nativeScenario && (this.inWebview || this.cdpConnected) && this.cdpDriver) {
       return this.cdpDriver.inspectMatches(candidate);
     }
     const elements = await this.b.$$(this.toSelector(candidate)) as unknown as WdioElement[];
@@ -1909,6 +1980,20 @@ export function domSelector(c: LocatorCandidate): string {
 
 function isPlaywrightOnlyCss(value: string): boolean {
   return /:(?:has-text|text|text-is|text-matches)\s*\(/.test(value) || value.includes('>>');
+}
+
+/** Resolve camera fixtures inside the workspace and refuse arbitrary file reads. */
+export async function safeWorkspacePng(input: string): Promise<string> {
+  if (path.extname(input).toLocaleLowerCase() !== '.png') {
+    throw new Error(`Camera injection chỉ nhận ảnh PNG: ${input}`);
+  }
+  const workspace = await realpath(process.cwd());
+  const resolved = await realpath(path.resolve(workspace, input));
+  const relative = path.relative(workspace, resolved);
+  if (relative.startsWith('..') || path.isAbsolute(relative)) {
+    throw new Error(`Ảnh QR phải nằm trong workspace: ${input}`);
+  }
+  return resolved;
 }
 
 function esc(s: string): string {

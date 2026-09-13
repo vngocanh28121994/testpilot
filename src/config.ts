@@ -99,6 +99,8 @@ const Android = z.object({
   appPackage: z.string().optional(),
   appActivity: z.string().optional(),
   hybrid: z.boolean().default(false),
+  /** Android Emulator VirtualScene setup required before injecting QR PNGs. */
+  injectedImageProperties: z.record(z.string(), z.string()).optional(),
   /**
    * How long to wait at launch for the app's WebView to attach.
    *

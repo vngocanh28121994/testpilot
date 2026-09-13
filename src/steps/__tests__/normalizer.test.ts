@@ -12,6 +12,30 @@ import {
 } from '../../core/contextual.js';
 
 describe('natural-language scenario normalization', () => {
+  it('inherits @native from Feature and routes the scenario only to mobile', async () => {
+    const registry = await Registry.load('/dev/null/nonexistent-native-scope-registry.json');
+    const parsed = parseFeature(
+      'native.feature',
+      '@native\nFeature: Native smoke\n\n'
+        + '  @android @regression @p1 @positive\n'
+        + '  Scenario: Vân tay và QR\n'
+        + '    Given I open the app\n'
+        + '    When tôi giả lập xác thực vân tay thành công\n'
+        + '    And tôi đưa ảnh QR "fixtures/native/qr.png" vào camera\n',
+      registry,
+    );
+    assert.deepEqual(
+      parsed.scenarios[0]?.tags,
+      ['@p1', '@regression', '@positive', '@android', '@native'],
+    );
+    assert.deepEqual(parsed.scenarios[0]?.platforms, ['android']);
+    assert.deepEqual(parsed.scenarios[0]?.steps.map((step) => step.intent), [
+      { kind: 'launch' },
+      { kind: 'simulateBiometricSuccess', biometric: 'fingerprint' },
+      { kind: 'injectCameraImage', path: 'fixtures/native/qr.png' },
+    ]);
+  });
+
   it('accepts a concise unquoted Vietnamese visible result', () => {
     const normalized = normalizeNaturalSteps([
       'Scenario: Danh sách',

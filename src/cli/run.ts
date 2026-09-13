@@ -15,7 +15,7 @@ import { KnownIssueStore } from '../core/knownIssues.js';
 import { adoptStoredApiKeys, Secrets, accountVariables, secretEnvName } from '../core/secrets.js';
 import { DeviceEnvLog, appFingerprint, installedAppVersion, needsReinstall } from '../core/deviceEnv.js';
 import { iosTunnelCheck } from '../core/preflight.js';
-import { canonicalTag } from '../core/tagTaxonomy.js';
+import { scenarioInRunScope } from '../core/tagScope.js';
 import type {
   FeatureSpec,
   OpenQuestion,
@@ -106,14 +106,8 @@ async function main(): Promise<void> {
   // Dấu phẩy vốn đã là "hoặc" từ trước nên giữ nguyên. Dấu cộng là cái thiếu:
   // muốn chạy "chỉ các case positive của MỘT chức năng" thì không có cách nào
   // diễn đạt, và chọn hai tag kiểu cũ lại ra positive của mọi chức năng.
-  const wantedGroups = (args.tag ?? '')
-    .split(',')
-    .map((group) => group.split('+').map(canonicalTag).filter(Boolean))
-    .filter((group) => group.length > 0);
   const inScope = (scenario: { tags: string[]; platforms: string[] }) =>
-    scenario.platforms.includes(platform)
-    && (wantedGroups.length === 0
-      || wantedGroups.some((group) => group.every((tag) => scenario.tags.includes(tag))));
+    scenarioInRunScope(args.tag, scenario, platform);
 
   const unapproved = features
     .flatMap((feature) => feature.unapproved)
@@ -705,6 +699,9 @@ async function makeDriver(
       ...(cfg.android.appPackage ? { appPackage: cfg.android.appPackage } : {}),
       ...(cfg.android.appActivity ? { appActivity: cfg.android.appActivity } : {}),
       hybrid: cfg.android.hybrid,
+      ...(cfg.android.injectedImageProperties
+        ? { injectedImageProperties: cfg.android.injectedImageProperties }
+        : {}),
       ...(cfg.android.webviewTimeoutMs ? { webviewTimeoutMs: cfg.android.webviewTimeoutMs } : {}),
       isolation: cfg.android.isolation,
       ...(cfg.web.popups ? { popupRules: cfg.web.popups } : {}),

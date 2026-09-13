@@ -233,6 +233,31 @@ export const STEP_RULES: StepRule[] = [
     group: 'Di chuyển',
   },
   {
+    id: 'simulateBiometricSuccess',
+    patterns: [
+      /^I simulate successful (fingerprint|touch ?id|face ?id) authentication$/i,
+      /^tôi giả lập xác thực (vân tay|touch ?id|face ?id|khuôn mặt) thành công$/iu,
+    ],
+    build: (m) => ({
+      kind: 'simulateBiometricSuccess',
+      biometric: normalizeBiometric(m[1]!),
+    }),
+    doc: 'I simulate successful fingerprint|touchId|faceId authentication',
+    hint: 'Giả lập một lần xác thực sinh trắc học thành công trên Android Emulator hoặc iOS Simulator.',
+    group: 'Khác',
+  },
+  {
+    id: 'injectCameraImage',
+    patterns: [
+      new RegExp(`^I inject QR image ${Q} into the camera$`, 'i'),
+      new RegExp(`^tôi đưa ảnh QR ${Q} vào camera$`, 'iu'),
+    ],
+    build: (m) => ({ kind: 'injectCameraImage', path: m[1]! }),
+    doc: 'I inject QR image "<workspace PNG path>" into the camera',
+    hint: 'Đưa ảnh PNG chứa QR vào camera ảo của Android Emulator để kiểm tra luồng scanner.',
+    group: 'Khác',
+  },
+  {
     id: 'waitFor',
     patterns: [
       new RegExp(`^I wait for ${Q}$`, 'i'),
@@ -549,6 +574,14 @@ function normalizeDirection(raw: string): 'left' | 'right' | 'up' | 'down' {
 function normalizeVerticalDirection(raw: string): 'up' | 'down' {
   const value = raw.toLocaleLowerCase();
   return value === 'up' || value === 'lên' ? 'up' : 'down';
+}
+
+function normalizeBiometric(raw: string): 'fingerprint' | 'touchId' | 'faceId' {
+  const value = raw.toLocaleLowerCase().replace(/\s+/g, '');
+  if (value === 'vântay' || value === 'fingerprint' || value === 'touchid') {
+    return value === 'touchid' ? 'touchId' : 'fingerprint';
+  }
+  return 'faceId';
 }
 
 /** The block injected into the generation prompt. Keep it generated, never hand-copied. */

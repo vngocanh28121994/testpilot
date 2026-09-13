@@ -9,6 +9,11 @@
 
 export type Platform = 'web' | 'android' | 'ios';
 
+/** Controlled OS/simulator fixtures available only to opt-in @native scenarios. */
+export type NativeFixture =
+  | { kind: 'biometricSuccess'; biometric: 'fingerprint' | 'touchId' | 'faceId' }
+  | { kind: 'cameraImage'; path: string };
+
 /** Semantic control shape learned from the live UI, independent of platform. */
 export type ControlType =
   | 'text'
@@ -217,6 +222,8 @@ export type Intent =
   | { kind: 'swipe'; direction: 'left' | 'right' | 'up' | 'down' }
   | { kind: 'scroll'; direction: 'up' | 'down' }
   | { kind: 'back' }
+  | { kind: 'simulateBiometricSuccess'; biometric: 'fingerprint' | 'touchId' | 'faceId' }
+  | { kind: 'injectCameraImage'; path: string }
   | { kind: 'assertVisible'; element: string; locatorParams?: Record<string, string> }
   | { kind: 'assertNotVisible'; element: string; locatorParams?: Record<string, string> }
   | { kind: 'assertText'; element: string; text: string; mode?: 'equals' | 'contains' | 'notContains'; locatorParams?: Record<string, string> }

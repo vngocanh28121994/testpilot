@@ -6,7 +6,7 @@
  * this module before it reaches the runtime.
  */
 
-export type TagCategory = 'priority' | 'suite' | 'type' | 'platform' | 'operation' | 'feature';
+export type TagCategory = 'priority' | 'suite' | 'type' | 'platform' | 'runtime' | 'operation' | 'feature';
 
 export interface TagDefinition {
   name: string;
@@ -35,6 +35,7 @@ export const TAG_DEFINITIONS: readonly TagDefinition[] = [
   { name: '@web', category: 'platform', label: 'Web', description: 'Chỉ dùng khi hành vi nghiệp vụ riêng cho Web.' },
   { name: '@android', category: 'platform', label: 'Android', description: 'Chỉ dùng khi hành vi nghiệp vụ riêng cho Android.' },
   { name: '@ios', category: 'platform', label: 'iOS', description: 'Chỉ dùng khi hành vi nghiệp vụ riêng cho iOS.' },
+  { name: '@native', category: 'runtime', label: 'Native system', description: 'Kiểm tra chức năng hệ điều hành/thiết bị; chỉ chạy khi được chọn rõ.' },
   { name: '@diagnostic', category: 'operation', label: 'Chẩn đoán', description: 'Kịch bản kỹ thuật dùng để chẩn đoán hạ tầng.' },
 ] as const;
 
@@ -61,11 +62,11 @@ export const TAG_ALIASES: Readonly<Record<string, string>> = {
 };
 
 const DEFINITION_BY_NAME = new Map(TAG_DEFINITIONS.map((item) => [item.name, item]));
-const CATEGORY_ORDER: TagCategory[] = ['feature', 'priority', 'suite', 'type', 'platform', 'operation'];
+const CATEGORY_ORDER: TagCategory[] = ['feature', 'priority', 'suite', 'type', 'platform', 'runtime', 'operation'];
 
 export function tagTaxonomyView(): TagTaxonomyView {
   return {
-    version: 1,
+    version: 2,
     definitions: [...TAG_DEFINITIONS],
     featurePattern: '@feature-<ten-chuc-nang>',
     aliases: { ...TAG_ALIASES },
@@ -79,6 +80,7 @@ export function tagPolicyPrompt(): string {
     `- Mỗi scenario có đúng một loại: @positive, @negative, @boundary hoặc @business-rule.\n` +
     `- Chỉ thêm @smoke cho happy path P0.\n` +
     `- Chỉ thêm @web, @android hoặc @ios khi hành vi nghiệp vụ khác theo nền tảng.\n` +
+    `- Chỉ thêm @native cho kiểm tra chức năng hệ điều hành/thiết bị như OTP, sinh trắc học hoặc camera; không dùng cho WebView.\n` +
     `- Không dùng trạng thái workflow như generated, pending, approved, rejected làm tag.`;
 }
 
@@ -171,7 +173,11 @@ export function applyGeneratedTagPolicy(
   const featureIndex = lines.findIndex((line) => /^\s*Feature\s*:/i.test(line));
   if (featureIndex < 0) return canonical;
 
-  replaceTagsBefore(lines, featureIndex, [featureTag(featureName)]);
+  const inheritedExecutionTags = tagsBefore(lines, featureIndex).filter((tag) => {
+    const category = tagCategory(tag);
+    return category === 'platform' || category === 'runtime';
+  });
+  replaceTagsBefore(lines, featureIndex, [featureTag(featureName), ...inheritedExecutionTags]);
 
   const requirementById = new Map(requirements.map((item) => [item.id, item]));
   const scenarioIndexes = lines
@@ -190,6 +196,8 @@ export function applyGeneratedTagPolicy(
     const priority = mapped.some((item) => item.priority === 'P0') ? '@p0' : mapped.length ? '@p1' : '@p2';
     const previous = tagsBefore(lines, scenarioIndex);
     const platform = previous.filter((tag) => tagCategory(tag) === 'platform');
+    const regression = previous.filter((tag) => tag === '@regression');
+    const runtime = previous.filter((tag) => tagCategory(tag) === 'runtime');
     const operation = previous.filter((tag) => tagCategory(tag) === 'operation');
 
     // Loại hành vi lấy từ chính model, không tính lại bằng từ khoá.
@@ -213,8 +221,10 @@ export function applyGeneratedTagPolicy(
     const tags = normalizeTagList([
       priority,
       ...(priority === '@p0' && type === '@positive' ? ['@smoke'] : []),
+      ...regression,
       type,
       ...platform,
+      ...runtime,
       ...operation,
     ]);
     replaceTagsBefore(lines, scenarioIndex, tags);

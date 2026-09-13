@@ -8,17 +8,19 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { describe, it } from 'node:test';
-import { canonicalTag } from '../../core/tagTaxonomy.js';
+import {
+  matchesTagExpression,
+  platformsForTags,
+  scenarioInRunScope,
+} from '../../core/tagScope.js';
 
 const source = readFileSync('src/cli/run.ts', 'utf8');
+const executorSource = readFileSync('src/runtime/Executor.ts', 'utf8');
+const nativeDriverSource = readFileSync('src/drivers/native.ts', 'utf8');
 
 /** Bản sao đúng bằng biểu thức trong run.ts; test bên dưới canh cho nó không lệch. */
 function inScope(tagArg: string, scenarioTags: string[]): boolean {
-  const groups = tagArg
-    .split(',')
-    .map((group) => group.split('+').map(canonicalTag).filter(Boolean))
-    .filter((group) => group.length > 0);
-  return groups.length === 0 || groups.some((g) => g.every((t) => scenarioTags.includes(t)));
+  return matchesTagExpression(tagArg, scenarioTags);
 }
 
 const transferPositive = ['@feature-chuyen-tien', '@positive', '@p0'];
@@ -51,9 +53,53 @@ describe('phạm vi tag của một lượt chạy', () => {
     assert.equal(inScope('', transferNegative), true);
   });
 
+  it('không kéo native vào lượt WebView mặc định hoặc bộ lọc rộng', () => {
+    const nativeRegression = ['@native', '@regression', '@p0'];
+    assert.equal(inScope('', nativeRegression), false);
+    assert.equal(inScope('@regression', nativeRegression), false);
+    assert.equal(inScope('@p0', nativeRegression), false);
+  });
+
+  it('chỉ chạy native khi chính nhánh lọc đó ghi rõ @native', () => {
+    const nativeRegression = ['@native', '@regression', '@p0'];
+    assert.equal(inScope('@native', nativeRegression), true);
+    assert.equal(inScope('@native+@regression', nativeRegression), true);
+    assert.equal(inScope('@native+@negative', nativeRegression), false);
+    assert.equal(inScope('@p0,@native', nativeRegression), true);
+  });
+
+  it('native không có platform tag chỉ định tuyến mobile, không chạy web', () => {
+    assert.deepEqual(platformsForTags(['@native']), ['android', 'ios']);
+    assert.deepEqual(platformsForTags(['@native', '@ios']), ['ios']);
+    assert.deepEqual(platformsForTags(['@regression']), ['web', 'android', 'ios']);
+    const scenario = { tags: ['@native', '@regression'], platforms: platformsForTags(['@native']) };
+    assert.equal(scenarioInRunScope('@native+@regression', scenario, 'web'), false);
+    assert.equal(scenarioInRunScope('@native+@regression', scenario, 'android'), true);
+  });
+
   /** Bản sao ở trên chỉ có giá trị khi run.ts thật sự làm như vậy. */
   it('run.ts dùng đúng cách tách đó', () => {
-    assert.match(source, /split\(','\)[\s\S]{0,120}split\('\+'\)/);
-    assert.match(source, /group\.every\(\(tag\) => scenario\.tags\.includes\(tag\)\)/);
+    assert.match(source, /scenarioInRunScope\(args\.tag, scenario, platform\)/);
+  });
+
+  it('executor chọn native mode theo tag của từng scenario', () => {
+    assert.match(
+      executorSource,
+      /setScenarioMode\?\.\(scenario\.tags\.includes\('@native'\) \? 'native' : 'default'\)/,
+    );
+  });
+
+  it('native mode tách CDP và không đổi cấu hình hybrid toàn cục', () => {
+    assert.match(nativeDriverSource, /private nativeScenario = false/);
+    assert.match(nativeDriverSource, /this\.cdpDriver\?\.disconnect\(\)/);
+    assert.match(nativeDriverSource, /if \(this\.nativeScenario\) \{/);
+    assert.doesNotMatch(source, /hybrid\s*=\s*false/);
+  });
+
+  it('fixture native dùng lệnh Appium có kiểu rõ, không nhận mobile command tuỳ ý', () => {
+    assert.match(nativeDriverSource, /execute\('mobile: fingerprint', \{ fingerprintId: 1 \}\)/);
+    assert.match(nativeDriverSource, /execute\('mobile: sendBiometricMatch'/);
+    assert.match(nativeDriverSource, /execute\('mobile: injectEmulatorCameraImage'/);
+    assert.doesNotMatch(nativeDriverSource, /runNativeFixture\([^)]*command/);
   });
 });
