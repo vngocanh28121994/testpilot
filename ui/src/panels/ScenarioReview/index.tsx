@@ -32,6 +32,17 @@ import { TagChip } from '@/components/TagChip';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
+import {
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { api } from '@/api/client';
 import { ROUTES } from '@/api/routes';
 import { useAppState } from '@/hooks/useAppState';
@@ -99,6 +110,11 @@ function ReviewBody({ state, search }: { state: StateResponse; search: ScenarioS
   } | null>(null);
   /** Chỉ khác null khi đang thêm kịch bản mới. */
   const [creating, setCreating] = useState<{ block: string; target: CreateTarget } | null>(null);
+  const [knownIssueTarget, setKnownIssueTarget] = useState<{
+    scenarioId: string;
+    scenarioName: string;
+  } | null>(null);
+  const [knownIssueNote, setKnownIssueNote] = useState('');
   const refresh = () => void client.invalidateQueries({ queryKey: ['state'] });
   const review = useMutation({
     mutationFn: (body: FeatureReviewRequest) =>
@@ -126,8 +142,12 @@ function ReviewBody({ state, search }: { state: StateResponse; search: ScenarioS
   const knownIssue = useMutation({
     mutationFn: (body: KnownIssueRequest) =>
       api.post<KnownIssueResponse>(ROUTES.featureKnownIssue, body),
-    onSuccess: (data) => {
+    onSuccess: (data, variables) => {
       toast.success(data.removed ? 'Đã gỡ nhãn Known issue.' : 'Đã gắn nhãn Known issue.');
+      if (!variables.remove) {
+        setKnownIssueTarget(null);
+        setKnownIssueNote('');
+      }
       refresh();
     },
     onError: (error) => toast.error((error as Error).message),
@@ -580,14 +600,11 @@ function ReviewBody({ state, search }: { state: StateResponse; search: ScenarioS
                                         knownIssue.mutate({ scenarioId: scenario.id, remove: true });
                                         return;
                                       }
-                                      // Lý do là bắt buộc: một nhãn không kèm lý
-                                      // do thì năm sau không ai giải thích được
-                                      // vì sao kịch bản này được miễn.
-                                      const note = window.prompt(
-                                        `Vì sao "${scenario.name}" đỏ do sản phẩm chưa đáp ứng?`,
-                                      );
-                                      if (!note?.trim()) return;
-                                      knownIssue.mutate({ scenarioId: scenario.id, note });
+                                      setKnownIssueTarget({
+                                        scenarioId: scenario.id,
+                                        scenarioName: scenario.name,
+                                      });
+                                      setKnownIssueNote('');
                                     }}
                                   >
                                     <TriangleAlert className="size-4" />
@@ -724,6 +741,76 @@ function ReviewBody({ state, search }: { state: StateResponse; search: ScenarioS
           }}
         />
       )}
+
+      <Dialog
+        open={knownIssueTarget !== null}
+        onOpenChange={(open) => {
+          if (!open && !knownIssue.isPending) {
+            setKnownIssueTarget(null);
+            setKnownIssueNote('');
+          }
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <div className="bg-status-flaky/15 text-status-flaky flex size-10 items-center justify-center rounded-full">
+              <TriangleAlert className="size-5" />
+            </div>
+            <DialogTitle>Đánh dấu Known Issue</DialogTitle>
+            <DialogDescription>
+              Kịch bản vẫn đúng, nhưng sản phẩm hiện chưa đáp ứng. Lượt chạy sẽ ghi nhận riêng,
+              không tính là lỗi automation.
+            </DialogDescription>
+          </DialogHeader>
+
+          <form
+            className="grid gap-5"
+            onSubmit={(event) => {
+              event.preventDefault();
+              const note = knownIssueNote.trim();
+              if (!knownIssueTarget || !note) return;
+              knownIssue.mutate({ scenarioId: knownIssueTarget.scenarioId, note });
+            }}
+          >
+            <div className="bg-muted/50 rounded-lg border px-3 py-2.5">
+              <p className="text-muted-foreground text-xs font-medium uppercase tracking-wide">
+                Kịch bản
+              </p>
+              <p className="mt-1 text-sm font-medium">{knownIssueTarget?.scenarioName}</p>
+            </div>
+
+            <div className="grid gap-2">
+              <Label htmlFor="known-issue-note">Lý do sản phẩm chưa đáp ứng</Label>
+              <Textarea
+                id="known-issue-note"
+                autoFocus
+                required
+                rows={4}
+                value={knownIssueNote}
+                onChange={(event) => setKnownIssueNote(event.target.value)}
+                placeholder="Ví dụ: API chưa trả về danh mục đích theo đặc tả…"
+                disabled={knownIssue.isPending}
+              />
+              <p className="text-muted-foreground text-xs">
+                Lý do được lưu cùng đúng phiên bản hiện tại của kịch bản và sẽ hết hiệu lực nếu
+                nội dung thay đổi.
+              </p>
+            </div>
+
+            <DialogFooter>
+              <DialogClose asChild>
+                <Button type="button" variant="outline" disabled={knownIssue.isPending}>
+                  Huỷ
+                </Button>
+              </DialogClose>
+              <Button type="submit" disabled={!knownIssueNote.trim() || knownIssue.isPending}>
+                <TriangleAlert className="size-4" />
+                {knownIssue.isPending ? 'Đang lưu…' : 'Đánh dấu Known Issue'}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
 
       {editing && (
         <ScenarioEditor
