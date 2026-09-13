@@ -2,7 +2,16 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from '@tanstack/react-router';
 import { useQuery } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { CheckCircle2, Play, RefreshCw, Smartphone, Square, XCircle } from 'lucide-react';
+import {
+  CheckCircle2,
+  Fingerprint,
+  Play,
+  QrCode,
+  RefreshCw,
+  Smartphone,
+  Square,
+  XCircle,
+} from 'lucide-react';
 import { AppShell } from '@/components/layout/AppShell';
 import { CheckRow } from '@/components/CheckRow';
 import { CheckedAt } from '@/components/CheckedAt';
@@ -42,6 +51,7 @@ const PAGE_DESCRIPTION = 'Chạy bộ test ngay trên máy này, trước khi đ
 export default function RunnerPanel() {
   const state = useAppState((s) => ({ config: s.config, features: s.features, reports: s.reports }));
   const [platform, setPlatform] = useState<'web' | 'android' | 'ios'>('web');
+  const [runMode, setRunMode] = useState<'standard' | 'native'>('standard');
   // Nhiều tag, nối bằng '+' khi gửi xuống: đó là "và" ở tầng lọc — mỗi tag chọn
   // thêm là hẹp phạm vi lại, đúng hướng người ta dùng một bộ lọc.
   const [tags, setTags] = useState<string[]>([]);
@@ -162,7 +172,11 @@ export default function RunnerPanel() {
       return toast.error('Chưa qua kiểm tra trước khi chạy. Hãy xử lý các mục đỏ rồi thử lại.');
     job.start({
       platform,
-      tag: tags.length > 0 ? tags.join('+') : undefined,
+      tag: runMode === 'native'
+        ? '@native+@regression'
+        : tags.length > 0
+          ? tags.join('+')
+          : undefined,
       headed,
       includeQuarantined: quarantined,
       ...(env ? { env } : {}),
@@ -291,6 +305,24 @@ export default function RunnerPanel() {
             </CardHeader>
             <CardContent className="flex flex-col gap-4">
               <div className="grid gap-4 sm:grid-cols-2">
+                <Field label="Loại bộ test">
+                  <Dropdown
+                    className="mt-0"
+                    value={runMode}
+                    onChange={(next) => {
+                      const mode = next as typeof runMode;
+                      setRunMode(mode);
+                      if (mode === 'native' && platform === 'web') {
+                        setPlatform('android');
+                        setMulti([]);
+                      }
+                    }}
+                    options={[
+                      { value: 'standard', label: 'Thông thường / WebView' },
+                      { value: 'native', label: 'Native Regression' },
+                    ]}
+                  />
+                </Field>
                 <Field label="Platform">
                   <Dropdown
                     className="mt-0"
@@ -303,15 +335,29 @@ export default function RunnerPanel() {
                       if (next === 'web') setMulti([]);
                     }}
                     options={[
-                      { value: 'web', label: 'web — Playwright' },
+                      ...(runMode === 'standard'
+                        ? [{ value: 'web', label: 'web — Playwright' }]
+                        : []),
                       { value: 'android', label: 'android — Appium' },
                       { value: 'ios', label: 'ios — Appium' },
                     ]}
                   />
                 </Field>
-                <Field label="Lọc theo tag">
-                  <TagFilter all={allTags} value={tags} onChange={setTags} />
-                </Field>
+                {runMode === 'standard' ? (
+                  <Field label="Lọc theo tag">
+                    <TagFilter all={allTags} value={tags} onChange={setTags} />
+                  </Field>
+                ) : (
+                  <Field
+                    label="Phạm vi native"
+                    hint="Chỉ chạy scenario có đồng thời @native và @regression."
+                  >
+                    <div className="border-input bg-muted/40 flex h-9 items-center gap-2 rounded-md border px-2">
+                      <Badge variant="secondary">@native</Badge>
+                      <Badge variant="secondary">@regression</Badge>
+                    </div>
+                  </Field>
+                )}
                 {environments.length > 0 && (
                   <Field label="Môi trường">
                     <Dropdown
@@ -340,6 +386,8 @@ export default function RunnerPanel() {
                 )}
               </div>
 
+              {runMode === 'native' && <NativeCapabilityNotice platform={platform} />}
+
               <div className="flex flex-col gap-3">
                 {platform === 'web' && (
                   <CheckRow
@@ -361,7 +409,11 @@ export default function RunnerPanel() {
                   onClick={start}
                 >
                   <Play className="size-4" />
-                  {job.status === 'running' ? 'Đang chạy…' : 'Chạy test'}
+                  {job.status === 'running'
+                    ? 'Đang chạy…'
+                    : runMode === 'native'
+                      ? 'Chạy Native Regression'
+                      : 'Chạy test'}
                 </Button>
                 {job.status === 'running' && (
                   <Button variant="destructive" onClick={() => void stop()}>
@@ -417,6 +469,35 @@ export default function RunnerPanel() {
         <History reports={reports} />
       </section>
     </AppShell>
+  );
+}
+
+function NativeCapabilityNotice({ platform }: { platform: 'web' | 'android' | 'ios' }) {
+  if (platform === 'web') return null;
+  const android = platform === 'android';
+  return (
+    <div
+      role="status"
+      className="border-primary/25 bg-primary/5 flex flex-col gap-2 rounded-lg border p-3 text-sm"
+    >
+      <div className="flex items-center gap-2 font-medium">
+        <Fingerprint className="text-primary size-4" />
+        {android ? 'Khả năng native trên Android' : 'Khả năng native trên iOS'}
+      </div>
+      <p className="text-muted-foreground">
+        {android
+          ? 'Android Emulator hỗ trợ giả lập vân tay; máy thật chỉ chạy luồng mở tính năng và kiểm tra app không crash.'
+          : 'iOS Simulator hỗ trợ Touch ID và Face ID. Máy thật chỉ chạy luồng mở tính năng và kiểm tra app không crash.'}
+      </p>
+      <div className="flex items-start gap-2">
+        <QrCode className="text-primary mt-0.5 size-4 shrink-0" />
+        <p className="text-muted-foreground">
+          {android
+            ? 'Inject ảnh QR chỉ hỗ trợ Android Emulator đã bật VirtualScene; máy thật/Device Farm chỉ kiểm tra scanner mở và app còn phản hồi.'
+            : 'iOS không inject ảnh camera qua fixture hiện tại; hãy dùng smoke case mở scanner và kiểm tra app còn phản hồi.'}
+        </p>
+      </div>
+    </div>
   );
 }
 
