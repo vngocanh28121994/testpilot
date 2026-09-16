@@ -174,7 +174,11 @@ export interface StateResponse {
   configError: string | null;
   /** Dấu vân của file config lúc đọc. Gửi lại khi Lưu để không ghi đè bản mới hơn. */
   configRevision?: string;
-  configFile: string;
+  /** Personal profile identity; the absolute filesystem path never leaves the server. */
+  configProfile: {
+    owner: string;
+    source: 'personal' | 'environment';
+  };
   features: FeatureSummary[];
   elements: number;
   reports: ReportView[];
@@ -245,7 +249,17 @@ export interface ReportView {
    * farm vẫn vẽ một thẻ <video> trần.
    */
   testSeconds?: number;
-  shotUrls?: Array<{ name: string; url: string; onFailure: boolean }>;
+  shotUrls?: Array<{
+    name: string;
+    url: string;
+    onFailure: boolean;
+    /** Exact scenario/step join from report.json; absent only for legacy artifacts. */
+    scenario?: string;
+    detail?: string;
+    error?: string;
+    /** Present when the failed scenario is actively classified as a known issue. */
+    knownIssue?: string;
+  }>;
 }
 
 export interface BuildInventoryRow {
@@ -369,9 +383,31 @@ export type HealingRecordView = HealingRecord & {
   quality: LocatorQuality;
 };
 
+/**
+ * Một cặp element bị nghi là cùng MỘT control, kèm bằng chứng để người duyệt
+ * tự kết luận thay vì phải tin.
+ */
+export interface DuplicateElementView {
+  strong: { id: string; label: string; wins: number };
+  weak: { id: string; label: string; wins: number };
+  /** Locator cả hai bên đều từng thắng — lý do cặp này được nêu ra. */
+  sharedLocator: string;
+  /** Tỉ lệ locator ấy chiếm trong lịch sử mỗi bên: [strong, weak]. */
+  share: [number, number];
+  /**
+   * Locator ấy đã là candidate được duyệt ở bên yếu chưa.
+   *
+   * Nếu rồi thì "gộp" không còn gì để làm, và nút phải nói ra điều đó thay vì
+   * mời người ta bấm một nút không đổi gì.
+   */
+  weakAlreadyHasIt: boolean;
+}
+
 export interface HealingResponse {
   policy: { minSuccesses: number; minRuns: number };
   records: HealingRecordView[];
+  /** Cặp trùng vai chưa ai quyết định. Đã quyết rồi thì không hiện lại. */
+  duplicates: DuplicateElementView[];
   summary: {
     total: number;
     proposed: number;
@@ -384,6 +420,21 @@ export interface HealingResponse {
 export interface HealingReviewRequest {
   id: string;
   action: 'apply' | 'reject';
+}
+
+export interface DuplicateReviewRequest {
+  strong: string;
+  weak: string;
+  /**
+   * `merge` KHÔNG xoá bản ghi nào.
+   *
+   * Step bind vào element theo id, nên xoá một bản ghi là làm hỏng mọi bước
+   * đang trỏ vào nó; và registry còn cấm alias trùng label của element khác,
+   * nên "gộp tên" cũng không phải một nút bấm an toàn. Thứ thực sự chữa được
+   * lượt chạy là mang locator đã chứng minh sang bên yếu — đảo ngược được, và
+   * đủ để bước đang hỏng chạy lại.
+   */
+  action: 'merge' | 'distinct';
 }
 
 /* ------------------------------------------------------------------ */

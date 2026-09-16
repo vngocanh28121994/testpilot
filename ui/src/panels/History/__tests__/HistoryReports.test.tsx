@@ -26,12 +26,15 @@ const run = (over: Record<string, unknown> = {}) => ({
   ...over,
 });
 
-const render = async (over: Record<string, unknown> = {}) => {
+const render = async (
+  over: Record<string, unknown> = {},
+  extraRuns: Array<Record<string, unknown>> = [],
+) => {
   server.use(
     http.get(ROUTES.state, () =>
       HttpResponse.json({
         ...stateFixture,
-        runs: [run(over)],
+        runs: [run(over), ...extraRuns],
         reports: [
           { id: 'rep-1', platform: 'web', status: 'failed', url: '/runs/rep-1/index.html', startedAt: '2026-09-08T04:05:00.000Z' },
         ],
@@ -44,13 +47,13 @@ const render = async (over: Record<string, unknown> = {}) => {
 describe('Lịch sử workflow — đường tới report', () => {
   it('có lối vào trang chi tiết trong app, đúng report của lượt đó', async () => {
     await render();
-    const link = await screen.findByRole('link', { name: /Chi tiết \(web\)/ });
+    const link = await screen.findByRole('link', { name: /Xem kết quả/ });
     expect(link.getAttribute('href')).toContain('runId=rep-1');
   });
 
   it('vẫn giữ lối mở file report gốc', async () => {
     await render();
-    const raw = await screen.findByRole('link', { name: 'Report gốc' });
+    const raw = await screen.findByRole('link', { name: /Mở report HTML/ });
     expect(raw.getAttribute('href')).toBe('/runs/rep-1/index.html');
   });
 
@@ -64,5 +67,11 @@ describe('Lịch sử workflow — đường tới report', () => {
     await render();
     const list = await screen.findByRole('list', { name: 'Các bước của workflow' });
     expect(within(list).getByText('Sinh bộ testcase')).toBeInTheDocument();
+  });
+
+  it('không trộn Device Farm vào trang Xem tất cả workflow', async () => {
+    await render({}, [run({ id: 'farm-1', kind: 'farm', feature: 'ios-farm' })]);
+    expect(await screen.findByText('Chuyển tiền nội bộ')).toBeInTheDocument();
+    expect(screen.queryByText('ios-farm')).not.toBeInTheDocument();
   });
 });

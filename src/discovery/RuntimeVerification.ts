@@ -7,16 +7,12 @@
  * Produces a three-state result (PASS / FAIL / UNKNOWN) rather than a boolean:
  *   PASS    — all runnable checks passed → safe to execute with known locator
  *   FAIL    — at least one check definitively failed → reject, fall through
- *   UNKNOWN — not enough evidence to decide:
- *               • HIGH-risk action + critical metadata missing → do NOT execute
- *               • LOW/MEDIUM action + missing metadata → proceed to full discovery
+ *   UNKNOWN — retained for compatibility with stored evidence. Test-account
+ *             execution does not infer failure from missing Appium metadata.
  *
- * Caller (ElementDiscovery G01 path) decides what to do with UNKNOWN based on
- * ActionRisk. The rule is:
- *   UNKNOWN + HIGH  → method='failed' (stop)
- *   UNKNOWN + other → fall through to full observation + matching
- *
- * Never: UNKNOWN → automatic PASS
+ * Business impact remains attached to the evidence as ActionRisk, but missing
+ * enabled/interactive metadata is not a failure in isolated test runs. Explicit
+ * false values still fail; the driver action and postcondition are authoritative.
  */
 
 import type { ElementIntent } from './ElementIntent.js';
@@ -64,7 +60,6 @@ export function verifyRuntime(
   const actionRisk = classifyActionRisk(intent.action, elementText);
   const checks: RuntimeVerificationResult['checks'] = {};
   const failures: string[] = [];
-  const unknowns: string[] = [];
 
   // ── label check ───────────────────────────────────────────────────────────
   if (intent.label != null) {
@@ -74,7 +69,6 @@ export function verifyRuntime(
         expected: intent.label,
         reason: 'element has no text or accessibilityLabel to compare',
       };
-      unknowns.push('label');
     } else {
       const expected = normalizeHumanText(intent.label);
       const actual = normalizeHumanText(elementText);
@@ -118,12 +112,6 @@ export function verifyRuntime(
     if (element.enabled === false) {
       checks.enabled = { status: 'FAIL', actual: 'false', reason: 'element is disabled' };
       failures.push('element is disabled');
-    } else if (element.enabled == null && actionRisk === 'HIGH') {
-      checks.enabled = {
-        status: 'SKIP',
-        reason: 'enabled state unknown for HIGH-risk action',
-      };
-      unknowns.push('enabled');
     }
   }
 
@@ -132,12 +120,6 @@ export function verifyRuntime(
     if (element.interactive === false) {
       checks.interactive = { status: 'FAIL', actual: 'false', reason: 'element is not interactive' };
       failures.push('element is not interactive');
-    } else if (element.interactive == null && actionRisk === 'HIGH') {
-      checks.interactive = {
-        status: 'SKIP',
-        reason: 'interactive state unknown for HIGH-risk action',
-      };
-      unknowns.push('interactive');
     }
   }
 
@@ -145,17 +127,6 @@ export function verifyRuntime(
 
   if (failures.length > 0) {
     return { status: 'FAIL', checks, actionRisk, reason: failures[0] };
-  }
-
-  if (actionRisk === 'HIGH' && unknowns.length > 0) {
-    return {
-      status: 'UNKNOWN',
-      checks,
-      actionRisk,
-      reason:
-        `HIGH-risk action "${intent.action}" with missing metadata: ${unknowns.join(', ')} — ` +
-        `cannot confirm element is safe to interact with`,
-    };
   }
 
   return { status: 'PASS', checks, actionRisk };

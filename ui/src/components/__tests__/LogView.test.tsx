@@ -77,6 +77,30 @@ describe('LogView', () => {
     expect(screen.getByText('✗ Sai mật khẩu').className).toContain('status-fail');
   });
 
+  it('làm tên testcase thành một dòng nổi bật, không trộn với log kỹ thuật', () => {
+    render(<LogView logs={[
+      '[resolver] đang tìm element',
+      '[run:running] … Xoá mã khỏi danh mục',
+      '[run:passed] ✓ Xoá mã khỏi danh mục',
+    ]} />);
+
+    const testcase = screen.getByText('✓ Xoá mã khỏi danh mục');
+    expect(testcase).toHaveAttribute('data-log-row', 'testcase');
+    expect(testcase.className).toContain('font-semibold');
+    expect(testcase.className).toContain('tint-pass');
+    expect(screen.getByText('[resolver] đang tìm element')).not.toHaveAttribute('data-log-row');
+  });
+
+  it('làm nổi câu hỏi/cảnh báo và mốc workflow theo hai mức khác nhau', () => {
+    render(<LogView logs={[
+      '❓ Dòng 70: Tài liệu chưa nói tên danh mục',
+      'Bind OK — 11 scenario, 34 step.',
+    ]} />);
+
+    expect(screen.getByText(/❓ Dòng 70/)).toHaveAttribute('data-log-row', 'attention');
+    expect(screen.getByText(/Bind OK/)).toHaveAttribute('data-log-row', 'milestone');
+  });
+
   /**
    * CLI in tên kịch bản hai lần — "… tên" lúc bắt đầu, "✓ tên" lúc xong. Hiện
    * cả hai thì một suite mười kịch bản đọc như hai mươi, và mắt phải tự ghép cặp.
@@ -84,9 +108,11 @@ describe('LogView', () => {
   it('thay dòng đang chạy bằng kết quả, ngay tại chỗ nó đứng', () => {
     const { rerender } = render(<LogView logs={['[run:running] … Đăng nhập']} />);
     expect(screen.getByText('… Đăng nhập').className).toContain('status-running');
+    expect(document.querySelector('.log-progress-dots')).toBeInTheDocument();
 
     rerender(<LogView logs={['[run:running] … Đăng nhập', '[run:failed] ✗ Đăng nhập']} />);
     expect(screen.queryByText('… Đăng nhập')).not.toBeInTheDocument();
+    expect(document.querySelector('.log-progress-dots')).not.toBeInTheDocument();
     expect(screen.getByText('✗ Đăng nhập').className).toContain('status-fail');
     expect(screen.getByRole('log').children).toHaveLength(1);
   });
@@ -98,7 +124,7 @@ describe('LogView', () => {
       />,
     );
     const texts = [...screen.getByRole('log').children].map((c) => c.textContent);
-    expect(texts).toEqual(['✓ A', '… B']);
+    expect(texts).toEqual(['✓ A', '… B...']);
   });
 
   it('dựng dòng tổng kết thay vì in nguyên văn', () => {
@@ -169,6 +195,41 @@ describe('LogView', () => {
   it('nói khi đã cắt bớt dòng đầu', () => {
     render(<LogView logs={['a']} dropped={120} />);
     expect(screen.getByText(/Đã ẩn 120 dòng đầu/)).toBeInTheDocument();
+  });
+
+  it('animate dấu chấm cho tác vụ cuối đang chờ mà không sửa nội dung log', () => {
+    render(<LogView logs={['Upload testspec...', 'Chờ Device Farm chạy...']} active />);
+    const dots = document.querySelector('.log-progress-dots');
+    expect(dots).toBeInTheDocument();
+    expect(dots?.textContent).toBe('...');
+    expect(screen.getByRole('log')).toHaveTextContent('Chờ Device Farm chạy...');
+    expect(screen.getByText('Upload testspec...')).toBeInTheDocument();
+  });
+
+  it('không animate log lịch sử đã dừng dù câu cuối có chữ chờ', () => {
+    render(<LogView logs={['Chờ Device Farm chạy...']} active={false} />);
+    expect(document.querySelector('.log-progress-dots')).not.toBeInTheDocument();
+  });
+
+  it('không animate câu đã hoàn tất hoặc khi đang hiển thị lỗi', () => {
+    const { rerender } = render(<LogView logs={['Đã hoàn thành upload...']} active />);
+    expect(document.querySelector('.log-progress-dots')).not.toBeInTheDocument();
+
+    rerender(<LogView logs={['Đang upload...']} active error="Mất kết nối." />);
+    expect(document.querySelector('.log-progress-dots')).not.toBeInTheDocument();
+  });
+
+  it('đổi thuật ngữ coverage P0/P1 thành ngôn ngữ nghiệp vụ', () => {
+    render(
+      <LogView
+        logs={['Đang kiểm tra lại coverage P0/P1 trên nội dung đã duyệt/chỉnh sửa…']}
+        active
+      />,
+    );
+    expect(screen.getByRole('log')).toHaveTextContent(
+      'Đang đối chiếu testcase đã duyệt với các yêu cầu nghiệp vụ quan trọng',
+    );
+    expect(screen.queryByText(/P0\/P1|coverage/i)).not.toBeInTheDocument();
   });
 });
 

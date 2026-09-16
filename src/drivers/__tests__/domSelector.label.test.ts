@@ -172,6 +172,25 @@ describe('domSelector — thông báo mang dữ liệu bên trong', () => {
   });
 });
 
+describe('WebUiDriver — custom control có caption lồng nhau', () => {
+  it('tìm bằng business text thay vì tin XPath leaf từ cây quan sát', async () => {
+    const driver = new WebUiDriver({ baseUrl: 'http://localhost', artifactsDir: '/tmp' });
+    (driver as unknown as { page: Page }).page = page;
+    await page.setContent(`<!doctype html><body>
+      <div class="category-control" id="category">
+        <span aria-hidden="true">📁</span><span>Following Cate</span><span aria-hidden="true">▾</span>
+      </div>
+    </body>`);
+
+    const found = await driver.find({
+      strategy: 'label', value: 'Following Cate', weight: 0.8, origin: 'healed',
+    });
+
+    assert.ok(found);
+    assert.equal((await found.text()).includes('Following Cate'), true);
+  });
+});
+
 describe('tone-mark spelling variants', () => {
   it('offers one arm list per spelling, not one union of both', () => {
     // Unioning the spellings was correct and unusable: nine arms per spelling

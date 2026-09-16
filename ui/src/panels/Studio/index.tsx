@@ -605,6 +605,7 @@ function StudioFormPanel({ state }: { state: StateResponse }) {
                 logs={[...job.logs, ...completion.logs]}
                 dropped={job.dropped + completion.dropped}
                 error={completion.error ?? job.error}
+                active={job.status === 'running' || completion.status === 'running'}
                 label="Log workflow"
               />
               {/*

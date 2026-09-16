@@ -12,6 +12,7 @@
  */
 
 import type { ElementIntent } from './ElementIntent.js';
+import { isContainerElement } from './UiObservation.js';
 import type { ObservedElement } from './UiObservation.js';
 import { normalizeHumanText } from '../core/text.js';
 
@@ -30,6 +31,8 @@ export interface ScorerWeights {
   exactPlaceholder: number;
   /** Exact human text on a runtime-interactive control. */
   interactiveExactText: number;
+  /** A standard icon token whose documented meaning matches the business verb. */
+  iconSemantics: number;
   sameRole: number;
   sameScreen: number;
   sameParentContext: number;
@@ -59,6 +62,7 @@ export const DEFAULT_WEIGHTS: ScorerWeights = {
   exactText: 20,
   exactPlaceholder: 20,
   interactiveExactText: 10,
+  iconSemantics: 35,
   sameRole: 15,
   sameScreen: 15,
   sameParentContext: 15,
@@ -173,11 +177,19 @@ export class ConfidenceScorer {
         //
         // FIELD_NOUNS đã có sẵn trong tệp này và đang được dùng cho luật
         // "subset"; đây là cùng một ý, áp cho phép so chính.
-        const bare = stripFieldNoun(target);
+        const bare = stripControlDescriptor(target);
         if (norm(candidate.text) === norm(target) || norm(candidate.text) === norm(bare)) {
           add(this.weights.exactText, 'text exact match');
-          if (candidate.interactive && actionRequiresInteraction(intent.action)) {
-            add(this.weights.interactiveExactText, 'exact text on interactive control');
+          if (
+            actionRequiresInteraction(intent.action)
+            && (candidate.interactive || hasInteractiveAncestor(candidate, opts.allCandidates ?? []))
+          ) {
+            add(
+              this.weights.interactiveExactText,
+              candidate.interactive
+                ? 'exact text on interactive control'
+                : 'exact text owned by interactive ancestor',
+            );
           }
           // Read-only assertions cannot cause an unsafe interaction. Exact
           // visible text on the known screen may enter verification, while the
@@ -188,6 +200,18 @@ export class ConfidenceScorer {
         } else {
           const m = textMatch(candidate.text, target);
           if (m !== 'none') add(Math.floor(this.weights.exactText * 0.7), 'text partial match');
+        }
+        // Icon-only controls expose implementation vocabulary (`add`,
+        // `delete`, `more_vert`) instead of the language used by a tester.
+        // Treat only the finite Material-style icon vocabulary as semantic
+        // evidence; arbitrary one-word text must still pass normal matching.
+        // Ambiguity, visibility, role and safety gates continue to apply.
+        if (
+          (candidate.interactive === true || hasInteractiveAncestor(candidate, opts.allCandidates ?? []))
+          && actionRequiresInteraction(intent.action)
+          && iconMeaningMatches(candidate.text, target)
+        ) {
+          add(this.weights.iconSemantics, `icon "${candidate.text.trim()}" matches business action`);
         }
       }
     }
@@ -241,6 +265,7 @@ export class ConfidenceScorer {
     const duplicates = (opts.allCandidates ?? []).filter(
       (c) =>
         c.id !== candidate.id &&
+        controlIdentity(c, opts.allCandidates ?? []) !== controlIdentity(candidate, opts.allCandidates ?? []) &&
         c.text != null &&
         candidate.text != null &&
         norm(c.text) === norm(candidate.text),
@@ -254,6 +279,7 @@ export class ConfidenceScorer {
     const interactiveDuplicates = (opts.allCandidates ?? []).filter(
       (c) =>
         c.id !== candidate.id &&
+        controlIdentity(c, opts.allCandidates ?? []) !== controlIdentity(candidate, opts.allCandidates ?? []) &&
         c.text != null &&
         candidate.text != null &&
         norm(c.text) === norm(candidate.text) &&
@@ -270,7 +296,11 @@ export class ConfidenceScorer {
     // carry no testId and no accessibility label.
     if (opts.allCandidates && hasTextEvidence(intent, candidate)) {
       const answering = opts.allCandidates.filter((c) => hasTextEvidence(intent, c));
-      if (answering.length === 1 && answering[0]?.id === candidate.id) {
+      const distinctControls = new Set(answering.map((item) => controlIdentity(item, opts.allCandidates!)));
+      if (
+        distinctControls.size === 1
+        && distinctControls.has(controlIdentity(candidate, opts.allCandidates))
+      ) {
         add(this.weights.uniqueTextMatch, 'only element on screen matching the wording');
       }
     }
@@ -283,11 +313,7 @@ export class ConfidenceScorer {
       penalize(this.weights.disabledPenalty, 'element disabled');
     }
 
-    if (
-      candidate.childIds != null &&
-      candidate.childIds.length > 0 &&
-      !candidate.interactive
-    ) {
+    if (isContainerElement(candidate) && !candidate.interactive) {
       penalize(this.weights.containerPenalty, 'container element (has children, not interactive)');
     }
 
@@ -307,6 +333,41 @@ export class ConfidenceScorer {
   get thresholdValues(): ScorerThresholds {
     return { ...this.thresholds };
   }
+}
+
+function hasInteractiveAncestor(candidate: ObservedElement, all: ObservedElement[]): boolean {
+  if (!candidate.parentId) return false;
+  const byId = new Map(all.map((element) => [element.id, element]));
+  let cursor = byId.get(candidate.parentId);
+  for (let depth = 0; cursor && depth < 6; depth += 1) {
+    if (cursor.visible !== false && cursor.enabled !== false && cursor.interactive === true) return true;
+    cursor = cursor.parentId ? byId.get(cursor.parentId) : undefined;
+  }
+  return false;
+}
+
+/** Observation records inside one clickable control are not competing choices. */
+const CONTROL_IDENTITY_CACHE = new WeakMap<readonly ObservedElement[], ReadonlyMap<string, string>>();
+
+function controlIdentity(candidate: ObservedElement, all: ObservedElement[]): string {
+  let identities = CONTROL_IDENTITY_CACHE.get(all);
+  if (!identities) {
+    const byId = new Map(all.map((element) => [element.id, element]));
+    const computed = new Map<string, string>();
+    for (const element of all) {
+      let cursor: ObservedElement | undefined = element;
+      let identity = element.id;
+      for (let depth = 0; cursor && depth < 6; depth += 1) {
+        identity = cursor.id;
+        if (cursor.interactive === true) break;
+        cursor = cursor.parentId ? byId.get(cursor.parentId) : undefined;
+      }
+      computed.set(element.id, identity);
+    }
+    identities = computed;
+    CONTROL_IDENTITY_CACHE.set(all, identities);
+  }
+  return identities.get(candidate.id) ?? candidate.id;
 }
 
 /** Normalise for label/text comparison. */
@@ -342,13 +403,57 @@ export type TextMatch = 'exact' | 'contains' | 'subset' | 'none';
  * Chỉ bỏ ở ĐẦU và chỉ một từ. "Ô tìm kiếm nút gạt" thì từ "nút" ở giữa là nội
  * dung thật, không phải khung.
  */
-function stripFieldNoun(label: string): string {
+function stripControlDescriptor(label: string): string {
   const parts = normalizeHumanText(label).split(/\s+/).filter(Boolean);
-  if (parts.length > 1 && FIELD_NOUNS.has(parts[0]!)) return parts.slice(1).join(' ');
+  for (const prefix of CONTROL_DESCRIPTOR_PREFIXES) {
+    if (
+      parts.length > prefix.length &&
+      prefix.every((word, index) => parts[index] === word)
+    ) {
+      return parts.slice(prefix.length).join(' ');
+    }
+  }
   return parts.join(' ');
 }
 
-const FIELD_NOUNS = new Set(['o', 'truong', 'nut', 'input', 'field', 'button', 'icon']);
+const FIELD_NOUNS = new Set([
+  'o', 'truong', 'nut', 'the', 'input', 'field', 'button', 'icon', 'card',
+]);
+
+/**
+ * Cụm mở đầu chỉ mô tả LOẠI control, không phải tên người dùng nhìn thấy.
+ *
+ * Phải ưu tiên cụm dài trước cụm ngắn. Ví dụ "Tùy chọn Xóa khỏi danh mục"
+ * mang caption thật là "Xóa khỏi danh mục"; nếu chỉ biết bỏ từng danh từ một
+ * thì từ "tùy" trở thành head word và loại đúng menu item khỏi discovery.
+ * Chỉ bỏ ở đầu để một cụm tương tự nằm trong nội dung nghiệp vụ vẫn được giữ.
+ */
+const MULTIWORD_CONTROL_DESCRIPTOR_PREFIXES: readonly (readonly string[])[] = [
+  ['tuy', 'chon'],
+  ['menu', 'item'],
+  ['muc', 'menu'],
+  ['bieu', 'tuong'],
+  ['the'],
+  ['card'],
+];
+
+const CONTROL_DESCRIPTOR_PREFIXES: readonly (readonly string[])[] = [
+  ...MULTIWORD_CONTROL_DESCRIPTOR_PREFIXES,
+  ...[...FIELD_NOUNS].map((word) => [word] as const),
+];
+
+function stripMultiwordControlDescriptor(label: string): string {
+  const parts = normalizeHumanText(label).split(/\s+/).filter(Boolean);
+  for (const prefix of MULTIWORD_CONTROL_DESCRIPTOR_PREFIXES) {
+    if (
+      parts.length > prefix.length &&
+      prefix.every((word, index) => parts[index] === word)
+    ) {
+      return parts.slice(prefix.length).join(' ');
+    }
+  }
+  return parts.join(' ');
+}
 
 /**
  * Verbs that name what a control is *for*, not what it holds.
@@ -366,13 +471,15 @@ const ACTION_VERBS = new Set([
 export function textMatch(screen: string, wanted: string): TextMatch {
   const a = norm(screen);
   const b = norm(wanted);
+  const bareWanted = stripMultiwordControlDescriptor(wanted);
   if (!a || !b) return 'none';
-  if (a === b) return 'exact';
+  if (a === b || a === bareWanted) return 'exact';
   // The old rule, kept: the screen shows the asked-for phrase plus more.
-  if (a.includes(b)) return 'contains';
+  if (a.includes(b) || (bareWanted !== b && a.includes(bareWanted))) return 'contains';
   const words = (t: string) => t.split(/\s+/).filter(Boolean);
   const screenWords = words(a);
-  const wantedWords = new Set(words(b));
+  const wantedContent = words(bareWanted);
+  const wantedWords = new Set(wantedContent);
   // A compact option token is often the entire on-screen caption while the
   // business step adds context: "Giá 1M" → "1M", "Kỳ YTD" → "YTD". These
   // tokens are self-identifying choices, unlike a generic fragment such as
@@ -394,7 +501,7 @@ export function textMatch(screen: string, wanted: string): TextMatch {
   // is whether the match reaches the head. Without this, waiting for the first
   // search *result* healed onto the search *box*, and the next tap sat on an
   // input field until it timed out.
-  const content = words(b);
+  const content = wantedContent;
   // Falls back to the unfiltered first word: a label made entirely of framing
   // words still has to be *about* something, and dropping every word would let
   // it match anything at all.
@@ -411,6 +518,72 @@ export function textMatch(screen: string, wanted: string): TextMatch {
  */
 function isCompactOptionToken(token: string): boolean {
   return /^(?:\d+[a-z%]+|[a-z]+\d+[a-z%]*|ytd|mtd|qtd|all)$/i.test(token);
+}
+
+/**
+ * Bridges standard icon ligatures and natural-language business labels.
+ *
+ * This is UI vocabulary, not a screen locator: the same mapping applies to
+ * every feature and platform that exposes an icon token. A match only raises a
+ * candidate into normal verification; it never bypasses ambiguity or safety.
+ */
+export function iconMeaningMatches(iconText: string, wanted: string): boolean {
+  const icon = normalizeHumanText(iconText).replace(/[\s-]+/g, '_');
+  const words = normalizeHumanText(wanted).split(/\s+/).filter(Boolean);
+  const meaningGroups = {
+    add: ['them', 'tao', 'moi', 'add', 'create', 'new'],
+    edit: ['sua', 'chinh', 'edit'],
+    delete: ['xoa', 'bo', 'delete', 'remove'],
+    close: ['dong', 'huy', 'close', 'cancel'],
+    save: ['luu', 'save'],
+    search: ['tim', 'kiem', 'search'],
+    filter: ['loc', 'filter'],
+    more: ['menu', 'thao', 'tac', 'cham', 'more'],
+  } as const;
+  type Meaning = keyof typeof meaningGroups;
+  const firstExplicitMeaning = words
+    .map((word, index) => ({
+      index,
+      meaning: (Object.keys(meaningGroups) as Meaning[])
+        .find((key) => meaningGroups[key].includes(word as never)),
+    }))
+    .find((item) => item.meaning)?.meaning;
+  // A label may mention another action while naming the surrounding component:
+  // "Nút đóng popup Thêm thẻ". The first explicit action is what THIS control
+  // does; later words only describe its context. Without this precedence an
+  // `add` icon scored 65 for a close button and was persisted as healed.
+  const matches = (meaning: Meaning) => firstExplicitMeaning === meaning;
+  switch (icon) {
+    case 'add':
+    case 'add_circle':
+    case 'add_circle_outline':
+    case 'create_new_folder':
+      return matches('add');
+    case 'edit':
+    case 'mode_edit':
+      return matches('edit');
+    case 'delete':
+    case 'delete_outline':
+    case 'remove':
+    case 'remove_circle':
+      return matches('delete');
+    case 'close':
+    case 'cancel':
+    case 'clear':
+      return matches('close');
+    case 'save':
+      return matches('save');
+    case 'search':
+      return matches('search');
+    case 'filter_list':
+    case 'filter_alt':
+      return matches('filter');
+    case 'more_vert':
+    case 'more_horiz':
+      return matches('more');
+    default:
+      return false;
+  }
 }
 
 /** Region headings need a little more tolerance than element labels. */

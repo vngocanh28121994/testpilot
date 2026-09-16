@@ -23,6 +23,7 @@ import { readFileSync } from 'node:fs';
 import { describe, it } from 'node:test';
 
 const native = readFileSync('src/drivers/native.ts', 'utf8');
+const cdp = readFileSync('src/drivers/WebViewCdpDriver.ts', 'utf8');
 
 /** Thân hàm find(), tới trước chỗ dựng selector. */
 function findHead(): string {
@@ -62,7 +63,7 @@ describe('CDP đang nối nhưng Appium không ở trong WebView', () => {
     assert.ok(at > 0, 'getter platform đã biến mất');
     assert.match(
       native.slice(at, at + 200),
-      /this\.inWebview \|\| this\.cdpConnected \? 'web'/,
+      /\(this\.inWebview \|\| this\.cdpConnected\) \? 'web'/,
       'điều kiện chọn ứng viên đã đổi — kiểm lại toSelector và chốt chặn trong find()',
     );
   });
@@ -75,5 +76,13 @@ describe('CDP đang nối nhưng Appium không ở trong WebView', () => {
       /if \(this\.inWebview\) return this\.toDomSelector\(c\);/,
       'nhánh dựng selector đã đổi — kiểm lại chốt chặn trong find()',
     );
+  });
+});
+
+describe('CDP loopback address', () => {
+  it('connects to the IPv4 address on which adb forward actually listens', () => {
+    assert.match(cdp, /connectOverCDP\(`http:\/\/127\.0\.0\.1:\$\{localPort\}`\)/);
+    assert.match(cdp, /http:\/\/127\.0\.0\.1:\$\{localPort\}\/json\/version/);
+    assert.doesNotMatch(cdp, /http:\/\/localhost:\$\{localPort\}/);
   });
 });

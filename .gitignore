@@ -14,6 +14,7 @@ docs/
 
 # Browser auth state is equivalent to a credential. Local fixture only.
 .testpilot/sessions/
+.testpilot/users/
 
 # Workflow history written by the UI.
 registry/history.json

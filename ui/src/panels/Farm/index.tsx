@@ -27,6 +27,7 @@ import { api, qs } from '@/api/client';
 import { ROUTES, STREAM_ROUTES } from '@/api/routes';
 import { useAppState } from '@/hooks/useAppState';
 import { TagFilter } from '@/components/TagFilter';
+import { farmRunningCopy } from './progress';
 
 /** Tên biến mà farm/testspec.yml đọc để giới hạn phạm vi lượt chạy. */
 const FARM_TAG_VAR = 'TESTPILOT_TAG';
@@ -104,6 +105,7 @@ export default function FarmPanel() {
     bundle: true,
   }));
   const job = useStreamJob('farm-run', STREAM_ROUTES.farmRun);
+  const runningCopy = farmRunningCopy(job.run?.stages);
   const login = useStreamJob('aws-login', STREAM_ROUTES.awsLogin);
   // Trạng thái AWS gần như không đổi giữa hai lần bấm, nên nếu màn hình đứng im
   // thì không phân biệt được "đã kiểm rồi, vẫn vậy" với "nút hỏng".
@@ -671,11 +673,18 @@ export default function FarmPanel() {
                 }
               />
 
-              <div>
-                <Button disabled={job.status === 'running'} onClick={start}>
+              <div className="flex flex-col gap-3">
+                <Button className="self-start" disabled={job.status === 'running'} onClick={start}>
                   <Play className="size-4" />
-                  {job.status === 'running' ? 'Đang chạy…' : 'Chạy trên Device Farm'}
+                  {job.status === 'running' ? runningCopy.button : 'Chạy trên Device Farm'}
                 </Button>
+                {job.status === 'running' && (
+                  <StatusBanner
+                    tone="unknown"
+                    title={runningCopy.title}
+                    detail={runningCopy.detail}
+                  />
+                )}
               </div>
             </CardContent>
           </Card>
@@ -703,7 +712,13 @@ export default function FarmPanel() {
             </div>
           )}
           {job.logs.length > 0 && (
-            <LogView logs={job.logs} dropped={job.dropped} error={job.error} label="Log lượt chạy farm" />
+            <LogView
+              logs={job.logs}
+              dropped={job.dropped}
+              error={job.error}
+              active={job.status === 'running'}
+              label="Log lượt chạy farm"
+            />
           )}
         </section>
 

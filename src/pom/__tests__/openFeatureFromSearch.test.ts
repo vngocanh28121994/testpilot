@@ -1,5 +1,6 @@
 /**
- * Opening a feature means clicking the search result, not the query text.
+ * Opening a feature means clicking the exact title inside the search-result
+ * block, not the first result and not matching the whole page by query text.
  *
  * The step waited on `home.searchFirstResult` — a locator matching exactly one
  * node — and then clicked something else: an element found by the query text.
@@ -42,12 +43,12 @@ function body(file: string): string {
 
 describe('opening a feature from search', () => {
   for (const [name, file] of SOURCES) {
-    it(`${name} clicks the same locator it waited on`, () => {
+    it(`${name} clicks the exact result handle it waited on`, () => {
       const steps = body(file);
-      assert.match(steps, /home\.searchFirstResult/);
-      const waited = steps.indexOf('home.searchFirstResult');
-      const clicked = steps.indexOf('home.searchFirstResult', waited + 1);
-      assert.ok(clicked > waited, 'waits on the result but never clicks it');
+      const waited = steps.indexOf('waitForExactSearchResult');
+      const clicked = steps.indexOf('driver.tap(result.handle)');
+      assert.ok(waited >= 0, 'must wait for the exact result title');
+      assert.ok(clicked > waited, 'must click the exact handle returned by that wait');
     });
 
     it(`${name} does not pick the target by the query text`, () => {
@@ -56,13 +57,20 @@ describe('opening a feature from search', () => {
       assert.doesNotMatch(body(file), /home\.dynamicText/);
     });
 
-    it(`${name} still opens the search box and types the query first`, () => {
+    it(`${name} opens or reuses the search input and types before selecting a result`, () => {
       const steps = body(file);
       const box = steps.indexOf('home.searchBox');
       const input = steps.indexOf('home.searchInput');
-      const result = steps.indexOf('home.searchFirstResult');
-      assert.ok(box >= 0 && input > box, 'the search box must be opened before typing');
+      const result = steps.indexOf('waitForExactSearchResult');
+      assert.ok(box >= 0, 'the search box must be available when the input is not already open');
+      assert.ok(input >= 0, 'the search input must be checked and filled');
       assert.ok(result > input, 'the result must be waited for after typing');
     });
   }
+
+  it('scopes exact-title lookup to the feature-result block', () => {
+    const source = readFileSync('src/runtime/searchResult.ts', 'utf8');
+    assert.match(source, /runtimeScope:\s*'\.searched-feature-block'/);
+    assert.match(source, /normalizeHumanText\(title\)\s*===\s*normalizeHumanText\(query\)/);
+  });
 });

@@ -7,7 +7,7 @@
  *
  * Rules:
  *   confidence < minimumConfidence  → INSUFFICIENT / LOW_CONFIDENCE
- *   top - second < minimumMargin    → AMBIGUOUS (stop, surface to human)
+ *   top - second < minimumMargin    → AMBIGUOUS (do not guess without proof)
  *   otherwise                       → CLEAR / SELECTED (safe to act autonomously)
  *
  * CandidateRanking exposes the margin explicitly so downstream components can
@@ -16,6 +16,9 @@
  * CandidateDecision is a typed discriminated union replacing the raw
  * Candidate | undefined pattern.
  */
+
+import type { ElementMatch } from './ElementMatcher.js';
+import type { ObservedElement } from './UiObservation.js';
 
 export interface AmbiguityPolicy {
   /** Minimum confidence to even consider a candidate. Below this → INSUFFICIENT. */
@@ -57,6 +60,44 @@ export interface CandidateRanking {
   secondScore?: number;
   /** topScore − secondScore. Undefined when there is only one candidate. */
   margin?: number;
+}
+
+export interface RankedCandidateSet {
+  /** One representative per real UI element, sorted by confidence. */
+  candidates: ElementMatch[];
+  /** Duplicate observation records collapsed before ambiguity is evaluated. */
+  collapsedEquivalentCandidates: number;
+}
+
+/**
+ * Collapse records that are demonstrably the same UI element.
+ *
+ * Appium/MCP adapters can expose the same native control more than once. Those
+ * records are locator alternatives, not competing business choices, and must
+ * not manufacture an ambiguity. We collapse only on strong identity evidence:
+ * the provider's element id, or identical bounds plus semantic signature.
+ * Repeated labels at different positions remain distinct and therefore strict.
+ */
+export function rankDistinctCandidates(
+  matches: ElementMatch[],
+  elements: ObservedElement[],
+): RankedCandidateSet {
+  const byId = new Map(elements.map((element) => [element.id, element]));
+  const seen = new Set<string>();
+  const candidates: ElementMatch[] = [];
+
+  for (const match of matches) {
+    const element = byId.get(match.observedElementId);
+    const identity = element ? strongElementIdentity(element) : `observation:${match.observedElementId}`;
+    if (seen.has(identity)) continue;
+    seen.add(identity);
+    candidates.push(match);
+  }
+
+  return {
+    candidates,
+    collapsedEquivalentCandidates: matches.length - candidates.length,
+  };
 }
 
 // ── candidate decision ────────────────────────────────────────────────────────
@@ -170,4 +211,25 @@ export function checkAmbiguity(
     candidatesAboveThreshold,
     reason: `Single candidate at ${topScore} ≥ ${policy.minimumConfidence}`,
   };
+}
+
+function strongElementIdentity(element: ObservedElement): string {
+  if (element.providerElementId) {
+    return `provider:${element.provider ?? ''}:${element.providerElementId}`;
+  }
+
+  const bounds = element.bounds;
+  const signature = semanticSignature(element);
+  if (bounds && signature) {
+    return `bounds:${bounds.x},${bounds.y},${bounds.width},${bounds.height}:${signature}`;
+  }
+
+  return `observation:${element.id}`;
+}
+
+function semanticSignature(element: ObservedElement): string {
+  return [element.role, element.text, element.accessibilityLabel, element.placeholder]
+    .filter((value): value is string => Boolean(value?.trim()))
+    .map((value) => value.trim().toLocaleLowerCase())
+    .join('|');
 }

@@ -12,7 +12,8 @@
  *   3. Deterministic matching (DeterministicMatcher)
  *      └─ no candidates above minConfidence → method='failed'
  *   4. Ambiguity gate (G05)
- *      └─ AMBIGUOUS / INSUFFICIENT → method='failed' with outcome in evidence
+ *      └─ INSUFFICIENT → method='failed'; AMBIGUOUS stays strict unless the
+ *         executor explicitly supplies an observable outcome-validation path
  *   5. Interaction safety check (G06)
  *      └─ UNSAFE / AMBIGUOUS → method='failed' with reason in evidence
  *   6. Verification (StandardElementVerifier) — G04: single authoritative engine
@@ -28,12 +29,18 @@ import type { ElementIntent } from './ElementIntent.js';
 import type { UiObservation, ObservedElement } from './UiObservation.js';
 import type { ElementMatch } from './ElementMatcher.js';
 import type { ElementVerification } from './ElementVerifier.js';
-import { DeterministicMatcher, type MatchOptions } from './ElementMatcher.js';
+import { bestLocator, DeterministicMatcher, type MatchOptions } from './ElementMatcher.js';
 import { StandardElementVerifier } from './ElementVerifier.js';
 import { RuntimeRegistry, type RuntimeLocator } from './RuntimeRegistry.js';
 import { ConfidenceScorer } from './ConfidenceScorer.js';
 import { checkKnownLocator } from './KnownLocatorLookup.js';
-import { checkAmbiguity, type AmbiguityCheckResult, type AmbiguityPolicy, DEFAULT_AMBIGUITY_POLICY } from './AmbiguityPolicy.js';
+import {
+  checkAmbiguity,
+  rankDistinctCandidates,
+  type AmbiguityCheckResult,
+  type AmbiguityPolicy,
+  DEFAULT_AMBIGUITY_POLICY,
+} from './AmbiguityPolicy.js';
 import { checkInteractionSafety, type SafetyCheckResult } from './InteractionSafety.js';
 import { verifyRuntime, type RuntimeVerificationResult } from './RuntimeVerification.js';
 
@@ -53,6 +60,8 @@ export interface DiscoveryResult {
   locator?: { strategy: string; value: string };
   /** Match detail from the observation step. */
   match?: ElementMatch;
+  /** Additional verified candidates available for bounded outcome validation. */
+  alternatives?: ElementMatch[];
   /** Verification result for the best match. */
   verification?: ElementVerification;
   /** Ambiguity gate result — present when G05 check ran. */
@@ -120,6 +129,14 @@ export interface DiscoveryOptions {
    * Audit/crawl callers retain the historical default (true).
    */
   persistVerifiedLocator?: boolean;
+  /**
+   * Permit a ranked candidate set when identity remains ambiguous.
+   *
+   * This is intentionally opt-in for state-changing actions. Resolver enables
+   * it only when Executor has an observable postcondition and can reject a
+   * candidate that does not produce the expected state.
+   */
+  allowAmbiguousCandidates?: boolean;
 }
 
 /**
@@ -213,10 +230,11 @@ export class ElementDiscovery {
         }
 
         if (runtimeVerif.status === 'UNKNOWN') {
-          // HIGH-risk action + missing metadata: never auto-PASS, reject locator.
-          // Fall through to full observation-based discovery (already have obs).
+          // The verifier could not prove the known locator belongs to the
+          // requested element. Fall through to fresh observation-based
+          // discovery; business-risk labels do not participate in this gate.
           evidence.push(
-            `G01 UNKNOWN: ${runtimeVerif.reason ?? 'missing metadata for HIGH-risk action'} — ` +
+            `G01 UNKNOWN: ${runtimeVerif.reason ?? 'identity could not be verified'} — ` +
             `rejecting known locator, starting full discovery`,
           );
         } else {
@@ -268,11 +286,18 @@ export class ElementDiscovery {
     // ── 3. Deterministic matching ─────────────────────────────────────────────
     const matchOpts: MatchOptions = { screen: opts.screen };
     const matches = this.matcher.match(intent, observation, matchOpts);
-    const above = matches.filter((m) => m.confidence >= minConf);
+    const aboveRaw = matches.filter((m) => m.confidence >= minConf);
+    const ranked = rankDistinctCandidates(aboveRaw, observation.elements);
+    const above = ranked.candidates;
 
     evidence.push(
-      `matcher: ${matches.length} candidate(s), ${above.length} above threshold (${minConf})`,
+      `matcher: ${matches.length} candidate(s), ${above.length} distinct above threshold (${minConf})`,
     );
+    if (ranked.collapsedEquivalentCandidates > 0) {
+      evidence.push(
+        `identity: collapsed ${ranked.collapsedEquivalentCandidates} duplicate observation record(s)`,
+      );
+    }
 
     if (above.length === 0) {
       if (matches.length > 0) {
@@ -294,8 +319,16 @@ export class ElementDiscovery {
     const ambiguity = checkAmbiguity(scores, effectiveAmbiguityPolicy);
     evidence.push(`G05 ambiguity: ${ambiguity.outcome} — ${ambiguity.reason}`);
 
-    if (ambiguity.outcome === 'AMBIGUOUS' || ambiguity.outcome === 'INSUFFICIENT') {
+    if (
+      ambiguity.outcome === 'INSUFFICIENT' ||
+      (ambiguity.outcome === 'AMBIGUOUS' && !opts.allowAmbiguousCandidates)
+    ) {
       return { intent, method: 'failed', ambiguity, observation, evidence };
+    }
+    if (ambiguity.outcome === 'AMBIGUOUS') {
+      evidence.push(
+        'ambiguity: exposing verified candidates for bounded outcome validation; score only controls order',
+      );
     }
 
     const best = above[0]!;
@@ -308,7 +341,31 @@ export class ElementDiscovery {
     }
 
     // ── 5. Interaction safety check (G06) ─────────────────────────────────────
-    const safety = checkInteractionSafety(intent, candidateEl, observation.elements);
+    // A DOM/accessibility observer often reports the visible text leaf as
+    // non-interactive even though its parent owns the click. Exact + unique
+    // semantic identity is enough to walk the *observed parent chain* to an
+    // already visible/enabled/interactive owner. This is not ambiguity: the
+    // leaf and ancestor are two records for one real control. Ambiguous sibling
+    // controls still require the executor's bounded outcome-validation path.
+    const exactLeaf = checkInteractionSafety(intent, candidateEl, observation.elements, {
+      allowExactTextProxy: true,
+    }).safety === 'SAFE';
+    const interactiveAncestor = (exactLeaf || opts.allowAmbiguousCandidates === true)
+      ? nearestInteractiveAncestor(candidateEl, observation.elements)
+      : undefined;
+    const allowExactTextProxy = Boolean(interactiveAncestor) || opts.allowAmbiguousCandidates === true;
+    const actionEl = interactiveAncestor ?? candidateEl;
+    // The leaf carries the semantic evidence (`add`, `Xóa khỏi danh mục`),
+    // while the ancestor owns the click and the stable locator. Verify both as
+    // one control instead of returning a locator for an unclickable child.
+    const verificationEl = actionEl === candidateEl ? candidateEl : {
+      ...actionEl,
+      text: candidateEl.text ?? actionEl.text,
+      accessibilityLabel: candidateEl.accessibilityLabel ?? actionEl.accessibilityLabel,
+    };
+    const safety = checkInteractionSafety(intent, verificationEl, observation.elements, {
+      allowExactTextProxy,
+    });
     evidence.push(`G06 safety: ${safety.safety} — ${safety.reason}`);
     for (const e of safety.evidence) evidence.push(`  · ${e}`);
 
@@ -317,7 +374,9 @@ export class ElementDiscovery {
     }
 
     // ── 6. Verification (G04: single authoritative engine) ────────────────────
-    const verification = this.verifier.verify(intent, candidateEl, observation.elements);
+    const verification = this.verifier.verify(intent, verificationEl, observation.elements, {
+      allowExactTextProxy,
+    });
     evidence.push(
       `verification: ${verification.passed ? 'PASSED' : 'FAILED'} score=${verification.score}`,
     );
@@ -336,26 +395,50 @@ export class ElementDiscovery {
       };
     }
 
+    const effectiveLocator = bestLocator(actionEl, observation.platform) ?? best.locator;
+    const verifiedBest = {
+      ...best,
+      observedElementId: actionEl.id,
+      ...(effectiveLocator ? { locator: effectiveLocator } : {}),
+      verified: true,
+    };
+    const alternatives = ambiguity.outcome === 'AMBIGUOUS'
+      ? above.slice(1).flatMap((candidate) => {
+          const element = observation.elements.find((item) => item.id === candidate.observedElementId);
+          if (!element || !candidate.locator) return [];
+          const candidateSafety = checkInteractionSafety(intent, element, observation.elements, {
+            allowExactTextProxy,
+          });
+          if (candidateSafety.safety !== 'SAFE') return [];
+          const candidateVerification = this.verifier.verify(intent, element, observation.elements, {
+            allowExactTextProxy,
+          });
+          if (!candidateVerification.passed) return [];
+          return [{ ...candidate, verified: true }];
+        })
+      : [];
+
     // ── 7. Store in RuntimeRegistry ───────────────────────────────────────────
-    if (best.locator && opts.persistVerifiedLocator !== false) {
+    if (effectiveLocator && opts.persistVerifiedLocator !== false) {
       const locatorToStore: RuntimeLocator = {
-        strategy: best.locator.strategy,
-        value: best.locator.value,
+        strategy: effectiveLocator.strategy,
+        value: effectiveLocator.value,
         source: 'runtime-observed',
         status: 'verified',
-        confidence: best.confidence / 100,
+        confidence: verifiedBest.confidence / 100,
         verifiedAt: new Date().toISOString(),
         ...(opts.platform ? { platform: opts.platform } : {}),
       };
       this.runtimeRegistry.upsertLocator(intent.id, locatorToStore);
-      evidence.push(`stored: ${best.locator.strategy}="${best.locator.value}" in RuntimeRegistry`);
+      evidence.push(`stored: ${effectiveLocator.strategy}="${effectiveLocator.value}" in RuntimeRegistry`);
     }
 
     return {
       intent,
       method: 'deterministic',
-      locator: best.locator,
-      match: { ...best, verified: true },
+      locator: effectiveLocator,
+      match: verifiedBest,
+      ...(alternatives.length > 0 ? { alternatives } : {}),
       ambiguity,
       safety,
       verification,
@@ -386,6 +469,22 @@ export class ElementDiscovery {
   rejectLocator(elementId: string, locator: { strategy: string; value: string }): void {
     this.runtimeRegistry.markRejected(elementId, locator.strategy, locator.value);
   }
+}
+
+function nearestInteractiveAncestor(
+  leaf: ObservedElement,
+  all: ObservedElement[],
+): ObservedElement | undefined {
+  if (leaf.interactive !== false || !leaf.parentId) return undefined;
+  const byId = new Map(all.map((element) => [element.id, element]));
+  let cursor = byId.get(leaf.parentId);
+  for (let depth = 0; cursor && depth < 6; depth += 1) {
+    if (cursor.visible !== false && cursor.enabled !== false && cursor.interactive === true) {
+      return cursor;
+    }
+    cursor = cursor.parentId ? byId.get(cursor.parentId) : undefined;
+  }
+  return undefined;
 }
 
 // ── helpers ───────────────────────────────────────────────────────────────────

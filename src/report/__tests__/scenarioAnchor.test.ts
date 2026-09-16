@@ -45,7 +45,10 @@ function kichBan(
   } as unknown as ScenarioResult;
 }
 
-async function dungBaoCao(results: ScenarioResult[]): Promise<string> {
+async function dungBaoCao(
+  results: ScenarioResult[],
+  knownIssues: ReadonlyMap<string, string> = new Map(),
+): Promise<string> {
   const dir = mkdtempSync(path.join(tmpdir(), 'testpilot-report-'));
   const report: RunReport = {
     runId: 'thu',
@@ -55,7 +58,7 @@ async function dungBaoCao(results: ScenarioResult[]): Promise<string> {
     healSuggestions: [],
     quarantined: [],
   };
-  await writeHtmlReport(report, [], dir);
+  await writeHtmlReport(report, [], dir, knownIssues);
   return readFileSync(path.join(dir, 'index.html'), 'utf8');
 }
 
@@ -110,16 +113,83 @@ describe('report — bấm kịch bản là xuống chi tiết', () => {
    * thực tế đó là một dòng xanh không ai chất vấn.
    */
   it('dòng xanh có bước chưa chứng minh được thì phải nói ra ngay tại dòng', async () => {
-    const html = await dungBaoCao([
-      kichBan('u', 'Ca xanh nhưng có bước mù', 'passed', undefined, 'unverified'),
-    ]);
-    assert.match(html, /bước chưa chứng minh/, 'dòng bảng phải mang cảnh báo');
-    assert.match(html, /chưa chứng minh được thay đổi/, 'khối bằng chứng phải liệt kê bước đó');
+    const result = kichBan('u', 'Ca xanh nhưng có bước mù', 'passed', undefined, 'unverified');
+    result.runs[0]!.steps[0]!.unverifiedReason =
+      'Điều kiện đã đúng trước thao tác và trạng thái quan sát được không đổi.';
+    const html = await dungBaoCao([result]);
+    assert.match(html, /hành động chưa có bằng chứng thay đổi/, 'dòng bảng phải mang cảnh báo');
+    assert.match(html, /Điều kiện đã đúng trước thao tác/, 'khối bằng chứng phải giải thích nguyên nhân');
   });
 
   it('bung <details> đang đóng rồi mới cuộn', async () => {
     const html = await dungBaoCao([kichBan('a', 'Ca đỏ', 'failed')]);
     assert.match(html, /dich\.tagName === 'DETAILS'[\s\S]{0,80}dich\.open = true/);
     assert.match(html, /scrollIntoView/);
+  });
+
+  it('dùng cùng nhãn FAIL/PASS và xếp chi tiết theo thời gian chạy', async () => {
+    const failSau = kichBan('late-fail', 'Fail chạy sau', 'failed');
+    failSau.runs[0]!.startedAt = '2026-09-12T00:00:30.000Z';
+    const failTruoc = kichBan('early-fail', 'Fail chạy trước', 'failed');
+    failTruoc.runs[0]!.startedAt = '2026-09-12T00:00:10.000Z';
+    const pass = kichBan('pass', 'Case xanh', 'passed');
+    const html = await dungBaoCao([failSau, pass, failTruoc]);
+
+    assert.match(html, /evidence-badge failed">FAIL</);
+    assert.match(html, /evidence-badge passed">PASS</);
+    assert.ok(
+      html.indexOf('Fail chạy trước</strong>') < html.indexOf('Fail chạy sau</strong>'),
+      'case chạy trước phải đứng trước dù kết quả đầu vào đang lộn xộn',
+    );
+  });
+
+  it('mọi case trong report gốc đều nói rõ header có thể mở chi tiết', async () => {
+    const html = await dungBaoCao([
+      kichBan('fail', 'Ca đỏ', 'failed'),
+      kichBan('pass', 'Ca xanh', 'passed'),
+    ]);
+
+    assert.equal(
+      [...html.matchAll(/class="evidence-action">Xem\/ẩn chi tiết/g)].length,
+      2,
+      'cả case pass và fail đều phải có affordance mở chi tiết',
+    );
+    assert.match(html, /details\[open\] > \.evidence-head \.evidence-chevron/);
+  });
+
+  it('tách Known issue khỏi failed nhưng vẫn giữ chi tiết và lý do', async () => {
+    const html = await dungBaoCao([
+      kichBan('known', 'Sản phẩm chưa đáp ứng', 'failed'),
+      kichBan('real', 'Test hỏng thật', 'failed'),
+      kichBan('pass', 'Case xanh', 'passed'),
+    ], new Map([['known', 'Chưa nằm trong kế hoạch sản phẩm']]));
+
+    assert.match(html, /class="tile failed"><b>1<\/b>failed/);
+    assert.match(html, /class="tile known"><b>1<\/b>known issue/);
+    assert.match(html, /class="v-known">known issue<\/td>/);
+    const failSection = html.slice(html.indexOf('<h2>Case fail</h2>'), html.indexOf('<h2>Known issue</h2>'));
+    const knownSection = html.slice(html.indexOf('<h2>Known issue</h2>'), html.indexOf('<h2>Case pass</h2>'));
+    assert.match(failSection, /Test hỏng thật/);
+    assert.doesNotMatch(failSection, /Sản phẩm chưa đáp ứng/);
+    assert.match(knownSection, /KNOWN ISSUE/);
+    assert.match(knownSection, /Sản phẩm chưa đáp ứng/);
+    assert.match(knownSection, /Lý do:<\/strong> Chưa nằm trong kế hoạch sản phẩm/);
+  });
+
+  it('đặt video testcase trong chính case và chỉ để video toàn thiết bị ở mục riêng', async () => {
+    const html = await dungBaoCao([
+      kichBan('pass-video', 'Case xanh có video', 'passed', 'video/case-xanh.webm'),
+    ]);
+    const caseSection = html.slice(
+      html.indexOf('<h2>Case pass</h2>'),
+      html.indexOf('<h2>Bản ghi toàn bộ thiết bị</h2>'),
+    );
+    const wholeRunSection = html.slice(
+      html.indexOf('<h2>Bản ghi toàn bộ thiết bị</h2>'),
+      html.indexOf('<h2>Locator healing'),
+    );
+    assert.match(caseSection, /case-xanh\.webm/);
+    assert.doesNotMatch(wholeRunSection, /case-xanh\.webm/);
+    assert.match(wholeRunSection, /<!--device-recordings-->/);
   });
 });

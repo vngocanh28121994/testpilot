@@ -415,12 +415,6 @@ export default function RunnerPanel() {
                       ? 'Chạy Native Regression'
                       : 'Chạy test'}
                 </Button>
-                {job.status === 'running' && (
-                  <Button variant="destructive" onClick={() => void stop()}>
-                    <Square className="size-4" />
-                    Dừng test
-                  </Button>
-                )}
               </div>
 
               {/* Chọn nhiều máy nằm CẠNH nút chạy, không nằm trong thẻ kiểm tra
@@ -465,6 +459,7 @@ export default function RunnerPanel() {
           error={job.error}
           status={job.status}
           reports={reports}
+          onStop={() => void stop()}
         />
         <History reports={reports} />
       </section>
@@ -610,14 +605,19 @@ function JobLog({
   error,
   status,
   reports,
+  onStop,
 }: {
   logs: string[];
   dropped: number;
   error: string | null;
   status: 'idle' | 'running' | 'done' | 'error';
   reports: ReportView[];
+  onStop: () => void;
 }) {
-  if (!logs.length && !error) return null;
+  // Đang chạy thì thẻ này phải có mặt kể cả khi chưa có dòng log nào: nút Dừng
+  // nằm ở đây, và khoảng lặng đầu lượt chạy — lúc driver đang khởi động — đúng
+  // là lúc người ta hay đổi ý nhất.
+  if (!logs.length && !error && status !== 'running') return null;
 
   // CLI emits the absolute run directory as an internal marker. Match by its
   // basename because `/api/state` deliberately exposes only the safe run id.
@@ -638,6 +638,20 @@ function JobLog({
       <CardHeader>
         <div className="flex flex-wrap items-center justify-between gap-3">
           <CardTitle id="run-log-title">Log chạy</CardTitle>
+          {/* Nút Dừng ở ĐÂY, không ở cạnh nút Chạy.
+              
+              Log chảy liên tục trong lúc chạy, nên trang dài ra không ngừng và
+              cụm nút chạy bị đẩy lên trên màn hình. Muốn dừng thì phải cuộn
+              ngược lên, mà nội dung mới vẫn đang được thêm vào bên dưới —
+              đúng lúc cần dừng nhất thì nút dừng là thứ khó với tới nhất.
+              
+              Ở đầu thẻ log thì nó đi cùng thứ người ta đang nhìn. */}
+          {status === 'running' && (
+            <Button variant="destructive" size="sm" onClick={onStop}>
+              <Square className="size-4" />
+              Dừng test
+            </Button>
+          )}
           {status === 'done' && (
             <div role="status" className="flex flex-wrap items-center gap-2">
               <Badge
@@ -663,7 +677,13 @@ function JobLog({
         </div>
       </CardHeader>
       <CardContent>
-        <LogView logs={logs} dropped={dropped} error={error} label="Log chạy" />
+        <LogView
+          logs={logs}
+          dropped={dropped}
+          error={error}
+          active={status === 'running'}
+          label="Log chạy"
+        />
       </CardContent>
     </Card>
   );

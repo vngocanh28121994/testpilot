@@ -6,7 +6,7 @@
  * lỗi gõ không trả 404 rõ ràng — nó rơi xuống nhánh static cuối cùng và trả về
  * index.html của app cũ với status 200.
  *
- * 9 route đánh dấu STREAM trả về SSE-over-POST, KHÔNG phải JSON. Chúng đi qua
+ * 10 route đánh dấu STREAM trả về SSE-over-POST, KHÔNG phải JSON. Chúng đi qua
  * `lib/streamJob.ts` chứ không qua `api/client.ts`.
  */
 export const ROUTES = {
@@ -15,6 +15,7 @@ export const ROUTES = {
   history: '/api/history',
   healing: '/api/healing',
   healingReview: '/api/healing/review',
+  healingDuplicate: '/api/healing/duplicate',
   runLog: '/api/run/log',
   preflight: '/api/preflight',
   vocabulary: '/api/vocabulary',
@@ -53,11 +54,12 @@ export const ROUTES = {
   prereqIosTrust: '/api/prereq/ios-trust',
 } as const;
 
-/** 9 route SSE-over-POST. Đi qua streamJob(), không qua api.post(). */
+/** 10 route SSE-over-POST. Đi qua streamJob(), không qua api.post(). */
 export const STREAM_ROUTES = {
   gen: '/api/gen',
   run: '/api/run',
   farmRun: '/api/farm/run',
+  farmPull: '/api/farm/pull',
   awsLogin: '/api/aws/login',
   workflowComplete: '/api/workflow/complete',
   prereqAppium: '/api/prereq/appium',

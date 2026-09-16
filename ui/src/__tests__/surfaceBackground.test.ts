@@ -31,7 +31,10 @@ describe('bề mặt nội dung không để nền xuyên qua', () => {
       const code = readFileSync(file, 'utf8');
       for (const m of code.matchAll(SURFACE)) {
         const cls = m[1]!;
-        if (!/\bbg-[a-z]/.test(cls)) {
+        // `bg-(--tint-warn)` và `bg-[…]` cũng là khai màu nền — cú pháp giá
+        // trị tuỳ ý của Tailwind v4. Chỉ nhận `bg-` + chữ cái thì một khối có
+        // nền hẳn hoi vẫn bị báo là thiếu nền.
+        if (!/\bbg-[a-z([]/.test(cls)) {
           offenders.push(`${path.relative(path.resolve('ui/src'), file)}: ${cls.slice(0, 60)}`);
         }
       }

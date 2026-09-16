@@ -21,7 +21,7 @@ import { syncPomProject } from '../pom/sync.js';
 
 async function main(): Promise<void> {
   const args = parseArgs(process.argv.slice(2));
-  const cfg = await loadConfig(args.config ?? 'testpilot.config.json');
+  const cfg = await loadConfig(args.config ?? process.env.TESTPILOT_CONFIG);
 
   const featuresDir = args.features ?? cfg.paths.features ?? 'features';
   const registryPath = args.registry ?? cfg.paths.registry ?? 'registry/elements.json';

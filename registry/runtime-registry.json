@@ -57,11 +57,11 @@
           "source": "runtime-observed",
           "status": "healed",
           "confidence": 0.6,
-          "verifiedAt": "2026-09-12T04:55:34.838Z",
+          "verifiedAt": "2026-09-16T03:10:44.211Z",
           "platform": "web"
         }
       ],
-      "lastUpdatedAt": "2026-09-12T04:55:34.838Z"
+      "lastUpdatedAt": "2026-09-16T03:10:44.211Z"
     },
     "priceBoard.addStockButton": {
       "element": "priceBoard.addStockButton",
@@ -72,7 +72,7 @@
           "source": "runtime-observed",
           "status": "healed",
           "confidence": 0.79,
-          "verifiedAt": "2026-08-26T10:32:10.540Z",
+          "verifiedAt": "2026-09-16T03:10:45.319Z",
           "platform": "web"
         },
         {
@@ -84,7 +84,7 @@
           "verifiedAt": "2026-09-11T18:45:44.869Z"
         }
       ],
-      "lastUpdatedAt": "2026-09-11T18:45:44.869Z"
+      "lastUpdatedAt": "2026-09-16T03:10:45.319Z"
     },
     "priceBoard.xoaKhoiDanhMuc": {
       "element": "priceBoard.xoaKhoiDanhMuc",
@@ -93,13 +93,13 @@
           "strategy": "label",
           "value": "Xoá khỏi danh mục",
           "source": "runtime-observed",
-          "status": "rejected",
+          "status": "healed",
           "confidence": 0.6,
-          "verifiedAt": "2026-09-12T05:00:55.867Z",
+          "verifiedAt": "2026-09-15T08:07:33.711Z",
           "platform": "web"
         }
       ],
-      "lastUpdatedAt": "2026-09-12T05:03:04.153Z"
+      "lastUpdatedAt": "2026-09-15T08:07:33.712Z"
     },
     "priceBoard.iconTaiDongAds": {
       "element": "priceBoard.iconTaiDongAds",
@@ -442,11 +442,11 @@
           "source": "runtime-observed",
           "status": "healed",
           "confidence": 0.6,
-          "verifiedAt": "2026-08-23T16:43:57.002Z",
+          "verifiedAt": "2026-09-15T05:21:50.357Z",
           "platform": "web"
         }
       ],
-      "lastUpdatedAt": "2026-08-23T16:43:57.002Z"
+      "lastUpdatedAt": "2026-09-15T05:21:50.357Z"
     },
     "home.thongKeChungGiaoDichPs": {
       "element": "home.thongKeChungGiaoDichPs",
@@ -457,11 +457,11 @@
           "source": "runtime-observed",
           "status": "healed",
           "confidence": 0.6,
-          "verifiedAt": "2026-08-23T16:43:58.274Z",
+          "verifiedAt": "2026-09-15T05:21:51.445Z",
           "platform": "web"
         }
       ],
-      "lastUpdatedAt": "2026-08-23T16:43:58.274Z"
+      "lastUpdatedAt": "2026-09-15T05:21:51.445Z"
     },
     "home.ngayTu": {
       "element": "home.ngayTu",
@@ -530,8 +530,8 @@
           "value": "Mã cổ phiếu",
           "source": "runtime-observed",
           "status": "healed",
-          "confidence": 0.79,
-          "verifiedAt": "2026-09-12T04:59:27.660Z",
+          "confidence": 1,
+          "verifiedAt": "2026-09-16T03:11:51.865Z",
           "platform": "web"
         },
         {
@@ -540,11 +540,11 @@
           "source": "runtime-observed",
           "status": "healed",
           "confidence": 0.79,
-          "verifiedAt": "2026-09-11T20:09:17.317Z",
+          "verifiedAt": "2026-09-16T02:32:19.259Z",
           "platform": "web"
         }
       ],
-      "lastUpdatedAt": "2026-09-12T04:59:27.660Z"
+      "lastUpdatedAt": "2026-09-16T03:11:51.865Z"
     },
     "priceBoard.vicHose": {
       "element": "priceBoard.vicHose",
@@ -570,11 +570,11 @@
           "source": "runtime-observed",
           "status": "healed",
           "confidence": 0.6,
-          "verifiedAt": "2026-09-11T08:19:28.565Z",
+          "verifiedAt": "2026-09-16T04:07:13.139Z",
           "platform": "web"
         }
       ],
-      "lastUpdatedAt": "2026-09-11T08:19:28.565Z"
+      "lastUpdatedAt": "2026-09-16T04:07:13.144Z"
     },
     "transfer.soTien": {
       "element": "transfer.soTien",
@@ -585,11 +585,11 @@
           "source": "runtime-observed",
           "status": "healed",
           "confidence": 0.6,
-          "verifiedAt": "2026-09-11T08:19:29.870Z",
+          "verifiedAt": "2026-09-16T04:07:16.733Z",
           "platform": "web"
         }
       ],
-      "lastUpdatedAt": "2026-09-11T08:19:29.870Z"
+      "lastUpdatedAt": "2026-09-16T04:07:16.733Z"
     },
     "transfer.tienChuyenPhi0": {
       "element": "transfer.tienChuyenPhi0",
@@ -600,11 +600,11 @@
           "source": "runtime-observed",
           "status": "healed",
           "confidence": 0.6,
-          "verifiedAt": "2026-09-11T08:18:31.959Z",
+          "verifiedAt": "2026-09-15T09:36:33.655Z",
           "platform": "web"
         }
       ],
-      "lastUpdatedAt": "2026-09-11T08:18:31.959Z"
+      "lastUpdatedAt": "2026-09-15T09:36:33.655Z"
     },
     "login.usernameField": {
       "element": "login.usernameField",
@@ -617,9 +617,151 @@
           "confidence": 0.62,
           "verifiedAt": "2026-09-11T04:57:55.635Z",
           "platform": "web"
+        },
+        {
+          "strategy": "placeholder",
+          "value": "Email / Số tài khoản / Điện thoại",
+          "source": "ai-discovered",
+          "status": "suggested",
+          "confidence": 0.95,
+          "verifiedAt": "2026-09-15T07:07:44.236Z"
         }
       ],
-      "lastUpdatedAt": "2026-09-11T04:57:55.635Z"
+      "lastUpdatedAt": "2026-09-15T07:07:44.236Z"
+    },
+    "home.totalAssets": {
+      "element": "home.totalAssets",
+      "locators": [
+        {
+          "strategy": "text",
+          "value": "0.1 tr",
+          "source": "ai-discovered",
+          "status": "suggested",
+          "confidence": 0.85,
+          "verifiedAt": "2026-09-15T08:30:37.638Z"
+        }
+      ],
+      "lastUpdatedAt": "2026-09-15T08:30:37.638Z"
+    },
+    "stockOptionsMenu.removeFromCategory": {
+      "element": "stockOptionsMenu.removeFromCategory",
+      "locators": [
+        {
+          "strategy": "label",
+          "value": "Xóa khỏi danh mục",
+          "source": "runtime-observed",
+          "status": "healed",
+          "confidence": 0.6,
+          "verifiedAt": "2026-09-16T03:13:17.655Z",
+          "platform": "web"
+        }
+      ],
+      "lastUpdatedAt": "2026-09-16T03:13:17.655Z"
+    },
+    "myReports.addReportButton": {
+      "element": "myReports.addReportButton",
+      "locators": [
+        {
+          "strategy": "label",
+          "value": "add",
+          "source": "runtime-observed",
+          "status": "healed",
+          "confidence": 0.4,
+          "verifiedAt": "2026-09-15T20:41:58.418Z",
+          "platform": "web"
+        }
+      ],
+      "lastUpdatedAt": "2026-09-15T20:41:58.418Z"
+    },
+    "myReports.chonLoaiNoiDungHienThi": {
+      "element": "myReports.chonLoaiNoiDungHienThi",
+      "locators": [
+        {
+          "strategy": "label",
+          "value": "Chọn loại nội dung hiển thị",
+          "source": "runtime-observed",
+          "status": "healed",
+          "confidence": 0.6,
+          "verifiedAt": "2026-09-15T20:42:17.674Z",
+          "platform": "web"
+        }
+      ],
+      "lastUpdatedAt": "2026-09-15T20:42:17.674Z"
+    },
+    "reportTemplateEditor.addCardButton": {
+      "element": "reportTemplateEditor.addCardButton",
+      "locators": [
+        {
+          "strategy": "label",
+          "value": "add",
+          "source": "runtime-observed",
+          "status": "healed",
+          "confidence": 0.6,
+          "verifiedAt": "2026-09-15T20:42:55.914Z",
+          "platform": "web"
+        }
+      ],
+      "lastUpdatedAt": "2026-09-15T20:42:55.914Z"
+    },
+    "reportTypePicker.continueButton": {
+      "element": "reportTypePicker.continueButton",
+      "locators": [
+        {
+          "strategy": "label",
+          "value": "TIẾP TỤC",
+          "source": "runtime-observed",
+          "status": "healed",
+          "confidence": 0.59,
+          "verifiedAt": "2026-09-15T20:42:34.432Z",
+          "platform": "web"
+        }
+      ],
+      "lastUpdatedAt": "2026-09-15T20:42:34.432Z"
+    },
+    "addCardSheet.cardMonthlyProfit": {
+      "element": "addCardSheet.cardMonthlyProfit",
+      "locators": [
+        {
+          "strategy": "xpath",
+          "value": "//*[not(*) and normalize-space(.)='Lợi nhuận theo tháng']",
+          "source": "runtime-observed",
+          "status": "rejected",
+          "confidence": 0.45,
+          "verifiedAt": "2026-09-15T20:42:55.913Z",
+          "platform": "web"
+        }
+      ],
+      "lastUpdatedAt": "2026-09-15T20:43:12.482Z"
+    },
+    "addCardSheet.cardTransactionStats": {
+      "element": "addCardSheet.cardTransactionStats",
+      "locators": [
+        {
+          "strategy": "xpath",
+          "value": "//*[not(*) and normalize-space(.)='Thống kê giao dịch CP']",
+          "source": "runtime-observed",
+          "status": "healed",
+          "confidence": 0.4,
+          "verifiedAt": "2026-09-15T20:35:25.238Z",
+          "platform": "web"
+        }
+      ],
+      "lastUpdatedAt": "2026-09-15T20:35:25.238Z"
+    },
+    "addCardSheet.cardAssets": {
+      "element": "addCardSheet.cardAssets",
+      "locators": [
+        {
+          "strategy": "xpath",
+          "value": "//*[not(*) and normalize-space(.)='Tài sản']",
+          "source": "runtime-observed",
+          "status": "healed",
+          "confidence": 0.4,
+          "verifiedAt": "2026-09-15T20:35:25.725Z",
+          "platform": "web"
+        }
+      ],
+      "lastUpdatedAt": "2026-09-15T20:35:25.725Z"
     }
   }
 }

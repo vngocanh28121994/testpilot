@@ -55,7 +55,7 @@ export async function prepareExecutableDraft(
   const repair = opts.repair ?? completeText;
 
   for (let attempt = 0; attempt <= maxRepairs; attempt += 1) {
-    const normalized = normalizeNaturalSteps(content);
+    const normalized = normalizeNaturalSteps(content, registry);
     content = normalized.content;
     for (const element of registerMissingElementIntents(content, registry)) {
       pending.set(element.id, { id: element.id, label: element.label, screen: element.screen });

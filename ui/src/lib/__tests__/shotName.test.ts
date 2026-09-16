@@ -27,6 +27,20 @@ describe('shotLabel', () => {
     });
   });
 
+  it('đọc tên testcase pass thay vì in nguyên filename slug', () => {
+    expect(shotLabel('chuyen-tien-thanh-cong-a1-pass', false)).toEqual({
+      scenario: 'chuyen tien thanh cong',
+      detail: 'bằng chứng tại lúc kiểm tra',
+    });
+  });
+
+  it('ghi đúng dòng assertion của ảnh pass chụp tại thời điểm kiểm tra', () => {
+    expect(shotLabel('chuyen-tien-thanh-cong-a1-l27-pass', false)).toEqual({
+      scenario: 'chuyen tien thanh cong',
+      detail: 'bằng chứng tại lúc kiểm tra · dòng 27',
+    });
+  });
+
   it('ảnh lỗi không theo dạng chuẩn thì vẫn nói là lúc fail', () => {
     expect(shotLabel('tap-declined-1788842133277', true).detail).toBe(
       'lúc fail · tap-declined-1788842133277',

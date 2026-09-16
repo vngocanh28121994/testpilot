@@ -1,6 +1,10 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import type { HealingResponse, HealingReviewRequest } from '@core/ui/contracts.js';
+import type {
+  DuplicateReviewRequest,
+  HealingResponse,
+  HealingReviewRequest,
+} from '@core/ui/contracts.js';
 import { api } from '@/api/client';
 import { ROUTES } from '@/api/routes';
 
@@ -38,6 +42,36 @@ export function useReviewHealing() {
         variables.action === 'apply'
           ? 'Đã đưa locator được duyệt lên primary trong element registry.'
           : 'Đã từ chối đề xuất; locator hiện tại không bị thay đổi.',
+      );
+    },
+
+    onError: (err: Error) => toast.error(err.message),
+  });
+}
+
+/**
+ * Quyết định về một cặp element bị nghi là cùng một control.
+ *
+ * Cùng đường trả về với `useReviewHealing`: endpoint trả TOÀN BỘ trạng thái
+ * healing mới, nên ghi thẳng vào cache. `merge` có ghi vào element registry
+ * nên phải invalidate `['state']`; `distinct` thì không, nhưng phân biệt hai
+ * đường ở đây chỉ để tiết kiệm một round-trip mà lại thêm một nhánh có thể
+ * trôi — nên cả hai làm giống nhau.
+ */
+export function useReviewDuplicate() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (body: DuplicateReviewRequest) =>
+      api.post<HealingResponse>(ROUTES.healingDuplicate, body),
+
+    onSuccess: (fresh, variables) => {
+      queryClient.setQueryData(healingQueryKey, fresh);
+      void queryClient.invalidateQueries({ queryKey: ['state'] });
+      toast.success(
+        variables.action === 'merge'
+          ? 'Đã đưa locator đã chứng minh sang element còn lại. Không bản ghi nào bị xoá.'
+          : 'Đã ghi nhận hai element là khác nhau; cặp này sẽ không hiện lại.',
       );
     },
 

@@ -209,6 +209,13 @@ export async function listRuns(root: string): Promise<RunMeta[]> {
  *
  * A run still marked `running` is never touched: it is either in progress right
  * now, or it is the crash you are trying to investigate.
+ *
+ * `interrupted` is kept on the failure clock, not the pass budget. It used to
+ * fall through to the `else` and count as a passing baseline, so three aborted
+ * local runs filled `keepPassedPerPlatform` for the platform and evicted the
+ * newest genuinely passing run — including farm runs, whose artifacts cost
+ * device minutes and only exist on AWS for thirty days. An aborted run is also
+ * not a baseline by its own definition: nothing in it finished.
  */
 export async function prune(
   root: string,
@@ -222,7 +229,7 @@ export async function prune(
   // Newest first, so "keep the newest N passing" is a running count.
   for (const r of runs) {
     if (r.status === 'running') continue;
-    if (r.status === 'failed') {
+    if (r.status === 'failed' || r.status === 'interrupted') {
       if (new Date(r.startedAt).getTime() < cutoff) doomed.push(r);
       continue;
     }

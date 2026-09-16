@@ -40,7 +40,7 @@ export const stateFixture: StateResponse = {
     workflow: { platforms: ['web'], devices: {}, env: '', headed: false },
   } as unknown as StateResponse['config'],
   configError: null,
-  configFile: '/tmp/testpilot.config.json',
+  configProfile: { owner: 'qa-user', source: 'personal' },
   features: [
     {
       name: 'dang-nhap.feature',
@@ -163,8 +163,19 @@ function record(over: Partial<HealingRecordView> = {}): HealingRecordView {
 
 export const healingRecord = record;
 
+export const duplicateFixture: HealingResponse['duplicates'] = [
+  {
+    strong: { id: 'priceBoard.xoaKhoiDanhMuc', label: 'Xoá khỏi danh mục', wins: 41 },
+    weak: { id: 'stockOptionsMenu.removeFromCategory', label: 'Tùy chọn Xóa khỏi danh mục', wins: 3 },
+    sharedLocator: 'label:Xoá khỏi danh mục',
+    share: [1, 1],
+    weakAlreadyHasIt: false,
+  },
+];
+
 export const healingFixture: HealingResponse = {
   policy: { minSuccesses: 3, minRuns: 2 },
+  duplicates: [],
   records: [
     record(),
     // Không đạt quality gate ⇒ nút "Áp dụng" phải bị khoá VÀ nói ra lý do.

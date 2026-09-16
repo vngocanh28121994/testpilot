@@ -2,8 +2,18 @@ import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import type { Page } from 'playwright';
 import { PopupInterceptor } from '../PopupInterceptor.js';
+import { protectedSelectors } from '../driver.js';
 
 describe('PopupInterceptor', () => {
+  it('protects both a business label and the rendered caption inside a dialog', () => {
+    assert.deepEqual(
+      protectedSelectors([{
+        strategy: 'label', value: 'Nút TIẾP TỤC', weight: 0.7, origin: 'healed',
+      }]),
+      ['text=Nút TIẾP TỤC', 'text=TIẾP TỤC', 'text~=TIẾP TỤC'],
+    );
+  });
+
   it('clears semantic popup layers from top to bottom', async () => {
     const results = [
       { root: 'mat-dialog-container', control: 'CLOSE', source: 'semantic' as const },

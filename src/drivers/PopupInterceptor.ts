@@ -243,6 +243,15 @@ export class PopupInterceptor {
 async function holdsProtected(root: Locator, protect: string[]): Promise<boolean> {
   if (protect.length === 0) return false;
   for (const selector of protect) {
+    if (selector.startsWith('text~=')) {
+      const wanted = selector.slice(6).replace(/\s+/g, ' ').trim();
+      if (!wanted) continue;
+      const body = await root.textContent().catch(() => '') ?? '';
+      if (body.replace(/\s+/g, ' ').toLocaleUpperCase('vi').includes(
+        wanted.toLocaleUpperCase('vi'),
+      )) return true;
+      continue;
+    }
     if (selector.startsWith('text=')) {
       const wanted = selector.slice(5).replace(/\s+/g, ' ').trim();
       if (!wanted) continue;
@@ -305,6 +314,10 @@ export const SMART_DISMISS_SCRIPT = `(() => {
   // matches an element whose whole visible text is exactly that string —
   // partial matching would let one common word protect every dialog on screen.
   function holds(root, sel) {
+    if (String(sel).indexOf('text~=') === 0) {
+      var phrase = norm(String(sel).slice(6));
+      return !!phrase && norm(root.textContent).indexOf(phrase) !== -1;
+    }
     if (String(sel).indexOf('text=') === 0) {
       var want = norm(String(sel).slice(5));
       if (!want) return false;
@@ -403,10 +416,21 @@ export const SMART_DISMISS_SCRIPT = `(() => {
   for (var ri = 0; ri < ranked.length; ri++) {
     var layer = ranked[ri].root;
     var present = Array.from(layer.querySelectorAll(CONTROLS));
-    var controls = present
-      .map(function (control, order) { return { control: control, score: score(control), order: order }; })
+    var scored = present
+      .map(function (control, order) { return { control: control, score: score(control), order: order }; });
+    var controls = scored
       .filter(function (item) { return item.score > 0; })
       .sort(function (a, b) { return b.score - a.score || b.order - a.order; });
+    // A dialog with both CLOSE and another actionable control is a business
+    // workflow, not nuisance chrome. For example the report-type picker has
+    // CLOSE and TIẾP TỤC; auto-closing it destroys the state created by the
+    // previous step. Notices/coach marks normally expose only their dismiss
+    // control, so they remain eligible.
+    var hasBusinessAction = scored.some(function (item) {
+      return item.score === 0 && visible(item.control) &&
+        !item.control.hasAttribute('disabled') && item.control.getAttribute('aria-disabled') !== 'true';
+    });
+    if (controls.length && hasBusinessAction) break;
     if (controls.length) { top = layer; winner = controls[0].control; break; }
     if (present.length) break;
   }

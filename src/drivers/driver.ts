@@ -13,6 +13,22 @@ export interface UiMatchSnapshot {
   texts: string[];
   /** Zero-based indexes whose DOM/native control currently owns focus/selection. */
   focused: number[];
+  /**
+   * Locator này khớp nhiều thứ bấm được, và driver không có căn cứ nào để chọn
+   * giữa chúng.
+   *
+   * Khớp nhiều KHÔNG phải là điều bất thường, nên cờ này không chỉ đếm: một
+   * nhãn xuất hiện cả trong ngăn kéo ẩn lẫn trên dialog đang mở vẫn là locator
+   * tốt, vì lớp trên cùng nói cho driver biết phải bấm cái nào. Cờ chỉ bật khi
+   * lựa chọn ấy sẽ là tuỳ tiện — nhiều phần tử cùng bấm được, không lớp nào
+   * thu hẹp — tức khi "phần tử đầu tiên" là một sự trùng hợp, không phải câu
+   * trả lời.
+   *
+   * `undefined` nghĩa là driver không trả lời được câu này. Người gọi phải coi
+   * đó là "không biết" chứ không phải "có": chặn theo phỏng đoán thì mọi
+   * locator hợp lệ trên những driver không thu hẹp được đều chết oan.
+   */
+  ambiguousForAction?: boolean;
 }
 
 /**
@@ -124,7 +140,11 @@ export interface UiDriver {
    * Undefined when the driver cannot answer at all, which callers must report
    * as a failure rather than read as "no options".
    */
-  listOptions?(handle: UiHandle): Promise<string[] | undefined>;
+  listOptions?(
+    handle: UiHandle,
+    /** Called after the complete list is visible, before a panel opened here is restored. */
+    whileOpen?: () => Promise<void>,
+  ): Promise<string[] | undefined>;
   /**
    * What the application said since `since`, if anything.
    *
@@ -254,6 +274,20 @@ export function protectedSelectors(candidates: LocatorCandidate[]): string[] {
         break;
       case 'label':
         out.push(`text=${value}`);
+        // Gherkin labels often include the kind of control while the DOM only
+        // renders its caption: "Nút TIẾP TỤC" → "TIẾP TỤC". Protect both so
+        // the popup interceptor does not close the target dialog immediately
+        // before resolving a control inside it.
+        {
+          const caption = value.replace(
+            /^(?:nút|button|khung|tiêu đề|hình ảnh|ảnh|thẻ|icon|ô|trường)\s+/iu,
+            '',
+          ).trim();
+          if (caption && caption !== value) {
+            out.push(`text=${caption}`);
+            out.push(`text~=${caption}`);
+          }
+        }
         break;
       default:
         // xpath, relative and predicate have no cheap in-page equivalent.
@@ -261,4 +295,14 @@ export function protectedSelectors(candidates: LocatorCandidate[]): string[] {
     }
   }
   return [...new Set(out)];
+}
+
+/**
+ * The feature-search drawer is itself an overlay and the exact result has
+ * already been proved visible inside it. Scanning every overlay again before
+ * clicking that result is both redundant and expensive on a large Angular
+ * page. A real obstruction is still handled by the click-failure retry.
+ */
+export function isScopedFeatureSearchResult(candidate: LocatorCandidate): boolean {
+  return candidate.runtimeScope === '.searched-feature-block';
 }

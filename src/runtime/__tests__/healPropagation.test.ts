@@ -106,4 +106,67 @@ describe('lan bài học sang bản ghi cùng một control', () => {
     const nhan = registry.raw.elements['order.maCoPhieu']!.candidates.web ?? [];
     assert.ok(!nhan.some((c) => c.value === SONG.value), 'không được chép sang màn hình khác');
   });
+
+  it('không coi hai menuitem khác accessible name là cùng locator', async () => {
+    const registry = await Registry.load('/dev/null/nonexistent-menu-registry.json');
+    registry.upsertElement({
+      id: 'stockOptionsMenu.removeFromCategory', label: 'Tùy chọn Xóa khỏi danh mục', screen: 'menu',
+      candidates: { web: [{ strategy: 'role', value: 'menuitem', name: 'Xóa khỏi danh mục', weight: 0.8, origin: 'llm' }] },
+    });
+    registry.upsertElement({
+      id: 'stockOptionsMenu.addToCategory', label: 'Tùy chọn Thêm vào danh mục', screen: 'menu',
+      candidates: { web: [{ strategy: 'role', value: 'menuitem', name: 'Thêm vào danh mục', weight: 0.8, origin: 'llm' }] },
+    });
+    const fresh: LocatorCandidate = {
+      strategy: 'label', value: 'Xóa khỏi danh mục', weight: 0.8, origin: 'healed',
+    };
+    const resolver = new Resolver(driverGia(), registry, {
+      timeoutMs: 1_000, pollMs: 50, requireVisible: false, verifyHealedMatch: false,
+    });
+    resolver.confirmResolution('stockOptionsMenu.removeFromCategory', {
+      handle: {} as UiHandle,
+      candidate: fresh,
+      healed: true,
+      previous: {
+        strategy: 'role', value: 'menuitem', name: 'Xóa khỏi danh mục', weight: 0.8, origin: 'llm',
+      },
+      attempts: 2,
+    });
+
+    const addCandidates = registry.raw.elements['stockOptionsMenu.addToCategory']!.candidates.web ?? [];
+    assert.ok(
+      !addCandidates.some((candidate) => candidate.value === 'Xóa khỏi danh mục'),
+      'locator Xóa tuyệt đối không được lan sang action Thêm',
+    );
+  });
+
+  it('không lan giữa hai nhãn khác nghiệp vụ dù locator cũ giống hệt', async () => {
+    const registry = await Registry.load('/dev/null/nonexistent-opposite-actions.json');
+    const shared: LocatorCandidate = {
+      strategy: 'css', value: '.menu-action', weight: 0.7, origin: 'authored',
+    };
+    registry.upsertElement({
+      id: 'menu.remove', label: 'Xóa khỏi danh mục', screen: 'menu',
+      candidates: { web: [shared] },
+    });
+    registry.upsertElement({
+      id: 'menu.add', label: 'Thêm vào danh mục', screen: 'menu',
+      candidates: { web: [shared] },
+    });
+    const resolver = new Resolver(driverGia(), registry, {
+      timeoutMs: 1_000, pollMs: 50, requireVisible: false, verifyHealedMatch: false,
+    });
+    resolver.confirmResolution('menu.remove', {
+      handle: {} as UiHandle,
+      candidate: { strategy: 'label', value: 'Xóa khỏi danh mục', weight: 0.8, origin: 'healed' },
+      healed: true,
+      previous: shared,
+      attempts: 2,
+    });
+
+    assert.equal(
+      registry.raw.elements['menu.add']!.candidates.web?.some((candidate) => candidate.value === 'Xóa khỏi danh mục'),
+      false,
+    );
+  });
 });

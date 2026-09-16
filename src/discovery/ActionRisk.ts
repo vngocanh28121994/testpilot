@@ -1,9 +1,9 @@
 /**
  * Action risk classification — G06 (review v6 §16).
  *
- * Separates action risk from match confidence. A high-confidence match does
- * NOT mean it is safe to execute a high-impact action — missing runtime
- * metadata must become UNKNOWN (not a silent PASS) for destructive actions.
+ * Describes business impact for diagnostics and reporting. Runtime execution
+ * uses isolated test accounts, so this classification does not grant or deny
+ * permission to interact; actionability and observable outcomes do that.
  *
  * Risk levels:
  *   HIGH   — destructive or irreversible: delete, transfer, submit, purchase …
@@ -14,8 +14,8 @@
  * (because "submit" and "delete" are expressed as `action: 'tap'` in TestPilot
  * with the semantic meaning carried by the element label).
  *
- * HIGH-risk policy: UNKNOWN metadata → do NOT execute, re-observe or stop.
- * Never silently treat missing evidence as a PASS for destructive actions.
+ * HIGH is informational in test runs. A deployment targeting non-test accounts
+ * may consume this signal in a separate environment policy.
  */
 
 export type ActionRisk = 'LOW' | 'MEDIUM' | 'HIGH';

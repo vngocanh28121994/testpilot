@@ -77,6 +77,16 @@ describe('PopupInterceptor in a real page', () => {
     assert.equal(dismissed, 0, 'a dialog with only unsafe controls must stop the search');
   });
 
+  it('does not close an interactive business dialog merely because it has a close button', async () => {
+    await show(`
+      <div role="dialog" style="position:fixed;inset:20px;z-index:50;background:#fff">
+        <button aria-label="close">CLOSE</button>
+        <button>TIẾP TỤC</button>
+      </div>`);
+    const dismissed = await new PopupInterceptor([], () => {}).clear(page);
+    assert.equal(dismissed, 0, 'dialog with a business action must survive');
+  });
+
   it('protects a message layer named by part of its text', async () => {
     // The toast the step is waiting for carries data the step cannot state, and
     // its ✕ is a safe control — so without a partial-text guard the dismisser

@@ -4,7 +4,7 @@ import { http, HttpResponse } from 'msw';
 import { screen, waitFor, within } from '@testing-library/react';
 import { server } from '@/test/mocks/server';
 import { renderWithRouter , chooseFromDropdown } from '@/test/utils';
-import { healingFixture } from '@/test/mocks/fixtures';
+import { healingFixture, healingRecord } from '@/test/mocks/fixtures';
 import { ROUTES } from '@/api/routes';
 import HealingPanel from '@/panels/Healing';
 
@@ -56,6 +56,44 @@ describe('HealingPanel', () => {
     await screen.findByText('login.submit');
     await chooseFromDropdown('Trạng thái', 'Đã từ chối');
     expect(screen.getByText('Không có healing record khớp bộ lọc.')).toBeInTheDocument();
+  });
+
+  it('phân trang 20 bản ghi và reset về trang đầu khi đổi bộ lọc', async () => {
+    const user = userEvent.setup();
+    const records = Array.from({ length: 25 }, (_, index) => healingRecord({
+      id: `page-${index + 1}`,
+      elementId: `element.${index + 1}`,
+      platform: index === 24 ? 'android' : 'web',
+    }));
+    server.use(
+      http.get(ROUTES.healing, () => HttpResponse.json({
+        ...healingFixture,
+        records,
+        summary: {
+          total: records.length,
+          proposed: records.length,
+          watching: 0,
+          applied: 0,
+          rejected: 0,
+        },
+      })),
+    );
+
+    await renderWithRouter(<HealingPanel />);
+    await screen.findByText('element.1');
+    expect(rows()).toHaveLength(20);
+    expect(screen.getByText('Trang 1/2')).toBeInTheDocument();
+    expect(screen.queryByText('element.21')).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Trang sau' }));
+    expect(rows()).toHaveLength(5);
+    expect(screen.getByText('element.21')).toBeInTheDocument();
+    expect(screen.getByText('Trang 2/2')).toBeInTheDocument();
+
+    await chooseFromDropdown('Platform', 'Android');
+    expect(rows()).toHaveLength(1);
+    expect(screen.getByText('element.25')).toBeInTheDocument();
+    expect(screen.queryByRole('navigation', { name: 'Phân trang' })).not.toBeInTheDocument();
   });
 
   /**

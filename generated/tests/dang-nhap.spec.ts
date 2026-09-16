@@ -46,7 +46,7 @@ describe("Đăng nhập TCInvest", () => {
       await ctx.launch();
       // app already launched via ctx.launch()
       await ctx.ensureLoggedIn("tcbs");
-      await ctx.openFeatureFromSearch("Tài sản của tôi");
+      await ctx.openFeatureFromSearch("Tài sản của tôi", "home.totalAssets");
       await ctx.screenshot("my-asset-after-search");
       await homePage.assertTotalAssetsVisible();
       await homePage.tapTraiPhieu();

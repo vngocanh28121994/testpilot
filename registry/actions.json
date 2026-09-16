@@ -1,4 +1,37 @@
 {
   "version": 1,
-  "actions": []
+  "actions": [
+    {
+      "label": "Chọn danh mục bất kỳ",
+      "kind": "macro",
+      "phraseTemplate": "I choose any category",
+      "parameters": [],
+      "expansion": [
+        "I tap \"Danh mục theo dõi\"",
+        "I tap \"Danh mục\""
+      ],
+      "postcondition": "\"Danh mục\" is visible",
+      "reason": "Cần chọn một danh mục bất kỳ trong dropdown danh mục theo dõi, gồm mở dropdown và chọn danh mục",
+      "sourceExample": "I chọn 1 danh mục bất kỳ",
+      "id": "action-mu1k467w-chon-danh-muc-bat-ky",
+      "status": "proposed",
+      "createdAt": "2026-09-14T18:08:53.373Z"
+    },
+    {
+      "label": "Chọn danh mục mặc định",
+      "kind": "macro",
+      "phraseTemplate": "I choose the default category",
+      "parameters": [],
+      "expansion": [
+        "I tap \"Danh mục theo dõi\"",
+        "I tap \"Danh mục\""
+      ],
+      "postcondition": "\"Danh mục\" is visible",
+      "reason": "Chọn danh mục mặc định trong dropdown danh mục theo dõi, gồm mở dropdown và chọn danh mục",
+      "sourceExample": "I chọn danh mục mặc định",
+      "id": "action-mu1k467x-chon-danh-muc-mac-dinh",
+      "status": "proposed",
+      "createdAt": "2026-09-14T18:08:53.373Z"
+    }
+  ]
 }

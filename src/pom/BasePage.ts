@@ -7,6 +7,8 @@ import {
 } from '../runtime/capabilities.js';
 import { sameDate } from '../drivers/datePicker.js';
 import { performAdaptiveInput } from '../drivers/controlClassifier.js';
+import { resolveDropdownOption } from '../drivers/dropdownSelection.js';
+import { waitForExactSearchResult } from '../runtime/searchResult.js';
 
 /**
  * Cross-platform base context for generated Page Objects.
@@ -79,24 +81,50 @@ export class BasePage {
     await this.driver.saveAuthenticatedSession?.(account).catch(() => {});
   }
 
-  /** Opens the exact named business feature instead of clicking result #1. */
   /**
-   * Opens a feature by searching for it and taking the first result.
-   *
-   * The result is clicked through the same locator this waits on, not by
-   * looking for the query text. Searching "Chuyển tiền" leaves that phrase in
-   * seven visible places — the header, the home grid behind the dialog, the
-   * screen title — and a text lookup returned all seven, clicking whichever
-   * happened to come first in the DOM. It worked only for as long as that was
-   * the right one; a change to the home screen behind the dialog was enough to
-   * break it. `home.searchFirstResult` matches exactly one node.
+   * Opens the exact named result and proves the destination through the first
+   * element the generated scenario is about to use there.
    */
-  async openFeatureFromSearch(query: string): Promise<void> {
+  async openFeatureFromSearch(query: string, destinationElementId?: string): Promise<void> {
     this.contextAnchor = undefined;
-    await this.tap('home.searchBox');
-    await this.input('home.searchInput', query);
-    await this.waitFor('home.searchFirstResult');
-    await this.tap('home.searchFirstResult');
+    let lastError: Error | undefined;
+    for (let attempt = 1; attempt <= 2; attempt++) {
+      try {
+        if (!(await this.resolver.isVisibleNow('home.searchInput').catch(() => false))) {
+          await this.tap('home.searchBox');
+        }
+        await this.input('home.searchInput', query);
+        const result = await waitForExactSearchResult(this.driver, query);
+        const beforeUrl = await this.driver.currentUrl?.().catch(() => '') ?? '';
+        await this.driver.tap(result.handle);
+
+        if (destinationElementId) {
+          await this.waitFor(destinationElementId, 12_000);
+        } else {
+          const afterUrl = await this.driver.currentUrl?.().catch(() => '') ?? '';
+          if (!afterUrl || afterUrl === beforeUrl) {
+            throw new Error(`Đã click "${query}" nhưng chưa có bằng chứng màn hình đã đổi.`);
+          }
+        }
+        return;
+      } catch (err) {
+        lastError = err as Error;
+        if (attempt >= 2) break;
+        await this.returnToHomeForSearch();
+      }
+    }
+    throw lastError ?? new Error(`Không mở được tính năng "${query}" từ tìm kiếm.`);
+  }
+
+  private async returnToHomeForSearch(): Promise<void> {
+    await this.driver.dismissOverlay?.().catch(() => false);
+    for (let attempt = 0; attempt < 3; attempt++) {
+      if (await this.resolver.isVisibleNow('home.searchInput').catch(() => false)) return;
+      if (await this.resolver.isVisibleNow('home.searchBox').catch(() => false)) return;
+      await this.driver.back();
+      await new Promise((resolve) => setTimeout(resolve, 300));
+    }
+    throw new Error('Không thể quay về Trang chủ để thử lại thao tác tìm kiếm.');
   }
 
   async tap(elementId: string, locatorParams?: Record<string, string>): Promise<void> {
@@ -223,7 +251,8 @@ export class BasePage {
     const r = await this.resolver.resolve(elementId, this.inBusinessContext({
       discoveryAction: 'select', locatorParams,
     }));
-    await this.driver.selectOption(r.handle, option);
+    const resolvedOption = await resolveDropdownOption(this.driver, r.handle, option);
+    await this.driver.selectOption(r.handle, resolvedOption);
     this.resolver.confirmResolution(elementId, r);
   }
 

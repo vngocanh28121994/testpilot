@@ -13,7 +13,7 @@
 
 import { writeFile, mkdir, readFile } from 'node:fs/promises';
 import path from 'node:path';
-import type { FeatureSpec, Intent, Platform } from '../core/types.js';
+import type { FeatureSpec, Intent, Platform, StepSpec } from '../core/types.js';
 import type { ElementDef, ElementRegistry } from '../core/types.js';
 import { isOverflowRowAction } from '../core/contextual.js';
 
@@ -697,7 +697,12 @@ function renderSpec(
     .map((scenario) => {
       const allScenarioSteps = [...feature.background, ...scenario.steps];
       const stepLines = allScenarioSteps
-        .map((step) => renderStepCall(step.intent, registry, step.text))
+        .map((step, index) => renderStepCall(
+          step.intent,
+          registry,
+          step.text,
+          destinationElementAfter(allScenarioSteps, index),
+        ))
         .filter(Boolean)
         .join('\n      ');
       return (
@@ -725,7 +730,12 @@ ${scenarioBlocks}
 `;
 }
 
-function renderStepCall(intent: Intent, registry: ElementRegistry, originalText: string): string {
+function renderStepCall(
+  intent: Intent,
+  registry: ElementRegistry,
+  originalText: string,
+  destinationElementId?: string,
+): string {
   if (intent.kind === 'launch') return '// app already launched via ctx.launch()';
 
   if (intent.kind === 'ensureLoggedIn') {
@@ -733,7 +743,9 @@ function renderStepCall(intent: Intent, registry: ElementRegistry, originalText:
   }
 
   if (intent.kind === 'openFeatureFromSearch') {
-    return `await ctx.openFeatureFromSearch(${JSON.stringify(intent.query)});`;
+    const args = [JSON.stringify(intent.query)];
+    if (destinationElementId) args.push(JSON.stringify(destinationElementId));
+    return `await ctx.openFeatureFromSearch(${args.join(', ')});`;
   }
 
   if (intent.kind === 'scroll') {
@@ -844,6 +856,38 @@ function renderStepCall(intent: Intent, registry: ElementRegistry, originalText:
   }
 
   return `await ${varName}.${name}();`;
+}
+
+/** First concrete destination element after a composite search-navigation step. */
+function destinationElementAfter(steps: StepSpec[], currentIndex: number): string | undefined {
+  for (let index = currentIndex + 1; index < steps.length; index++) {
+    const intent = steps[index]!.intent;
+    switch (intent.kind) {
+      case 'screenshot':
+        continue;
+      case 'tap':
+      case 'longPress':
+      case 'hover':
+      case 'input':
+      case 'selectDate':
+      case 'clear':
+      case 'select':
+      case 'scrollTo':
+      case 'waitFor':
+      case 'assertVisible':
+      case 'assertText':
+      case 'assertNumber':
+      case 'assertCollection':
+      case 'focusRegion':
+      case 'rememberNumber':
+        return intent.element;
+      case 'dragDrop':
+        return intent.target;
+      default:
+        return undefined;
+    }
+  }
+  return undefined;
 }
 
 /**

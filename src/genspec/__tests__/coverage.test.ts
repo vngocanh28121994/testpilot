@@ -5,6 +5,7 @@ import {
   auditFeatureCoverage,
   enforceFeatureCoverage,
   extractCoverageMap,
+  tryAuditFeatureCoverage,
   type CoverageRequirement,
 } from '../coverage.js';
 
@@ -19,6 +20,20 @@ const doc: SourceDoc = {
 };
 
 describe('testcase coverage gate', () => {
+  it('keeps post-review coverage audit failures non-blocking', async () => {
+    const requirement: CoverageRequirement = {
+      id: 'REQ-001', key: 'req:approved', sourceId: 'SRC-001', priority: 'P1',
+      rule: 'Kịch bản đã được duyệt', sourceQuote: 'Kịch bản đã được duyệt',
+      expectedResult: 'Workflow tiếp tục chạy', sourceRef: doc.ref,
+    };
+    const result = await tryAuditFeatureCoverage('Feature: F', [requirement], {
+      model: 'deepseek-chat',
+      json: async () => { throw new Error('model timeout'); },
+    });
+
+    assert.deepEqual(result, { ok: false, error: 'model timeout' });
+  });
+
   it('keeps a rule-like source note as P1 even when the model misclassifies it as INFO', async () => {
     const map = await extractCoverageMap([doc], {
       model: 'deepseek-chat',

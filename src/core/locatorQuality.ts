@@ -1,3 +1,4 @@
+import { labelContainsXPath, labelSplitAcrossChildrenXPath } from './labelXPath.js';
 import type { LocatorCandidate } from './types.js';
 
 export interface LocatorQuality {
@@ -77,6 +78,111 @@ export function assessLocatorQuality(candidate: LocatorCandidate): LocatorQualit
   const persistable = score >= 45 || candidate.strategy === 'relative';
   const promotable = score >= 65;
   return { score, stable: score >= 80, persistable, promotable, reasons };
+}
+
+/**
+ * Locator này có thể khớp một phần tử chỉ vì phần tử đó CHỨA cụm từ, thay vì
+ * phần tử đó LÀ cụm từ.
+ *
+ * Phân biệt này không quan trọng khi ta đã biết mình đang ở đâu và chỉ cần bấm
+ * đúng thứ — khớp chuỗi con vẫn tìm ra nút, và những locator kiểu ấy đã chứng
+ * minh hàng trăm lần. Nó chỉ trở thành sai lầm khi locator được dùng để TRẢ LỜI
+ * "màn hình nào đang mở": bất kỳ câu văn nào chứa cụm từ đều thành bằng chứng.
+ *
+ * Đo trên máy thật ngày 2026-09-15: `:text('Cơ sở')` của tab Bảng giá khớp dòng
+ * mô tả "Công cụ phòng ngừa rủi ro giảm giá cho CK Cơ sở bằng HĐ phái sinh" —
+ * một mục trong menu tính năng của Home. Runner kết luận Bảng giá đã mở sẵn,
+ * bỏ qua điều hướng, rồi bốn kịch bản liên tiếp thao tác trên màn hình Home và
+ * cùng hỏng ở bước bấm "Thêm mã".
+ *
+ * Một phạm vi thật — id, class hay thuộc tính — thu hẹp việc chứa đó về một
+ * vùng của màn hình, nên nó không còn là bằng chứng lỏng. Tên thẻ đứng một mình
+ * (`button:has-text(...)`) thì không: mọi trang đều có button.
+ */
+export function matchesByContainment(candidate: LocatorCandidate): boolean {
+  switch (candidate.strategy) {
+    case 'css': {
+      if (!/:(?:text|has-text|text-matches)\s*\(/.test(candidate.value)) return false;
+      // Phạm vi phải nằm NGOÀI đối số của pseudo. `:text-matches("Cơ sở.*")`
+      // có dấu chấm, nhưng dấu chấm ấy thuộc biểu thức chính quy chứ không
+      // phải một class — đọc cả chuỗi thì nó thành "đã có phạm vi" và luật tự
+      // vô hiệu hoá mình ở đúng dạng locator lỏng nhất.
+      const outsideArgs = candidate.value.replace(/\((?:[^()'"]|'[^']*'|"[^"]*")*\)/g, '()');
+      return !/[#.[]/.test(outsideArgs);
+    }
+    case 'predicate':
+      return /textContains\s*\(|descriptionContains\s*\(|\bCONTAINS\b/i.test(candidate.value);
+    // Cả hai nền tảng native đều dịch placeholder thành CONTAINS, và `role` có
+    // `name` thành `.textContains(name)` / `label CONTAINS`.
+    case 'placeholder':
+      return true;
+    case 'role':
+      return candidate.name !== undefined;
+    case 'xpath':
+      return /contains\s*\(/.test(candidate.value);
+    // Các arm của `label` phần lớn là so khớp CHÍNH XÁC, nhưng không phải tất
+    // cả: labelSplitAcrossChildrenXPath() dựng `contains(normalize-space(.))`
+    // trên cả cây con cho cụm từ hai chữ trở lên, và labelContainsXPath() dựng
+    // arm nới lỏng cho ba chữ trở lên.
+    //
+    // Hỏi thẳng hai hàm ấy thay vì chép lại ngưỡng. Bản đầu của luật này chép
+    // mỗi ngưỡng ba chữ, nên `label="Cơ sở"` lọt qua — và lọt đúng vào arm cây
+    // con, arm đã khớp dòng "…CK Cơ sở bằng HĐ phái sinh" và giữ nguyên lỗi cũ
+    // sau khi luật đã được thêm. Ngưỡng ở đây mà lệch thì luật chỉ trông như
+    // đang bảo vệ.
+    case 'label':
+      return labelSplitAcrossChildrenXPath(candidate.value) !== undefined
+        || labelContainsXPath(candidate.value) !== undefined;
+    default:
+      return false;
+  }
+}
+
+/**
+ * Locator này chỉ mô tả HÌNH DẠNG của phần tử, không mô tả nội dung nào.
+ *
+ * `role:dialog` khớp mọi hộp thoại. `.subtitle-dialog-common` khớp mọi hộp
+ * thoại dùng chung style ấy. Cả hai đều là locator tốt để BẤM khi đã biết mình
+ * đang ở đâu — và không nói được một chữ nào về việc mình đang ở đâu.
+ *
+ * Đo trên máy thật ngày 2026-09-16: `transfer.thongBao` ("Thông báo", màn hình
+ * Chuyển tiền) có đúng hai locator kiểu này. Trên màn Home, một hộp thoại thông
+ * báo bất kỳ làm cả hai khớp, runner kết luận "Chuyển tiền đã mở sẵn", bỏ qua
+ * bước mở Search, rồi thao tác trên màn hình sai. Cùng một element cũng đã khớp
+ * lẫn với `login.errorMessage` qua `.subtitle-dialog-common` — cảnh báo trùng
+ * element ở đầu lượt chạy đã nói ra điều đó trước khi nó gây hại.
+ *
+ * Luật này cố tình chặt, và chặt theo hướng an toàn: lọc nhầm một landmark tốt
+ * thì runner chỉ đi đường điều hướng bình thường — lặp lại được, không phá
+ * trạng thái. Nhận nhầm một landmark xấu thì cả loạt kịch bản chạy trên màn
+ * hình sai mà vẫn báo PASS. Hai cái giá đó không cùng một cỡ.
+ *
+ * Trên chính màn hình Chuyển tiền, năm element khoẻ nhất — "Chọn TK nhận tiền",
+ * "Chuyển từ", "Số tiền", "CHUYỂN", "Được chuyển" — đều định danh bằng text
+ * chính xác và đều đi qua luật này. Landmark tốt không thiếu; thứ cần loại là
+ * cái không định danh gì cả.
+ */
+export function matchesByShape(candidate: LocatorCandidate): boolean {
+  switch (candidate.strategy) {
+    // Một `name` là nội dung. `role:dialog` trần thì không.
+    case 'role':
+      return candidate.name === undefined;
+    case 'css':
+      return !/:(?:text|has-text|text-matches)\s*\(/.test(candidate.value)
+        && !/#|\[\s*(?:id|name|title|alt|value|placeholder|aria-label|data-[\w-]+)\s*[~|^$*]?=/i
+          .test(candidate.value);
+    case 'xpath':
+      return !/text\s*\(\)|normalize-space|@(?:id|name|title|alt|value|placeholder|aria-label|content-desc|resource-id|data-[\w-]+)/i
+        .test(candidate.value);
+    // UiSelector/NSPredicate: resourceId và text/description là nội dung;
+    // className, index, instance chỉ là hình dạng.
+    case 'predicate':
+      return !/\b(?:text|description|resourceId|name|label|value|identifier)\b/i
+        .test(candidate.value);
+    // testId, label, placeholder, relative đều mang nội dung định danh.
+    default:
+      return false;
+  }
 }
 
 /** A runtime-healed candidate stays below authored candidates until approval. */

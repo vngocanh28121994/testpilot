@@ -62,6 +62,7 @@ export class DriverMcpClient implements McpClient {
         testId: o.testId,
         resourceId: o.resourceId,
         css: o.css,
+        bounds: o.bounds,
         attributes: o.context?.length ? { region: o.context.join(' > ') } : undefined,
         // Observed[] only contains visible elements (driver filters them).
         visible: true,

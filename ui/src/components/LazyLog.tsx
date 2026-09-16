@@ -39,7 +39,12 @@ export function LazyLog({
       }}
     >
       <summary className="cursor-pointer text-sm">{summary}</summary>
-      <LogView logs={text ?? 'Đang tải…'} label={label} className={className} />
+      <LogView
+        logs={text ?? 'Đang tải…'}
+        active={text === null}
+        label={label}
+        className={className}
+      />
     </details>
   );
 }

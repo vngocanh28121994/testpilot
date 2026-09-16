@@ -84,7 +84,7 @@ for (const signal of ['SIGINT', 'SIGTERM'] as const) {
 
 async function main(): Promise<void> {
   const args = parseArgs(process.argv.slice(2));
-  const cfg = await loadConfig(args.config ?? 'testpilot.config.json');
+  const cfg = await loadConfig(args.config ?? process.env.TESTPILOT_CONFIG);
   const chosen = pickTargets(cfg, args);
   const targets = await onlyAttached(chosen, labeller(chosen));
   const label = labeller(targets);

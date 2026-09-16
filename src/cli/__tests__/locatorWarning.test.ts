@@ -50,4 +50,8 @@ describe('cảnh báo element thiếu locator', () => {
   it('vẫn bỏ qua element đã từng resolve', () => {
     assert.match(warnBody(), /health\?\.resolutions \?\? 0\) > 0\) continue;/);
   });
+
+  it('không dọa sẽ fail khi control cùng nghĩa trên cùng màn hình đã có locator', () => {
+    assert.match(warnBody(), /hasSameScreenSemanticCandidate/);
+  });
 });

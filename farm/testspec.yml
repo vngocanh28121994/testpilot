@@ -1,43 +1,25 @@
 version: 0.1
 
+# Pin the managed hosts explicitly. iOS 26+ cannot use the legacy host, and
+# both hosts expose the same devicefarm-cli selections used below.
+ios_test_host: macos_tahoe
+android_test_host: amazon_linux_2
+
 # AWS Device Farm test spec for the Appium Node package produced by
-# `npm run farm` (bundle step). Device Farm starts Appium for us and injects
-# $DEVICEFARM_* variables; the runner reads them instead of hard-coded caps.
+# `npm run farm` (bundle step). Device Farm injects $DEVICEFARM_* variables;
+# this spec starts Appium with the matching managed toolchain and capabilities.
 
 phases:
   install:
     commands:
-      # The host ships Node 18 and has no nvm — the previous `nvm install 20`
-      # here failed silently every run, leaving everything on 18. That went
-      # unnoticed until Playwright, which refuses to load below Node 20, and
-      # aws-sdk warns about it too. So fetch a Node 20 rather than asking for
-      # one. It lands inside the test package because that directory is the only
-      # thing that survives into the later phases, each of which is a fresh
-      # shell that inherits no PATH from this one.
-      - cd $DEVICEFARM_TEST_PACKAGE_PATH
-      - export NODE_HOME=$DEVICEFARM_TEST_PACKAGE_PATH/node20
-      # The glibc-217 build, not the default one. The host is Amazon Linux 2,
-      # whose glibc predates the 2.28 that nodejs.org's normal linux-x64 tarball
-      # links against — that one downloads and unpacks perfectly and then dies
-      # with "GLIBC_2.28 not found" the first time it is run.
-      - >
-        NODE_VER=v20.18.1;
-        curl -fsSL "https://unofficial-builds.nodejs.org/download/release/$NODE_VER/node-$NODE_VER-linux-x64-glibc-217.tar.gz" -o /tmp/node20.tar.gz
-        && mkdir -p "$NODE_HOME"
-        && tar -xzf /tmp/node20.tar.gz -C "$NODE_HOME" --strip-components=1
-        || echo "không tải được Node 20"
-      # Prove it runs before letting it onto PATH. An unpacked-but-unrunnable
-      # node is worse than none: it shadows the working system one and takes the
-      # whole run down, which is exactly what the plain build did here.
-      - >
-        if "$NODE_HOME/bin/node" --version >/dev/null 2>&1; then
-          echo "Node 20 sẵn sàng: $("$NODE_HOME/bin/node" --version)";
-        else
-          echo "Node 20 không chạy được trên host này — gỡ bỏ, dùng node hệ thống";
-          rm -rf "$NODE_HOME";
-        fi
-      - export PATH="$NODE_HOME/bin:$PATH"
+      # Use Device Farm's managed toolchain. The downloaded glibc-compatible
+      # Node tarball still failed to execute on the iOS host and silently left
+      # the suite on Node 18; `avm` is only available on legacy hosts.
+      - devicefarm-cli use node 22
       - node --version
+      - devicefarm-cli use appium 2
+      - appium --version
+      - cd $DEVICEFARM_TEST_PACKAGE_PATH
       # Playwright ships in the package because the WebView driver connects over
       # CDP, and connectOverCDP attaches to the browser already running on the
       # phone — it never launches one. Downloading ~130 MB of desktop Chromium
@@ -48,9 +30,24 @@ phases:
 
   pre_test:
     commands:
-      # Device Farm's own Appium server. Do not start a second one.
-      - export APPIUM_VERSION=2
-      - avm $APPIUM_VERSION || true
+      # Device Farm provides signed, prebuilt WDA bundles matched by XCUITest
+      # driver major. Building stock WDA here fails before the app opens because
+      # the AWS host has no customer development team/signing identity.
+      - |-
+        if [ "$DEVICEFARM_DEVICE_PLATFORM_NAME" = "iOS" ]; then
+          APPIUM_DRIVER_VERSION=$(appium driver list --installed --json | jq -r ".xcuitest.version" | cut -d "." -f 1)
+          CORRESPONDING_WDA=$(env | grep "DEVICEFARM_APPIUM_WDA_DERIVED_DATA_PATH_V${APPIUM_DRIVER_VERSION}" || true)
+          if [ -n "$CORRESPONDING_WDA" ]; then
+            DEVICEFARM_APPIUM_WDA_DERIVED_DATA_PATH=$(echo "$CORRESPONDING_WDA" | cut -d "=" -f 2)
+          else
+            LATEST_WDA=$(env | grep "DEVICEFARM_APPIUM_WDA_DERIVED_DATA_PATH_V" | sort -V -r | head -n 1)
+            DEVICEFARM_APPIUM_WDA_DERIVED_DATA_PATH=$(echo "$LATEST_WDA" | cut -d "=" -f 2)
+          fi
+          if [ -z "$DEVICEFARM_APPIUM_WDA_DERIVED_DATA_PATH" ]; then
+            echo "Device Farm không cung cấp prebuilt WDA phù hợp"; exit 1
+          fi
+          echo "using prebuilt WDA v${APPIUM_DRIVER_VERSION}: $DEVICEFARM_APPIUM_WDA_DERIVED_DATA_PATH"
+        fi
       # chromedriver_autodownload is an *insecure feature*: the
       # `appium:chromedriverAutodownload` capability is refused unless the
       # server was started allowing it. Without this flag a hybrid app dies on
@@ -58,13 +55,19 @@ phases:
       # the driver switches into the WebView — the device's WebView updates far
       # faster than the chromedrivers bundled with the Appium image.
       #
-      # Bare feature names, because APPIUM_VERSION above pins Appium 2. Appium 3
+      # Bare feature names, because the install phase pins Appium 2. Appium 3
       # rejects them and demands `*:adb_shell` — it exits before it ever listens
       # — so if that pin moves, this line has to move with it.
-      - >
-        appium --base-path=/wd/hub --log-timestamp --log-no-colors
-        --allow-insecure=chromedriver_autodownload,adb_shell
-        >> $DEVICEFARM_LOG_DIR/appium.log 2>&1 &
+      - |-
+        if [ "$DEVICEFARM_DEVICE_PLATFORM_NAME" = "iOS" ]; then
+          APPIUM_DEFAULT_CAPABILITIES="{\"appium:deviceName\":\"$DEVICEFARM_DEVICE_NAME\",\"platformName\":\"iOS\",\"appium:udid\":\"$DEVICEFARM_DEVICE_UDID\",\"appium:platformVersion\":\"$DEVICEFARM_DEVICE_OS_VERSION\",\"appium:derivedDataPath\":\"$DEVICEFARM_APPIUM_WDA_DERIVED_DATA_PATH\",\"appium:usePrebuiltWDA\":true,\"appium:automationName\":\"XCUITest\"}"
+        else
+          APPIUM_DEFAULT_CAPABILITIES="{\"appium:deviceName\":\"$DEVICEFARM_DEVICE_NAME\",\"platformName\":\"Android\",\"appium:udid\":\"$DEVICEFARM_DEVICE_UDID\",\"appium:platformVersion\":\"$DEVICEFARM_DEVICE_OS_VERSION\",\"appium:automationName\":\"UiAutomator2\"}"
+        fi
+        appium --base-path=/wd/hub --log-timestamp --log-no-colors \
+          --allow-insecure=chromedriver_autodownload,adb_shell \
+          --default-capabilities "$APPIUM_DEFAULT_CAPABILITIES" \
+          >> "$DEVICEFARM_LOG_DIR/appium.log" 2>&1 &
       - >
         start_appium_timeout=0;
         while [ true ]; do
@@ -78,9 +81,6 @@ phases:
   test:
     commands:
       - cd $DEVICEFARM_TEST_PACKAGE_PATH
-      # A separate shell from the install phase, so the interpreter has to be
-      # pointed at again. Falls back to the host's node when the download failed.
-      - export PATH="$DEVICEFARM_TEST_PACKAGE_PATH/node20/bin:$PATH"
       - node --version
       # TESTPILOT_PLATFORM is read by src/cli/run.ts; the device name and
       # Appium endpoint come from the Device Farm environment.

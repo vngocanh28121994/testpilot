@@ -10,6 +10,9 @@ import {
   type StatusFilter,
 } from './hooks/useHealingFilters';
 import { HealingRow } from './HealingRow';
+import { DuplicateElements } from './DuplicateElements';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Pagination } from '@/components/Pagination';
 import { Clock, CircleCheckBig, CircleSlash, Eye } from 'lucide-react';
 import { Field } from '@/components/Field';
 import { StatTile } from '@/components/StatTile';
@@ -38,6 +41,7 @@ const HEADERS = [
 ];
 
 const PAGE_DESCRIPTION = 'Locator được Playwright/Appium phục hồi qua nhiều lần chạy.';
+const PAGE_SIZE = 20;
 
 /** Bốn ô tổng hợp. Nhãn là hợp đồng với HealingPanel.test.tsx. */
 const STATS = [
@@ -50,6 +54,7 @@ const STATS = [
 export default function HealingPanel() {
   const [status, setStatus] = useState<StatusFilter>('all');
   const [platform, setPlatform] = useState<PlatformFilter>('all');
+  const [page, setPage] = useState(1);
   // Bản ghi nào đang chờ xác nhận bước hai. Chỉ một tại một thời điểm, giống
   // biến `healingPending` của bản cũ (app.js:1078).
   const [pending, setPending] = useState<{ id: string; action: 'apply' | 'reject' } | null>(null);
@@ -57,8 +62,16 @@ export default function HealingPanel() {
   const query = useHealing();
   const review = useReviewHealing();
   const records = useFilteredRecords(query.data?.records, status, platform);
+  const pageCount = Math.max(1, Math.ceil(records.length / PAGE_SIZE));
+  const currentPage = Math.min(page, pageCount);
+  const visibleRecords = records.slice(
+    (currentPage - 1) * PAGE_SIZE,
+    currentPage * PAGE_SIZE,
+  );
   const summary = query.data?.summary;
   const policy = query.data?.policy;
+  const duplicates = query.data?.duplicates ?? [];
+  const [tab, setTab] = useState('records');
 
   return (
     <AppShell title="Healing Center" description={PAGE_DESCRIPTION}>
@@ -69,6 +82,27 @@ export default function HealingPanel() {
           </p>
         )}
 
+        {/* Hai bảng, hai tab. Trùng vai là phát hiện BẢO TRÌ registry, còn
+            bản ghi healing là chuyện của locator qua các lượt chạy — hai câu
+            hỏi khác nhau, và người ta tới trang này để trả lời một trong hai
+            chứ không phải cả hai cùng lúc.
+            
+            Xếp chồng thì số cặp trùng vai tăng theo số feature được soạn, và
+            mười cặp là đủ đẩy bảng healing ra khỏi màn hình. Số ngay trên nhãn
+            tab để biết bên kia có gì mà không phải bấm sang xem. */}
+        <Tabs value={tab} onValueChange={setTab}>
+          <TabsList>
+            <TabsTrigger value="records">
+              Bản ghi healing
+              <TabCount value={query.data?.records.length ?? 0} />
+            </TabsTrigger>
+            <TabsTrigger value="duplicates">
+              Element trùng vai
+              <TabCount value={duplicates.length} />
+            </TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="records" className="gap-6">
         {/* Nhóm lại để test (và trình đọc màn hình) phân biệt được ô thống kê
             "Chờ duyệt" với option cùng tên trong bộ lọc và với pill trong bảng. */}
         <div
@@ -110,7 +144,10 @@ export default function HealingPanel() {
                   aria-label="Trạng thái"
                   className="mt-0"
                   value={status}
-                  onChange={(next) => setStatus(next as StatusFilter)}
+                  onChange={(next) => {
+                    setStatus(next as StatusFilter);
+                    setPage(1);
+                  }}
                   options={STATUS_OPTIONS.map((o) => ({ value: o.value, label: o.label }))}
                 />
               </Field>
@@ -119,7 +156,10 @@ export default function HealingPanel() {
                   aria-label="Platform"
                   className="mt-0"
                   value={platform}
-                  onChange={(next) => setPlatform(next as PlatformFilter)}
+                  onChange={(next) => {
+                    setPlatform(next as PlatformFilter);
+                    setPage(1);
+                  }}
                   options={PLATFORM_OPTIONS.map((o) => ({ value: o.value, label: o.label }))}
                 />
               </Field>
@@ -160,7 +200,7 @@ export default function HealingPanel() {
                       </td>
                     </tr>
                   )}
-                  {records.map((r) => (
+                  {visibleRecords.map((r) => (
                     <HealingRow
                       key={r.id}
                       record={r}
@@ -176,9 +216,46 @@ export default function HealingPanel() {
                 </tbody>
               </table>
             </div>
+            <Pagination
+              page={currentPage}
+              pageCount={pageCount}
+              onPageChange={setPage}
+            />
           </CardContent>
         </Card>
+          </TabsContent>
+
+          <TabsContent value="duplicates">
+            <Card aria-labelledby="duplicates-title">
+              <CardHeader>
+                <CardTitle id="duplicates-title">Element trùng vai</CardTitle>
+                <CardDescription>
+                  Hai bản ghi cùng thắng bằng một locator riêng biệt, nên nhiều khả năng
+                  chúng trỏ vào cùng một control. Bản mới luôn bắt đầu lại từ locator yếu.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <DuplicateElements items={duplicates} />
+              </CardContent>
+            </Card>
+          </TabsContent>
+        </Tabs>
       </section>
     </AppShell>
+  );
+}
+
+/**
+ * Số bên cạnh nhãn tab.
+ *
+ * Không phải trang trí: người ta tới trang này để trả lời một trong hai câu
+ * hỏi, và nếu không thấy bên kia có gì thì tab kia coi như không tồn tại. Số 0
+ * cũng được hiện, vì "đã sạch" là một câu trả lời.
+ */
+function TabCount({ value }: { value: number }) {
+  return (
+    <span className="bg-muted-foreground/15 rounded px-1.5 py-0.5 text-[11px] tabular-nums">
+      {value}
+    </span>
   );
 }

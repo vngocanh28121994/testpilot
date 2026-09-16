@@ -23,10 +23,19 @@ export interface Observed {
   resourceId?: string;
   /** CSS selector the driver believes is unique. Web only. */
   css?: string;
+  /** Bounding box in viewport/device pixels, used to correlate DOM and screenshot. */
+  bounds?: { x: number; y: number; width: number; height: number };
   /** Nearest visible section/card heading(s), used to disambiguate controls. */
   context?: string[];
-  /** True when the user can act on it: button, link, input, clickable node. */
-  interactive: boolean;
+  /**
+   * True when the user can act on it: button, link, input, clickable node.
+   *
+   * `undefined` means the observation cannot answer — a framework icon whose
+   * click handler is not exposed as an HTML attribute. Downstream gates
+   * (ElementVerifier, ConfidenceScorer) reject on `false` only, so keeping
+   * "unknown" distinct from "no" is what stops icons being ruled out.
+   */
+  interactive: boolean | undefined;
   /** Position among same-role siblings. The fallback of last resort. */
   index: number;
   /**

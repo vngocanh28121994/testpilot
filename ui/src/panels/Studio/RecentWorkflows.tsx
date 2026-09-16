@@ -3,6 +3,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { StatusPill } from '@/components/StatusPill';
 import { useRecentRuns } from '@/hooks/useAppState';
 import { when } from '@/lib/datetime';
+import { isWorkflowHistoryRun } from '@/lib/workflowHistory';
 import { cn } from '@/lib/utils';
 
 const SHOWN = 5;
@@ -31,7 +32,7 @@ const LABEL: Record<string, string> = {
 export function RecentWorkflows() {
   const runs = useRecentRuns();
   const navigate = useNavigate();
-  const all = (runs.data ?? []).filter((run) => run.kind !== 'farm');
+  const all = (runs.data ?? []).filter(isWorkflowHistoryRun);
 
   if (all.length === 0) return null;
 

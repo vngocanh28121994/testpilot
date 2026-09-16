@@ -86,6 +86,70 @@ describe('ConfidenceScorer — natural-language labels', () => {
   it('still rejects an ordinary single-word fragment', () => {
     assert.equal(textMatch('mã', 'Ô mã cổ phiếu'), 'none');
   });
+
+  it('strips a multi-word control descriptor before matching visible text', () => {
+    assert.equal(textMatch('Xóa khỏi danh mục', 'Tùy chọn Xóa khỏi danh mục'), 'exact');
+    const result = scorer.score(
+      intent({ action: 'assert-visible', label: 'Tùy chọn Xóa khỏi danh mục', screen: 'stockOptionsMenu' }),
+      element({ text: 'Xóa khỏi danh mục', interactive: false }),
+      { screen: 'stockOptionsMenu' },
+    );
+    assert.ok(result.score >= 40, `expected descriptor-normalized score >= 40, got ${result.score}`);
+    assert.ok(result.reasons.includes('text exact match'));
+  });
+
+  it('treats a caption and its clickable card ancestor as one exact target', () => {
+    const card: ObservedElement = {
+      id: 'monthly-card', role: 'div', css: '.report-card',
+      visible: true, enabled: true, interactive: true, childIds: ['monthly-caption'],
+    };
+    const caption: ObservedElement = {
+      id: 'monthly-caption', role: 'span', text: 'Lợi nhuận theo tháng',
+      visible: true, enabled: true, interactive: false, parentId: 'monthly-card',
+    };
+    const result = scorer.score(
+      intent({
+        id: 'addCardSheet.cardMonthlyProfit', label: 'Thẻ Lợi nhuận theo tháng',
+        action: 'tap', screen: 'addCardSheet',
+      }),
+      caption,
+      { screen: 'addCardSheet', allCandidates: [card, caption] },
+    );
+
+    assert.ok(result.score >= 40, `expected clickable-caption score >= 40, got ${result.score}`);
+    assert.ok(result.reasons.includes('exact text owned by interactive ancestor'));
+    assert.ok(result.reasons.includes('only element on screen matching the wording'));
+    assert.ok(!result.penalties.some((reason) => reason.includes('duplicate')));
+  });
+
+  it('computes ancestor identities once for a large Appium snapshot', () => {
+    const controls: ObservedElement[] = Array.from({ length: 450 }, (_, index) => ({
+      id: `card-${index}`, role: 'div', visible: true, enabled: true, interactive: true,
+      childIds: [`caption-${index}`],
+    }));
+    const captions: ObservedElement[] = Array.from({ length: 450 }, (_, index) => ({
+      id: `caption-${index}`, role: 'span',
+      text: index === 12 ? 'Lợi nhuận theo tháng' : `Nội dung ${index}`,
+      visible: true, enabled: true, interactive: false, parentId: `card-${index}`,
+    }));
+    const snapshot = [...controls, ...captions];
+    const target = intent({
+      id: 'addCardSheet.cardMonthlyProfit', label: 'Thẻ Lợi nhuận theo tháng',
+      action: 'tap', screen: 'addCardSheet',
+    });
+    const started = Date.now();
+
+    const scores = snapshot.map((candidate) => scorer.score(target, candidate, {
+      screen: 'addCardSheet', allCandidates: snapshot,
+    }));
+
+    assert.ok(scores.some((score) => score.score >= 40));
+    assert.ok(Date.now() - started < 5_000, '900-node snapshot must not rebuild ancestry per comparison');
+  });
+
+  it('does not strip a descriptor phrase from the middle of business text', () => {
+    assert.notEqual(textMatch('Xóa danh mục', 'Xóa tùy chọn danh mục'), 'exact');
+  });
 });
 
 describe('ConfidenceScorer — positive signals', () => {
@@ -141,6 +205,50 @@ describe('ConfidenceScorer — positive signals', () => {
     );
     assert.ok(result.score >= 40, `expected interactive exact-text score >= 40, got ${result.score}`);
     assert.ok(result.reasons.includes('exact text on interactive control'));
+  });
+
+  it('maps a standard add icon to a natural-language add action without screen-specific locators', () => {
+    const result = scorer.score(
+      intent({
+        id: 'myReports.addReportButton',
+        label: 'Nút thêm mới báo cáo',
+        action: 'tap',
+        screen: 'myReports',
+      }),
+      element({
+        text: 'add', role: 'button', interactive: true, enabled: true,
+        css: 'button.btn-add',
+      }),
+      { screen: 'myReports' },
+    );
+    assert.ok(result.score >= DEFAULT_THRESHOLDS.requireVerification, JSON.stringify(result));
+    assert.ok(result.reasons.some((reason) => reason.includes('icon "add"')));
+  });
+
+  it('does not confuse a different standard icon with the requested action', () => {
+    const result = scorer.score(
+      intent({ label: 'Nút thêm mới báo cáo', action: 'tap', screen: 'myReports' }),
+      element({ text: 'edit', role: 'button', interactive: true, enabled: true }),
+      { screen: 'myReports' },
+    );
+    assert.ok(!result.reasons.some((reason) => reason.includes('matches business action')));
+    assert.ok(result.score < DEFAULT_THRESHOLDS.requireVerification);
+  });
+
+  it('uses the control action before words that only name its surrounding component', () => {
+    const result = scorer.score(
+      intent({
+        id: 'addCardSheet.closeButton',
+        label: 'Nút đóng popup Thêm thẻ',
+        action: 'tap',
+        screen: 'addCardSheet',
+      }),
+      element({ text: 'add', role: 'button', interactive: true, enabled: true }),
+      { screen: 'addCardSheet' },
+    );
+
+    assert.ok(!result.reasons.some((reason) => reason.includes('icon "add"')));
+    assert.ok(result.score < DEFAULT_THRESHOLDS.requireVerification, JSON.stringify(result));
   });
 
   it('allows unique exact text on the current screen into read-only verification', () => {

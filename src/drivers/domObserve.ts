@@ -35,6 +35,20 @@ export type RawEl = {
   /** Stable selector for custom controls such as tcbs-icon[name]. */
   css?: string;
   customName?: string;
+  /**
+   * Whether this DOM node itself owns an interaction. `undefined` means the
+   * DOM cannot answer (common for framework icon components whose event
+   * binding is not exposed as an HTML attribute).
+   */
+  interactive?: boolean;
+  /**
+   * Node này bọc node khác, nên `domText` của nó là chữ của cả cây con.
+   *
+   * Bộ chọn ở dưới cố ý thu cả những div bọc có `cursor: pointer` — chúng là
+   * nút thật trong Angular — nên chữ nối dài là chuyện bình thường ở đây, và
+   * các tầng sau phải được nói cho biết thay vì phải tự đoán.
+   */
+  container: boolean;
   disabled: boolean;
   visible: boolean;
   rect: { x: number; y: number; width: number; height: number };
@@ -44,16 +58,53 @@ export type RawEl = {
 // a single locator lookup, but still nowhere near a hang.
 
 export function observeDomInPage(): RawEl[] {
+    const layerRoots = Array.from(document.querySelectorAll(
+      '.cdk-overlay-pane, mat-dialog-container, [role="dialog"], [aria-modal="true"]',
+    )).filter((node) => {
+      const rect = node.getBoundingClientRect();
+      const style = getComputedStyle(node);
+      return rect.width > 0 && rect.height > 0 && style.display !== 'none' && style.visibility !== 'hidden';
+    });
+    // A pane contains its mat-dialog-container; retain only the innermost root
+    // so one visible modal is not counted twice. Highest z-index wins, with DOM
+    // order as the framework-neutral tiebreaker used by stacked dialogs.
+    const modalLayers = layerRoots.filter((root) =>
+      !layerRoots.some((other) => other !== root && root.contains(other)),
+    );
+    const frontModal = modalLayers
+      .map((root, order) => {
+        let current: Element | null = root;
+        let z = 0;
+        while (current) {
+          const value = Number.parseInt(getComputedStyle(current).zIndex || '0', 10);
+          if (Number.isFinite(value)) z = Math.max(z, value);
+          current = current.parentElement;
+        }
+        return { root, order, z };
+      })
+      .sort((a, b) => b.z - a.z || b.order - a.order)[0]?.root;
     const nodes = document.querySelectorAll(
       // `label` and `legend` earn their place: they are where a form keeps the
       // words a person reads to identify a field, and without them the
       // observation showed `name="volume"` with no hint that the screen calls
       // it "KL đặt". Both the scorer and the AI tier were guessing from
       // English attribute names because the caption was never observed.
-      'input, textarea, button, [role], a, select, [onclick], tcbs-icon[name], ' +
-        'span, p, li, label, legend',
+      'input, textarea, button, [role], a, select, [onclick], [aria-label], [title], ' +
+        'mat-icon, tcbs-icon, .material-icons, ' +
+        'span, p, li, label, legend, div.name, div.title, ' +
+        '[class*="-title"], [class*="__title"], [class*="-name"], [class*="__name"], ' +
+        'div[class] > div:only-child',
     );
-    return Array.from(nodes).map((node) => {
+    return Array.from(nodes).filter((node) => {
+      if (node.tagName.toLowerCase() !== 'div') return true;
+      const el = node as HTMLElement;
+      const rect = el.getBoundingClientRect();
+      if (rect.width <= 0 || rect.height <= 0) return false;
+      // Leaf divs commonly carry headings/card names in Angular apps. A div
+      // with children is useful only when it owns an interaction; otherwise it
+      // contributes a huge concatenated duplicate of the entire subtree.
+      return el.children.length === 0 || getComputedStyle(el).cursor === 'pointer';
+    }).map((node) => {
       const el = node as HTMLElement & { disabled?: boolean; value?: string; placeholder?: string; type?: string };
       const rect = el.getBoundingClientRect();
 
@@ -66,6 +117,31 @@ export function observeDomInPage(): RawEl[] {
       const customName = el.tagName.includes('-')
         ? el.getAttribute('name') || undefined
         : undefined;
+      const role = (el.getAttribute('role') || '').toLowerCase();
+      const ownsInteraction = /^(a|button|input|select|textarea)$/i.test(el.tagName) ||
+        /^(button|link|menuitem|option|tab|checkbox|radio|switch|textbox|combobox|searchbox)$/i.test(role) ||
+        el.hasAttribute('onclick') ||
+        el.hasAttribute('data-testid') ||
+        el.hasAttribute('data-test') ||
+        el.hasAttribute('data-cy') ||
+        Boolean(customName) ||
+        getComputedStyle(el).cursor === 'pointer';
+      // Frameworks keep parent dialogs mounted below their child dialogs. Such
+      // controls remain geometrically visible in the DOM but a user cannot
+      // touch them through the modal backdrop, so discovery must not count them
+      // as a second actionable candidate.
+      const isIconSemanticLeaf = el.matches('mat-icon, tcbs-icon, .material-icons');
+      const inFrontLayer = !frontModal || frontModal.contains(el);
+      // Covered controls are definitely not actionable. A visible icon in the
+      // front layer with no onclick/cursor metadata is merely unknown: Angular
+      // and React handlers are not represented by either signal.
+      const interactive = !inFrontLayer
+        ? false
+        : ownsInteraction
+          ? true
+          : isIconSemanticLeaf
+            ? undefined
+            : false;
       let css: string | undefined;
       if (el.id && document.querySelectorAll(`#${CSS.escape(el.id)}`).length === 1) {
         css = `#${CSS.escape(el.id)}`;
@@ -73,6 +149,25 @@ export function observeDomInPage(): RawEl[] {
         const escaped = customName.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
         const byName = `${el.tagName.toLowerCase()}[name="${escaped}"]`;
         if (document.querySelectorAll(byName).length === 1) css = byName;
+      }
+      if (!css && stableClasses) {
+        const tokens = stableClasses.split(/\s+/).filter((token) =>
+          /^[a-z][a-z0-9_-]{3,}$/i.test(token) &&
+          !/^(?:active|disabled|selected|focus(?:ed)?|hover|show|open)$/i.test(token),
+        );
+        // Prefer names that describe a control/action. Layout utility classes
+        // may also be unique today, but are not the element's identity.
+        tokens.sort((a, b) =>
+          Number(!/(?:^|[-_])(btn|button|add|create|save|delete|close|menu|search)(?:$|[-_])/i.test(a)) -
+          Number(!/(?:^|[-_])(btn|button|add|create|save|delete|close|menu|search)(?:$|[-_])/i.test(b)),
+        );
+        for (const token of tokens) {
+          const candidate = `${el.tagName.toLowerCase()}.${CSS.escape(token)}`;
+          if (document.querySelectorAll(candidate).length === 1) {
+            css = candidate;
+            break;
+          }
+        }
       }
 
       return {
@@ -94,6 +189,8 @@ export function observeDomInPage(): RawEl[] {
         cssClasses: stableClasses,
         css,
         customName,
+        interactive,
+        container: el.children.length > 0,
         disabled: el.disabled === true,
         visible: rect.width > 0 && rect.height > 0,
         rect: { x: rect.x, y: rect.y, width: rect.width, height: rect.height },

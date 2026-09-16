@@ -42,6 +42,22 @@ export interface LocatorCandidate {
   /** Original registry template before runtime parameter substitution. */
   runtimeTemplateValue?: string;
   /**
+   * Chữ mà phần tử được chọn phải chứa, đặt vào lúc chạy. Không bao giờ lưu
+   * vào registry — giống `runtimeScope`, nó là một điều kiện của LÚC NÀY.
+   *
+   * Sinh ra cho đúng một tình huống, và là tình huống phổ biến: bước trước vừa
+   * gõ một chữ vào ô tìm kiếm, bước này bấm "kết quả tìm kiếm". Locator của
+   * kết quả khớp mọi lựa chọn trong panel, nên "kết quả đầu tiên" là bất kỳ
+   * cái nào driver bắt gặp trước — kể cả lựa chọn còn sót lại từ truy vấn
+   * trước, khi panel chưa kịp đổi theo chữ vừa gõ.
+   *
+   * Đo trên máy thật ngày 2026-09-16: kịch bản gõ "VIC", bấm kết quả đầu tiên,
+   * và thêm vào danh mục mã EVS. Assertion sau đó lại xanh suốt nhiều lượt vì
+   * VIC vốn đã nằm sẵn ở đầu danh sách, nên cú bấm sai không lộ ra cho tới khi
+   * mã sai chen lên trước nó.
+   */
+  runtimeText?: string;
+  /**
    * Strategy names are intentionally close to Playwright's semantic locators,
    * because accessibility-first locators survive refactors far better than CSS/XPath.
    */
@@ -369,6 +385,12 @@ export interface StepResult {
   error?: { message: string; stack?: string };
   /** Drives retry policy: assertions never become green merely by rerunning. */
   failureKind?: 'locator' | 'assertion' | 'interaction' | 'environment';
+  /**
+   * Why an action could not be credited with causing the state that followed.
+   * Kept as data so every report surface can explain the same fact instead of
+   * reducing all cases to the vague label "chưa chứng minh".
+   */
+  unverifiedReason?: string;
   screenshot?: string;
   /**
    * Vì sao bước này xanh: locator nào thắng, và nó đọc ra cái gì.

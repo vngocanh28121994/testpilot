@@ -1,19 +1,28 @@
-import type { LocatorCandidate, Platform } from '../core/types.js';
+import type { ElementDef, LocatorCandidate, Platform } from '../core/types.js';
 import type { Registry } from '../core/registry.js';
 import { protectedSelectors, type UiDriver, type UiHandle } from '../drivers/driver.js';
-import type { ElementDiscovery } from '../discovery/ElementDiscovery.js';
+import type { DiscoveryResult, ElementDiscovery } from '../discovery/ElementDiscovery.js';
 import type { SemanticElementDiscovery } from '../discovery/ai/SemanticElementDiscovery.js';
+import type { VisionElementDiscovery } from '../discovery/ai/VisionElementDiscovery.js';
 import type { ObservedElement, UiObservation } from '../discovery/UiObservation.js';
 import type { ActionKind, ElementIntent } from '../discovery/ElementIntent.js';
 import { buildElementIntent, mapDiscoveryStrategy } from '../discovery/DriverObservationAdapter.js';
 import { StandardElementVerifier } from '../discovery/ElementVerifier.js';
+import { iconMeaningMatches } from '../discovery/ConfidenceScorer.js';
 import {
   contextualRowActionCandidates,
   formatRelativeRowLocator,
   parseRelativeRowLocator,
 } from '../core/contextual.js';
-import { assessLocatorQuality, asUnapprovedFallback } from '../core/locatorQuality.js';
+import {
+  assessLocatorQuality,
+  asUnapprovedFallback,
+  matchesByContainment,
+  matchesByShape,
+} from '../core/locatorQuality.js';
 import { xpathLiteral } from '../core/labelXPath.js';
+import { normalizeHumanText } from '../core/text.js';
+import { semanticControlTokens } from '../core/controlNames.js';
 
 export interface ResolveOptions {
   /** Total budget for finding the element. */
@@ -31,10 +40,14 @@ export interface ResolveOptions {
   discoveryAction?: ActionKind;
   /** Candidate keys rejected by an action postcondition during this step. */
   excludeCandidateKeys?: string[];
+  /** Allow ranked ambiguous candidates only when the caller can prove outcome. */
+  allowAmbiguousDiscovery?: boolean;
   /** Values used to instantiate authored locator templates for this step. */
   locatorParams?: Record<string, string>;
   /** Previous/next business assertions that narrow runtime discovery. */
   semanticContext?: string[];
+  /** Exact business value the current read-only assertion expects to see. */
+  semanticText?: string;
   /** The last successfully asserted business region, when one exists. */
   contextAnchor?: string;
 }
@@ -55,6 +68,13 @@ export interface Resolution {
   attempts: number;
 }
 
+export interface VerifiedLearningEvent {
+  elementId: string;
+  platform: Platform;
+  candidate: LocatorCandidate;
+  kind?: 'confirmed' | 'rejected';
+}
+
 /**
  * Chờ thêm bao lâu cho một discovery còn dang dở khi hạn resolve đã hết.
  *
@@ -62,7 +82,7 @@ export interface Resolution {
  * tiêu tốn đúng lúc bước sắp hỏng — nên nó không làm chậm lượt chạy nào đang
  * đi đúng đường.
  */
-const DISCOVERY_GRACE_MS = 4_000;
+const DISCOVERY_GRACE_MS = 6_000;
 
 /**
  * Chờ bao lâu trước khi gọi discovery, khi số vòng lặp chưa đủ.
@@ -103,6 +123,12 @@ export class ElementNotFoundError extends Error {
 export class Resolver {
   // G04: single authoritative verification engine — shared with ElementDiscovery
   private readonly verifier = new StandardElementVerifier();
+  /** Locators proven during this process, so later scenarios can report reuse. */
+  private readonly learnedThisRun = new Set<string>();
+  private readonly reuseReported = new Set<string>();
+  private visionDisabledForRun = false;
+  private visionUnavailableUntil = 0;
+  private visionCircuitReported = false;
 
   constructor(
     private readonly driver: UiDriver,
@@ -123,6 +149,10 @@ export class Resolver {
      */
     private readonly semanticDiscovery?: SemanticElementDiscovery,
     private readonly aiMinConfidence = 60,
+    private readonly visionDiscovery?: VisionElementDiscovery,
+    private readonly screenshotProvider?: { screenshot(): Promise<string> },
+    /** Persist a proven locator without waiting for the whole suite to finish. */
+    private readonly onVerifiedLearning?: (event: VerifiedLearningEvent) => void,
   ) {}
 
   async resolve(elementId: string, override: Partial<ResolveOptions> = {}): Promise<Resolution> {
@@ -136,8 +166,17 @@ export class Resolver {
     // Copy so unshift() below doesn't mutate the registry's internal array,
     // then apply cssScope: prefix every css candidate with the screen scope so
     // selectors stay short in the registry but are safely narrowed at runtime.
-    const rawCandidates = this.registry.candidates(elementId, this.driver.platform)
+    const declaredCandidates = this.registry.candidates(elementId, this.driver.platform)
       .map((candidate) => instantiateCandidate(candidate, o.locatorParams));
+    // A generated action can name a control by its operation ("mở dropdown
+    // Danh mục") while the same real control is already known by its business
+    // name ("Danh mục theo dõi"). Reuse same-screen candidates when the
+    // meaningful phrase is contained in the sibling label. This is runtime
+    // semantic discovery, not a hardcoded alias: the candidate still has to be
+    // clickable and the executor still gates it by the action's outcome.
+    const rawCandidates = declaredCandidates.length > 0
+      ? declaredCandidates
+      : this.sameControlCandidates(elementId, o.locatorParams);
     const authoredPrimary = rawCandidates[0];
     const excluded = new Set(o.excludeCandidateKeys ?? []);
     const candidates = this.prepareCandidates(
@@ -173,6 +212,10 @@ export class Resolver {
     let discoveryStartedAt = 0;
     let discoveryTask: Promise<LocatorCandidate | null> | null = null;
     let discoveryAttempted = false;
+    // A discovery result only describes the exact UI snapshot from which it
+    // was produced. Closing an overlay changes that UI, so any in-flight
+    // result from the older generation must never be allowed to win later.
+    let discoveryGeneration = 0;
     let lastUrl: string | undefined;
     /** Ứng viên đã thực sự đưa cho driver, để biết cái nào chưa từng được thử. */
     const daThu = new Set<string>();
@@ -233,11 +276,12 @@ export class Resolver {
         if (
           unauthored &&
           o.verifyHealedMatch &&
-          !(await this.verifySemantically(elementId, handle, o.locatorParams))
+          !(await this.verifySemantically(elementId, handle, o.locatorParams, o.semanticText, o.discoveryAction))
         ) {
           continue;
         }
 
+        this.reportLearnedReuse(elementId, candidate, authoredKeys.has(candidateKey(candidate)));
         return {
           handle,
           candidate,
@@ -248,6 +292,32 @@ export class Resolver {
       }
 
       ticks += 1;
+
+      // The first candidate sweep above is deliberately observational. Once it
+      // missed, however, remove a blocking overlay BEFORE taking the discovery
+      // snapshot. Starting discovery first captured the permission dialog,
+      // dismissed it a moment later, then kept ranking the stale 400-node tree
+      // for the rest of the step. Vision correctly reported that the requested
+      // control was absent from the screenshot we had given it.
+      if (this.driver.dismissOverlay) {
+        const dismissed = await this.driver
+          .dismissOverlay(protectedSelectors(candidates))
+          .catch(() => false);
+        if (dismissed) {
+          if (discoveryAttempted || discoveryTask) {
+            discoveryGeneration += 1;
+            discovered = null;
+            discoveryTask = null;
+            discoverySettled = false;
+            discoveryStartedAt = 0;
+            discoveryAttempted = false;
+            console.log(
+              `[discovery] "${elementId}": overlay vừa thay đổi màn hình — bỏ ảnh/XML cũ và quan sát lại.`,
+            );
+          }
+          continue;
+        }
+      }
 
       // Give authored/previously verified locators several cheap polling ticks
       // before invoking discovery. A normal route transition can take a few
@@ -280,31 +350,32 @@ export class Resolver {
         // Chạy nền thì mỗi vòng lặp sau chỉ việc hỏi "có kết quả chưa" — không
         // tick nào bị chặn, và kết quả về muộn vẫn kịp dùng trong cùng lần
         // resolve này.
-        discoveryTask = this.tryDiscovery(
+        const generation = discoveryGeneration;
+        const task = this.tryDiscovery(
           elementId,
           o.discoveryAction,
           o.locatorParams,
           o.semanticContext,
+          o.semanticText,
+          o.allowAmbiguousDiscovery ?? isReadOnlyDiscovery(o.discoveryAction),
+          excluded,
+          o,
         );
-        void discoveryTask
-          .then((c) => { discovered = c; })
-          .catch(() => { discovered = null; })
-          .finally(() => { discoverySettled = true; });
+        discoveryTask = task;
+        void task
+          .then((c) => {
+            if (generation === discoveryGeneration) discovered = c;
+          })
+          .catch(() => {
+            if (generation === discoveryGeneration) discovered = null;
+          })
+          .finally(() => {
+            if (generation === discoveryGeneration) discoverySettled = true;
+          });
       }
       if (discovered && !excluded.has(candidateKey(discovered))) {
         candidates.unshift(discovered);
         discovered = null;
-      }
-
-      // A native overlay (permission dialog, system popup) sits above the WebView
-      // and blocks every locator. Dismiss it and retry immediately — but never
-      // the layer holding what this very loop is waiting for, which is what an
-      // app that reports errors in a dialog produces on every failed login.
-      if (this.driver.dismissOverlay) {
-        const dismissed = await this.driver
-          .dismissOverlay(protectedSelectors(candidates))
-          .catch(() => false);
-        if (dismissed) continue;
       }
 
       // Nothing matched this tick. If the UI is still moving, that is a reason to
@@ -357,7 +428,7 @@ export class Resolver {
       const handle = await this.tryCandidate(candidate, o);
       const verified = handle
         && (!o.verifyHealedMatch
-          || (await this.verifySemantically(elementId, handle, o.locatorParams)));
+          || (await this.verifySemantically(elementId, handle, o.locatorParams, o.semanticText, o.discoveryAction)));
       if (handle && verified) {
         console.log(`[discovery] "${elementId}": tìm được sau khi chờ thêm — ${candidate.strategy}=${candidate.value}`);
         return { handle, candidate, healed: true, attempts };
@@ -415,7 +486,7 @@ export class Resolver {
    * ở bước sau. Khoá cũ chỉ dùng elementId nên mỗi element chỉ được hỏi đúng
    * một lần cho cả lượt chạy — quá chặt.
    */
-  private readonly aiProposed = new Set<string>();
+  private readonly aiProposals = new Map<string, Promise<LocatorCandidate[]>>();
 
   /**
    * Asks the AI tier what the deterministic pipeline could not find.
@@ -430,48 +501,181 @@ export class Resolver {
     intent: ElementIntent,
     observation: UiObservation,
     elementId: string,
-  ): Promise<LocatorCandidate | null> {
-    if (!this.semanticDiscovery) return null;
-    // Vân tay màn hình: số phần tử quan sát được cộng vài nhãn đầu. Đủ để phân
-    // biệt hai màn hình khác nhau mà không cần băm cả cây.
-    const shape = observation.elements
-      .slice(0, 6)
-      .map((el) => el.accessibilityLabel ?? el.text ?? el.role ?? '')
-      .join('|');
-    const key = `${elementId}::${observation.elements.length}::${shape}`;
-    if (this.aiProposed.has(key)) return null;
-    this.aiProposed.add(key);
+    allowOutcomeValidation = false,
+    resolveOptions: ResolveOptions = this.opts,
+    forceVision = false,
+  ): Promise<LocatorCandidate[]> {
+    if (!this.semanticDiscovery && !this.visionDiscovery) return [];
+    // Chỉ dùng trạng thái màn hình mang nghĩa nghiệp vụ. Số node và sáu nhãn
+    // đầu thay đổi theo animation/virtual list, khiến cùng một màn hình ở
+    // scenario sau bị coi là câu hỏi mới và lại gọi AI từ đầu.
+    const screenState = stableScreenState(observation, this.registry.element(elementId).screen);
+    const key = [
+      elementId,
+      intent.action,
+      intent.label ?? intent.text ?? '',
+      intent.context?.join('|') ?? '',
+      screenState,
+      allowOutcomeValidation ? 'bounded' : 'strict',
+      forceVision ? 'vision' : 'semantic-first',
+    ].join('::');
+    const cached = this.aiProposals.get(key);
+    if (cached) return cached;
 
-    const result = await this.semanticDiscovery
-      .discover(intent, observation, { minConfidence: this.aiMinConfidence })
-      .catch((err: Error) => ({ method: 'failed' as const, evidence: [err.message] }));
-    if (!result || result.method === 'failed' || !('locator' in result) || !result.locator) {
-      // Say why. A tier that declines in silence is indistinguishable from one
-      // that never ran, and that ambiguity cost an afternoon of guessing once
-      // today already.
-      const why = (result?.evidence ?? []).slice(-2).join(' | ');
-      console.warn(`[discovery:ai] "${elementId}" không đề xuất được: ${why.slice(0, 200)}`);
-      return null;
+    const task = (async (): Promise<LocatorCandidate[]> => {
+      // Capture close to the structured observation. The image is uploaded to
+      // Gemini only if semantic AI also fails, but it must describe the same UI.
+      const visionAvailable = this.canUseVisionNow();
+      const screenshotTask = visionAvailable && this.screenshotProvider
+        ? this.screenshotProvider.screenshot().catch((err: Error) => {
+            console.warn(`[discovery:vision] không chụp được màn hình: ${err.message.slice(0, 160)}`);
+            return '';
+          })
+        : undefined;
+
+      if (this.semanticDiscovery && !forceVision) {
+        try {
+          const semantic = await this.semanticDiscovery.discover(intent, observation, {
+            minConfidence: this.aiMinConfidence,
+            persistSuggestedLocator: false,
+            allowExactTextProxy: allowOutcomeValidation,
+          });
+          const candidates = this.runtimeCandidatesFromResult(semantic, intent, elementId, 'semantic-ai');
+          const usable = await this.usableAiCandidates(
+            candidates,
+            elementId,
+            resolveOptions,
+          );
+          if (usable.length > 0) return usable;
+          if (candidates.length > 0) {
+            console.warn(
+              `[discovery:vision] "${elementId}" — toàn bộ ${candidates.length} ứng viên semantic ` +
+              'không resolve hoặc không qua xác minh; chuyển sang Gemini.',
+            );
+          }
+          const why = semantic.evidence.slice(-2).join(' | ');
+          console.warn(`[discovery:ai] "${elementId}" chưa có ứng viên dùng được: ${why.slice(0, 200)}`);
+        } catch (err) {
+          console.warn(`[discovery:ai] "${elementId}" lỗi semantic: ${(err as Error).message.slice(0, 200)}`);
+        }
+      }
+
+      if (!this.visionDiscovery || !screenshotTask) return [];
+      const screenshot = await screenshotTask;
+      if (!screenshot) return [];
+      try {
+        console.warn(
+          `[discovery:vision] "${elementId}" — semantic không có ứng viên dùng được; ` +
+          'đang đối chiếu screenshot bằng Gemini.',
+        );
+        const vision = await this.visionDiscovery.discover(intent, screenshot, observation, {
+          minConfidence: this.aiMinConfidence,
+          platform: this.driver.platform,
+          persistSuggestedLocator: false,
+          allowExactTextProxy: allowOutcomeValidation,
+        });
+        // VisionElementDiscovery intentionally converts provider exceptions to
+        // evidence instead of rethrowing. Feed those failures into the same
+        // run-level circuit breaker; otherwise every new element retries a
+        // quota that is already known to be exhausted.
+        const providerFailure = vision.evidence.find((item) =>
+          /\b429\b|resource[_ -]?exhausted|quota|\b503\b|unavailable|overload/i.test(item));
+        if (providerFailure) this.tripVisionCircuit(providerFailure);
+        for (const item of vision.evidence) {
+          console.warn(`[discovery:vision] "${elementId}" ${item.replace(/^\[vision\]\s*/, '')}`);
+        }
+        const candidates = this.runtimeCandidatesFromResult(vision, intent, elementId, 'vision');
+        if (candidates.length === 0) {
+          console.warn(`[discovery:vision] "${elementId}" — không có locator đã xác minh để thử.`);
+        }
+        return this.usableAiCandidates(candidates, elementId, resolveOptions);
+      } catch (err) {
+        const message = (err as Error).message;
+        this.tripVisionCircuit(message);
+        console.warn(`[discovery:vision] "${elementId}" lỗi Gemini: ${message.slice(0, 200)}`);
+        return [];
+      }
+    })();
+    this.aiProposals.set(key, task);
+    return task;
+  }
+
+  /**
+   * A model proposal is not a usable fallback merely because it parsed into a
+   * locator. Prove it against the live driver and the same semantic gate used
+   * by the main resolver before allowing the cheaper tier to stop the chain.
+   *
+   * This is deliberately read-only. Persistence still happens only after the
+   * executor observes the requested action's postcondition.
+   */
+  private async usableAiCandidates(
+    candidates: LocatorCandidate[],
+    elementId: string,
+    o: ResolveOptions,
+  ): Promise<LocatorCandidate[]> {
+    const usable: LocatorCandidate[] = [];
+    for (const candidate of candidates) {
+      const handle = await this.tryCandidate(candidate, o);
+      if (!handle) {
+        console.warn(
+          `[discovery:ai-check] "${elementId}" loại ${candidate.strategy}="${candidate.value}": ` +
+          'không khớp phần tử đang hiển thị.',
+        );
+        continue;
+      }
+      if (
+        o.verifyHealedMatch &&
+        !(await this.verifySemantically(elementId, handle, o.locatorParams, o.semanticText, o.discoveryAction))
+      ) {
+        console.warn(
+          `[discovery:ai-check] "${elementId}" loại ${candidate.strategy}="${candidate.value}": ` +
+          'khớp DOM nhưng sai ngữ nghĩa control.',
+        );
+        continue;
+      }
+      usable.push(candidate);
     }
+    return usable;
+  }
 
-    const proposed: LocatorCandidate = {
-      strategy: mapDiscoveryStrategy(result.locator.strategy),
-      value: result.locator.value,
-      weight: Math.min(0.9, (result.match?.confidence ?? 60) / 100),
-      // Treat it as a runtime healing candidate only after AI has selected it
-      // from the live observation. confirmResolution() remains the sole place
-      // that can persist it after action/outcome verification.
-      origin: 'healed',
-    };
-    const quality = assessLocatorQuality(proposed);
-    if (!quality.persistable) return null;
-
-    console.warn(
-      `[discovery:ai] "${elementId}" → ${proposed.strategy}="${proposed.value}" ` +
-        `(tin cậy ${result.match?.confidence ?? '?'}) — thử trên UI thật trong lần chạy này; ` +
-        'chỉ lưu sau khi action tạo đúng trạng thái.',
-    );
-    return proposed;
+  private runtimeCandidatesFromResult(
+    result: DiscoveryResult,
+    intent: ElementIntent,
+    elementId: string,
+    tier: 'semantic-ai' | 'vision',
+  ): LocatorCandidate[] {
+    if (result.method === 'failed' || !result.locator) return [];
+    const semanticText = intent.text?.trim();
+    // New providers attach a locator to every ranked match. Older adapters put
+    // the sole locator on DiscoveryResult, so retain that contract as fallback.
+    const rankedMatches = [
+      result.match
+        ? { ...result.match, locator: result.match.locator ?? result.locator }
+        : undefined,
+      ...(result.alternatives ?? []),
+    ];
+    return rankedMatches
+      .filter((match): match is NonNullable<typeof match> => Boolean(match?.locator))
+      .flatMap((match) => {
+        const locator = match.locator!;
+        const textLocatorOnWeb = this.driver.platform === 'web'
+          && Boolean(semanticText)
+          && locator.strategy === 'xpath';
+        const proposed: LocatorCandidate = {
+          strategy: textLocatorOnWeb ? 'label' : mapDiscoveryStrategy(locator.strategy),
+          value: textLocatorOnWeb ? semanticText! : locator.value,
+          weight: Math.min(0.9, match.confidence / 100),
+          origin: 'healed',
+        };
+        if (!assessLocatorQuality(proposed).persistable) return [];
+        console.warn(
+          `[discovery:${tier}] "${elementId}" → ${proposed.strategy}="${proposed.value}" ` +
+            `(tin cậy ${match.confidence}) — ứng viên runtime; chỉ lưu sau khi action tạo đúng trạng thái.`,
+        );
+        return [proposed];
+      })
+      .filter((candidate, index, all) =>
+        all.findIndex((other) => candidateKey(other) === candidateKey(candidate)) === index);
   }
 
   private async tryDiscovery(
@@ -479,15 +683,20 @@ export class Resolver {
     action: ActionKind = 'assert-visible',
     locatorParams?: Record<string, string>,
     semanticContext?: string[],
+    semanticText?: string,
+    allowAmbiguousCandidates = false,
+    excluded: ReadonlySet<string> = new Set(),
+    resolveOptions: ResolveOptions = this.opts,
   ): Promise<LocatorCandidate | null> {
     /** Lời hứa của tầng AI, khởi động ngay khi có ảnh chụp. */
-    let aiTask: Promise<LocatorCandidate | null> | null = null;
+    let aiTask: Promise<LocatorCandidate[]> | null = null;
     try {
       const elementDef = this.registry.element(elementId);
       const intent = buildElementIntent(elementId, {
         ...elementDef,
         label: interpolateTemplate(elementDef.label, locatorParams),
       }, action, semanticContext);
+      if (semanticText) intent.text = semanticText;
       // Lower threshold than the standard 60: this is a fallback after all known
       // locators have already failed.  The resolver's own plausible() guard still
       // catches completely unrelated matches when verifyHealedMatch is on.
@@ -501,6 +710,7 @@ export class Resolver {
         // Identity verification makes this candidate safe to try, but only the
         // executor can prove that the requested action had the intended effect.
         persistVerifiedLocator: false,
+        allowAmbiguousCandidates,
         // Khởi động tầng AI NGAY khi có ảnh chụp, song song với phần còn lại.
         //
         // Ảnh chụp là phần đắt nhất và cả hai tầng dùng chung nó. Trước đây AI
@@ -509,7 +719,13 @@ export class Resolver {
         // hàng giây. Đo ngày 2026-09-10: AI trả đúng locator với tin cậy 95
         // nhưng về sau hạn resolve và bị vứt đi.
         onObservation: (obs) => {
-          aiTask = this.proposeViaAi(intent, obs, elementId).catch(() => null);
+          aiTask = this.proposeViaAi(
+            intent,
+            obs,
+            elementId,
+            allowAmbiguousCandidates,
+            resolveOptions,
+          ).catch(() => []);
         },
       });
       if (result.method === 'failed' || !result.locator) {
@@ -520,12 +736,36 @@ export class Resolver {
         // Tầng AI đã chạy từ lúc có ảnh chụp; ở đây chỉ việc lấy kết quả.
         // Nhánh dự phòng dành cho trường hợp discover() thất bại TRƯỚC khi kịp
         // quan sát, khi đó chưa có gì để khởi động.
-        const proposed = aiTask
+        const proposals = aiTask
           ? await aiTask
           : result.observation
-            ? await this.proposeViaAi(intent, result.observation, elementId).catch(() => null)
-            : null;
+            ? await this.proposeViaAi(
+                intent,
+                result.observation,
+                elementId,
+                allowAmbiguousCandidates,
+                resolveOptions,
+              ).catch(() => [])
+            : [];
+        const proposed = proposals.find((candidate) => !excluded.has(candidateKey(candidate)));
         if (proposed) return proposed;
+        // The executor may have disproved every semantic candidate by its
+        // postcondition on earlier attempts. They remain cached so the model is
+        // not billed twice, but they must not prevent the final visual tier.
+        if (proposals.length > 0 && result.observation && this.visionDiscovery) {
+          const visual = await this.proposeViaAi(
+            intent,
+            result.observation,
+            elementId,
+            allowAmbiguousCandidates,
+            resolveOptions,
+            true,
+          ).catch(() => []);
+          const visualCandidate = visual.find(
+            (candidate) => !excluded.has(candidateKey(candidate)),
+          );
+          if (visualCandidate) return visualCandidate;
+        }
         if (!this.discoveryReported.has(elementId)) {
           this.discoveryReported.add(elementId);
           console.warn(
@@ -534,15 +774,29 @@ export class Resolver {
         }
         return null;
       }
-      const candidate: LocatorCandidate = {
-        strategy: mapDiscoveryStrategy(result.locator.strategy),
-        value: result.locator.value,
-        // Clamp weight at 0.95 — a runtime-observed locator is never as certain
-        // as one explicitly authored, but ranks above unverified fallbacks.
-        weight: Math.min(0.95, (result.match?.confidence ?? 80) / 100),
-        origin: 'healed',
-      };
-      return candidate;
+      const discoveredMatches = [result.match, ...(result.alternatives ?? [])]
+        .filter((match): match is NonNullable<typeof match> => Boolean(match?.locator));
+      for (const match of discoveredMatches) {
+        const textLocatorOnWeb = this.driver.platform === 'web'
+          && Boolean(semanticText?.trim())
+          && match.locator!.strategy === 'xpath';
+        const candidate: LocatorCandidate = {
+          strategy: textLocatorOnWeb ? 'label' : mapDiscoveryStrategy(match.locator!.strategy),
+          value: textLocatorOnWeb ? semanticText!.trim() : match.locator!.value,
+          // Clamp weight at 0.95 — a runtime-observed locator is never as certain
+          // as one explicitly authored, but ranks above unverified fallbacks.
+          weight: Math.min(0.95, match.confidence / 100),
+          origin: 'healed',
+        };
+        if (!excluded.has(candidateKey(candidate))) {
+          console.warn(
+            `[discovery:deterministic] "${elementId}" → ${candidate.strategy}="${candidate.value}" ` +
+              `(tin cậy ${match.confidence}) — chờ action chứng minh kết quả.`,
+          );
+          return candidate;
+        }
+      }
+      return null;
     } catch (err) {
       // Discovery is non-critical; warn but do not propagate.
       console.warn(`[discovery] "${elementId}": ${(err as Error).message}`);
@@ -589,6 +843,58 @@ export class Resolver {
   }
 
   /**
+   * Read-only proof that the screen owning an element is currently open.
+   *
+   * A brand-new screen often has no locator yet for its first business action.
+   * Using that action as the sole navigation landmark creates a deadlock: the
+   * executor refuses to enter the action step, so normal discovery never gets
+   * a chance to learn it. The authored screen title is independent evidence
+   * and is intentionally never recorded as the action's locator.
+   */
+  async visibleScreenTitleForElement(
+    elementId: string,
+    override: Partial<ResolveOptions> = {},
+  ): Promise<string | undefined> {
+    const element = this.registry.element(elementId);
+    if (!element.screen) return undefined;
+    const screen = this.registry.screen(element.screen);
+    const title = screen?.title?.trim();
+    if (!title) return undefined;
+
+    // Do not use a plain text/label lookup. SPAs commonly keep navigation
+    // drawers mounted off-screen; TCInvest's Home toolbox contains the text
+    // "Báo cáo của tôi" even while the report dialog is closed. Requiring the
+    // title node itself to carry heading/title semantics prevents that stale
+    // menu item from proving a destination it did not open.
+    const titleLiteral = xpathLiteral(title);
+    const candidate: LocatorCandidate = {
+      strategy: 'xpath',
+      value: `//*[normalize-space(.)=${titleLiteral} and (`
+        + `self::h1 or self::h2 or self::h3 or self::h4 or self::h5 or self::h6 `
+        + `or @role='heading' `
+        + `or contains(concat(' ', normalize-space(@class), ' '), ' title ') `
+        + `or contains(concat(' ', normalize-space(@class), ' '), ' page-title ') `
+        + `or contains(concat(' ', normalize-space(@class), ' '), ' screen-title ') `
+        + `or contains(concat(' ', normalize-space(@class), ' '), ' dialog-title ') `
+        + `or ancestor::*[contains(@class,'common-header') `
+        + `or contains(concat(' ', normalize-space(@class), ' '), ' toolbar ') `
+        + `or contains(concat(' ', normalize-space(@class), ' '), ' app-bar ') `
+        + `or contains(concat(' ', normalize-space(@class), ' '), ' page-header ') `
+        + `or contains(concat(' ', normalize-space(@class), ' '), ' dialog-header ')])]`,
+      weight: 0.5,
+      origin: 'healed',
+    };
+    const prepared = this.prepareCandidates([candidate], screen?.cssScope)[0];
+    if (!prepared) return undefined;
+    const handle = await this.tryCandidate(prepared, {
+      ...this.opts,
+      ...override,
+      requireVisible: true,
+    });
+    return handle ? title : undefined;
+  }
+
+  /**
    * `isVisibleNow` with the winning handle kept instead of thrown away.
    *
    * Callers that need to compare an element's contents before and after an
@@ -598,6 +904,21 @@ export class Resolver {
   async visibleResolutionNow(
     elementId: string,
     override: Partial<ResolveOptions> = {},
+  ): Promise<{ candidate: LocatorCandidate; handle: UiHandle } | undefined> {
+    return this.visibleResolutionUsing(elementId, override);
+  }
+
+  /**
+   * `visibleResolutionNow` với quyền lọc bớt ứng viên trước khi thử.
+   *
+   * Tách ra vì cùng một element được hỏi theo hai câu hỏi khác nhau: "bấm được
+   * cái này không" chấp nhận mọi locator từng chứng minh được, còn "màn hình
+   * nào đang mở" thì không — xem `visibleLandmarkOnScreen`.
+   */
+  private async visibleResolutionUsing(
+    elementId: string,
+    override: Partial<ResolveOptions> = {},
+    keep?: (candidate: LocatorCandidate) => boolean,
   ): Promise<{ candidate: LocatorCandidate; handle: UiHandle } | undefined> {
     const o = { ...this.opts, ...override };
     const elementDef = this.registry.element(elementId);
@@ -609,12 +930,88 @@ export class Resolver {
         interpolateTemplate(elementDef.label, o.locatorParams),
       ),
       screenDef?.cssScope,
-    );
+    ).filter((candidate) => keep?.(candidate) ?? true);
     for (const candidate of candidates) {
       const handle = await this.tryCandidate(candidate, { ...o, requireVisible: true });
       if (handle) return { candidate, handle };
     }
     return undefined;
+  }
+
+  /**
+   * Find a proven, currently visible landmark belonging to a screen.
+   *
+   * Opening a feature must not use the first business assertion as the screen
+   * identity: its value may legitimately differ before the scenario starts.
+   * A screen-level landmark is weaker than the requested assertion but strong
+   * enough to establish where the runner is, and it works for newly authored
+   * steps before those steps have their own locator.
+   */
+  async visibleLandmarkOnScreen(
+    screenId: string,
+    excludeElementIds: readonly string[] = [],
+  ): Promise<{ elementId: string; label: string } | undefined> {
+    const excluded = new Set(excludeElementIds);
+    const elements = Object.values(this.registry.raw.elements)
+      .filter((element) =>
+        element.screen === screenId
+        && !excluded.has(element.id)
+        && (element.candidates[this.driver.platform]?.length ?? 0) > 0)
+      .sort((a, b) =>
+        (b.health?.resolutions ?? 0) - (a.health?.resolutions ?? 0));
+
+    // Screen identity should be cheap. The most frequently proven locators are
+    // the best landmarks; if none of the first few are visible, normal search
+    // navigation and full discovery remain the authority.
+    //
+    // Nhưng CHỈ bằng những locator định danh chính xác, theo hai luật:
+    //
+    //  - matchesByContainment: khớp theo chuỗi con trả lời được câu "bấm cái
+    //    nào" mà không trả lời được câu "đang ở màn nào" — mọi câu văn chứa cụm
+    //    từ đều thành bằng chứng, kể cả câu nằm trong menu của màn hình khác.
+    //  - matchesByShape: locator chỉ mô tả hình dạng (`role:dialog`, một class
+    //    dùng chung) thì còn lỏng hơn nữa — nó không nhắc tới nội dung nào cả,
+    //    nên đúng trên mọi màn hình có cùng hình dạng ấy.
+    //
+    // Cả hai luật chỉ quan trọng ở ĐÂY; xem hai hàm đó để biết vì sao.
+    //
+    // Lọc hết ứng viên thì element đó thôi làm landmark, không phải cả lượt
+    // chạy hỏng: bỏ qua landmark chỉ có nghĩa là đi đường điều hướng bình
+    // thường, vốn lặp lại được và không phá trạng thái.
+    for (const element of elements.slice(0, 8)) {
+      const seen = await this
+        .visibleResolutionUsing(
+          element.id,
+          {},
+          (c) => !matchesByContainment(c) && !matchesByShape(c),
+        )
+        .catch(() => undefined);
+      if (seen) return { elementId: element.id, label: element.label };
+    }
+    return undefined;
+  }
+
+  /** Candidates owned by a same-screen element whose business name contains this one. */
+  private sameControlCandidates(
+    elementId: string,
+    locatorParams?: Record<string, string>,
+  ): LocatorCandidate[] {
+    const siblings = sameScreenSemanticElements(this.registry, elementId, locatorParams)
+      .sort((a, b) => (b.health?.resolutions ?? 0) - (a.health?.resolutions ?? 0));
+
+    const candidates = siblings.flatMap((sibling) =>
+      (sibling.candidates[this.driver.platform] ?? []).map((candidate) => ({
+        ...instantiateCandidate(candidate, locatorParams),
+        weight: Math.min(candidate.weight, 0.69),
+        origin: 'healed' as const,
+      })));
+    if (candidates.length > 0) {
+      console.log(
+        `[discovery] "${elementId}" chưa có locator ${this.driver.platform}; `
+        + `thử control cùng nghĩa "${siblings[0]!.label}" trên cùng màn hình.`,
+      );
+    }
+    return candidates;
   }
 
   /**
@@ -629,10 +1026,15 @@ export class Resolver {
     const {
       runtimeScope: _runtimeScope,
       runtimeTemplateValue: _runtimeTemplateValue,
+      runtimeText: _runtimeText,
       ...persisted
     } = candidate;
     const quality = assessLocatorQuality(persisted);
     if (!quality.persistable) return;
+
+    const learningKey = this.learningKey(elementId, persisted);
+    const alreadyKnown = this.registry.candidates(elementId, this.driver.platform)
+      .some((known) => candidateKey(known) === candidateKey(persisted));
 
     const elementDef = this.registry.element(elementId);
     this.registry.upsertElement({
@@ -647,7 +1049,64 @@ export class Resolver {
       this.driver.platform,
       candidate.weight,
     );
+    this.learnedThisRun.add(learningKey);
+    if (!alreadyKnown) {
+      console.log(
+        `[learn:new] "${elementId}" — ${persisted.strategy}=${persisted.value}; `
+        + 'đã chứng minh bằng kết quả action.',
+      );
+      try {
+        this.onVerifiedLearning?.({
+          elementId,
+          platform: this.driver.platform,
+          candidate: persisted,
+        });
+      } catch (err) {
+        console.warn(`[learn:checkpoint] không thể xếp lịch lưu: ${(err as Error).message}`);
+      }
+    }
     if (resolution.previous) this.lanBaiHoc(elementId, resolution.previous, persisted);
+  }
+
+  private learningKey(elementId: string, candidate: LocatorCandidate): string {
+    return `${elementId}::${this.driver.platform}::${candidateKey(candidate)}`;
+  }
+
+  private reportLearnedReuse(
+    elementId: string,
+    candidate: LocatorCandidate,
+    declaredByRegistry: boolean,
+  ): void {
+    if (candidate.origin !== 'healed' || !declaredByRegistry) return;
+    const learningKey = this.learningKey(elementId, candidate);
+    const source = this.learnedThisRun.has(learningKey) ? 'reuse-session' : 'reuse-registry';
+    const reportKey = `${source}::${learningKey}`;
+    if (this.reuseReported.has(reportKey)) return;
+    this.reuseReported.add(reportKey);
+    console.log(`[learn:${source}] "${elementId}" — ${candidate.strategy}=${candidate.value}`);
+  }
+
+  private canUseVisionNow(): boolean {
+    if (!this.visionDiscovery || this.visionDisabledForRun) return false;
+    return Date.now() >= this.visionUnavailableUntil;
+  }
+
+  private tripVisionCircuit(message: string): void {
+    if (/\b429\b|resource[_ -]?exhausted|quota/i.test(message)) {
+      this.visionDisabledForRun = true;
+      if (!this.visionCircuitReported) {
+        this.visionCircuitReported = true;
+        console.warn('[discovery:vision] hết quota — tắt Gemini Vision cho phần còn lại của run.');
+      }
+      return;
+    }
+    if (/\b503\b|unavailable|overload/i.test(message)) {
+      this.visionUnavailableUntil = Date.now() + 60_000;
+      if (!this.visionCircuitReported) {
+        this.visionCircuitReported = true;
+        console.warn('[discovery:vision] dịch vụ tạm lỗi — nghỉ gọi Vision 60 giây, vẫn tiếp tục các tầng khác.');
+      }
+    }
   }
 
   /**
@@ -668,9 +1127,11 @@ export class Resolver {
    * cùng màn hình — một ô có thật, sai thật, và bị luật head-word gạt đúng. Nó
    * không có đường nào đi tới ô đúng, dù câu trả lời đã nằm sẵn trong registry.
    *
-   * Khoá nối chính là locator vừa chết: hai bản ghi cùng ôm một locator chết
-   * trên cùng màn hình thì gần như chắc chắn là một control. Ở đó không cần hỏi
-   * model lần nào nữa.
+   * Khoá nối gồm TOÀN BỘ locator vừa chết (kể cả accessible name) và nhãn
+   * semantic tương thích. `role=menuitem` không đủ nhận dạng một control: cả
+   * "Thêm vào danh mục" và "Xóa khỏi danh mục" đều mang role đó. Bỏ `name`
+   * khỏi phép so sánh đã từng lan locator Xóa sang element Thêm — một lỗi có
+   * thể click sai nghiệp vụ dù từng candidate riêng lẻ đều hợp lệ.
    *
    * Chép sang dưới dạng ứng viên chưa duyệt, trọng số thấp — nó vẫn phải tự
    * chứng minh qua confirmResolution như mọi locator khác, nên một lần chữa sai
@@ -682,12 +1143,14 @@ export class Resolver {
     fresh: LocatorCandidate,
   ): void {
     const platform = this.driver.platform;
-    const screen = this.registry.element(healedId).screen;
+    const healed = this.registry.element(healedId);
+    const screen = healed.screen;
     for (const other of Object.values(this.registry.raw.elements)) {
       if (other.id === healedId || other.screen !== screen) continue;
+      if (!sameControlSemantics(healed, other)) continue;
       const list = other.candidates?.[platform] ?? [];
       const omLocatorChet = list.some(
-        (c) => c.strategy === dead.strategy && c.value === dead.value,
+        (candidate) => sameLocatorIdentity(candidate, dead),
       );
       if (!omLocatorChet) continue;
       if (list.some((c) => c.strategy === fresh.strategy && c.value === fresh.value)) continue;
@@ -706,6 +1169,27 @@ export class Resolver {
   rejectResolution(elementId: string, resolution: Resolution): void {
     if (resolution.candidate.origin !== 'healed') return;
     this.elementDiscovery?.rejectLocator(elementId, resolution.candidate);
+    const removed = this.registry.rejectCandidate(
+      elementId,
+      this.driver.platform,
+      resolution.candidate,
+    );
+    if (!removed) return;
+    this.learnedThisRun.delete(this.learningKey(elementId, resolution.candidate));
+    console.warn(
+      `[learn:rejected] "${elementId}" — ${resolution.candidate.strategy}=${resolution.candidate.value}; `
+      + 'kết quả action chứng minh locator sai, đã thu hồi khỏi registry.',
+    );
+    try {
+      this.onVerifiedLearning?.({
+        elementId,
+        platform: this.driver.platform,
+        candidate: resolution.candidate,
+        kind: 'rejected',
+      });
+    } catch (err) {
+      console.warn(`[learn:checkpoint] không thể xếp lịch lưu thu hồi: ${(err as Error).message}`);
+    }
   }
 
   private prepareCandidates(
@@ -744,12 +1228,12 @@ export class Resolver {
     label?: string,
     contextAnchor?: string,
   ): LocatorCandidate[] {
-    if (candidates.length > 0 || this.driver.platform !== 'web' || !label?.trim()) {
+    if (candidates.length > 0 || !label?.trim()) {
       return candidates;
     }
     const full = label.trim();
     const compact = compactOptionFromLabel(full);
-    const contextual = compact && contextAnchor
+    const contextual = this.driver.platform === 'web' && compact && contextAnchor
       ? contextualCompactXPath(contextAnchor, compact)
       : undefined;
     return [
@@ -761,7 +1245,7 @@ export class Resolver {
             origin: 'healed' as const,
           }]
         : []),
-      ...(compact
+      ...(this.driver.platform === 'web' && compact
         && !contextual
         ? [{
             strategy: 'xpath' as const,
@@ -806,12 +1290,23 @@ export class Resolver {
     elementId: string,
     handle: UiHandle,
     locatorParams?: Record<string, string>,
+    semanticText?: string,
+    action: ActionKind = 'assert-visible',
   ): Promise<boolean> {
     const elementDef = this.registry.element(elementId);
     const intent = buildElementIntent(elementId, {
       ...elementDef,
       label: interpolateTemplate(elementDef.label, locatorParams),
-    });
+    }, action);
+    // For a read-only assertion the live value is stronger identity evidence
+    // than the abstract registry label. A custom category control is named
+    // "Danh mục theo dõi" in Gherkin but renders its selected value
+    // "Following Cate". Rejecting that exact value for not containing the
+    // abstract name throws away the candidate discovery just proved.
+    if (semanticText?.trim()) {
+      intent.text = semanticText.trim();
+      delete intent.label;
+    }
 
     // Build a minimal ObservedElement from the runtime handle (G04)
     const el: ObservedElement = {
@@ -852,6 +1347,14 @@ export class Resolver {
       return true;
     }
 
+    // Material icon ligatures are the accessible vocabulary of many icon-only
+    // controls. Discovery may correctly identify `add`, `delete`, `save`, …
+    // from a business label; the live-handle gate must apply the same generic
+    // semantic mapping instead of rejecting the very candidate discovery just
+    // proved.
+    const wanted = intent.text ?? intent.label;
+    if (action === 'tap' && wanted && iconMeaningMatches(el.text, wanted)) return true;
+
     // G04: delegate to StandardElementVerifier — single authoritative engine
     const result = this.verifier.verify(intent, el, []);
     // labelMatch=undefined means intent has no label → allow
@@ -861,12 +1364,46 @@ export class Resolver {
   }
 }
 
+function isReadOnlyDiscovery(action?: ActionKind): boolean {
+  return action?.startsWith('assert-') ?? false;
+}
+
 function sleep(ms: number): Promise<void> {
   return new Promise((r) => setTimeout(r, ms));
 }
 
 export function candidateKey(candidate: LocatorCandidate): string {
   return `${candidate.strategy}\u0000${candidate.value}\u0000${candidate.name ?? ''}`;
+}
+
+/** Locator identity includes the accessible name; role alone is not identity. */
+function sameLocatorIdentity(a: LocatorCandidate, b: LocatorCandidate): boolean {
+  return a.strategy === b.strategy
+    && a.value === b.value
+    && normalizeHumanText(a.name ?? '') === normalizeHumanText(b.name ?? '');
+}
+
+/**
+ * Conservative proof that two registry records describe the same control.
+ *
+ * Exact label/alias equality is strongest. A token-subset relation covers the
+ * historical duplicate "Ô mã cổ phiếu" / "Ô tìm kiếm mã cổ phiếu" without
+ * equating siblings that merely share their control type, such as "Thêm vào
+ * danh mục" and "Xóa khỏi danh mục".
+ */
+function sameControlSemantics(a: ElementDef, b: ElementDef): boolean {
+  if (a.controlType && b.controlType && a.controlType !== b.controlType) return false;
+  if (a.template && b.template && a.template.kind !== b.template.kind) return false;
+
+  const namesA = new Set([a.label, ...(a.aliases ?? [])].map(normalizeHumanText));
+  const namesB = new Set([b.label, ...(b.aliases ?? [])].map(normalizeHumanText));
+  if ([...namesA].some((name) => namesB.has(name))) return true;
+
+  const tokensA = new Set(semanticControlTokens(a.label));
+  const tokensB = new Set(semanticControlTokens(b.label));
+  const smaller = tokensA.size <= tokensB.size ? tokensA : tokensB;
+  const larger = smaller === tokensA ? tokensB : tokensA;
+  return smaller.size >= 2 && [...smaller].every((token) => larger.has(token));
 }
 
 function instantiateCandidate(
@@ -901,6 +1438,69 @@ function interpolateTemplate(value: string, params?: Record<string, string>): st
   return value.replace(/\{\{([A-Za-z][\w]*)\}\}/g, (whole, key: string) =>
     params[key] ?? whole,
   );
+}
+
+/**
+ * Stable enough to share an AI answer across scenario resets, specific enough
+ * not to carry it into another dialog/state of the same feature.
+ *
+ * Deliberately excludes node count, order, selected/focused flags and ordinary
+ * list rows: all of those change during animation and virtual scrolling. Page
+ * identity plus headings/dialog landmarks are the parts a user would use to
+ * answer "am I still on the same screen?".
+ */
+function stableScreenState(observation: UiObservation, declaredScreen?: string): string {
+  const context = [
+    declaredScreen,
+    observation.screen?.name,
+    observation.context.activity,
+    observation.context.webContext,
+  ]
+    .filter((part): part is string => Boolean(part?.trim()))
+    .map(normalizeHumanText);
+
+  const landmarks = observation.elements
+    .filter((element) => element.visible)
+    .filter((element) => {
+      const role = normalizeHumanText(element.role ?? '');
+      const cls = normalizeHumanText(element.attributes?.class ?? '');
+      return /heading|dialog|alert|navigation|toolbar|title|header|modal/.test(`${role} ${cls}`);
+    })
+    .map((element) => normalizeHumanText(element.accessibilityLabel ?? element.text ?? ''))
+    .filter(Boolean);
+
+  return [...new Set([...context, ...landmarks])].sort().slice(0, 12).join('|') || 'same-element-screen';
+}
+
+function sameScreenSemanticElements(
+  registry: Registry,
+  elementId: string,
+  locatorParams?: Record<string, string>,
+) {
+  const target = registry.element(elementId);
+  if (!target.screen) return [];
+  const wanted = semanticControlTokens(interpolateTemplate(target.label, locatorParams));
+  if (wanted.length < 2) return [];
+  return Object.values(registry.raw.elements)
+    .filter((element) => element.id !== elementId && element.screen === target.screen)
+    .filter((element) => {
+      const available = new Set(semanticControlTokens(element.label));
+      return wanted.every((token) => available.has(token));
+    });
+}
+
+/** Used by preflight so it does not call a discoverable alias a certain failure. */
+export function hasSameScreenSemanticCandidate(
+  registry: Registry,
+  elementId: string,
+  platform: Platform,
+  hybrid = false,
+): boolean {
+  return sameScreenSemanticElements(registry, elementId).some((element) => {
+    const direct = element.candidates[platform] ?? [];
+    const web = hybrid ? element.candidates.web ?? [] : [];
+    return direct.length + web.length > 0;
+  });
 }
 
 /** `Giá 1M` → `1M`, `Kỳ YTD` → `YTD`; ordinary words are never shortened. */

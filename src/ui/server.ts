@@ -2,6 +2,7 @@ import { createServer, type IncomingMessage, type ServerResponse } from 'node:ht
 import { OrphanTracker } from '../core/orphans.js';
 import { activeRuns, beginActiveRun, endActiveRun, findActiveRun } from './activeRuns.js';
 import { closeInterruptedRuns, reindex } from '../core/runstore.js';
+import { mergeRunLearnings } from '../core/learned.js';
 import { recoverInterruptedRunReports } from '../core/interruptedReport.js';
 import { firstJsonObject } from '../llm/json.js';
 import net from 'node:net';
@@ -22,6 +23,8 @@ import { ConfigSchema, applyEnv, devicesOf, loadConfig, resolveModel, saveConfig
 // được lệch hợp đồng, thay vì để nó nổ ở trình duyệt. Xem contracts.ts.
 import type {
   Build,
+  DuplicateElementView,
+  DuplicateReviewRequest,
   HealingResponse,
   HistoryResponse,
   RunHistoryEntry,
@@ -29,6 +32,9 @@ import type {
   FeatureNormalizeResponse,
 } from './contracts.js';
 import { Registry } from '../core/registry.js';
+import type { ElementDef, LocatorCandidate, Platform } from '../core/types.js';
+import { findDuplicateElements } from '../core/duplicateElements.js';
+import { DuplicateReviewStore } from '../core/duplicateReview.js';
 import { KnownIssueStore } from '../core/knownIssues.js';
 import { ScenarioReviewStore, scenarioBlocks } from '../core/scenarioReview.js';
 import { listRuns } from '../core/runstore.js';
@@ -61,12 +67,13 @@ import {
   listDevicePools,
   listDevices,
   listProjects,
+  collectFarmRun,
   scheduleFarmRun,
 } from '../farm/devicefarm.js';
 import { runGenPipeline } from '../genspec/pipeline.js';
 import { prepareExecutableDraft } from '../genspec/draft.js';
 import {
-  auditFeatureCoverage,
+  tryAuditFeatureCoverage,
   type CoverageAudit,
   type CoverageRequirement,
 } from '../genspec/coverage.js';
@@ -83,11 +90,15 @@ import {
 } from '../steps/scenarioPlan.js';
 import { STEP_RULES, vocabularyDoc } from '../steps/vocabulary.js';
 import { chaptersOf, isWholeRunRecording, testWindowSeconds } from '../report/videoIndex.js';
+import { refreshHtmlReportIfStale } from '../report/refresh.js';
+import { reportShotContexts } from './reportEvidence.js';
 import { syncPomProject } from '../pom/sync.js';
 import { HealingStore } from '../healing/HealingStore.js';
 import { assessLocatorQuality } from '../core/locatorQuality.js';
+import { ensurePersonalConfig, personalConfigProfile } from '../core/personalConfig.js';
 import {
   ActionRegistry,
+  validateExecutableAction,
   type LearnedActionDef,
   type LearnedActionKind,
 } from '../actions/ActionRegistry.js';
@@ -111,7 +122,10 @@ const PUBLIC_DIR = path.resolve(
 const execFileAsync = promisify(execFile);
 
 const PORT = Number(process.env.TESTPILOT_UI_PORT ?? 4300);
-const CONFIG_FILE = process.env.TESTPILOT_CONFIG ?? 'testpilot.config.json';
+const CONFIG_PROFILE = await ensurePersonalConfig(personalConfigProfile());
+const CONFIG_FILE = CONFIG_PROFILE.file;
+// Every CLI child spawned by the UI must read the same user's profile.
+process.env.TESTPILOT_CONFIG = CONFIG_FILE;
 
 /**
  * Shown when the Anthropic Models API cannot be reached despite a key being
@@ -332,6 +346,61 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
       return json(res, 200, await healingState(cfg));
     }
 
+    /**
+     * Quyết định về một cặp element bị nghi trùng vai.
+     *
+     * `merge` cố ý KHÔNG xoá bản ghi nào và KHÔNG đụng tới alias. Step bind vào
+     * element theo id, nên xoá một bản ghi là làm hỏng mọi bước trỏ vào nó; và
+     * registry còn từ chối load khi một alias trùng label của element khác, nên
+     * "gộp tên" bằng một nút bấm là cách nhanh nhất để hỏng cả registry.
+     *
+     * Thứ thực sự chữa được lượt chạy nhỏ hơn thế nhiều: mang locator mà cả hai
+     * bên đều đã chứng minh sang bên yếu, đặt làm primary đã duyệt. Bước đang
+     * hỏng chạy lại được ngay, hai bản ghi vẫn nguyên, và việc gộp thật — nếu
+     * có — vẫn là quyết định của con người trong code review.
+     */
+    case 'POST /api/healing/duplicate': {
+      const body = await readJson<DuplicateReviewRequest>(req);
+      if (!body.strong || !body.weak || !['merge', 'distinct'].includes(body.action)) {
+        return json(res, 400, { error: 'Quyết định trùng vai không hợp lệ.' });
+      }
+      const cfg = await loadConfig(CONFIG_FILE);
+      const registry = await Registry.load(cfg.paths.registry);
+      // Khớp theo CẶP, không theo thứ tự client gửi. Hướng mạnh/yếu do bằng
+      // chứng quyết định và đổi được giữa hai lần tải trang — một lượt chạy
+      // thêm vài lần thắng cho bên kia là đủ. Nhận theo thứ tự client thì một
+      // màn hình mở hơi lâu sẽ báo "cặp không còn trong danh sách", còn tệ hơn
+      // là nó mở đường cho việc gộp ngược hướng.
+      const wanted = [body.strong, body.weak].sort().join('::');
+      const pair = findDuplicateElements(registry.raw.elements)
+        .find((item) => [item.strong, item.weak].sort().join('::') === wanted);
+      if (!pair) return json(res, 404, { error: 'Cặp này không còn trong danh sách nghi vấn.' });
+
+      if (body.action === 'merge') {
+        const approved = parseWinnerKey(pair.strongKey);
+        if (!approved) return json(res, 400, { error: `Không dựng được locator từ "${pair.strongKey}".` });
+        const weak = registry.raw.elements[pair.weak]!;
+        // Chỉ những nền tảng element ấy đã có candidate. Thêm locator cho một
+        // nền tảng nó chưa từng chạy là bịa ra một khẳng định chưa ai kiểm.
+        const platforms = (Object.keys(weak.candidates) as Platform[])
+          .filter((platform) => (weak.candidates[platform]?.length ?? 0) > 0);
+        if (platforms.length === 0) {
+          return json(res, 400, { error: `"${pair.weak}" chưa có candidate ở nền tảng nào để thăng hạng.` });
+        }
+        try {
+          for (const platform of platforms) registry.promoteCandidate(pair.weak, platform, approved);
+        } catch (err) {
+          return json(res, 400, { error: (err as Error).message });
+        }
+        await registry.save();
+      }
+
+      const review = await DuplicateReviewStore.load(cfg.paths.duplicateReviewDb);
+      review.decide(pair.strong, pair.weak, body.action === 'merge' ? 'merged' : 'distinct');
+      await review.save();
+      return json(res, 200, await healingState(cfg));
+    }
+
     // Saving and running are separate on purpose. Generation needs an API key,
     // so without this the only way to persist a test account was to run the
     // whole pipeline — and anyone without a key typed their credentials into a
@@ -390,9 +459,21 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
     }
 
     case 'POST /api/workflow/complete': {
-      const { runId } = await readJson<{ runId: string }>(req);
+      const { runId, appSource, retry } = await readJson<{
+        runId: string;
+        appSource?: 'device' | 'upload';
+        retry?: boolean;
+      }>(req);
       if (!runId) return json(res, 400, { error: 'Thiếu workflow ID.' });
-      return stream(res, (log, stage) => continueWorkflow(runId, log, stage));
+      if (appSource && appSource !== 'device' && appSource !== 'upload') {
+        return json(res, 400, { error: 'Nguồn app không hợp lệ.' });
+      }
+      const effectiveRunId = retry ? await retryFailedWorkflow(runId, appSource) : runId;
+      return stream(
+        res,
+        (log, stage) => continueWorkflow(effectiveRunId, log, stage, appSource),
+        (err) => failRunningWorkflow(effectiveRunId, err),
+      );
     }
 
     /**
@@ -1036,6 +1117,48 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
       });
     }
 
+    /**
+     * Tải lại report, ảnh và video của một run đã chạy xong trên Device Farm.
+     *
+     * Cùng việc mà `npm run farm:pull` làm, nhưng gọi được từ màn hình: người
+     * dùng TestPilot không mở terminal, và thư mục artifact biến mất là chuyện
+     * của chính sách dọn dẹp bên này chứ không phải lỗi họ gây ra. Phút thiết
+     * bị đã trả rồi — lấy lại phải rẻ hơn chạy lại.
+     */
+    case 'POST /api/farm/pull': {
+      const body = await readJson<{ arn?: string; runId?: string }>(req);
+      const arn = body.arn?.trim();
+      if (!arn) return json(res, 400, { error: 'Thiếu ARN của run trên Device Farm.' });
+      const cfg = await loadConfig(CONFIG_FILE);
+      return stream(res, async (log) => {
+        const result = await collectFarmRun(
+          {
+            ...cfg.farm,
+            runsDir: cfg.paths.runs,
+            flakeDb: cfg.paths.flakeDb,
+            healingDb: cfg.paths.healingDb,
+            reportsDir: cfg.paths.reports,
+            retention: cfg.retention,
+          },
+          arn,
+          { log },
+        );
+        // Thư mục lấy về được đặt tên theo thời điểm job chạy trên AWS, nên
+        // thường trùng đúng cái tên cũ trong lịch sử. "Thường" không đủ: nếu
+        // lệch tên thì màn chi tiết vẫn báo thiếu dù file đã nằm trên đĩa.
+        const dirs = result.runDirs.map((dir) => path.basename(dir));
+        if (body.runId) {
+          const history = await History.load();
+          const run = history.find(body.runId);
+          if (run) {
+            run.runDirs = [...new Set([...(run.runDirs ?? []), ...dirs])];
+            await history.save();
+          }
+        }
+        log(`Đã lấy về ${dirs.length} thư mục report: ${dirs.join(', ')}`);
+      });
+    }
+
     case 'POST /api/prereq/appium':
       return stream(res, (log) => prereqAppium(log));
 
@@ -1136,18 +1259,27 @@ async function state(): Promise<StateResponse> {
 
   const features = await listFeatures(config);
   const elements = await countElements(config);
-  const reports = await listReports(config);
+  const runs = await recentRuns();
+  // A history detail must be able to resolve every report it explicitly
+  // references. The general report list is capped for payload size, but a
+  // burst of newer local runs must not make an older farm detail lose its
+  // screenshots and videos while the files are still on disk.
+  const referencedReportIds = new Set(runs.flatMap((run) => run.runDirs ?? []));
+  const reports = await listReports(config, referencedReportIds);
   const secrets = await Secrets.load();
 
   return {
     config,
     configError,
     configRevision: await configRevision(),
-    configFile: path.resolve(CONFIG_FILE),
+    configProfile: {
+      owner: CONFIG_PROFILE.owner,
+      source: CONFIG_PROFILE.source,
+    },
     features,
     elements,
     reports,
-    runs: await recentRuns(),
+    runs,
     // Passwords are never sent to the browser — only the fact that one exists,
     // so the field can render a "đã lưu" placeholder instead of looking empty.
     accounts: config.accounts.map((a) => ({ ...a, hasPassword: secrets.has(a.label) })),
@@ -1232,6 +1364,7 @@ async function healingState(cfg: TestPilotConfig): Promise<HealingResponse> {
   return {
     policy: { minSuccesses: 3, minRuns: 2 },
     records,
+    duplicates: await pendingDuplicates(cfg, registry),
     summary: {
       total: records.length,
       proposed: records.filter((item) => item.status === 'proposed').length,
@@ -1240,6 +1373,71 @@ async function healingState(cfg: TestPilotConfig): Promise<HealingResponse> {
       rejected: records.filter((item) => item.status === 'rejected').length,
     },
   };
+}
+
+/**
+ * Cặp element bị nghi trùng vai, còn chờ người duyệt.
+ *
+ * Danh sách nghi vấn tính lại từ registry mỗi lần hỏi; chỉ quyết định là được
+ * lưu. Nên một cặp hết nghi sẽ tự biến mất, và một cặp đã bị bấm "không phải
+ * trùng" thì không bao giờ quay lại — điều kiện để danh sách này về được 0 và
+ * vì thế còn được đọc.
+ */
+async function pendingDuplicates(
+  cfg: TestPilotConfig,
+  registry: Registry,
+): Promise<DuplicateElementView[]> {
+  const review = await DuplicateReviewStore.load(cfg.paths.duplicateReviewDb);
+  const pairs = review.pending(findDuplicateElements(registry.raw.elements));
+  return pairs.map((pair) => {
+    const strong = registry.raw.elements[pair.strong]!;
+    const weak = registry.raw.elements[pair.weak]!;
+    const approved = parseWinnerKey(pair.strongKey);
+    return {
+      strong: { id: pair.strong, label: strong.label, wins: totalWins(strong) },
+      weak: { id: pair.weak, label: weak.label, wins: totalWins(weak) },
+      sharedLocator: pair.strongKey,
+      share: pair.share,
+      weakAlreadyHasIt: approved !== undefined
+        && Object.values(weak.candidates).some((list) => (list ?? []).some((candidate) =>
+          candidate.strategy === approved.strategy
+          && candidate.value === approved.value
+          && candidate.approved === true)),
+    };
+  });
+}
+
+function totalWins(element: ElementDef): number {
+  return Object.values(element.health?.winners ?? {})
+    .reduce<number>((sum, n) => sum + n, 0);
+}
+
+/**
+ * `strategy:value[:name]` ngược lại thành một candidate.
+ *
+ * `value` được phép chứa dấu hai chấm — một selector CSS đầy rẫy — nên chỉ cắt
+ * ở dấu ĐẦU TIÊN, và phần `name` chỉ tồn tại với strategy `role`, nơi tên là
+ * một phần của danh tính. Cắt tham lam ở đây sẽ lặng lẽ dựng ra một locator
+ * khác với cái đã thắng.
+ */
+function parseWinnerKey(key: string): LocatorCandidate | undefined {
+  const first = key.indexOf(':');
+  if (first <= 0) return undefined;
+  const strategy = key.slice(0, first) as LocatorCandidate['strategy'];
+  const rest = key.slice(first + 1);
+  if (strategy === 'role') {
+    const split = rest.lastIndexOf(':');
+    if (split > 0) {
+      return {
+        strategy,
+        value: rest.slice(0, split),
+        name: rest.slice(split + 1),
+        weight: 1,
+        origin: 'healed',
+      };
+    }
+  }
+  return { strategy, value: rest, weight: 1, origin: 'healed' };
 }
 
 interface FeatureCoverageRecord {
@@ -1446,14 +1644,27 @@ async function countElements(cfg: TestPilotConfig): Promise<number> {
  */
 const MAX_REPORTS = 50;
 
-async function listReports(cfg: TestPilotConfig) {
+async function listReports(cfg: TestPilotConfig, referencedIds: ReadonlySet<string> = new Set()) {
   const runs = await listRuns(cfg.paths.runs);
+  const knownIssues = await KnownIssueStore.load(cfg.paths.knownIssuesDb);
+  const visibleRuns = runs.filter(
+    (run, index) => index < MAX_REPORTS || referencedIds.has(run.id),
+  );
   return Promise.all(
-    runs
+    visibleRuns
       .filter((r) => existsSync(path.join(cfg.paths.runs, r.id, 'index.html')))
-      .slice(0, MAX_REPORTS)
       .map(async (r) => {
         const runDir = path.join(cfg.paths.runs, r.id);
+
+        // `index.html` is a static snapshot. Without this versioned backfill,
+        // opening two history rows can show two generations of the report UI
+        // even though both are served by the same screen. Never touch an active
+        // run; completed reports are rebuilt once from their immutable JSON.
+        if (r.status !== 'running') {
+          await refreshHtmlReportIfStale(runDir, knownIssues).catch((err) => {
+            console.warn(`[report] không nâng được ${r.id}: ${(err as Error).message}`);
+          });
+        }
 
         // Chỉ nói CÓ log hay không, không gửi kèm nội dung.
         //
@@ -1475,16 +1686,25 @@ async function listReports(cfg: TestPilotConfig) {
         // step, so a passing run's `take a screenshot` output existed on disk
         // and appeared nowhere at all.
         const shotDir = path.join(runDir, 'artifacts');
+        const shotContexts = await reportShotContexts(runDir, knownIssues);
         const shotUrls = existsSync(shotDir)
           ? (await readdir(shotDir))
               .filter((f) => /\.png$/i.test(f))
               .sort()
-              .map((f) => ({
-                name: f.replace(/\.png$/i, ''),
-                url: `/${cfg.paths.runs}/${r.id}/artifacts/${f}`,
-                // A failure shot is named by the executor, not by a step.
-                onFailure: /-a\d+-l\d+-fail$/.test(f.replace(/\.png$/i, '')),
-              }))
+              .map((f) => {
+                const name = f.replace(/\.png$/i, '');
+                const context = shotContexts.get(f);
+                return {
+                  name,
+                  url: `/${cfg.paths.runs}/${r.id}/artifacts/${f}`,
+                  // `tap-declined` is also a failure shot even though its name
+                  // cannot carry the scenario slug.
+                  onFailure: Boolean(context?.error)
+                    || /-a\d+-l\d+-fail$/.test(name)
+                    || name.startsWith('tap-declined-'),
+                  ...(context ?? {}),
+                };
+              })
           : [];
 
         // The same two numbers the generated report uses to open a recording at
@@ -1646,7 +1866,7 @@ const NORMALIZE_EXAMPLES: Array<{
         line: 9,
         label: 'Tìm kiếm',
         kind: 'macro',
-        phraseTemplate: 'I search for "{{keyword}}"',
+        phraseTemplate: 'tìm kiếm "{{keyword}}"',
         parameters: [{ name: 'keyword', example: 'Tài sản của tôi' }],
         expansion: [
           'I tap "Nút tìm kiếm"',
@@ -1683,7 +1903,7 @@ async function normalizeFeatureDraft(
   const scenarioPlan = await compileScenarioPlan(content, model);
   const planned = applyScenarioPlan(content, scenarioPlan);
   const learned = expandApprovedActions(planned.content, actions);
-  let result = normalizeNaturalSteps(learned.content);
+  let result = normalizeNaturalSteps(learned.content, registry);
   const changes = [...planned.changes, ...learned.changes, ...result.changes];
   let usedAi = scenarioPlan.source === 'ai';
   const actionProposals: LearnedActionDef[] = [];
@@ -1693,6 +1913,21 @@ async function normalizeFeatureDraft(
   // remain visible to the reviewer as unresolved and can be edited locally.
   const aiCandidates = result.unresolved.filter((item) => !isSensitiveStep(item.text));
   if (aiCandidates.length > 0 && aiAvailable) {
+    const normalizedLines = result.content.split('\n');
+    const contextualCandidates = aiCandidates.map((item) => {
+      const neighboringStep = (direction: -1 | 1): string | undefined => {
+        for (let index = item.line - 1 + direction; index >= 0 && index < normalizedLines.length; index += direction) {
+          const match = normalizedLines[index]?.match(/^\s*(?:Given|When|Then|And|But)\s+(.+)$/iu);
+          if (match) return match[1]!.trim();
+        }
+        return undefined;
+      };
+      return {
+        ...item,
+        ...(neighboringStep(-1) ? { previousStep: neighboringStep(-1) } : {}),
+        ...(neighboringStep(1) ? { nextStep: neighboringStep(1) } : {}),
+      };
+    });
     const candidates = Object.values(registry.raw.elements).map((el) => ({ id: el.id, label: el.label }));
     const text = await completeJson({
       model,
@@ -1704,6 +1939,8 @@ async function normalizeFeatureDraft(
         'Use replacements only when one existing action expresses the exact meaning.',
         'When the meaning requires several operations, propose a reusable macro instead of silently dropping behavior.',
         'A macro phraseTemplate replaces variable values with {{camelCaseParameter}} and expansion reuses those placeholders.',
+        'The phraseTemplate must keep the source language and sentence shape so it matches sourceExample after substituting parameters.',
+        'Each unresolved item may include previousStep and nextStep. Do not repeat setup already performed by previousStep or consume behavior belonging to nextStep.',
         'Every macro needs a postcondition that proves its result. All expansion and postcondition lines must use the executable forms below.',
         'Executable forms, one per line — a step must match one of them exactly:',
         vocabularyDoc(),
@@ -1719,7 +1956,7 @@ async function normalizeFeatureDraft(
         ),
       ].join('\n'),
       user: JSON.stringify({
-        unresolved: aiCandidates,
+        unresolved: contextualCandidates,
         registry: candidates,
       }),
     });
@@ -1753,14 +1990,14 @@ async function normalizeFeatureDraft(
           reason: replacement.reason?.trim() || 'AI chuẩn hoá câu tự nhiên',
         });
       }
-      result = normalizeNaturalSteps(lines.join('\n'));
+      result = normalizeNaturalSteps(lines.join('\n'), registry);
       changes.push(...result.changes);
       usedAi = true;
     }
     for (const proposal of parsed?.actionProposals ?? []) {
       const source = result.unresolved.find((item) => item.line === proposal.line)?.text;
       if (!source || !proposal.label || !proposal.phraseTemplate || !proposal.kind) continue;
-      const candidate = actions.propose({
+      const proposalInput = {
         label: proposal.label.trim(),
         kind: proposal.kind,
         phraseTemplate: proposal.phraseTemplate.trim(),
@@ -1771,7 +2008,17 @@ async function normalizeFeatureDraft(
         ...(proposal.postcondition?.trim() ? { postcondition: proposal.postcondition.trim() } : {}),
         ...(proposal.reason?.trim() ? { reason: proposal.reason.trim() } : {}),
         sourceExample: source,
-      });
+      };
+      if (proposalInput.kind !== 'primitive') {
+        const validationError = validateExecutableAction({
+          ...proposalInput,
+          id: 'proposal-validation',
+          status: 'proposed',
+          createdAt: new Date(0).toISOString(),
+        });
+        if (validationError) continue;
+      }
+      const candidate = actions.propose(proposalInput);
       if (candidate.status === 'proposed') actionProposals.push(candidate);
     }
     if (actionProposals.length > 0) {
@@ -1785,7 +2032,7 @@ async function normalizeFeatureDraft(
   // anchor only; duplicate anchors add no execution value and make the editor
   // look as if AI invented an extra business step.
   const compacted = collapseDuplicateFocusRegions(result.content);
-  if (compacted !== result.content) result = normalizeNaturalSteps(compacted);
+  if (compacted !== result.content) result = normalizeNaturalSteps(compacted, registry);
 
   // Missing logical elements are accepted here without inventing selectors.
   // Playwright/CDP discovers and verifies the real locator when this step is
@@ -1811,7 +2058,7 @@ async function normalizeFeatureDraft(
           reason: 'AI tự sửa lỗi cú pháp/binding trước khi lưu',
         });
       }
-      result = normalizeNaturalSteps(prepared.content);
+      result = normalizeNaturalSteps(prepared.content, registry);
       usedAi ||= prepared.repaired;
       pending = prepared.pendingElements.map((item) => registry.element(item.id));
       await registry.save();
@@ -2227,6 +2474,7 @@ async function continueWorkflow(
   runId: string,
   log: (line: string) => void,
   stage: (run: WorkflowRun) => void,
+  appSource?: 'device' | 'upload',
 ): Promise<void> {
   const history = await History.load();
   const run = history.find(runId);
@@ -2254,53 +2502,6 @@ async function continueWorkflow(
   }
   if (approved.length === 0) throw new Error('Không có testcase nào được duyệt để chạy automation.');
 
-  // Re-audit after edits for traceability, but do not create a second hidden
-  // approval gate. The business user has explicitly approved/rejected every
-  // scenario; missing coverage remains visible as a warning in the report.
-  const coverageRecord = await readFeatureCoverage(cfg, run.generatedFile);
-  if (coverageRecord && coverageRecord.requirements.length > 0) {
-    record('Đang kiểm tra lại coverage P0/P1 trên nội dung đã duyệt/chỉnh sửa…');
-    const approvedFeature = featureWithApprovedScenarios(content, blocks, approved);
-    const audit = await auditFeatureCoverage(approvedFeature, coverageRecord.requirements, {
-      model: resolveModel(cfg.llm.model),
-    });
-    await saveFeatureCoverageAudit(cfg, coverageRecord, audit);
-    const missing = coverageRecord.requirements
-      .filter((requirement) => audit.missingRequirementIds.includes(requirement.id))
-      .map((requirement) => ({
-        id: requirement.id,
-        priority: requirement.priority,
-        rule: requirement.rule,
-      }));
-    if (run.generated) {
-      run.generated.coverageRequirements = coverageRecord.requirements.length;
-      run.generated.coverageCovered = coverageRecord.requirements.length - missing.length;
-      run.generated.coverageMissing = missing;
-    }
-    if (missing.length > 0) {
-      record(
-        `Cảnh báo coverage: còn ${missing.length} quy tắc P0/P1 chưa có testcase được duyệt. ` +
-          'Workflow vẫn tiếp tục theo quyết định review của người dùng.',
-      );
-    } else {
-      record(`Coverage PASS — ${coverageRecord.requirements.length}/${coverageRecord.requirements.length} quy tắc P0/P1.`);
-    }
-    delete run.error;
-  }
-
-  const set = async (index: number, status: WorkflowRun['stages'][number]['status']) => {
-    const item = run.stages[index];
-    if (item) item.status = status;
-    stage(run);
-    await history.save();
-  };
-
-  run.status = 'running';
-  delete run.error;
-  await set(5, 'done');
-  await set(6, 'running');
-  record(`${approved.length}/${blocks.length} testcase đã được duyệt; bắt đầu automation.`);
-
   const execution = run.execution ?? {
     platforms: cfg.workflow.platforms,
     ...(cfg.workflow.deviceFarm ? { deviceFarm: cfg.workflow.deviceFarm } : {}),
@@ -2309,6 +2510,70 @@ async function continueWorkflow(
     locatorRetries: cfg.workflow.locatorRetries,
     appSource: cfg.workflow.appSource,
   };
+  if (appSource) execution.appSource = appSource;
+  run.execution = execution;
+
+  const set = async (index: number, status: WorkflowRun['stages'][number]['status']) => {
+    const item = run.stages[index];
+    if (item) item.status = status;
+    stage(run);
+    await history.save();
+  };
+
+  // Persist the hand-off before the optional model call. If the tab disconnects
+  // or the server stops here, history must no longer claim that review is still
+  // waiting for the user.
+  run.status = 'running';
+  delete run.error;
+  await set(5, 'done');
+  await set(6, 'running');
+
+  // Re-audit after edits for traceability, but do not create a second hidden
+  // approval gate. The business user has explicitly approved/rejected every
+  // scenario; missing coverage remains visible as a warning in the report.
+  const coverageRecord = await readFeatureCoverage(cfg, run.generatedFile);
+  if (coverageRecord && coverageRecord.requirements.length > 0) {
+    record('Đang đối chiếu testcase đã duyệt với các yêu cầu nghiệp vụ quan trọng…');
+    await history.save();
+    const approvedFeature = featureWithApprovedScenarios(content, blocks, approved);
+    const attempt = await tryAuditFeatureCoverage(approvedFeature, coverageRecord.requirements, {
+      model: resolveModel(cfg.llm.model),
+    });
+    if (!attempt.ok) {
+      record(
+        `⚠ Không thể đối chiếu lại yêu cầu nghiệp vụ lúc này: ${attempt.error}. `
+        + 'Đây là bước bổ trợ nên workflow vẫn tiếp tục chạy automation.',
+      );
+      await history.save();
+    } else {
+      const audit = attempt.audit;
+      await saveFeatureCoverageAudit(cfg, coverageRecord, audit);
+      const missing = coverageRecord.requirements
+        .filter((requirement) => audit.missingRequirementIds.includes(requirement.id))
+        .map((requirement) => ({
+          id: requirement.id,
+          priority: requirement.priority,
+          rule: requirement.rule,
+        }));
+      if (run.generated) {
+        run.generated.coverageRequirements = coverageRecord.requirements.length;
+        run.generated.coverageCovered = coverageRecord.requirements.length - missing.length;
+        run.generated.coverageMissing = missing;
+      }
+      if (missing.length > 0) {
+        record(
+          `Cảnh báo coverage: còn ${missing.length} quy tắc P0/P1 chưa có testcase được duyệt. ` +
+            'Workflow vẫn tiếp tục theo quyết định review của người dùng.',
+        );
+      } else {
+        record(`Coverage PASS — ${coverageRecord.requirements.length}/${coverageRecord.requirements.length} quy tắc P0/P1.`);
+      }
+      delete run.error;
+      await history.save();
+    }
+  }
+  record(`${approved.length}/${blocks.length} testcase đã được duyệt; bắt đầu automation.`);
+
   // The environment is checked here, before the first driver opens, because
   // everything expensive already happened: two model calls, a generated suite,
   // and a human sitting down to review it. A missing phone found at this point
@@ -2320,8 +2585,10 @@ async function continueWorkflow(
   // and it has to be carried into the run, or the preflight passes and the run
   // itself refuses for want of `--device`.
   const chosenDevice = new Map<string, string>();
-  for (const platform of execution.platforms) {
-    const result = await preflight(platform, cfg);
+  const preflightResults = await Promise.all(
+    execution.platforms.map(async (platform) => ({ platform, result: await preflight(platform, cfg) })),
+  );
+  for (const { platform, result } of preflightResults) {
     record(preflightSummary(result));
     if (!result.ok) failedPreflight.push(platform);
     if (result.device) chosenDevice.set(platform, result.device);
@@ -2343,36 +2610,67 @@ async function continueWorkflow(
 
   const outcomes: RunSuiteOutcome[] = [];
   await set(7, 'running');
-  for (const platform of execution.platforms) {
+  // Mỗi tiến trình run.ts bình thường tự ghi lại toàn bộ registry/healing/flake.
+  // Hai tiến trình kết thúc gần nhau sẽ gây last-writer-wins và làm mất dữ liệu
+  // của nhánh còn lại. Khi có nhiều nền tảng, từng nhánh chỉ ghi learnings vào
+  // run directory riêng; coordinator này gộp tất cả đúng một lần sau Promise.all.
+  const deferSharedWrites = execution.platforms.length > 1;
+  const localOutcomes = await Promise.all(execution.platforms.map(async (platform) => {
     // Checked again, immediately before this platform's own run. The gate above
-    // gives the complete picture before anything starts, but it can be minutes
-    // or hours stale by the time the third platform's turn comes round — Appium
-    // gets closed, a phone gets unplugged, a cable gets borrowed. Re-probing
-    // costs a moment and turns a WebDriver stack trace into a sentence.
+    // gives the complete picture before anything starts, but the environment
+    // can still change while the other parallel branches are being prepared —
+    // Appium gets closed, a phone gets unplugged, a cable gets borrowed.
+    // Re-probing costs a moment and turns a WebDriver stack trace into a sentence.
     if (platform !== 'web') {
       const recheck = await preflight(platform, cfg);
       if (!recheck.ok) {
         record(`\n✗ Bỏ qua ${platform}: môi trường đã đổi kể từ lúc kiểm tra.`);
         record(preflightSummary(recheck));
-        outcomes.push({ code: 1, stopped: false, reportPaths: [] });
-        continue;
+        return { code: 1, stopped: false, reportPaths: [], runDirs: [] } satisfies RunSuiteOutcome;
       }
       if (recheck.device) chosenDevice.set(platform, recheck.device);
     }
     const device = chosenDevice.get(platform);
     record(`\n▶ Chạy ${run.generatedFile} trên ${platform}${device ? ` (${device})` : ''}…`);
-    outcomes.push(await runSuite(
+    return runSuite(
       platform,
       undefined,
       platform === 'web' && Boolean(execution.headed),
       true,
-      record,
+      (line) => record(`[${platform}] ${line}`),
       device,
       execution.env,
       run.generatedFile,
       execution.locatorRetries ?? 1,
       execution.appSource,
-    ));
+      deferSharedWrites,
+    );
+  }));
+  outcomes.push(...localOutcomes);
+
+  if (deferSharedWrites) {
+    const runDirs = localOutcomes.flatMap((outcome) => outcome.runDirs);
+    if (runDirs.length > 0) {
+      const merged = await mergeRunLearnings({
+        runDirs,
+        runsRoot: cfg.paths.runs,
+        registryPath: cfg.paths.registry,
+        runtimeRegistryPath: 'registry/runtime-registry.json',
+        flakeDbPath: cfg.paths.flakeDb,
+        healingDbPath: cfg.paths.healingDb,
+        flakePolicy: cfg.flake,
+      });
+      record(
+        `Đã gộp dữ liệu từ ${merged.runIds.length}/${execution.platforms.length} nền tảng: `
+          + `${merged.elementsMerged} element, ${merged.runtimeEntriesMerged} runtime locator, `
+          + `${merged.healingEventsIngested} healing event.`,
+      );
+      for (const skipped of merged.skipped) {
+        record(`⚠ ${skipped.runId}: ${skipped.reason}.`);
+      }
+    } else {
+      record('⚠ Không nền tảng nào tạo được thư mục kết quả để gộp dữ liệu runtime.');
+    }
   }
 
   // Device Farm last, and only if the local run gave it a reason to happen.
@@ -2402,7 +2700,7 @@ async function continueWorkflow(
         // Counted like any other platform. A farm run that came back red is a
         // red workflow; leaving it out meant four platforms could run, one
         // could fail, and the workflow would still call itself passed.
-        outcomes.push({ code: farm.passed ? 0 : 1, stopped: false, reportPaths: [] });
+        outcomes.push({ code: farm.passed ? 0 : 1, stopped: false, reportPaths: [], runDirs: [] });
         record(
           farm.passed
             ? `✓ Device Farm pass. Chi tiết ở lượt chạy ${farm.id}, tab Device Farm.`
@@ -2410,7 +2708,7 @@ async function continueWorkflow(
         );
       } catch (err) {
         record(`✗ Không bàn giao được cho Device Farm: ${(err as Error).message}`);
-        outcomes.push({ code: 1, stopped: false, reportPaths: [] });
+        outcomes.push({ code: 1, stopped: false, reportPaths: [], runDirs: [] });
       }
     }
   }
@@ -2460,6 +2758,60 @@ async function continueWorkflow(
         : 'Automation có testcase fail sau khi áp dụng locator healing/retry theo policy.';
   }
   await set(10, 'done');
+}
+
+/** Persist unexpected continuation errors before the SSE response disappears. */
+async function failRunningWorkflow(runId: string, err: unknown): Promise<WorkflowRun | undefined> {
+  const history = await History.load();
+  const run = history.find(runId);
+  // Validation errors raised while review is still incomplete must leave the
+  // durable human gate intact. Only a continuation that actually started owns
+  // a running stage and may be closed as failed here.
+  if (!run || run.kind !== 'workflow' || run.status !== 'running') return undefined;
+
+  const message = err instanceof Error ? err.message : String(err);
+  run.status = 'failed';
+  run.error = message;
+  run.finishedAt = new Date().toISOString();
+  for (const item of run.stages) {
+    if (item.status === 'running') item.status = 'failed';
+  }
+  run.log.push(`✗ Workflow dừng: ${message}`);
+  await history.save();
+  return run;
+}
+
+/** Create a fresh history record while reusing the already-reviewed suite. */
+async function retryFailedWorkflow(
+  runId: string,
+  appSource?: 'device' | 'upload',
+): Promise<string> {
+  const history = await History.load();
+  const previous = history.find(runId);
+  if (!previous || previous.kind !== 'workflow') throw new Error('Không tìm thấy workflow cần chạy lại.');
+  if (previous.status !== 'failed') {
+    throw new Error(`Workflow đang ở trạng thái “${previous.status}”, không thể tạo lượt chạy lại.`);
+  }
+  if (!previous.generatedFile) throw new Error('Workflow cũ không có feature file để chạy lại.');
+
+  const retry = history.start(previous.feature, 'workflow', WORKFLOW_STAGES);
+  retry.status = 'waiting_review';
+  retry.generatedFile = previous.generatedFile;
+  retry.generated = previous.generated
+    ? {
+        ...previous.generated,
+        coverageMissing: previous.generated.coverageMissing?.map((item) => ({ ...item })),
+      }
+    : undefined;
+  retry.execution = previous.execution
+    ? { ...previous.execution, platforms: [...previous.execution.platforms] }
+    : undefined;
+  if (appSource && retry.execution) retry.execution.appSource = appSource;
+  for (let index = 0; index <= 4; index += 1) retry.stages[index]!.status = 'done';
+  retry.stages[5]!.status = 'running';
+  retry.log.push(`Chạy lại từ workflow ${previous.id}; giữ nguyên bộ testcase đã duyệt.`);
+  await history.save();
+  return retry.id;
 }
 
 function featureWithApprovedScenarios(
@@ -2827,7 +3179,9 @@ async function runOnFarm(
 
     for (const s of run.stages) if (s.status === 'running') s.status = 'done';
     record(`status=${result.status} result=${result.result}`);
-    record(`counters ${JSON.stringify(result.counters)}`);
+    record(
+      `AWS lifecycle counters (không phải testcase TestPilot) ${JSON.stringify(result.counters)}`,
+    );
 
     // Include the URL, not just the name. Device Farm keeps the video and the
     // logs on its side, and a name alone means digging through the AWS console
@@ -2916,6 +3270,7 @@ interface RunSuiteOutcome {
   code: number | null;
   stopped: boolean;
   reportPaths: string[];
+  runDirs: string[];
 }
 
 function runSuite(
@@ -2942,6 +3297,8 @@ function runSuite(
    * sáng chạy trên bản vừa cắm máy cài tay, chiều chạy lại trên bản build mới.
    */
   appSource?: 'device' | 'upload',
+  /** Park shared-store changes in each run directory for one coordinator to merge. */
+  deferSharedWrites = false,
 ): Promise<RunSuiteOutcome> {
   return new Promise<RunSuiteOutcome>((resolve, reject) => {
     const bin = path.resolve('node_modules/.bin/tsx');
@@ -2954,6 +3311,8 @@ function runSuite(
       ...(feature ? ['--feature', feature] : []),
       ...(locatorRetries !== undefined ? ['--locator-retries', String(locatorRetries)] : []),
       ...(appSource ? ['--app-source', appSource] : []),
+      ...(appSource === 'upload' && platform !== 'web' ? ['--reinstall'] : []),
+      ...(deferSharedWrites ? ['--defer-shared-writes'] : []),
       ...(tag ? ['--tag', tag] : []),
       ...(headed ? ['--headed'] : []),
       ...(includeQuarantined ? ['--include-quarantined'] : []),
@@ -2969,13 +3328,18 @@ function runSuite(
     // tab đã bấm nút. Đó là thứ cho phép một trang khác nối lại sau khi reload.
     const live = beginActiveRun(label, 'run');
     const reportPaths: string[] = [];
+    const runDirs: string[] = [];
     const pipe = (chunk: Buffer) => chunk.toString().split('\n').filter(Boolean).map(cleanLog).forEach((line) => {
       const report = /^\[run\] report -> (.+)$/.exec(line)?.[1]?.trim();
       if (report && !reportPaths.includes(report)) reportPaths.push(report);
       // Con báo thư mục của nó ở dòng này; từ đây log ghi được xuống đĩa, và
       // những dòng đã trôi qua được ghi bù.
       const dir = /^\[run:dir\] (.+)$/.exec(line)?.[1]?.trim();
-      if (dir) live.attachDir(path.resolve(dir));
+      if (dir) {
+        const absoluteDir = path.resolve(dir);
+        if (!runDirs.includes(absoluteDir)) runDirs.push(absoluteDir);
+        live.attachDir(absoluteDir);
+      }
       live.push(line);
       log(line);
     });
@@ -2998,7 +3362,7 @@ function runSuite(
               : `\n✗ Test kết thúc với lỗi (mã ${code}) — xem log bên trên để biết chi tiết.`,
       );
       endActiveRun(live);
-      resolve({ code, stopped, reportPaths });
+      resolve({ code, stopped, reportPaths, runDirs });
     });
   });
 }
@@ -3049,6 +3413,7 @@ function runSuiteParallel(
       '--devices', devices.join(','),
       ...(env ? ['--env', env] : []),
       ...(appSource ? ['--app-source', appSource] : []),
+      ...(appSource === 'upload' ? ['--reinstall'] : []),
       ...(tag ? ['--tag', tag] : []),
       ...(includeQuarantined ? ['--include-quarantined'] : []),
     ];
@@ -3112,6 +3477,7 @@ async function stopSuite(): Promise<{ stopped: boolean; wda: boolean }> {
 async function stream(
   res: ServerResponse,
   job: (log: (l: string) => void, stage: (run: WorkflowRun) => void) => Promise<void>,
+  onError?: (err: unknown) => Promise<WorkflowRun | undefined>,
 ) {
   res.writeHead(200, {
     'content-type': 'text/event-stream; charset=utf-8',
@@ -3129,6 +3495,14 @@ async function stream(
     );
     send('done', { ok: true });
   } catch (err) {
+    try {
+      const failedRun = await onError?.(err);
+      if (failedRun) {
+        send('run', { ...failedRun, log: undefined, stagesDone: stagesDone(failedRun) });
+      }
+    } catch {
+      // Keep the original failure visible even when persisting its history fails.
+    }
     send('error', (err as Error).message);
     send('done', { ok: false });
   }

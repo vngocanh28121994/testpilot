@@ -29,7 +29,19 @@ export function WorkflowStages({
   runStatus?: string;
 }) {
   if (stages.length === 0) return null;
-  const done = stages.filter((s) => s.status === 'done' || s.status === 'skipped').length;
+  // Một số bản ghi cũ kết thúc trước khi server kịp đổi stage cuối từ
+  // `running`. Trạng thái của cả workflow mới là nguồn sự thật ở đây: một lượt
+  // đã passed/failed không thể còn việc đang chạy để người dùng tiếp tục đợi.
+  const displayedStatus = (status: WorkflowStage['status']): WorkflowStage['status'] => {
+    if (status !== 'running') return status;
+    if (runStatus === 'failed') return 'failed';
+    if (runStatus === 'passed') return 'done';
+    return status;
+  };
+  const done = stages.filter((s) => {
+    const status = displayedStatus(s.status);
+    return status === 'done' || status === 'skipped';
+  }).length;
   const waitingOnUser = runStatus === 'waiting_review' || runStatus === 'waiting_input';
 
   return (
@@ -41,27 +53,28 @@ export function WorkflowStages({
         </span>
       </div>
       <ol aria-label="Các bước của workflow" className="flex flex-col gap-1.5">
-        {stages.map((stage) => (
-          <li key={stage.name} className="flex items-start gap-2 text-sm">
-            <StageIcon
-              status={stage.status}
-              waitingOnUser={waitingOnUser && stage.status === 'running'}
-            />
-            <span
-              className={cn(
-                stage.status === 'pending' && 'text-muted-foreground',
-                stage.status === 'running' && 'font-medium',
-                stage.status === 'skipped' && 'text-muted-foreground line-through',
-                stage.status === 'failed' && 'text-destructive',
-              )}
-            >
-              {stage.name}
-              {waitingOnUser && stage.status === 'running' && (
-                <span className="text-status-flaky ms-2 text-xs font-normal">đang chờ bạn</span>
-              )}
-            </span>
-          </li>
-        ))}
+        {stages.map((stage) => {
+          const status = displayedStatus(stage.status);
+          const stageWaitingOnUser = waitingOnUser && status === 'running';
+          return (
+            <li key={stage.name} className="flex items-start gap-2 text-sm">
+              <StageIcon status={status} waitingOnUser={stageWaitingOnUser} />
+              <span
+                className={cn(
+                  status === 'pending' && 'text-muted-foreground',
+                  status === 'running' && 'font-medium',
+                  status === 'skipped' && 'text-muted-foreground line-through',
+                  status === 'failed' && 'text-destructive',
+                )}
+              >
+                {stage.name}
+                {stageWaitingOnUser && (
+                  <span className="text-status-flaky ms-2 text-xs font-normal">đang chờ bạn</span>
+                )}
+              </span>
+            </li>
+          );
+        })}
       </ol>
     </div>
   );

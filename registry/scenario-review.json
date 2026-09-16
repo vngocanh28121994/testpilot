@@ -71,10 +71,10 @@
       "filename": "kiem-tra-hieu-qua-dau-tu-phai-sinh.feature",
       "scenarioName": "Kiểm tra hiệu quả đầu tư phái sinh",
       "contentHash": "d391c05e0afca3deb5f77dbe68c32fd604118b19402c50d03f320681e5e1c1b4",
-      "status": "rejected",
+      "status": "approved",
       "source": "legacy",
-      "updatedAt": "2026-09-09T03:16:57.504Z",
-      "reviewedAt": "2026-08-27T15:34:56.551Z"
+      "updatedAt": "2026-09-15T04:50:53.698Z",
+      "reviewedAt": "2026-09-15T04:50:53.698Z"
     },
     "them-ma-co-phieu.feature::Kết quả khớp theo mã được ưu tiên hiển thị": {
       "id": "them-ma-co-phieu.feature::Kết quả khớp theo mã được ưu tiên hiển thị",
@@ -83,118 +83,118 @@
       "contentHash": "070aaa6ca6042a7565e5b674bd5c795e54515b825106df4ddcb7c4e55c52a4b9",
       "status": "approved",
       "source": "generated",
-      "updatedAt": "2026-09-12T19:43:38.495Z",
-      "reviewedAt": "2026-09-12T19:43:38.495Z"
-    },
-    "them-ma-co-phieu.feature::Chọn mã đã có trong danh mục thì không thêm mới và focus vào dòng đó": {
-      "id": "them-ma-co-phieu.feature::Chọn mã đã có trong danh mục thì không thêm mới và focus vào dòng đó",
-      "filename": "them-ma-co-phieu.feature",
-      "scenarioName": "Chọn mã đã có trong danh mục thì không thêm mới và focus vào dòng đó",
-      "contentHash": "3e04ae2e45c55dc32c0fdb9c7c93793f01b3e43542cbda83190a3667db5034e8",
-      "status": "approved",
-      "source": "generated",
-      "updatedAt": "2026-09-12T19:43:38.495Z",
-      "reviewedAt": "2026-09-12T19:43:38.495Z"
-    },
-    "them-ma-co-phieu.feature::Xoá mã khỏi danh mục hiện tại": {
-      "id": "them-ma-co-phieu.feature::Xoá mã khỏi danh mục hiện tại",
-      "filename": "them-ma-co-phieu.feature",
-      "scenarioName": "Xoá mã khỏi danh mục hiện tại",
-      "contentHash": "9eb87b02630de54ebcfce2be70d3f356d59029dcd2fe14c39ab8022130df624f",
-      "status": "approved",
-      "source": "generated",
-      "updatedAt": "2026-09-12T19:43:38.495Z",
-      "reviewedAt": "2026-09-12T19:43:38.495Z"
+      "updatedAt": "2026-09-15T08:26:35.681Z",
+      "reviewedAt": "2026-09-15T08:26:35.681Z"
     },
     "chuyen-tien-noi-bo.feature::Chuyển tiền thành công từ tiểu khoản Thường sang Ký Quỹ": {
       "id": "chuyen-tien-noi-bo.feature::Chuyển tiền thành công từ tiểu khoản Thường sang Ký Quỹ",
       "filename": "chuyen-tien-noi-bo.feature",
       "scenarioName": "Chuyển tiền thành công từ tiểu khoản Thường sang Ký Quỹ",
       "contentHash": "0474e1e01ef11fe8caa001a970e0a40d8dc758bde60fc9b1f6ba763cc34a4383",
-      "status": "pending",
+      "status": "approved",
       "source": "generated",
-      "updatedAt": "2026-09-12T19:37:28.266Z"
+      "updatedAt": "2026-09-13T08:04:34.969Z",
+      "reviewedAt": "2026-09-13T08:04:34.969Z"
     },
     "chuyen-tien-noi-bo.feature::Chuyển tiền thành công từ tiểu khoản Ký Quỹ sang Thường": {
       "id": "chuyen-tien-noi-bo.feature::Chuyển tiền thành công từ tiểu khoản Ký Quỹ sang Thường",
       "filename": "chuyen-tien-noi-bo.feature",
       "scenarioName": "Chuyển tiền thành công từ tiểu khoản Ký Quỹ sang Thường",
       "contentHash": "46b35e2ab96818e97b90e591a2192a8c098a6142c476e028faa39d6ee4928821",
-      "status": "pending",
+      "status": "approved",
       "source": "generated",
-      "updatedAt": "2026-09-12T19:37:28.266Z"
+      "updatedAt": "2026-09-13T08:04:34.969Z",
+      "reviewedAt": "2026-09-13T08:04:34.969Z"
     },
     "chuyen-tien-noi-bo.feature::Chọn tiểu khoản nguồn và tiểu khoản đích thành công": {
       "id": "chuyen-tien-noi-bo.feature::Chọn tiểu khoản nguồn và tiểu khoản đích thành công",
       "filename": "chuyen-tien-noi-bo.feature",
       "scenarioName": "Chọn tiểu khoản nguồn và tiểu khoản đích thành công",
       "contentHash": "5bf4eea08d21438bd02199efb43869a4969663851c0d643b759f4b2e52057184",
-      "status": "pending",
+      "status": "approved",
       "source": "generated",
-      "updatedAt": "2026-09-12T19:37:28.266Z"
+      "updatedAt": "2026-09-13T08:04:34.969Z",
+      "reviewedAt": "2026-09-13T08:04:34.969Z"
     },
     "chuyen-tien-noi-bo.feature::Tiểu khoản đã chọn ở nguồn không xuất hiện ở dropdown đích": {
       "id": "chuyen-tien-noi-bo.feature::Tiểu khoản đã chọn ở nguồn không xuất hiện ở dropdown đích",
       "filename": "chuyen-tien-noi-bo.feature",
       "scenarioName": "Tiểu khoản đã chọn ở nguồn không xuất hiện ở dropdown đích",
       "contentHash": "0e2e1a7a57468dd1ae2a99caa67557b6d7093e7a00fee56c6588295dd3b93117",
-      "status": "pending",
+      "status": "approved",
       "source": "generated",
-      "updatedAt": "2026-09-12T19:37:28.266Z"
+      "updatedAt": "2026-09-13T08:04:34.969Z",
+      "reviewedAt": "2026-09-13T08:04:34.969Z"
     },
     "chuyen-tien-noi-bo.feature::Tiểu khoản đã chọn ở đích không xuất hiện ở dropdown nguồn": {
       "id": "chuyen-tien-noi-bo.feature::Tiểu khoản đã chọn ở đích không xuất hiện ở dropdown nguồn",
       "filename": "chuyen-tien-noi-bo.feature",
       "scenarioName": "Tiểu khoản đã chọn ở đích không xuất hiện ở dropdown nguồn",
       "contentHash": "d2bacef4bbc1f42ee08edf3cbd0651b85ef8e73b022e4d61ea7cb6e0c0e3da49",
-      "status": "pending",
+      "status": "approved",
       "source": "generated",
-      "updatedAt": "2026-09-12T19:37:28.266Z"
+      "updatedAt": "2026-09-13T08:04:34.969Z",
+      "reviewedAt": "2026-09-13T08:04:34.969Z"
     },
     "chuyen-tien-noi-bo.feature::Số tiền được chuyển thay đổi theo tiểu khoản nguồn được chọn": {
       "id": "chuyen-tien-noi-bo.feature::Số tiền được chuyển thay đổi theo tiểu khoản nguồn được chọn",
       "filename": "chuyen-tien-noi-bo.feature",
       "scenarioName": "Số tiền được chuyển thay đổi theo tiểu khoản nguồn được chọn",
       "contentHash": "ad77628458ae1edccb2062ef11e5dbe211da5c0d4fe08f24bb7509ca5989e260",
-      "status": "pending",
+      "status": "approved",
       "source": "generated",
-      "updatedAt": "2026-09-12T19:37:28.266Z"
+      "updatedAt": "2026-09-13T08:04:34.969Z",
+      "reviewedAt": "2026-09-13T08:04:34.969Z"
     },
     "chuyen-tien-noi-bo.feature::Nhập số tiền vượt quá số tiền được chuyển thì không cho chuyển": {
       "id": "chuyen-tien-noi-bo.feature::Nhập số tiền vượt quá số tiền được chuyển thì không cho chuyển",
       "filename": "chuyen-tien-noi-bo.feature",
       "scenarioName": "Nhập số tiền vượt quá số tiền được chuyển thì không cho chuyển",
       "contentHash": "e19c21fb69f6c65b95f9f73c435285e7a4697ac8371fc11ed2ccf4658ce0408b",
-      "status": "pending",
+      "status": "approved",
       "source": "generated",
-      "updatedAt": "2026-09-12T19:37:28.266Z"
+      "updatedAt": "2026-09-13T08:04:34.969Z",
+      "reviewedAt": "2026-09-13T08:04:34.969Z"
     },
     "chuyen-tien-noi-bo.feature::Số tiền hợp lệ thì chuyển sang màn hình xác nhận": {
       "id": "chuyen-tien-noi-bo.feature::Số tiền hợp lệ thì chuyển sang màn hình xác nhận",
       "filename": "chuyen-tien-noi-bo.feature",
       "scenarioName": "Số tiền hợp lệ thì chuyển sang màn hình xác nhận",
       "contentHash": "8981bbceac2ae7b7f7e7ec4f250e6f4e4cb0f43f7530ab1afd2482f8e23ee4d6",
-      "status": "pending",
+      "status": "approved",
       "source": "generated",
-      "updatedAt": "2026-09-12T19:37:28.266Z"
+      "updatedAt": "2026-09-13T08:04:34.969Z",
+      "reviewedAt": "2026-09-13T08:04:34.969Z"
     },
     "chuyen-tien-noi-bo.feature::Bấm Quay lại thì trở lại màn hình Chuyển tiền": {
       "id": "chuyen-tien-noi-bo.feature::Bấm Quay lại thì trở lại màn hình Chuyển tiền",
       "filename": "chuyen-tien-noi-bo.feature",
       "scenarioName": "Bấm Quay lại thì trở lại màn hình Chuyển tiền",
       "contentHash": "3bd7737d4d8a07532c2a2364b8946697ce647484666ffa21f11b9183bc5e8476",
-      "status": "pending",
+      "status": "approved",
       "source": "generated",
-      "updatedAt": "2026-09-12T19:37:28.266Z"
+      "updatedAt": "2026-09-13T08:04:34.969Z",
+      "reviewedAt": "2026-09-13T08:04:34.969Z"
     },
     "chuyen-tien-noi-bo.feature::Sau khi chuyển thành công số tiền được chuyển cập nhật theo số tiền vừa chuyển": {
       "id": "chuyen-tien-noi-bo.feature::Sau khi chuyển thành công số tiền được chuyển cập nhật theo số tiền vừa chuyển",
       "filename": "chuyen-tien-noi-bo.feature",
       "scenarioName": "Sau khi chuyển thành công số tiền được chuyển cập nhật theo số tiền vừa chuyển",
       "contentHash": "a885daa884fdfee41898206edb8a3d4690ea398402c9813fb651f41abbb3be8c",
-      "status": "pending",
+      "status": "approved",
       "source": "generated",
-      "updatedAt": "2026-09-12T19:37:28.266Z"
+      "updatedAt": "2026-09-13T08:04:34.969Z",
+      "reviewedAt": "2026-09-13T08:04:34.969Z"
+    },
+    "them-ma-co-phieu.feature::Nhập số liệu để tìm kiếm mã cổ phiếu": {
+      "id": "them-ma-co-phieu.feature::Nhập số liệu để tìm kiếm mã cổ phiếu",
+      "filename": "them-ma-co-phieu.feature",
+      "scenarioName": "Nhập số liệu để tìm kiếm mã cổ phiếu",
+      "contentHash": "028a41dfdc0dbdc366a458b6ddb8a95fd28fba58edae0a712ab005f903d1033e",
+      "status": "approved",
+      "source": "generated",
+      "updatedAt": "2026-09-15T08:26:35.681Z",
+      "reviewedAt": "2026-09-15T08:26:35.681Z"
     },
     "them-ma-co-phieu.feature::Thêm mã cổ phiếu mới vào danh mục trên Bảng giá": {
       "id": "them-ma-co-phieu.feature::Thêm mã cổ phiếu mới vào danh mục trên Bảng giá",
@@ -203,28 +203,18 @@
       "contentHash": "ed3691a54bcd4df0ac90d3b63f5055ff36be7899f7c75ce14f176ce6d466e10c",
       "status": "approved",
       "source": "generated",
-      "updatedAt": "2026-09-12T19:43:38.494Z",
-      "reviewedAt": "2026-09-12T19:43:38.494Z"
+      "updatedAt": "2026-09-15T08:26:35.681Z",
+      "reviewedAt": "2026-09-15T08:26:35.681Z"
     },
-    "them-ma-co-phieu.feature::Mở chức năng Thêm mã cổ phiếu từ nút plus": {
-      "id": "them-ma-co-phieu.feature::Mở chức năng Thêm mã cổ phiếu từ nút plus",
+    "them-ma-co-phieu.feature::Mở chức năng Thêm mã cổ phiếu từ nút dấu cộng": {
+      "id": "them-ma-co-phieu.feature::Mở chức năng Thêm mã cổ phiếu từ nút dấu cộng",
       "filename": "them-ma-co-phieu.feature",
-      "scenarioName": "Mở chức năng Thêm mã cổ phiếu từ nút plus",
-      "contentHash": "ba1976e71805c31f8d49e0f0cabafe262ab353b2214d5407f9db370324b5ba12",
+      "scenarioName": "Mở chức năng Thêm mã cổ phiếu từ nút dấu cộng",
+      "contentHash": "3d07dcbc40fba44d4565824b0c07ec65717f61c712c01258d938bb7f2776518c",
       "status": "approved",
       "source": "generated",
-      "updatedAt": "2026-09-12T19:43:38.494Z",
-      "reviewedAt": "2026-09-12T19:43:38.494Z"
-    },
-    "them-ma-co-phieu.feature::Tìm kiếm mã cổ phiếu theo dữ liệu nhập": {
-      "id": "them-ma-co-phieu.feature::Tìm kiếm mã cổ phiếu theo dữ liệu nhập",
-      "filename": "them-ma-co-phieu.feature",
-      "scenarioName": "Tìm kiếm mã cổ phiếu theo dữ liệu nhập",
-      "contentHash": "35e70930de092e8791b29d49139904e359931005b8e8e0d0851701ade293bc45",
-      "status": "approved",
-      "source": "generated",
-      "updatedAt": "2026-09-12T19:43:38.495Z",
-      "reviewedAt": "2026-09-12T19:43:38.495Z"
+      "updatedAt": "2026-09-15T08:26:35.681Z",
+      "reviewedAt": "2026-09-15T08:26:35.681Z"
     },
     "them-ma-co-phieu.feature::Tìm kiếm mã cổ phiếu theo tên doanh nghiệp": {
       "id": "them-ma-co-phieu.feature::Tìm kiếm mã cổ phiếu theo tên doanh nghiệp",
@@ -233,48 +223,208 @@
       "contentHash": "8f41a792cf4a6394cd292b5d1fca38a29cebdb382d826834991f16a33c3f5a33",
       "status": "approved",
       "source": "generated",
-      "updatedAt": "2026-09-12T19:43:38.495Z",
-      "reviewedAt": "2026-09-12T19:43:38.495Z"
+      "updatedAt": "2026-09-15T08:26:35.681Z",
+      "reviewedAt": "2026-09-15T08:26:35.681Z"
     },
-    "them-ma-co-phieu.feature::Danh sách gợi ý hiển thị tối đa 5 kết quả": {
-      "id": "them-ma-co-phieu.feature::Danh sách gợi ý hiển thị tối đa 5 kết quả",
+    "them-ma-co-phieu.feature::Chỉ hiển thị tối đa 5 kết quả tìm kiếm": {
+      "id": "them-ma-co-phieu.feature::Chỉ hiển thị tối đa 5 kết quả tìm kiếm",
       "filename": "them-ma-co-phieu.feature",
-      "scenarioName": "Danh sách gợi ý hiển thị tối đa 5 kết quả",
-      "contentHash": "fd816094b3873ff912887cd78353b40d8d186357e1bc59befcf5e2b8679f192c",
+      "scenarioName": "Chỉ hiển thị tối đa 5 kết quả tìm kiếm",
+      "contentHash": "aaa26d8914aa7daf6621a72321c1960477bd306b470a0034828e40820663444f",
       "status": "approved",
       "source": "generated",
-      "updatedAt": "2026-09-12T19:43:38.495Z",
-      "reviewedAt": "2026-09-12T19:43:38.495Z"
+      "updatedAt": "2026-09-15T08:26:35.681Z",
+      "reviewedAt": "2026-09-15T08:26:35.681Z"
     },
-    "them-ma-co-phieu.feature::Kết quả trùng giữa mã và tên doanh nghiệp được lọc chỉ hiển thị một lần": {
-      "id": "them-ma-co-phieu.feature::Kết quả trùng giữa mã và tên doanh nghiệp được lọc chỉ hiển thị một lần",
+    "them-ma-co-phieu.feature::Tự động lọc trùng kết quả tìm kiếm theo mã và theo tên doanh nghiệp": {
+      "id": "them-ma-co-phieu.feature::Tự động lọc trùng kết quả tìm kiếm theo mã và theo tên doanh nghiệp",
       "filename": "them-ma-co-phieu.feature",
-      "scenarioName": "Kết quả trùng giữa mã và tên doanh nghiệp được lọc chỉ hiển thị một lần",
-      "contentHash": "b5a9c23c0241193823689616bb003bc2aac12432009503c832c1aeeda1457b45",
+      "scenarioName": "Tự động lọc trùng kết quả tìm kiếm theo mã và theo tên doanh nghiệp",
+      "contentHash": "80d86674e867c6f6ff9b1d8bf672ff75c95251b0ea0fa715af6fc4dabfde89b1",
       "status": "approved",
       "source": "generated",
-      "updatedAt": "2026-09-12T19:43:38.495Z",
-      "reviewedAt": "2026-09-12T19:43:38.495Z"
+      "updatedAt": "2026-09-15T08:26:35.681Z",
+      "reviewedAt": "2026-09-15T08:26:35.681Z"
     },
-    "them-ma-co-phieu.feature::Chọn mã chưa có trong danh mục thì thêm mới vào dòng đầu tiên": {
-      "id": "them-ma-co-phieu.feature::Chọn mã chưa có trong danh mục thì thêm mới vào dòng đầu tiên",
+    "them-ma-co-phieu.feature::Chọn mã đã có trong danh mục thì không thêm mới và focus vào dòng đó": {
+      "id": "them-ma-co-phieu.feature::Chọn mã đã có trong danh mục thì không thêm mới và focus vào dòng đó",
       "filename": "them-ma-co-phieu.feature",
-      "scenarioName": "Chọn mã chưa có trong danh mục thì thêm mới vào dòng đầu tiên",
-      "contentHash": "eae858be318768a84ffb5a82f24f282aacf77981f3565b1615575fdad0ab8fb9",
+      "scenarioName": "Chọn mã đã có trong danh mục thì không thêm mới và focus vào dòng đó",
+      "contentHash": "9a4dd3a5160daf844b3bee7740b5630b6ea3acbc99d854b88a3d50246d552e7a",
       "status": "approved",
       "source": "generated",
-      "updatedAt": "2026-09-12T19:43:38.495Z",
-      "reviewedAt": "2026-09-12T19:43:38.495Z"
+      "updatedAt": "2026-09-15T08:26:35.681Z",
+      "reviewedAt": "2026-09-15T08:26:35.681Z"
     },
-    "them-ma-co-phieu.feature::Mở menu tùy chọn của dòng cổ phiếu": {
-      "id": "them-ma-co-phieu.feature::Mở menu tùy chọn của dòng cổ phiếu",
+    "them-ma-co-phieu.feature::Mở menu thao tác của dòng mã cổ phiếu": {
+      "id": "them-ma-co-phieu.feature::Mở menu thao tác của dòng mã cổ phiếu",
       "filename": "them-ma-co-phieu.feature",
-      "scenarioName": "Mở menu tùy chọn của dòng cổ phiếu",
-      "contentHash": "d8489d74130a26460d0a6b4dd1b5e118e7edb989d351ccfb0543c0efc144bbb2",
+      "scenarioName": "Mở menu thao tác của dòng mã cổ phiếu",
+      "contentHash": "7d42816abadb9f06e579ccf2a0ead6473160b7d307573d1559d461f195547950",
       "status": "approved",
       "source": "generated",
-      "updatedAt": "2026-09-12T19:43:38.495Z",
-      "reviewedAt": "2026-09-12T19:43:38.495Z"
+      "updatedAt": "2026-09-15T08:26:35.681Z",
+      "reviewedAt": "2026-09-15T08:26:35.681Z"
+    },
+    "them-ma-co-phieu.feature::Xoá mã cổ phiếu khỏi danh mục hiện tại": {
+      "id": "them-ma-co-phieu.feature::Xoá mã cổ phiếu khỏi danh mục hiện tại",
+      "filename": "them-ma-co-phieu.feature",
+      "scenarioName": "Xoá mã cổ phiếu khỏi danh mục hiện tại",
+      "contentHash": "b5d3a98129afe69b04d87ee11df163b6ecaa926c3f22f3065ff39fb944f2204b",
+      "status": "approved",
+      "source": "generated",
+      "updatedAt": "2026-09-15T08:26:35.681Z",
+      "reviewedAt": "2026-09-15T08:26:35.681Z"
+    },
+    "them-ma-co-phieu.feature::Xoá mã khỏi danh mục hiện tại không ảnh hưởng tới các danh mục khác": {
+      "id": "them-ma-co-phieu.feature::Xoá mã khỏi danh mục hiện tại không ảnh hưởng tới các danh mục khác",
+      "filename": "them-ma-co-phieu.feature",
+      "scenarioName": "Xoá mã khỏi danh mục hiện tại không ảnh hưởng tới các danh mục khác",
+      "contentHash": "59e14c9d4b8d20ec130a8faf0dbea2db6fe62300becbf0f69e8609328be06209",
+      "status": "approved",
+      "source": "manual",
+      "updatedAt": "2026-09-15T08:26:35.681Z",
+      "reviewedAt": "2026-09-15T08:26:35.681Z"
+    },
+    "them-moi-template-bao-cao-cua-toi.feature::Thêm mới template báo cáo thành công": {
+      "id": "them-moi-template-bao-cao-cua-toi.feature::Thêm mới template báo cáo thành công",
+      "filename": "them-moi-template-bao-cao-cua-toi.feature",
+      "scenarioName": "Thêm mới template báo cáo thành công",
+      "contentHash": "4228807a3671d5716e7bf19c48695879c28dd681602e9e12e9085ca27c730221",
+      "status": "approved",
+      "source": "generated",
+      "updatedAt": "2026-09-15T11:43:00.917Z",
+      "reviewedAt": "2026-09-15T11:43:00.917Z"
+    },
+    "them-moi-template-bao-cao-cua-toi.feature::Mở chức năng Thêm mới từ nút thêm mới báo cáo": {
+      "id": "them-moi-template-bao-cao-cua-toi.feature::Mở chức năng Thêm mới từ nút thêm mới báo cáo",
+      "filename": "them-moi-template-bao-cao-cua-toi.feature",
+      "scenarioName": "Mở chức năng Thêm mới từ nút thêm mới báo cáo",
+      "contentHash": "307dac25b95d5fcba7cabcc0a0cd1ce71e1fd189dd2da80e4ee72c61193050b5",
+      "status": "approved",
+      "source": "generated",
+      "updatedAt": "2026-09-15T11:43:00.917Z",
+      "reviewedAt": "2026-09-15T11:43:00.917Z"
+    },
+    "them-moi-template-bao-cao-cua-toi.feature::Chọn loại báo cáo Cá nhân và bấm Tiếp tục mở màn hình thêm mới": {
+      "id": "them-moi-template-bao-cao-cua-toi.feature::Chọn loại báo cáo Cá nhân và bấm Tiếp tục mở màn hình thêm mới",
+      "filename": "them-moi-template-bao-cao-cua-toi.feature",
+      "scenarioName": "Chọn loại báo cáo Cá nhân và bấm Tiếp tục mở màn hình thêm mới",
+      "contentHash": "987c987435fbd7b3f1578c032d5f32cf4d3a26cb93e9acd0546eaf21e80f744a",
+      "status": "approved",
+      "source": "generated",
+      "updatedAt": "2026-09-15T11:43:00.917Z",
+      "reviewedAt": "2026-09-15T11:43:00.917Z"
+    },
+    "them-moi-template-bao-cao-cua-toi.feature::Chọn loại báo cáo Doanh nghiệp và thị trường và bấm Tiếp tục mở màn hình thêm mới": {
+      "id": "them-moi-template-bao-cao-cua-toi.feature::Chọn loại báo cáo Doanh nghiệp và thị trường và bấm Tiếp tục mở màn hình thêm mới",
+      "filename": "them-moi-template-bao-cao-cua-toi.feature",
+      "scenarioName": "Chọn loại báo cáo Doanh nghiệp và thị trường và bấm Tiếp tục mở màn hình thêm mới",
+      "contentHash": "d41c644bc251dde66441c7dfc5b1be13414da98209954162d5c3cbae325e0320",
+      "status": "approved",
+      "source": "generated",
+      "updatedAt": "2026-09-15T11:43:00.917Z",
+      "reviewedAt": "2026-09-15T11:43:00.917Z"
+    },
+    "them-moi-template-bao-cao-cua-toi.feature::Mỗi loại báo cáo mở ra màn hình thêm mới có giao diện khác nhau": {
+      "id": "them-moi-template-bao-cao-cua-toi.feature::Mỗi loại báo cáo mở ra màn hình thêm mới có giao diện khác nhau",
+      "filename": "them-moi-template-bao-cao-cua-toi.feature",
+      "scenarioName": "Mỗi loại báo cáo mở ra màn hình thêm mới có giao diện khác nhau",
+      "contentHash": "556d126c5257cb2df8ca7181a9ffe9bfffcf6b274fb4a2a6d82770b939f14a81",
+      "status": "approved",
+      "source": "generated",
+      "updatedAt": "2026-09-15T11:43:00.917Z",
+      "reviewedAt": "2026-09-15T11:43:00.917Z"
+    },
+    "them-moi-template-bao-cao-cua-toi.feature::Màn hình Thêm mới hiển thị empty state khi chưa thêm thẻ": {
+      "id": "them-moi-template-bao-cao-cua-toi.feature::Màn hình Thêm mới hiển thị empty state khi chưa thêm thẻ",
+      "filename": "them-moi-template-bao-cao-cua-toi.feature",
+      "scenarioName": "Màn hình Thêm mới hiển thị empty state khi chưa thêm thẻ",
+      "contentHash": "36fb54e45b6547bb80a1785b4269035ecc311586dfd937b6efc8c0d6a7ee62b7",
+      "status": "approved",
+      "source": "generated",
+      "updatedAt": "2026-09-15T11:43:00.917Z",
+      "reviewedAt": "2026-09-15T11:43:00.917Z"
+    },
+    "them-moi-template-bao-cao-cua-toi.feature::Bấm nút thêm thẻ mở màn hình chọn thẻ": {
+      "id": "them-moi-template-bao-cao-cua-toi.feature::Bấm nút thêm thẻ mở màn hình chọn thẻ",
+      "filename": "them-moi-template-bao-cao-cua-toi.feature",
+      "scenarioName": "Bấm nút thêm thẻ mở màn hình chọn thẻ",
+      "contentHash": "fb9a82b4b90f4067546c352f0600a4bead21a57871f18373a6831021d926962a",
+      "status": "approved",
+      "source": "generated",
+      "updatedAt": "2026-09-15T11:43:00.917Z",
+      "reviewedAt": "2026-09-15T11:43:00.917Z"
+    },
+    "them-moi-template-bao-cao-cua-toi.feature::Mặc định không chọn thẻ nào khi mở màn hình chọn thẻ": {
+      "id": "them-moi-template-bao-cao-cua-toi.feature::Mặc định không chọn thẻ nào khi mở màn hình chọn thẻ",
+      "filename": "them-moi-template-bao-cao-cua-toi.feature",
+      "scenarioName": "Mặc định không chọn thẻ nào khi mở màn hình chọn thẻ",
+      "contentHash": "379a7d8d9ef6feb683eefc6dff1ad5878905fa33417c2d97d2d0497048339436",
+      "status": "approved",
+      "source": "generated",
+      "updatedAt": "2026-09-15T11:43:00.917Z",
+      "reviewedAt": "2026-09-15T11:43:00.917Z"
+    },
+    "them-moi-template-bao-cao-cua-toi.feature::Bấm thẻ lần thứ hai bỏ chọn thẻ": {
+      "id": "them-moi-template-bao-cao-cua-toi.feature::Bấm thẻ lần thứ hai bỏ chọn thẻ",
+      "filename": "them-moi-template-bao-cao-cua-toi.feature",
+      "scenarioName": "Bấm thẻ lần thứ hai bỏ chọn thẻ",
+      "contentHash": "2b3c1eef838cf08a3d0cd4bd39a1777399850dbccb6a235d004ea87802365131",
+      "status": "approved",
+      "source": "generated",
+      "updatedAt": "2026-09-15T11:43:00.917Z",
+      "reviewedAt": "2026-09-15T11:43:00.917Z"
+    },
+    "them-moi-template-bao-cao-cua-toi.feature::Các thẻ đã chọn hiển thị trên màn hình Thêm mới sau khi quay lại": {
+      "id": "them-moi-template-bao-cao-cua-toi.feature::Các thẻ đã chọn hiển thị trên màn hình Thêm mới sau khi quay lại",
+      "filename": "them-moi-template-bao-cao-cua-toi.feature",
+      "scenarioName": "Các thẻ đã chọn hiển thị trên màn hình Thêm mới sau khi quay lại",
+      "contentHash": "a1dc0cd6270850301d529f8ca502f52b71c073c72c78385873f6aced9f52618a",
+      "status": "approved",
+      "source": "generated",
+      "updatedAt": "2026-09-15T11:43:00.918Z",
+      "reviewedAt": "2026-09-15T11:43:00.918Z"
+    },
+    "them-moi-template-bao-cao-cua-toi.feature::Không chọn thẻ nào thì màn hình Thêm mới vẫn ở trạng thái empty state": {
+      "id": "them-moi-template-bao-cao-cua-toi.feature::Không chọn thẻ nào thì màn hình Thêm mới vẫn ở trạng thái empty state",
+      "filename": "them-moi-template-bao-cao-cua-toi.feature",
+      "scenarioName": "Không chọn thẻ nào thì màn hình Thêm mới vẫn ở trạng thái empty state",
+      "contentHash": "eff75a414e996d6a425983e84ec4665bd2624c3c5322700b70e1ae5c416e0489",
+      "status": "approved",
+      "source": "generated",
+      "updatedAt": "2026-09-15T11:43:00.918Z",
+      "reviewedAt": "2026-09-15T11:43:00.918Z"
+    },
+    "them-moi-template-bao-cao-cua-toi.feature::Nút Lưu disable khi không có thẻ nào được chọn": {
+      "id": "them-moi-template-bao-cao-cua-toi.feature::Nút Lưu disable khi không có thẻ nào được chọn",
+      "filename": "them-moi-template-bao-cao-cua-toi.feature",
+      "scenarioName": "Nút Lưu disable khi không có thẻ nào được chọn",
+      "contentHash": "ad5cc2e0cc537f776360d9547499e7417c2d84579c7551dd3db608a3385c3c39",
+      "status": "approved",
+      "source": "generated",
+      "updatedAt": "2026-09-15T11:43:00.918Z",
+      "reviewedAt": "2026-09-15T11:43:00.918Z"
+    },
+    "them-moi-template-bao-cao-cua-toi.feature::Nút Lưu enable khi có thẻ được chọn": {
+      "id": "them-moi-template-bao-cao-cua-toi.feature::Nút Lưu enable khi có thẻ được chọn",
+      "filename": "them-moi-template-bao-cao-cua-toi.feature",
+      "scenarioName": "Nút Lưu enable khi có thẻ được chọn",
+      "contentHash": "af90a3d531a19bc0e455296d8e3c1fe43aa3d609747e042fbf55db7edb039165",
+      "status": "approved",
+      "source": "generated",
+      "updatedAt": "2026-09-15T11:43:00.918Z",
+      "reviewedAt": "2026-09-15T11:43:00.918Z"
+    },
+    "them-moi-template-bao-cao-cua-toi.feature::Bấm Lưu mở popup nhập tên template": {
+      "id": "them-moi-template-bao-cao-cua-toi.feature::Bấm Lưu mở popup nhập tên template",
+      "filename": "them-moi-template-bao-cao-cua-toi.feature",
+      "scenarioName": "Bấm Lưu mở popup nhập tên template",
+      "contentHash": "6b4901e4ef4f9754533e11162935223929e1d16809ecf3ab6717bdb105c26088",
+      "status": "approved",
+      "source": "generated",
+      "updatedAt": "2026-09-15T11:43:00.918Z",
+      "reviewedAt": "2026-09-15T11:43:00.918Z"
     }
   }
 }

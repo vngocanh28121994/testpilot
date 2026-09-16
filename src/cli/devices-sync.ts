@@ -139,7 +139,7 @@ function parseArgs(argv: string[]): Args {
   }
   return {
     platforms: platforms as Array<'android' | 'ios'>,
-    config: value('--config') ?? 'testpilot.config.json',
+    config: value('--config') ?? process.env.TESTPILOT_CONFIG ?? 'testpilot.config.json',
     dryRun: argv.includes('--dry-run'),
   };
 }

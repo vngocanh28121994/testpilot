@@ -25,7 +25,7 @@ import { FRAGILE_BELOW, toElementDef, type Observed } from '../crawl/observe.js'
  */
 async function main(): Promise<void> {
   const args = parseArgs(process.argv.slice(2));
-  const cfg = await loadConfig(args.config ?? 'testpilot.config.json');
+  const cfg = await loadConfig(args.config ?? process.env.TESTPILOT_CONFIG);
 
   const driver = await makeDriver(args.platform, cfg);
   if (!driver.observe) {

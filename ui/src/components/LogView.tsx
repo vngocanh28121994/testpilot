@@ -5,6 +5,9 @@ const VERDICT = /^\[run:(passed|failed|flaky|skip|running|unapproved|abort)\]\s*
 const SUMMARY =
   /^\[run:summary\]\s*(\d+)✓\s*(\d+)✗\s*(\d+)~\s*(\d+)⊘(?:\s*(\d+)✎)?(?:\s*(\d+)⚠)?$/;
 const URL_PART = /(https?:\/\/\S+)/g;
+const ACTIVE_WORDS = /(đang|chờ|đợi|tải|upload|download|đóng gói|chuẩn bị|khởi tạo|kết nối|scheduling|running|waiting|loading)/iu;
+const FINISHED_WORDS = /(đã xong|hoàn tất|hoàn thành|complete|completed|failed|thất bại|lỗi|✓|✗)/iu;
+const TRAILING_DOTS = /(?:\s*(?:\.{1,3}|…))\s*$/u;
 
 const TONE: Record<string, string> = {
   passed: 'text-status-pass',
@@ -15,6 +18,19 @@ const TONE: Record<string, string> = {
   unapproved: 'text-status-flaky',
   abort: 'text-status-fail',
 };
+
+const CASE_ROW_TONE: Record<string, string> = {
+  passed: 'border-status-pass/35 bg-(--tint-pass)',
+  failed: 'border-status-fail/35 bg-(--tint-fail)',
+  flaky: 'border-status-flaky/35 bg-(--tint-warn)',
+  running: 'border-status-running/35 bg-background/75',
+  skip: 'border-border bg-background/60',
+  unapproved: 'border-status-flaky/35 bg-(--tint-warn)',
+  abort: 'border-status-fail/35 bg-(--tint-fail)',
+};
+
+const NEEDS_ATTENTION = /^(?:❓|⚠️?|Còn thiếu testcase|Cảnh báo thiếu testcase)/iu;
+const WORKFLOW_MILESTONE = /^(?:Workflow\s|Bind OK\b|\d+\/\d+ testcase\b|Đã bao phủ đầy đủ\b)/iu;
 
 /** Một dòng sau khi đã gộp: dòng "đang chạy" biến mất khi có kết quả. */
 interface Row {
@@ -38,10 +54,11 @@ function toRows(logs: string[]): Row[] {
   logs.forEach((line, i) => {
     const verdict = VERDICT.exec(line);
     if (!verdict) {
-      rows.push({ key: `l${i}`, kind: null, text: line });
+      rows.push({ key: `l${i}`, kind: null, text: humanizeLogText(line) });
       return;
     }
-    const [, kind, text] = verdict;
+    const [, kind, rawText] = verdict;
+    const text = humanizeLogText(rawText!);
     // Icon nằm trong chính phần text và khác nhau giữa hai lần in, nên khoá
     // theo tên đã bỏ icon — nếu không thì không cặp nào khớp và mọi kịch bản
     // vẫn hiện hai lần.
@@ -63,6 +80,19 @@ function toRows(logs: string[]): Row[] {
   return rows;
 }
 
+/** Hide internal prioritisation jargon from business-facing progress logs. */
+function humanizeLogText(text: string): string {
+  return text
+    .replace(
+      'Đang kiểm tra lại coverage P0/P1 trên nội dung đã duyệt/chỉnh sửa…',
+      'Đang đối chiếu testcase đã duyệt với các yêu cầu nghiệp vụ quan trọng…',
+    )
+    .replace(/Cảnh báo coverage:/giu, 'Cảnh báo thiếu testcase:')
+    .replace(/Coverage PASS/giu, 'Đã bao phủ đầy đủ')
+    .replace(/Coverage còn thiếu/giu, 'Còn thiếu testcase cho')
+    .replace(/quy tắc P0\/P1/giu, 'yêu cầu nghiệp vụ quan trọng');
+}
+
 /**
  * Khung log của một luồng đang chạy.
  *
@@ -81,6 +111,7 @@ export function LogView({
   error,
   className,
   label = 'Log',
+  active = false,
 }: {
   /**
    * Chuỗi cũng nhận được, không chỉ mảng.
@@ -94,6 +125,8 @@ export function LogView({
   error?: string | null;
   className?: string;
   label?: string;
+  /** The producer is still working; animate its latest wait/progress line. */
+  active?: boolean;
 }) {
   const lines = typeof logs === 'string' ? logs.split('\n') : logs;
   const rowCount = lines.length;
@@ -115,6 +148,10 @@ export function LogView({
   }, [rowCount, error]);
 
   const rows = toRows(lines);
+  let lastVisible = -1;
+  rows.forEach((row, index) => {
+    if (!row.text.startsWith('[run:dir]')) lastVisible = index;
+  });
 
   return (
     <div className="flex flex-col gap-1">
@@ -136,8 +173,18 @@ export function LogView({
         }}
         className={cn('console mt-0', className)}
       >
-        {rows.map((row) => (
-          <Line key={row.key} kind={row.kind} text={row.text} />
+        {rows.map((row, index) => (
+          <Line
+            key={row.key}
+            kind={row.kind}
+            text={row.text}
+            animated={
+              !error && (
+                row.kind === 'running'
+                || (active && index === lastVisible && isActiveLine(row.text))
+              )
+            }
+          />
         ))}
         {error && <span className="text-status-fail block">{error}</span>}
       </pre>
@@ -145,8 +192,21 @@ export function LogView({
   );
 }
 
-function Line({ kind, text }: { kind: string | null; text: string }) {
-  if (kind) return <span className={cn('block', TONE[kind])}>{text}</span>;
+function Line({ kind, text, animated }: { kind: string | null; text: string; animated: boolean }) {
+  if (kind) {
+    return (
+      <span
+        data-log-row="testcase"
+        className={cn(
+          'my-1 block rounded-md border px-2.5 py-1.5 font-sans font-semibold shadow-xs',
+          TONE[kind],
+          CASE_ROW_TONE[kind],
+        )}
+      >
+        {animated ? <ProgressText text={text} /> : text}
+      </span>
+    );
+  }
 
   const summary = SUMMARY.exec(text);
   if (summary) return <Summary counts={summary} />;
@@ -156,7 +216,50 @@ function Line({ kind, text }: { kind: string | null; text: string }) {
   // Việt viết cho người đọc.
   if (text.startsWith('[run:dir]')) return null;
 
-  return <span className="block">{linkify(text) ?? ' '}</span>;
+  if (NEEDS_ATTENTION.test(text)) {
+    return (
+      <span
+        data-log-row="attention"
+        className="border-status-flaky/40 bg-(--tint-warn) my-1 block rounded-md border-s-[3px] px-2.5 py-1.5 font-sans font-medium text-status-flaky"
+      >
+        {animated ? <ProgressText text={text} /> : (linkify(text) ?? ' ')}
+      </span>
+    );
+  }
+
+  if (WORKFLOW_MILESTONE.test(text)) {
+    return (
+      <span
+        data-log-row="milestone"
+        className="border-border bg-background/70 my-1 block rounded-md border px-2.5 py-1.5 font-sans font-medium"
+      >
+        {animated ? <ProgressText text={text} /> : (linkify(text) ?? ' ')}
+      </span>
+    );
+  }
+
+  return (
+    <span className="block">
+      {animated ? <ProgressText text={text} /> : (linkify(text) ?? ' ')}
+    </span>
+  );
+}
+
+function isActiveLine(text: string): boolean {
+  return ACTIVE_WORDS.test(text) && !FINISHED_WORDS.test(text);
+}
+
+/** Keep the stored log immutable; only the rendered suffix moves. */
+function ProgressText({ text }: { text: string }) {
+  const base = text.replace(TRAILING_DOTS, '');
+  return (
+    <>
+      {linkify(base)}
+      <span className="log-progress-dots" aria-hidden="true">
+        <span>.</span><span>.</span><span>.</span>
+      </span>
+    </>
+  );
 }
 
 function Summary({ counts }: { counts: RegExpExecArray }) {

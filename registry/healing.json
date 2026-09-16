@@ -382,7 +382,65 @@
     "2026-09-10T16-55-32Z-ios-feature-dang-nhap-iphone-12-pro-max": "2026-09-10T16:56:57.704Z",
     "2026-09-10T17-19-04Z-ios-feature-dang-nhap-iphone-12-pro-max": "2026-09-10T17:21:36.195Z",
     "2026-09-12T19-43-46Z-web": "2026-09-12T20:00:12.929Z",
-    "2026-09-12T20-51-18Z-web-feature-dat-lenh": "2026-09-12T20:55:24.468Z"
+    "2026-09-12T20-51-18Z-web-feature-dat-lenh": "2026-09-12T20:55:24.468Z",
+    "2026-09-13T08-03-55Z-web-feature-chuyen-tien-noi-bo": "2026-09-13T08:03:57.632Z",
+    "2026-09-13T08-04-47Z-web-feature-chuyen-tien-noi-bo": "2026-09-13T08:10:32.999Z",
+    "2026-09-13T09-16-06Z-android-feature-chuyen-tien-noi-bo-sm-s938b": "2026-09-13T09:20:22.055Z",
+    "2026-09-13T17-54-16Z-ios-apple-iphone-12": "2026-09-13T17:54:16.000Z",
+    "2026-09-14T02-34-11Z-ios-feature-chuyen-tien-noi-bo-apple-iphone-12": "2026-09-14T02:37:24.252Z",
+    "2026-09-14T03-25-18Z-android-feature-chuyen-tien-noi-bo-google-pixel-11-pro-xl": "2026-09-14T03:33:01.426Z",
+    "2026-09-14T03-25-19Z-android-feature-chuyen-tien-noi-bo-google-pixel-8a": "2026-09-14T03:33:35.770Z",
+    "2026-09-14T04-16-46Z-android-feature-chuyen-tien-noi-bo-google-pixel-11-pro": "2026-09-14T04:23:27.567Z",
+    "2026-09-14T04-53-24Z-web-feature-chuyen-tien-noi-bo": "2026-09-14T04:58:22.844Z",
+    "2026-09-14T09-33-42Z-web-feature-chuyen-tien-noi-bo-positive": "2026-09-14T09:36:03.574Z",
+    "2026-09-14T09-56-50Z-web-feature-chuyen-tien-noi-bo-positive": "2026-09-14T09:59:50.872Z",
+    "2026-09-14T10-27-16Z-web-feature-dang-nhap-negative": "2026-09-14T10:27:31.669Z",
+    "2026-09-14T19-21-08Z-web": "2026-09-14T19:27:30.076Z",
+    "2026-09-14T19-25-45Z-android-sm-s938b": "2026-09-14T19:27:30.083Z",
+    "2026-09-15T04-50-32Z-web-feature-hieu-qua-dau-tu": "2026-09-15T04:50:36.425Z",
+    "2026-09-15T04-51-04Z-web-feature-hieu-qua-dau-tu": "2026-09-15T04:51:50.881Z",
+    "2026-09-15T05-02-20Z-web-feature-hieu-qua-dau-tu": "2026-09-15T05:02:22.427Z",
+    "2026-09-15T05-02-39Z-web-feature-hieu-qua-dau-tu": "2026-09-15T05:03:00.577Z",
+    "2026-09-15T05-11-01Z-web-feature-hieu-qua-dau-tu": "2026-09-15T05:13:51.936Z",
+    "2026-09-15T05-21-23Z-web-feature-hieu-qua-dau-tu": "2026-09-15T05:21:52.968Z",
+    "2026-09-15T05-30-46Z-web-feature-them-ma-co-phieu-tren-bang-gia-co-phieu": "2026-09-15T05:42:32.521Z",
+    "2026-09-15T06-35-48Z-web-feature-them-ma-co-phieu-tren-bang-gia-co-phieu": "2026-09-15T06:46:47.887Z",
+    "2026-09-15T07-07-24Z-web-feature-them-ma-co-phieu-tren-bang-gia-co-phieu": "2026-09-15T07:16:02.918Z",
+    "2026-09-15T07-22-14Z-web-feature-them-ma-co-phieu-tren-bang-gia-co-phieu": "2026-09-15T07:32:59.797Z",
+    "2026-09-15T07-35-50Z-web-feature-them-ma-co-phieu-tren-bang-gia-co-phieu": "2026-09-15T07:46:13.459Z",
+    "2026-09-15T07-49-28Z-web-feature-them-ma-co-phieu-tren-bang-gia-co-phieu": "2026-09-15T07:54:43.929Z",
+    "2026-09-15T07-59-44Z-web-feature-them-ma-co-phieu-tren-bang-gia-co-phieu": "2026-09-15T08:09:12.085Z",
+    "2026-09-15T08-26-44Z-web": "2026-09-15T08:39:17.273Z",
+    "2026-09-15T09-30-26Z-web-feature-chuyen-tien-noi-bo": "2026-09-15T09:37:59.490Z",
+    "2026-09-15T09-54-54Z-web-feature-them-ma-co-phieu-tren-bang-gia-co-phieu-positive": "2026-09-15T09:59:20.132Z",
+    "2026-09-15T11-55-50Z-web-feature-them-moi-template-bao-cao-cua-toi": "2026-09-15T11:58:27.890Z",
+    "2026-09-15T13-49-52Z-web-feature-them-moi-template-bao-cao-cua-toi": "2026-09-15T14:10:45.095Z",
+    "2026-09-15T14-21-12Z-android-feature-them-moi-template-bao-cao-cua-toi-sm-s938b": "2026-09-15T14:22:49.647Z",
+    "2026-09-15T14-24-11Z-android-feature-them-moi-template-bao-cao-cua-toi-sm-s938b": "2026-09-15T14:26:52.397Z",
+    "2026-09-15T14-35-19Z-android-feature-them-moi-template-bao-cao-cua-toi-sm-s938b": "2026-09-15T14:37:53.233Z",
+    "2026-09-15T14-40-09Z-android-smoke-sm-s938b": "2026-09-15T14:42:51.399Z",
+    "2026-09-15T14-46-07Z-android-smoke-sm-s938b": "2026-09-15T14:48:42.997Z",
+    "2026-09-15T14-49-40Z-android-smoke-sm-s938b": "2026-09-15T18:55:11.777Z",
+    "2026-09-15T14-52-55Z-android-smoke-sm-s938b": "2026-09-15T18:55:11.778Z",
+    "2026-09-15T14-55-25Z-android-smoke-sm-s938b": "2026-09-15T18:55:11.778Z",
+    "2026-09-15T15-01-20Z-android-smoke-sm-s938b": "2026-09-15T18:55:11.779Z",
+    "2026-09-15T15-08-13Z-android-smoke-sm-s938b": "2026-09-15T18:55:11.779Z",
+    "2026-09-15T15-56-23Z-android-feature-them-moi-template-bao-cao-cua-toi-sm-s938b": "2026-09-15T18:55:11.782Z",
+    "2026-09-15T16-54-05Z-android-feature-them-moi-template-bao-cao-cua-toi-sm-s938b": "2026-09-15T18:55:11.783Z",
+    "2026-09-15T18-11-32Z-android-feature-them-moi-template-bao-cao-cua-toi-positive-sm-s938b": "2026-09-15T18:55:11.783Z",
+    "2026-09-15T18-47-12Z-android-feature-them-moi-template-bao-cao-cua-toi-sm-s938b": "2026-09-15T18:55:11.784Z",
+    "2026-09-15T19-15-41Z-android-feature-them-moi-template-bao-cao-cua-toi-positive-sm-s938b": "2026-09-15T19:39:25.883Z",
+    "2026-09-15T19-40-56Z-android-feature-them-ma-co-phieu-tren-bang-gia-co-phieu-positive-sm-s938b": "2026-09-15T19:54:50.704Z",
+    "2026-09-15T19-58-37Z-android-feature-them-ma-co-phieu-tren-bang-gia-co-phieu-positive-sm-s938b": "2026-09-15T20:01:46.383Z",
+    "2026-09-15T20-03-08Z-android-feature-them-ma-co-phieu-tren-bang-gia-co-phieu-positive-sm-s938b": "2026-09-15T20:10:09.392Z",
+    "2026-09-15T20-21-11Z-android-positive-sm-s938b": "2026-09-15T20:43:14.930Z",
+    "2026-09-16T00-44-00Z-android-feature-them-ma-co-phieu-tren-bang-gia-co-phieu-positive-sm-s938b": "2026-09-16T01:10:05.824Z",
+    "2026-09-16T01-10-31Z-android-feature-them-ma-co-phieu-tren-bang-gia-co-phieu-positive-sm-s938b": "2026-09-16T01:11:35.253Z",
+    "2026-09-16T01-15-58Z-android-feature-them-ma-co-phieu-tren-bang-gia-co-phieu-positive-sm-s938b": "2026-09-16T01:17:57.543Z",
+    "2026-09-16T02-30-26Z-android-feature-them-ma-co-phieu-tren-bang-gia-co-phieu-positive-sm-s938b": "2026-09-16T02:37:46.450Z",
+    "2026-09-16T02-54-57Z-android-feature-them-ma-co-phieu-tren-bang-gia-co-phieu-positive-sm-s938b": "2026-09-16T02:56:20.845Z",
+    "2026-09-16T03-01-03Z-android-feature-them-ma-co-phieu-tren-bang-gia-co-phieu-positive-sm-s938b": "2026-09-16T03:03:51.346Z",
+    "2026-09-16T03-09-35Z-android-feature-them-ma-co-phieu-tren-bang-gia-co-phieu-positive-sm-s938b": "2026-09-16T03:13:19.036Z"
   },
   "entries": {
     "home.totalAssets::android::6dbfe0a6bf0ea4c4": {
@@ -466,7 +524,7 @@
         "weight": 0.97,
         "origin": "healed"
       },
-      "successes": 52,
+      "successes": 61,
       "runIds": [
         "2026-08-17T06-34-18Z-web-search",
         "2026-08-17T06-37-10Z-web-search",
@@ -509,12 +567,17 @@
         "2026-08-25T17-01-18Z-web",
         "2026-08-26T03-00-37Z-web",
         "2026-08-26T03-53-56Z-web",
-        "2026-08-26T10-31-35Z-web"
+        "2026-08-26T10-31-35Z-web",
+        "2026-09-15T07-07-24Z-web-feature-them-ma-co-phieu-tren-bang-gia-co-phieu",
+        "2026-09-15T07-22-14Z-web-feature-them-ma-co-phieu-tren-bang-gia-co-phieu",
+        "2026-09-15T07-35-50Z-web-feature-them-ma-co-phieu-tren-bang-gia-co-phieu",
+        "2026-09-15T07-59-44Z-web-feature-them-ma-co-phieu-tren-bang-gia-co-phieu",
+        "2026-09-15T08-26-44Z-web"
       ],
       "firstSeen": "2026-08-17T06:34:59.652Z",
-      "lastSeen": "2026-08-26T10:35:02.969Z",
+      "lastSeen": "2026-09-15T08:39:17.273Z",
       "devices": {
-        "Pixel 7": 41
+        "Pixel 7": 50
       }
     },
     "priceBoard.iconTaiDongAds::web::263fd85ac5704303": {
@@ -637,7 +700,7 @@
         "weight": 0.8,
         "origin": "llm"
       },
-      "successes": 131,
+      "successes": 171,
       "runIds": [
         "2026-08-27T03-19-48Z-android-sm-s938b",
         "2026-08-27T03-27-17Z-android-sm-s938b",
@@ -653,12 +716,19 @@
         "2026-08-28T03-25-33Z-android-sm-s938b",
         "2026-09-08T04-40-13Z-android-feature-chuyen-tien-noi-bo-sm-s938b",
         "2026-09-08T04-55-34Z-android-feature-chuyen-tien-noi-bo-sm-s938b",
-        "2026-09-08T05-03-19Z-android-feature-chuyen-tien-noi-bo-sm-s938b"
+        "2026-09-08T05-03-19Z-android-feature-chuyen-tien-noi-bo-sm-s938b",
+        "2026-09-13T09-16-06Z-android-feature-chuyen-tien-noi-bo-sm-s938b",
+        "2026-09-14T03-25-18Z-android-feature-chuyen-tien-noi-bo-google-pixel-11-pro-xl",
+        "2026-09-14T03-25-19Z-android-feature-chuyen-tien-noi-bo-google-pixel-8a",
+        "2026-09-14T04-16-46Z-android-feature-chuyen-tien-noi-bo-google-pixel-11-pro"
       ],
       "firstSeen": "2026-08-27T03:25:37.779Z",
-      "lastSeen": "2026-09-08T05:07:21.522Z",
+      "lastSeen": "2026-09-14T04:23:27.567Z",
       "devices": {
-        "SM_S938B": 131
+        "SM_S938B": 142,
+        "66090DLDV001XC": 10,
+        "3C021JEKB17690": 8,
+        "66130DLKX000NG": 11
       }
     },
     "transfer.submitButton::android::242f72750d7e5084": {
@@ -677,7 +747,7 @@
         "weight": 0.8,
         "origin": "llm"
       },
-      "successes": 73,
+      "successes": 99,
       "runIds": [
         "2026-08-27T03-19-48Z-android-sm-s938b",
         "2026-08-27T03-27-17Z-android-sm-s938b",
@@ -692,12 +762,19 @@
         "2026-08-28T02-32-14Z-android-sm-s938b",
         "2026-08-28T03-25-33Z-android-sm-s938b",
         "2026-09-08T04-55-34Z-android-feature-chuyen-tien-noi-bo-sm-s938b",
-        "2026-09-08T05-03-19Z-android-feature-chuyen-tien-noi-bo-sm-s938b"
+        "2026-09-08T05-03-19Z-android-feature-chuyen-tien-noi-bo-sm-s938b",
+        "2026-09-13T09-16-06Z-android-feature-chuyen-tien-noi-bo-sm-s938b",
+        "2026-09-14T03-25-18Z-android-feature-chuyen-tien-noi-bo-google-pixel-11-pro-xl",
+        "2026-09-14T03-25-19Z-android-feature-chuyen-tien-noi-bo-google-pixel-8a",
+        "2026-09-14T04-16-46Z-android-feature-chuyen-tien-noi-bo-google-pixel-11-pro"
       ],
       "firstSeen": "2026-08-27T03:25:37.779Z",
-      "lastSeen": "2026-09-08T05:07:21.522Z",
+      "lastSeen": "2026-09-14T04:23:27.567Z",
       "devices": {
-        "SM_S938B": 73
+        "SM_S938B": 80,
+        "66090DLDV001XC": 6,
+        "3C021JEKB17690": 6,
+        "66130DLKX000NG": 7
       }
     },
     "transferConfirm.confirmButton::android::27f0ee8803c93757": {
@@ -716,7 +793,7 @@
         "weight": 0.8,
         "origin": "llm"
       },
-      "successes": 23,
+      "successes": 34,
       "runIds": [
         "2026-08-27T06-31-18Z-android-sm-s938b",
         "2026-08-27T06-47-07Z-android-sm-s938b",
@@ -728,12 +805,19 @@
         "2026-08-28T02-32-14Z-android-sm-s938b",
         "2026-08-28T03-25-33Z-android-sm-s938b",
         "2026-09-08T04-55-34Z-android-feature-chuyen-tien-noi-bo-sm-s938b",
-        "2026-09-08T05-03-19Z-android-feature-chuyen-tien-noi-bo-sm-s938b"
+        "2026-09-08T05-03-19Z-android-feature-chuyen-tien-noi-bo-sm-s938b",
+        "2026-09-13T09-16-06Z-android-feature-chuyen-tien-noi-bo-sm-s938b",
+        "2026-09-14T03-25-18Z-android-feature-chuyen-tien-noi-bo-google-pixel-11-pro-xl",
+        "2026-09-14T03-25-19Z-android-feature-chuyen-tien-noi-bo-google-pixel-8a",
+        "2026-09-14T04-16-46Z-android-feature-chuyen-tien-noi-bo-google-pixel-11-pro"
       ],
       "firstSeen": "2026-08-27T06:37:53.431Z",
-      "lastSeen": "2026-09-08T05:07:21.522Z",
+      "lastSeen": "2026-09-14T04:23:27.567Z",
       "devices": {
-        "SM_S938B": 23
+        "SM_S938B": 26,
+        "66090DLDV001XC": 3,
+        "3C021JEKB17690": 2,
+        "66130DLKX000NG": 3
       }
     },
     "transfer.thongBao::android::d902c01a3180a982": {
@@ -752,7 +836,7 @@
         "weight": 0.8,
         "origin": "crawler"
       },
-      "successes": 19,
+      "successes": 25,
       "runIds": [
         "2026-08-27T06-31-18Z-android-sm-s938b",
         "2026-08-27T06-47-07Z-android-sm-s938b",
@@ -762,12 +846,19 @@
         "2026-08-27T17-26-24Z-android-sm-s938b",
         "2026-08-28T02-32-14Z-android-sm-s938b",
         "2026-08-28T03-25-33Z-android-sm-s938b",
-        "2026-09-08T05-03-19Z-android-feature-chuyen-tien-noi-bo-sm-s938b"
+        "2026-09-08T05-03-19Z-android-feature-chuyen-tien-noi-bo-sm-s938b",
+        "2026-09-13T09-16-06Z-android-feature-chuyen-tien-noi-bo-sm-s938b",
+        "2026-09-14T03-25-18Z-android-feature-chuyen-tien-noi-bo-google-pixel-11-pro-xl",
+        "2026-09-14T03-25-19Z-android-feature-chuyen-tien-noi-bo-google-pixel-8a",
+        "2026-09-14T04-16-46Z-android-feature-chuyen-tien-noi-bo-google-pixel-11-pro"
       ],
       "firstSeen": "2026-08-27T06:37:53.431Z",
-      "lastSeen": "2026-09-08T05:07:21.522Z",
+      "lastSeen": "2026-09-14T04:23:27.567Z",
       "devices": {
-        "SM_S938B": 19
+        "SM_S938B": 20,
+        "66090DLDV001XC": 2,
+        "3C021JEKB17690": 1,
+        "66130DLKX000NG": 2
       }
     },
     "transferConfirm.backButton::android::24518db0f6df5d7d": {
@@ -786,19 +877,26 @@
         "weight": 0.8,
         "origin": "llm"
       },
-      "successes": 6,
+      "successes": 10,
       "runIds": [
         "2026-08-27T06-53-25Z-android-sm-s938b",
         "2026-08-27T08-19-02Z-android-sm-s938b",
         "2026-08-27T17-26-24Z-android-sm-s938b",
         "2026-08-28T02-32-14Z-android-sm-s938b",
         "2026-08-28T03-25-33Z-android-sm-s938b",
-        "2026-09-08T05-03-19Z-android-feature-chuyen-tien-noi-bo-sm-s938b"
+        "2026-09-08T05-03-19Z-android-feature-chuyen-tien-noi-bo-sm-s938b",
+        "2026-09-13T09-16-06Z-android-feature-chuyen-tien-noi-bo-sm-s938b",
+        "2026-09-14T03-25-18Z-android-feature-chuyen-tien-noi-bo-google-pixel-11-pro-xl",
+        "2026-09-14T03-25-19Z-android-feature-chuyen-tien-noi-bo-google-pixel-8a",
+        "2026-09-14T04-16-46Z-android-feature-chuyen-tien-noi-bo-google-pixel-11-pro"
       ],
       "firstSeen": "2026-08-27T06:59:01.687Z",
-      "lastSeen": "2026-09-08T05:07:21.522Z",
+      "lastSeen": "2026-09-14T04:23:27.567Z",
       "devices": {
-        "SM_S938B": 6
+        "SM_S938B": 7,
+        "66090DLDV001XC": 1,
+        "3C021JEKB17690": 1,
+        "66130DLKX000NG": 1
       }
     },
     "home.searchFirstResult::android::94e6c4fc8969bbf5": {
@@ -845,14 +943,17 @@
         "weight": 0.8,
         "origin": "crawler"
       },
-      "successes": 2,
+      "successes": 8,
       "runIds": [
-        "2026-09-08T18-41-45Z-web-feature-chuyen-tien-noi-bo"
+        "2026-09-08T18-41-45Z-web-feature-chuyen-tien-noi-bo",
+        "2026-09-13T08-04-47Z-web-feature-chuyen-tien-noi-bo",
+        "2026-09-14T04-53-24Z-web-feature-chuyen-tien-noi-bo",
+        "2026-09-14T09-33-42Z-web-feature-chuyen-tien-noi-bo-positive"
       ],
       "firstSeen": "2026-09-08T18:44:09.059Z",
-      "lastSeen": "2026-09-08T18:44:09.059Z",
+      "lastSeen": "2026-09-14T09:36:03.574Z",
       "devices": {
-        "Pixel 7": 2
+        "Pixel 7": 8
       }
     },
     "transfer.sourceAccount::web::11c826932d0395f8": {
@@ -949,16 +1050,22 @@
         "weight": 0.75,
         "origin": "authored"
       },
-      "successes": 3,
+      "successes": 19,
       "runIds": [
         "2026-09-11T10-44-13Z-android-feature-tim-kiem-bang-gia-google-pixel-11-pro-xl",
-        "2026-09-11T10-44-16Z-android-feature-tim-kiem-bang-gia-google-pixel-8a"
+        "2026-09-11T10-44-16Z-android-feature-tim-kiem-bang-gia-google-pixel-8a",
+        "2026-09-14T03-25-18Z-android-feature-chuyen-tien-noi-bo-google-pixel-11-pro-xl",
+        "2026-09-14T03-25-19Z-android-feature-chuyen-tien-noi-bo-google-pixel-8a",
+        "2026-09-14T04-16-46Z-android-feature-chuyen-tien-noi-bo-google-pixel-11-pro"
       ],
       "firstSeen": "2026-09-11T10:46:26.463Z",
-      "lastSeen": "2026-09-11T10:46:50.670Z",
+      "lastSeen": "2026-09-14T04:23:27.567Z",
       "devices": {
         "65260DLDV004P0": 2,
-        "3C011JEKB15075": 1
+        "3C011JEKB15075": 1,
+        "66090DLDV001XC": 8,
+        "3C021JEKB17690": 5,
+        "66130DLKX000NG": 3
       }
     },
     "priceBoard.addStockButton::android::33c8e668b246029d": {
@@ -976,16 +1083,19 @@
         "weight": 0.75,
         "origin": "authored"
       },
-      "successes": 10,
+      "successes": 22,
       "runIds": [
         "2026-09-11T19-15-40Z-android-feature-tim-kiem-bang-gia-sm-s938b",
         "2026-09-11T19-26-04Z-android-feature-tim-kiem-bang-gia-sm-s938b",
-        "2026-09-11T20-06-18Z-android-sm-s938b"
+        "2026-09-11T20-06-18Z-android-sm-s938b",
+        "2026-09-15T20-03-08Z-android-feature-them-ma-co-phieu-tren-bang-gia-co-phieu-positive-sm-s938b",
+        "2026-09-16T01-15-58Z-android-feature-them-ma-co-phieu-tren-bang-gia-co-phieu-positive-sm-s938b",
+        "2026-09-16T02-30-26Z-android-feature-them-ma-co-phieu-tren-bang-gia-co-phieu-positive-sm-s938b"
       ],
       "firstSeen": "2026-09-11T19:16:57.175Z",
-      "lastSeen": "2026-09-11T20:11:15.132Z",
+      "lastSeen": "2026-09-16T02:37:46.450Z",
       "devices": {
-        "SM_S938B": 10
+        "SM_S938B": 22
       }
     },
     "addStockModal.searchInput::web::f11216c2a8ddd286": {
@@ -1005,15 +1115,26 @@
         "origin": "healed",
         "approved": false
       },
-      "successes": 7,
+      "successes": 81,
       "runIds": [
-        "2026-09-12T04-54-52Z-web-feature-them-ma-co-phieu-tren-bang-gia-co-phieu"
+        "2026-09-12T04-54-52Z-web-feature-them-ma-co-phieu-tren-bang-gia-co-phieu",
+        "2026-09-14T19-21-08Z-web",
+        "2026-09-15T05-30-46Z-web-feature-them-ma-co-phieu-tren-bang-gia-co-phieu",
+        "2026-09-15T06-35-48Z-web-feature-them-ma-co-phieu-tren-bang-gia-co-phieu",
+        "2026-09-15T07-07-24Z-web-feature-them-ma-co-phieu-tren-bang-gia-co-phieu",
+        "2026-09-15T07-22-14Z-web-feature-them-ma-co-phieu-tren-bang-gia-co-phieu",
+        "2026-09-15T07-35-50Z-web-feature-them-ma-co-phieu-tren-bang-gia-co-phieu",
+        "2026-09-15T07-49-28Z-web-feature-them-ma-co-phieu-tren-bang-gia-co-phieu",
+        "2026-09-15T07-59-44Z-web-feature-them-ma-co-phieu-tren-bang-gia-co-phieu",
+        "2026-09-15T08-26-44Z-web"
       ],
       "firstSeen": "2026-09-12T05:03:28.228Z",
-      "lastSeen": "2026-09-12T05:03:28.228Z",
+      "lastSeen": "2026-09-15T08:39:17.273Z",
       "devices": {
-        "Pixel 7": 7
-      }
+        "Pixel 7": 81
+      },
+      "decision": "applied",
+      "reviewedAt": "2026-09-15T08:43:14.281Z"
     },
     "priceBoard.rowOptionsButton::web::06abf1a104f69229": {
       "elementId": "priceBoard.rowOptionsButton",
@@ -1031,14 +1152,15 @@
         "origin": "llm",
         "approved": false
       },
-      "successes": 4,
+      "successes": 6,
       "runIds": [
-        "2026-09-12T04-54-52Z-web-feature-them-ma-co-phieu-tren-bang-gia-co-phieu"
+        "2026-09-12T04-54-52Z-web-feature-them-ma-co-phieu-tren-bang-gia-co-phieu",
+        "2026-09-15T09-54-54Z-web-feature-them-ma-co-phieu-tren-bang-gia-co-phieu-positive"
       ],
       "firstSeen": "2026-09-12T05:03:28.228Z",
-      "lastSeen": "2026-09-12T05:03:28.228Z",
+      "lastSeen": "2026-09-15T09:59:20.132Z",
       "devices": {
-        "Pixel 7": 4
+        "Pixel 7": 6
       }
     },
     "login.usernameField::ios::dd2010f765da12cb": {
@@ -1063,6 +1185,170 @@
       "lastSeen": "2026-09-10T10:01:32.548Z",
       "devices": {
         "iPhone của Anh": 1
+      }
+    },
+    "transfer.thongBao::android::0a9f1ef5bde91010": {
+      "elementId": "transfer.thongBao",
+      "platform": "android",
+      "from": {
+        "strategy": "css",
+        "value": ".subtitle-dialog-common",
+        "weight": 0.95,
+        "noScope": true,
+        "origin": "crawler"
+      },
+      "to": {
+        "strategy": "role",
+        "value": "dialog",
+        "weight": 0.85,
+        "noScope": true,
+        "origin": "crawler"
+      },
+      "successes": 1,
+      "runIds": [
+        "2026-09-13T09-16-06Z-android-feature-chuyen-tien-noi-bo-sm-s938b"
+      ],
+      "firstSeen": "2026-09-13T09:20:22.055Z",
+      "lastSeen": "2026-09-13T09:20:22.055Z",
+      "devices": {
+        "SM_S938B": 1
+      }
+    },
+    "stockOptionsMenu.removeFromCategory::web::182bd8f44cf3893d": {
+      "elementId": "stockOptionsMenu.removeFromCategory",
+      "platform": "web",
+      "from": {
+        "strategy": "role",
+        "value": "menuitem",
+        "name": "Xóa khỏi danh mục",
+        "weight": 0.8,
+        "origin": "llm"
+      },
+      "to": {
+        "strategy": "label",
+        "value": "Xóa khỏi danh mục",
+        "weight": 0.6,
+        "origin": "healed",
+        "approved": false
+      },
+      "successes": 2,
+      "runIds": [
+        "2026-09-15T09-54-54Z-web-feature-them-ma-co-phieu-tren-bang-gia-co-phieu-positive"
+      ],
+      "firstSeen": "2026-09-15T09:59:20.132Z",
+      "lastSeen": "2026-09-15T09:59:20.132Z",
+      "devices": {
+        "Pixel 7": 2
+      }
+    },
+    "addStockModal.searchInput::android::6ae23d4591484610": {
+      "elementId": "addStockModal.searchInput",
+      "platform": "android",
+      "from": {
+        "strategy": "placeholder",
+        "value": "Mã cổ phiếu",
+        "weight": 1,
+        "origin": "healed",
+        "approved": true
+      },
+      "to": {
+        "strategy": "placeholder",
+        "value": "TCB,VNM,FPT...",
+        "weight": 0.79,
+        "origin": "healed",
+        "approved": false
+      },
+      "successes": 12,
+      "runIds": [
+        "2026-09-15T20-03-08Z-android-feature-them-ma-co-phieu-tren-bang-gia-co-phieu-positive-sm-s938b",
+        "2026-09-16T01-15-58Z-android-feature-them-ma-co-phieu-tren-bang-gia-co-phieu-positive-sm-s938b",
+        "2026-09-16T02-30-26Z-android-feature-them-ma-co-phieu-tren-bang-gia-co-phieu-positive-sm-s938b"
+      ],
+      "firstSeen": "2026-09-15T20:10:09.392Z",
+      "lastSeen": "2026-09-16T02:37:46.450Z",
+      "devices": {
+        "SM_S938B": 12
+      }
+    },
+    "priceBoard.rowOptionsButton::android::06abf1a104f69229": {
+      "elementId": "priceBoard.rowOptionsButton",
+      "platform": "android",
+      "from": {
+        "strategy": "css",
+        "value": "mat-icon.mat-menu-trigger",
+        "weight": 0.9,
+        "origin": "authored"
+      },
+      "to": {
+        "strategy": "css",
+        "value": "[data-walkthrough=\"mb-item-more\"]",
+        "weight": 0.5,
+        "origin": "llm",
+        "approved": false
+      },
+      "successes": 4,
+      "runIds": [
+        "2026-09-16T03-01-03Z-android-feature-them-ma-co-phieu-tren-bang-gia-co-phieu-positive-sm-s938b",
+        "2026-09-16T03-09-35Z-android-feature-them-ma-co-phieu-tren-bang-gia-co-phieu-positive-sm-s938b"
+      ],
+      "firstSeen": "2026-09-16T03:03:51.346Z",
+      "lastSeen": "2026-09-16T03:13:19.036Z",
+      "devices": {
+        "SM_S938B": 4
+      }
+    },
+    "stockOptionsMenu.removeFromCategory::android::182bd8f44cf3893d": {
+      "elementId": "stockOptionsMenu.removeFromCategory",
+      "platform": "android",
+      "from": {
+        "strategy": "role",
+        "value": "menuitem",
+        "name": "Xóa khỏi danh mục",
+        "weight": 0.8,
+        "origin": "llm"
+      },
+      "to": {
+        "strategy": "label",
+        "value": "Xóa khỏi danh mục",
+        "weight": 0.6,
+        "origin": "healed",
+        "approved": false
+      },
+      "successes": 4,
+      "runIds": [
+        "2026-09-16T03-01-03Z-android-feature-them-ma-co-phieu-tren-bang-gia-co-phieu-positive-sm-s938b",
+        "2026-09-16T03-09-35Z-android-feature-them-ma-co-phieu-tren-bang-gia-co-phieu-positive-sm-s938b"
+      ],
+      "firstSeen": "2026-09-16T03:03:51.346Z",
+      "lastSeen": "2026-09-16T03:13:19.036Z",
+      "devices": {
+        "SM_S938B": 4
+      }
+    },
+    "priceBoard.addStockButton::android::29bfc40ede151d4a": {
+      "elementId": "priceBoard.addStockButton",
+      "platform": "android",
+      "from": {
+        "strategy": "css",
+        "value": "#wt-filter-tcprice-el-mb tcbs-icon[name='Circle add']",
+        "weight": 0.98,
+        "origin": "authored"
+      },
+      "to": {
+        "strategy": "css",
+        "value": "tcbs-icon[name='Circle add']",
+        "weight": 0.79,
+        "origin": "healed",
+        "approved": false
+      },
+      "successes": 1,
+      "runIds": [
+        "2026-09-16T03-09-35Z-android-feature-them-ma-co-phieu-tren-bang-gia-co-phieu-positive-sm-s938b"
+      ],
+      "firstSeen": "2026-09-16T03:13:19.036Z",
+      "lastSeen": "2026-09-16T03:13:19.036Z",
+      "devices": {
+        "SM_S938B": 1
       }
     }
   }

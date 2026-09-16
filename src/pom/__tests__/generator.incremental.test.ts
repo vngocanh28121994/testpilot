@@ -94,11 +94,15 @@ test('business flows generate reusable BasePage calls instead of repeated raw st
   const flowFeature = feature([
     step({ kind: 'ensureLoggedIn', account: 'tcbs' }, 'authenticated', 1),
     step({ kind: 'openFeatureFromSearch', query: 'Hiệu quả đầu tư' }, 'open feature', 2),
+    step({ kind: 'tap', element: 'login.submitButton' }, 'first destination action', 3),
   ]);
   await generatePom([flowFeature], registry, { outputDir: output });
   const spec = await readFile(path.join(output, 'tests', 'login.spec.ts'), 'utf8');
   assert.match(spec, /ctx\.ensureLoggedIn\("tcbs"\)/);
-  assert.match(spec, /ctx\.openFeatureFromSearch\("Hiệu quả đầu tư"\)/);
+  assert.match(
+    spec,
+    /ctx\.openFeatureFromSearch\("Hiệu quả đầu tư", "login\.submitButton"\)/,
+  );
 });
 
 test('managed specs are refreshed from approved features and close their runtime context', async () => {

@@ -24,11 +24,25 @@ export interface AiElementCandidate {
   reasoning: string;
   /** Locator the AI suggests to identify the element stably. */
   suggestedLocator?: { strategy: string; value: string };
+  /**
+   * When the semantic answer is rendered by a text/icon leaf, this points to
+   * the observed control that actually owns the interaction.
+   */
+  clickableAncestorObservedElementId?: string;
+  /** Text Gemini says is visibly rendered inside the selected bounds. */
+  visualText?: string;
+  /** Semantic meaning of an icon-only control inferred from the screenshot. */
+  visualDescription?: string;
+  /** Candidate-specific screenshot bounds, used only to correlate to a real node. */
+  visualBounds?: { x: number; y: number; width: number; height: number };
 }
 
 // ── semantic AI provider (item 19) ───────────────────────────────────────────
 
 export interface SemanticDiscoveryResponse {
+  /** Ranked best-first proposals. Runtime may reject one by outcome and try the next. */
+  candidates?: AiElementCandidate[];
+  /** Backward-compatible best candidate for older providers/callers. */
   candidate?: AiElementCandidate;
   /** Number of tokens used — tracked for budget. */
   tokensUsed?: number;
@@ -52,6 +66,9 @@ export interface LlmProvider {
 // ── vision provider (item 20) ─────────────────────────────────────────────────
 
 export interface VisionDiscoveryResponse {
+  /** Ranked best-first visual proposals. */
+  candidates?: AiElementCandidate[];
+  /** Backward-compatible best candidate. */
   candidate?: AiElementCandidate;
   /** Bounding box coordinates the model identified (screenshot pixels). */
   bounds?: { x: number; y: number; width: number; height: number };

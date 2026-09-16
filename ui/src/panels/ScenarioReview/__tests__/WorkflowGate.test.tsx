@@ -101,8 +101,35 @@ describe('WorkflowGate', () => {
     );
     await userEvent.click(await screen.findByRole('button', { name: /Hoàn thành kịch bản/ }));
 
-    await waitFor(() => expect(sent).toEqual({ runId: 'wf-1' }));
+    await waitFor(() => expect(sent).toEqual({ runId: 'wf-1', appSource: 'device' }));
     await waitFor(() => expect(router.state.location.pathname).toBe('/studio'));
+  });
+
+  it('cho phép đổi sang bản build đã tải lên trước khi chạy tiếp', async () => {
+    let sent: unknown = null;
+    server.use(
+      questions(0),
+      http.post(STREAM_ROUTES.workflowComplete, async ({ request }) => {
+        sent = await request.json();
+        return sse([['done', { ok: true }]]);
+      }),
+    );
+    await renderWithRouter(
+      <WorkflowGate
+        runs={[run({
+          status: 'waiting_review',
+          execution: { platforms: ['web', 'android'], appSource: 'device' },
+        })]}
+      />,
+      { path: '/scenarios' },
+    );
+
+    const user = userEvent.setup();
+    await user.click(await screen.findByRole('combobox', { name: 'Nguồn app cho lần chạy' }));
+    await user.click(await screen.findByRole('option', { name: 'Bản build đã tải lên' }));
+    await user.click(screen.getByRole('button', { name: /Hoàn thành kịch bản/ }));
+
+    await waitFor(() => expect(sent).toEqual({ runId: 'wf-1', appSource: 'upload' }));
   });
 });
 

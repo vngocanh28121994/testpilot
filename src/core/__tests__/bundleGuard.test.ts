@@ -20,6 +20,10 @@ const script = readFileSync('scripts/bundle-farm.sh', 'utf8');
 const guard = script.slice(script.indexOf("node -e '"), script.indexOf("\n'", script.indexOf("node -e '")));
 
 describe('cổng đóng gói farm', () => {
+  it('loại runner trùng đã bị xóa khỏi source khỏi ZIP', () => {
+    assert.match(script, /rm -f "\$STAGE\/dist\/run\.js"/);
+  });
+
   it('chỉ xét element mà kịch bản có dùng', () => {
     assert.match(guard, /const used = \(e\) =>/);
     assert.match(guard, /return used\(e\);/);

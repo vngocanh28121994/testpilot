@@ -1,9 +1,14 @@
 import { existsSync } from 'node:fs';
 import { mkdir, readdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
+import { EVIDENCE_GROUPS, KNOWN_ISSUE_GROUP, sortEvidenceTimeline } from './evidenceView.js';
 import { chaptersOf, isWholeRunRecording, testWindowSeconds, type Chapter } from './videoIndex.js';
 import type { RunReport, ScenarioResult } from '../core/types.js';
 import type { FlakeVerdict } from '../flaky/detector.js';
+
+/** Lets history upgrade old static HTML once when the report renderer changes. */
+export const REPORT_RENDER_VERSION = '4';
+export const REPORT_RENDER_MARKER = `<meta name="testpilot-report-version" content="${REPORT_RENDER_VERSION}">`;
 
 /**
  * A report exists to answer three questions in order:
@@ -97,13 +102,16 @@ function render(
   knownIssues: ReadonlyMap<string, string>,
 ): string {
   const byKey = new Map(verdicts.map((v) => [`${v.scenarioId}::${v.platform}::${v.device}`, v]));
+  const isKnownFailure = (result: ScenarioResult) =>
+    result.verdict === 'failed' && knownIssues.has(result.scenario.id);
   const counts = {
     passed: report.results.filter((r) => r.verdict === 'passed').length
       + recoveredCount(report, 'passed'),
     flaky: report.results.filter((r) => r.verdict === 'flaky').length
       + recoveredCount(report, 'flaky'),
-    failed: report.results.filter((r) => r.verdict === 'failed').length
+    failed: report.results.filter((r) => r.verdict === 'failed' && !isKnownFailure(r)).length
       + recoveredCount(report, 'failed'),
+    known: report.results.filter(isKnownFailure).length,
     interrupted: report.interruption?.activeScenario ? 1 : 0,
     notRun: report.interruption?.notRun.length ?? 0,
   };
@@ -111,6 +119,7 @@ function render(
   return `<!doctype html>
 <html lang="en"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+${REPORT_RENDER_MARKER}
 <title>TestPilot — ${esc(report.runId)}</title>
 <style>
   :root { color-scheme: light dark; --bg:#fff; --fg:#111; --muted:#666; --line:#e5e5e5;
@@ -140,6 +149,7 @@ function render(
   .ki-on{font-size:.72rem;padding:.1rem .5rem;border-radius:999px;
          background:#fdf6e3;color:#9a6b00;border:1px solid #e5d7a3;white-space:nowrap}
   .passed b{color:var(--pass)} .failed b{color:var(--fail)} .flaky b{color:var(--flake)}
+  .known b{color:var(--flake)}
   .interrupted b,.not-run b{color:var(--flake)}
   h2 { font-size:1.05rem; margin:2rem 0 .75rem; }
   table { width:100%; border-collapse:collapse; font-size:.875rem; }
@@ -147,7 +157,7 @@ function render(
   th { color:var(--muted); font-weight:600; }
   .wrap { overflow-x:auto; }
   .tag { font-size:.75rem; padding:.1rem .45rem; border-radius:999px; border:1px solid var(--line); }
-  .v-passed{color:var(--pass)} .v-failed{color:var(--fail)} .v-flaky{color:var(--flake)}
+  .v-passed{color:var(--pass)} .v-failed{color:var(--fail)} .v-flaky,.v-known{color:var(--flake)}
   .v-interrupted,.v-not-run{color:var(--flake)}
   /* A healed step succeeded, so it is not red — but it leaned on a spare
      locator, which is worth noticing rather than reading as a plain pass. */
@@ -156,7 +166,23 @@ function render(
      which is exactly what an uncoloured cell would do. */
   .v-unverified{color:#d19a66}
   details { border:1px solid var(--line); border-radius:8px; padding:.6rem .8rem; margin:.4rem 0; background:var(--card); }
+  details.evidence-failed { border-color:color-mix(in srgb,var(--fail) 42%,var(--line)); }
+  details.evidence-known { border-color:color-mix(in srgb,var(--flake) 42%,var(--line)); }
+  details.evidence-passed { border-color:color-mix(in srgb,var(--pass) 30%,var(--line)); }
   summary { cursor:pointer; }
+  .evidence-head { display:flex; gap:.5rem; align-items:center; flex-wrap:wrap; }
+  .evidence-head:hover { color:var(--fg); }
+  .evidence-head:focus-visible { outline:2px solid var(--flake); outline-offset:4px; border-radius:4px; }
+  .evidence-action { display:inline-flex; align-items:center; gap:.3rem; margin-left:auto;
+                     color:var(--flake); font-size:.78rem; font-weight:600; white-space:nowrap; }
+  .evidence-chevron { display:inline-block; font-size:1.1rem; line-height:1; transition:transform .16s ease; }
+  details[open] > .evidence-head .evidence-chevron { transform:rotate(90deg); }
+  .evidence-badge { flex:none; border-radius:5px; padding:.08rem .4rem; font-size:.65rem;
+                    font-weight:700; letter-spacing:.02em; }
+  .evidence-badge.failed { color:var(--fail); background:color-mix(in srgb,var(--fail) 11%,transparent); }
+  .evidence-badge.known { color:var(--flake); background:color-mix(in srgb,var(--flake) 11%,transparent); }
+  .evidence-badge.passed { color:var(--pass); background:color-mix(in srgb,var(--pass) 11%,transparent); }
+  .known-note { color:var(--flake); }
   code { font:13px/1.4 ui-monospace,SFMono-Regular,Menlo,monospace; }
   /* Wrapping, not scrolling. The useful half of a resolver error is the
      "Tried: <candidates>" tail, and behind a horizontal scrollbar inside an
@@ -188,8 +214,7 @@ function render(
      it stays 0x0 — the thumbnail locks itself out. */
   height: 260px; width: auto; max-width: 100%; object-fit: contain;
 }
-.fail-head { display:flex; gap:.5rem; align-items:baseline; flex-wrap:wrap; }
-.fail-head .where { color:var(--muted); font-size:.85rem; font-weight:400; }
+.evidence-head .where { color:var(--muted); font-size:.85rem; font-weight:400; }
 .chapters { list-style:none; margin:8px 0 0; padding:0; max-width:520px; }
 .chapters li { margin:0; }
 .chapters button {
@@ -218,6 +243,7 @@ ${interruptionSummary(report)}
   <div class="tile passed"><b>${counts.passed}</b>passed</div>
   <div class="tile flaky"><b>${counts.flaky}</b>flaky</div>
   <div class="tile failed"><b>${counts.failed}</b>failed</div>
+  ${counts.known > 0 ? `<div class="tile known"><b>${counts.known}</b>known issue</div>` : ''}
   ${report.status === 'interrupted'
     ? `<div class="tile interrupted"><b>${counts.interrupted}</b>interrupted</div>
   <div class="tile not-run"><b>${report.interruption?.source === 'checkpoint' ? counts.notRun : '?'}</b>not run</div>`
@@ -242,14 +268,16 @@ ${interruptedRows(report)}
 
 ${quarantine(report)}
 
-<h2>Failures</h2>
-${failureDetails(report, outDir)}
+<h2>${EVIDENCE_GROUPS[0].title}</h2>
+${failureDetails(report, outDir, knownIssues)}
 
-<h2>Bằng chứng kịch bản xanh</h2>
+${knownIssueDetails(report, outDir, knownIssues)}
+
+<h2>${EVIDENCE_GROUPS[1].title}</h2>
 ${passingDetails(report, outDir)}
 
-<h2>Bản ghi màn hình</h2>
-${recordings(report.results, outDir)}
+<h2>Bản ghi toàn bộ thiết bị</h2>
+${recordings()}
 
 <h2>Locator healing — this run</h2>
 ${heals(report)}
@@ -304,14 +332,30 @@ function interruptedRows(report: RunReport): string {
   return [...recovered, ...active, ...notRun].join('\n');
 }
 
-function failureDetails(report: RunReport, outDir: string): string {
+function failureDetails(
+  report: RunReport,
+  outDir: string,
+  knownIssues: ReadonlyMap<string, string>,
+): string {
   const legacy = report.interruption?.logRecoveredResults?.filter((result) => result.verdict === 'failed') ?? [];
-  if (legacy.length === 0) return failures(report.results, outDir);
+  if (legacy.length === 0) return failures(report.results, outDir, knownIssues, false);
   return `<div class="warn">
   <p><strong>${legacy.length} scenario failed.</strong> Run này có trước cơ chế checkpoint nên chỉ
      khôi phục được verdict từ log; step detail không còn đủ để dựng lại an toàn.</p>
   <ul>${legacy.map((result) => `<li>${esc(result.name)}</li>`).join('')}</ul>
 </div>`;
+}
+
+function knownIssueDetails(
+  report: RunReport,
+  outDir: string,
+  knownIssues: ReadonlyMap<string, string>,
+): string {
+  const count = report.results.filter((result) =>
+    result.verdict === 'failed' && knownIssues.has(result.scenario.id)).length;
+  if (count === 0) return '';
+  return `<h2>${KNOWN_ISSUE_GROUP.title}</h2>
+${failures(report.results, outDir, knownIssues, true)}`;
 }
 
 function passingDetails(report: RunReport, outDir: string): string {
@@ -361,12 +405,13 @@ function unverified(report: RunReport): string {
     return '<p class="empty">Mọi hành động trong lượt chạy này đều có bằng chứng thay đổi.</p>';
   }
   return `<div class="wrap"><table>
-<thead><tr><th>Scenario</th><th>Bước</th><th>Dòng</th></tr></thead>
+<thead><tr><th>Scenario</th><th>Hành động</th><th>Vì sao chưa có bằng chứng</th><th>Dòng</th></tr></thead>
 <tbody>
 ${rows
   .map(({ scenario, step }) => `<tr>
   <td>${esc(scenario)}</td>
   <td class="v-unverified">${esc(step.step.text)}</td>
+  <td>${esc(step.unverifiedReason ?? 'Không quan sát được thay đổi do chính hành động này tạo ra.')}</td>
   <td>${step.step.line}</td>
 </tr>`)
   .join('\n')}
@@ -399,16 +444,24 @@ function row(r: ScenarioResult, v?: FlakeVerdict, knownIssueNote?: string): stri
   // nó là một dòng xanh không ai chất vấn.
   const chuaChungMinh = (r.runs.at(-1)?.steps ?? [])
     .filter((st) => st.status === 'unverified').length;
+  const lyDoChuaChungMinh = (r.runs.at(-1)?.steps ?? [])
+    .find((st) => st.status === 'unverified')?.unverifiedReason;
   const canhBao = chuaChungMinh
-    ? ` <span class="v-unverified" title="Bước bấm không chứng minh được là nó đã thay đổi điều gì">`
-      + `⚠ ${chuaChungMinh} bước chưa chứng minh</span>`
+    ? ` <span class="v-unverified" title="${esc(lyDoChuaChungMinh ?? 'Không quan sát được thay đổi do hành động tạo ra')}">`
+      + `⚠ ${chuaChungMinh} hành động chưa có bằng chứng thay đổi</span>`
     : '';
+  // The raw execution verdict remains `failed` in report.json for diagnosis,
+  // but the user-facing classification is Known issue once that exact scenario
+  // content has been approved as such. Showing both "Known issue" and "failed"
+  // in the same row contradicts the separated totals and evidence sections.
+  const shownVerdict = knownIssueNote !== undefined ? 'known issue' : r.verdict;
+  const verdictClass = knownIssueNote !== undefined ? 'known' : r.verdict;
   return `<tr>
   <td>${name}${canhBao}${flakeTag}</td>
   <td class="ki-col">${mark}</td>
   <td>${esc(r.platform)}</td>
   <td>${esc(r.device)}</td>
-  <td class="v-${r.verdict}">${r.verdict}</td>
+  <td class="v-${verdictClass}">${shownVerdict}</td>
   <td>${rate}</td>
   <td>${r.runs.length}</td>
 </tr>`;
@@ -469,8 +522,12 @@ function hasDetail(): boolean {
  * test mà chỉ chứng minh được phần hỏng của mình thì phần xanh chỉ là lời hứa.
  */
 function proofs(results: ScenarioResult[], outDir: string): string {
-  const good = results.filter((r) => r.verdict === 'passed');
+  const good = sortEvidenceTimeline(
+    results.filter((r) => r.verdict === 'passed'),
+    scenarioStartedAt,
+  );
   if (good.length === 0) return '<p class="empty">Không có kịch bản nào xanh.</p>';
+  const group = EVIDENCE_GROUPS[1];
 
   return good
     .map((r) => {
@@ -483,6 +540,7 @@ function proofs(results: ScenarioResult[], outDir: string): string {
       // thật — đúng thứ khiến một kết quả xanh đáng ngờ.
       const said = (last?.steps ?? []).filter((st) => st.evidence || st.status === 'unverified');
       const shot = last?.proof ? assetHref(outDir, last.proof) : '';
+      const videos = videoFigures(r, outDir);
       const rows = said
         .map((st) => `<tr>
     <td><code>${esc(st.step.keyword)} ${esc(st.step.text)}</code></td>
@@ -490,22 +548,34 @@ function proofs(results: ScenarioResult[], outDir: string): string {
     <td>${st.evidence?.saw ? esc(st.evidence.saw) : '<span class="empty">—</span>'}</td>
   </tr>`)
         .join('\n');
-      return `<details id="${detailAnchor(r)}">
-  <summary><strong>${esc(r.scenario.name)}</strong> — ${esc(r.platform)}/${esc(r.device)}</summary>
+      return `<details id="${detailAnchor(r)}" class="evidence-passed">
+  <summary class="evidence-head"><span class="evidence-badge passed">${group.badge}</span><strong>${esc(r.scenario.name)}</strong><span class="where">${esc(r.platform)}/${esc(r.device)}</span>${evidenceAction()}</summary>
   ${rows
     ? `<div class="wrap"><table>
 <thead><tr><th>Bước</th><th>Khớp bằng</th><th>Đọc được</th></tr></thead>
 <tbody>${rows}</tbody></table></div>`
     : '<p class="empty">Kịch bản này không có bước assert nào để ghi lại.</p>'}
-  ${shot ? `<div class="media"><figure class="shot"><figcaption><b>${esc(r.scenario.name)}</b><span class="shot-what">Trạng thái lúc kết thúc — bấm để xem cỡ thật</span></figcaption><a href="${esc(shot)}" target="_blank"><img src="${esc(shot)}" loading="lazy" alt="Trạng thái cuối — ${esc(r.scenario.name)}"></a></figure></div>` : ''}
+  ${shot || videos ? `<div class="media">${shot ? `<figure class="shot"><figcaption><b>${esc(r.scenario.name)}</b><span class="shot-what">Bằng chứng tại bước kiểm tra cuối — bấm để xem cỡ thật</span></figcaption><a href="${esc(shot)}" target="_blank"><img src="${esc(shot)}" loading="lazy" alt="Bằng chứng kiểm tra — ${esc(r.scenario.name)}"></a></figure>` : ''}${videos}</div>` : ''}
 </details>`;
     })
     .join('\n');
 }
 
-function failures(results: ScenarioResult[], outDir: string): string {
-  const bad = results.filter((r) => r.verdict !== 'passed');
-  if (bad.length === 0) return '<p class="empty">Nothing failed.</p>';
+function failures(
+  results: ScenarioResult[],
+  outDir: string,
+  knownIssues: ReadonlyMap<string, string>,
+  onlyKnown: boolean,
+): string {
+  const bad = sortEvidenceTimeline(
+    results.filter((r) => {
+      const known = r.verdict === 'failed' && knownIssues.has(r.scenario.id);
+      return r.verdict !== 'passed' && known === onlyKnown;
+    }),
+    scenarioStartedAt,
+  );
+  if (bad.length === 0) return '<p class="empty">Không có case fail thực sự.</p>';
+  const group = onlyKnown ? KNOWN_ISSUE_GROUP : EVIDENCE_GROUPS[0];
 
   // One device per run is the normal case, so repeating it on every row is
   // noise that pushes the scenario name — the thing you are scanning for — onto
@@ -528,6 +598,7 @@ function failures(results: ScenarioResult[], outDir: string): string {
           label: st.step.text.replace(/^I take a screenshot named "(.*)"$/i, '$1'),
         }));
       const where = manyDevices ? `<span class="where">${esc(r.platform)}/${esc(r.device)}</span>` : '';
+      const knownNote = onlyKnown ? knownIssues.get(r.scenario.id) : undefined;
       // Mỗi ảnh tự nói nó thuộc kịch bản nào.
       //
       // Tên kịch bản có ở tiêu đề khối, nhưng cuộn xuống tới ảnh là nó đã ra
@@ -538,8 +609,9 @@ function failures(results: ScenarioResult[], outDir: string): string {
 
       // Only the first is expanded: a run with ten failures should open as a
       // list you can scan, not as ten screenshots you have to scroll past.
-      return `<details id="${detailAnchor(r)}"${i === 0 ? ' open' : ''}>
-  <summary class="fail-head"><strong>${i + 1}/${bad.length} ${esc(r.scenario.name)}</strong>${where}</summary>
+      return `<details id="${detailAnchor(r)}" class="evidence-${onlyKnown ? 'known' : 'failed'}"${i === 0 ? ' open' : ''}>
+  <summary class="evidence-head fail-head"><span class="evidence-badge ${onlyKnown ? 'known' : 'failed'}">${group.badge}</span><strong>${i + 1}/${bad.length} ${esc(r.scenario.name)}</strong>${where}${evidenceAction()}</summary>
+  ${knownNote !== undefined ? `<p class="known-note"><strong>Lý do:</strong> ${esc(knownNote)}</p>` : ''}
   ${step ? `<p><code>${esc(step.step.keyword)} ${esc(step.step.text)}</code> — line ${step.step.line}</p>
   <pre>${esc(step.error?.message ?? '')}</pre>` : '<p class="empty">No failing step recorded.</p>'}
   <div class="media">
@@ -550,6 +622,19 @@ function failures(results: ScenarioResult[], outDir: string): string {
 </details>`;
     })
     .join('\n');
+}
+
+/** Giữ cùng affordance với nhóm ảnh trong UI React ở mọi report HTML tĩnh. */
+function evidenceAction(): string {
+  return '<span class="evidence-action">Xem/ẩn chi tiết <span class="evidence-chevron" aria-hidden="true">›</span></span>';
+}
+
+/** The first real attempt is the evidence's position in the run timeline. */
+function scenarioStartedAt(result: ScenarioResult): number {
+  const starts = result.runs
+    .map((run) => Date.parse(run.startedAt))
+    .filter(Number.isFinite);
+  return starts.length > 0 ? Math.min(...starts) : Number.POSITIVE_INFINITY;
 }
 
 /**
@@ -569,33 +654,17 @@ function videoFigures(r: ScenarioResult, outDir: string): string {
 }
 
 /**
- * Every recording of the run, in one section.
+ * Slot for the device-level recording of the whole run.
  *
- * There used to be two: per-scenario videos here, and the device's own screen
- * recording under its own heading further down. They ended up next to each
- * other saying opposite things — "No recordings for passing scenarios" directly
- * above a recording. A reader does not care which component produced a video.
- *
- * The device recording does not exist yet when this renders (it is a Device
- * Farm artifact, produced after the run ends), so the marker below is where
- * appendDeviceVideos splices it into this same section later.
+ * Per-scenario videos live inside their scenario details alongside screenshots
+ * and step evidence. Only a recording that spans several scenarios belongs in
+ * a separate section, because its chapters—not one scenario name—are its index.
+ * The Device Farm artifact does not exist yet when this renders, so the marker
+ * below is where appendDeviceVideos splices it later.
  */
-function recordings(results: ScenarioResult[], outDir: string): string {
-  const withVideo = results.filter((r) => r.verdict === 'passed' && r.runs.some((x) => x.video));
-  const perScenario = withVideo
-    .map(
-      (r) => `<details>
-  <summary><strong>${esc(r.scenario.name)}</strong> — ${esc(r.platform)}/${esc(r.device)}</summary>
-  <div class="media">${videoFigures(r, outDir)}</div>
-</details>`,
-    )
-    .join('\n');
-
-  const empty =
-    perScenario === ''
-      ? `<p class="empty" ${EMPTY_ATTR}>Chưa có bản ghi nào cho lượt chạy này.</p>`
-      : '';
-  return `${perScenario}\n<div class="media">${DEVICE_SLOT}</div>\n${empty}`;
+function recordings(): string {
+  return `<div class="media">${DEVICE_SLOT}</div>
+<p class="empty" ${EMPTY_ATTR}>Lượt chạy này không có video toàn bộ thiết bị.</p>`;
 }
 
 /** Where appendDeviceVideos splices in, and the note it has to clear. */

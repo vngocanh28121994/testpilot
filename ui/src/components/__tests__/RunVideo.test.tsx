@@ -57,6 +57,30 @@ describe('RunVideo', () => {
     expect(el.currentTime).toBeCloseTo(34.2 + 62.5, 1);
   });
 
+  it('sắp chapter theo timeline và hiện thời gian thật trong video', () => {
+    const unordered = {
+      ...report,
+      chapters: [
+        { name: 'Case cuối', status: 'passed', at: 62.5 },
+        { name: 'Case đầu', status: 'passed', at: 0 },
+        { name: 'Case giữa', status: 'failed', at: 14.9 },
+      ],
+    };
+    const view = render(<RunVideo url={unordered.wholeVideoUrls[0]!} report={unordered} />);
+    const el = view.container.querySelector('video')!;
+    Object.defineProperty(el, 'duration', { value: 150, configurable: true });
+    el.play = vi.fn().mockResolvedValue(undefined);
+    act(() => { el.dispatchEvent(new Event('loadedmetadata')); });
+
+    const buttons = screen.getAllByRole('button');
+    expect(buttons.map((button) => button.textContent)).toEqual([
+      '00:34●Case đầu',
+      '00:49●Case giữa',
+      '01:36●Case cuối',
+    ]);
+    expect(view.container.querySelector('ol')?.className).toContain('grid');
+  });
+
   /**
    * Clip riêng của một kịch bản vốn đã bắt đầu ở đúng chỗ của nó — nhảy tiếp là
    * nhảy qua mất phần đầu.

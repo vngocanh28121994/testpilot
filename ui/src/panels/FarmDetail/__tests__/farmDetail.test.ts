@@ -29,6 +29,29 @@ describe('màn chi tiết farm', () => {
     expect(farm).not.toMatch(/<video /);
   });
 
+  it('nói rõ khi lịch sử còn nhưng thư mục artifact đã mất', () => {
+    expect(farm).toMatch(/Report, ảnh và video đã bị dọn khỏi máy chủ này/);
+    expect(farm).toMatch(/missingReportIds/);
+    // Lý do, không chỉ hiện tượng: thư mục mất là do chính sách lưu trữ bên
+    // này xoá, nên câu chữ phải nói ra điều đó thay vì để người đọc nghi AWS.
+    expect(farm).toMatch(/chính sách lưu trữ/);
+  });
+
+  /**
+   * Người chạy TestPilot mở trình duyệt, không mở terminal trong thư mục repo.
+   * Một câu lệnh npm ở đây là ngõ cụt với đúng người đang nhìn vào nó.
+   */
+  it('khôi phục bằng nút bấm chứ không bằng câu lệnh npm', () => {
+    expect(farm).not.toMatch(/npm run farm:pull/);
+    expect(farm).toMatch(/STREAM_ROUTES\.farmPull/);
+    expect(farm).toMatch(/Tải lại từ AWS/);
+  });
+
+  /** Không có ARN thì không hỏi AWS được — nói ra, đừng hiện nút chết. */
+  it('chỉ hiện nút khi log còn ARN của run', () => {
+    expect(farm).toMatch(/farmArn \? </);
+  });
+
   /** Một lưới ảnh, hai màn dùng: lệch nhau lần nữa là lại mất công so sánh. */
   it('hai màn dùng chung một lưới ảnh', () => {
     expect(history).toMatch(/<RunShots report=\{report\}/);

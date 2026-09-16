@@ -112,6 +112,43 @@ describe('registry deltas across parallel runs', () => {
 });
 
 describe('mergeRunLearnings', () => {
+  it('applies rejected-locator tombstones after merging parallel learnings', async () => {
+    const shared = await Registry.load(registryPath);
+    shared.upsertElement({
+      ...shared.element('login.submitButton'),
+      candidates: {
+        web: [{ strategy: 'label', value: 'add', weight: 0.6, origin: 'healed', approved: false }],
+      },
+    });
+    await shared.save();
+
+    const runsRoot = path.join(dir, 'runs');
+    const runDir = path.join(runsRoot, 'run-rejected');
+    await mkdir(runDir, { recursive: true });
+    await writeLearned(runDir, {
+      registry: { version: 1, screens: {}, elements: {} },
+      runtime: { version: 1, entries: {} },
+      rejections: [{
+        elementId: 'login.submitButton', platform: 'web', strategy: 'label', value: 'add',
+      }],
+    });
+    await writeFile(path.join(runDir, 'report.json'), JSON.stringify({ report: { results: [] } }));
+
+    await mergeRunLearnings({
+      runDirs: [runDir],
+      runsRoot,
+      registryPath,
+      runtimeRegistryPath: path.join(dir, 'runtime.json'),
+      flakeDbPath: path.join(dir, 'flake.json'),
+      healingDbPath: path.join(dir, 'healing.json'),
+      flakePolicy: DEFAULT_FLAKE_POLICY,
+    });
+
+    const merged = JSON.parse(await readFile(registryPath, 'utf8')) as ElementRegistry;
+    const values = merged.elements['login.submitButton']?.candidates.web?.map((candidate) => candidate.value);
+    assert.deepEqual(values, ['button.btn-login']);
+  });
+
   it('folds every run directory in and reports the ones that carried nothing', async () => {
     const runsRoot = path.join(dir, 'runs');
     const dirs: string[] = [];

@@ -114,6 +114,7 @@ export function PrereqTools({ platform }: { platform: 'android' | 'ios' }) {
       {(restart.logs.length > 0 || install.logs.length > 0) && (
         <LogView
           logs={[...restart.logs, ...install.logs]}
+          active={restart.status === 'running' || install.status === 'running'}
           className="max-h-40"
           label="Log công cụ"
         />

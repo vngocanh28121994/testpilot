@@ -38,7 +38,7 @@ const PATH_FIELDS = [
 
 type PathKey = (typeof PATH_FIELDS)[number][0];
 
-const PAGE_DESCRIPTION = 'Khoá, kết nối và đường dẫn dùng chung cho cả workspace.';
+const PAGE_DESCRIPTION = 'Khoá, kết nối và cấu hình riêng của user hiện tại.';
 
 /** Một dòng trạng thái chỉ đọc trong thẻ Hệ thống. */
 function StatusRow({ label, children }: { label: string; children: React.ReactNode }) {
@@ -152,15 +152,16 @@ function SettingsForm({
           <CardHeader>
             <CardTitle id="system-status-title">Hệ thống</CardTitle>
             <CardDescription>
-              Trạng thái chỉ đọc, đọc từ config đang nạp. Không sửa được ở đây.
+              Profile được tách theo user đang chạy TestPilot trên máy này.
             </CardDescription>
           </CardHeader>
           <CardContent>
             <ul className="flex flex-col divide-y">
-              <StatusRow label="File config">
-                <code className="text-muted-foreground truncate font-mono text-xs">
-                  {state.configFile}
-                </code>
+              <StatusRow label="Cấu hình cá nhân">
+                <span className="text-muted-foreground text-xs">{state.configProfile.owner}</span>
+                <Badge variant="secondary">
+                  {state.configProfile.source === 'environment' ? 'Tuỳ chỉnh bằng môi trường' : 'Profile riêng'}
+                </Badge>
               </StatusRow>
               <StatusRow label="Anthropic API key">
                 {state.hasApiKey ? (

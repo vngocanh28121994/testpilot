@@ -1,7 +1,7 @@
 import { existsSync } from 'node:fs';
 import { readdir, readFile, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
-import { Registry } from './registry.js';
+import { Registry, type RegistryCandidateRejection } from './registry.js';
 import { RuntimeRegistry } from '../discovery/RuntimeRegistry.js';
 import { FlakeDetector, type FlakePolicy } from '../flaky/detector.js';
 import { HealingStore } from '../healing/HealingStore.js';
@@ -27,6 +27,8 @@ export interface LearnedFromRun {
   /** Not the registry as it now stands — only what this run added to it. */
   registry: ElementRegistry;
   runtime: RuntimeRegistryData;
+  /** Learned locators disproved by their action outcome. Rejections win merges. */
+  rejections?: RegistryCandidateRejection[];
 }
 
 export const LEARNED_FILE = 'learned.json';
@@ -90,6 +92,15 @@ export async function mergeRunLearnings(opts: {
       try {
         const learned = JSON.parse(await readFile(learnedFile, 'utf8')) as LearnedFromRun;
         registry.mergeFrom(learned.registry);
+        for (const rejected of learned.rejections ?? []) {
+          registry.rejectCandidate(rejected.elementId, rejected.platform, {
+            strategy: rejected.strategy,
+            value: rejected.value,
+            ...(rejected.name ? { name: rejected.name } : {}),
+            weight: 0,
+            origin: 'healed',
+          });
+        }
         runtime.mergeFrom(learned.runtime);
         summary.elementsMerged += Object.keys(learned.registry.elements ?? {}).length;
         summary.runtimeEntriesMerged += Object.keys(learned.runtime.entries ?? {}).length;

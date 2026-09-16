@@ -72,6 +72,40 @@ describe('the Playwright driver', () => {
 });
 
 /**
+ * A successful-transfer assertion first inspected an old dialog locator. The
+ * read closed the success toast belonging to the fallback locator, which then
+ * saw it only during its leave animation; the screenshot contained the reset
+ * form instead of the proof. Inspection must never mutate what it is proving.
+ */
+describe('inspectMatches preserves the verification moment', () => {
+  for (const [name, source] of [
+    ['the WebView driver', cdp],
+    ['the Playwright driver', web],
+  ] as const) {
+    it(`${name} does not dismiss overlays while reading`, () => {
+      const body = bodyOf(source, 'inspectMatches');
+      assert.doesNotMatch(body, /this\.clearOverlays\s*\(/);
+      assert.doesNotMatch(body, /this\.popupInterceptor\.clear\s*\(/);
+      assert.doesNotMatch(body, /this\.dismissOverlay\s*\(/);
+    });
+  }
+});
+
+describe('collection focus semantics', () => {
+  for (const [name, source] of [
+    ['the WebView driver', cdp],
+    ['the Playwright driver', web],
+  ] as const) {
+    it(`${name} recognises product highlight state`, () => {
+      const body = bodyOf(source, 'inspectMatches');
+      assert.match(body, /:focus-within/);
+      assert.match(body, /\.highlight/);
+      assert.match(body, /\[aria-pressed="true"\]/);
+    });
+  }
+});
+
+/**
  * Reading a dropdown that is still rendering.
  *
  * Material fills its panel progressively, so the first non-empty reading can be

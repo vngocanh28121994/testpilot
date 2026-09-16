@@ -31,7 +31,7 @@ export default function RunnerHistoryPanel({ runId }: { runId?: string }) {
   const missing = Boolean(wanted) && !report;
 
   return (
-    <AppShell title="Chi tiết lượt chạy local">
+    <AppShell title="Chi tiết kết quả kiểm thử">
       {/*
         Mỗi lượt chạy phải TỰ NHẬN DẠNG ĐƯỢC.
 
@@ -81,6 +81,7 @@ export default function RunnerHistoryPanel({ runId }: { runId?: string }) {
               >
                 <span className="font-medium tabular-nums">{when(item.startedAt)}</span>
                 <StatusPill status={item.status} />
+                <span className="text-muted-foreground">{reportSource(item.kind)}</span>
                 <span className="text-muted-foreground">{item.platform}</span>
                 <span className="text-muted-foreground truncate">{item.tag ?? 'tất cả tag'}</span>
                 <span className="ms-auto tabular-nums">
@@ -110,4 +111,23 @@ export default function RunnerHistoryPanel({ runId }: { runId?: string }) {
   );
 }
 
-function ReportDetail({ report }: { report: ReportView }) { return <section className="mt-4"><div className="flex gap-2"><StatusPill status={report.status}/><a href={report.url} target="_blank" rel="noreferrer" className="text-sm underline">Mở report</a></div><iframe title={`Report ${report.id}`} src={report.url} className="border-border mt-3 h-[550px] w-full rounded border"/><RunShots report={report}/>{report.networkLogUrl && <LazyLog url={report.networkLogUrl} summary="Network log" label="Network log" className="max-h-72"/>}{report.hasLog && <LazyLog url={`${ROUTES.runLog}?id=${encodeURIComponent(report.id)}`} label="Log lượt chạy" className="max-h-72"/>}</section>; }
+function reportSource(kind: string | undefined): string {
+  if (kind === 'farm') return 'Device Farm';
+  if (kind === 'run') return 'Local Runner';
+  return 'Lượt chạy';
+}
+
+function ReportDetail({ report }: { report: ReportView }) {
+  return <section className="mt-4">
+    <div className="flex flex-wrap items-center gap-2">
+      <StatusPill status={report.status}/>
+      <span className="bg-muted text-muted-foreground rounded-full px-2 py-0.5 text-xs font-medium">{reportSource(report.kind)}</span>
+      <span className="text-muted-foreground text-sm">{report.platform}</span>
+      <a href={report.url} target="_blank" rel="noreferrer" className="text-sm underline">Mở report HTML</a>
+    </div>
+    <iframe title={`Report ${report.id}`} src={report.url} className="border-border mt-3 h-[550px] w-full rounded border"/>
+    <RunShots report={report}/>
+    {report.networkLogUrl && <LazyLog url={report.networkLogUrl} summary="Network log" label="Network log" className="max-h-72"/>}
+    {report.hasLog && <LazyLog url={`${ROUTES.runLog}?id=${encodeURIComponent(report.id)}`} label="Log lượt chạy" className="max-h-72"/>}
+  </section>;
+}

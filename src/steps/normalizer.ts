@@ -27,7 +27,7 @@ export interface NaturalStepResult {
  * grammar. This deliberately does not guess an element id: resolving the
  * quoted reference remains the registry's responsibility.
  */
-export function normalizeNaturalSteps(content: string): NaturalStepResult {
+export function normalizeNaturalSteps(content: string, registry?: Registry): NaturalStepResult {
   const changes: NaturalStepChange[] = [];
   const unresolved: Array<{ line: number; text: string }> = [];
   const lines = content.replace(/\r\n/g, '\n').split('\n');
@@ -43,7 +43,8 @@ export function normalizeNaturalSteps(content: string): NaturalStepResult {
     const indent = match[1] ?? '';
     const keyword = match[2] ?? '';
     const original = match[3] ?? '';
-    const steps = canonicalStep(original.trim()).split('\n').map((step) => step.trim()).filter(Boolean);
+    const steps = canonicalStep(original.trim(), previousNormalizedStep(normalized), registry)
+      .split('\n').map((step) => step.trim()).filter(Boolean);
     if (steps.join('\n') !== original.trim()) {
       changes.push({
         line: i + 1,
@@ -330,7 +331,7 @@ function camel(value: string): string {
     .map((word) => word[0]!.toUpperCase() + word.slice(1).toLowerCase()).join('');
 }
 
-function canonicalStep(text: string): string {
+function canonicalStep(text: string, previousStep?: string, registry?: Registry): string {
   // These are launch primitives, not semantic click targets. Keep deep links
   // intact even though the concise navigation grammar below also uses "open".
   if (/^I open (?:the app|"[^"]+")$/iu.test(text)) return text;
@@ -339,6 +340,13 @@ function canonicalStep(text: string): string {
   // them back into a raw click.
   if (/^I am logged in as "[^"]+"$/iu.test(text)) return text;
   if (/^I open feature "[^"]+" from search$/iu.test(text)) return text;
+  const openDropdown = previousStep ? openedDropdownTarget(previousStep, registry) : undefined;
+  if (openDropdown && /^(?:I|tôi|người dùng)\s+chọn\s+(?:(?:1|một)\s+)?(?:danh mục|giá trị|lựa chọn|option)?\s*bất kỳ$/iu.test(text)) {
+    return `I select any option from "${openDropdown}"`;
+  }
+  if (openDropdown && /^(?:I|tôi|người dùng)\s+chọn\s+(?:danh mục|giá trị|lựa chọn|option)?\s*mặc định$/iu.test(text)) {
+    return `I select the default option from "${openDropdown}"`;
+  }
   const quoted = '"([^\"]+)"';
   const rules: Array<[RegExp, (m: RegExpMatchArray) => string]> = [
     [
@@ -450,6 +458,31 @@ function canonicalStep(text: string): string {
     }
   }
   return text;
+}
+
+function previousNormalizedStep(lines: string[]): string | undefined {
+  for (let index = lines.length - 1; index >= 0; index--) {
+    const match = lines[index]?.match(/^\s*(?:Given|When|Then|And|But)\s+(.+)$/iu);
+    if (match) return match[1]!.trim();
+  }
+  return undefined;
+}
+
+function openedDropdownTarget(step: string, registry?: Registry): string | undefined {
+  const match = step.match(/^I (?:tap|click) "(?:mở|open)\s+(?:dropdown|danh sách)\s+(.+)"$/iu);
+  const namedTarget = match?.[1]?.trim();
+  if (!namedTarget || !registry) return namedTarget;
+  const wanted = normalizeHumanText(namedTarget);
+  const dropdown = Object.values(registry.raw.elements).find((element) => {
+    const names = [element.label, ...(element.aliases ?? [])].map(normalizeHumanText);
+    if (!names.some((name) => name.includes(wanted))) return false;
+    return element.controlType === 'select'
+      || Object.values(element.candidates).flat().some(
+        (candidate) => candidate?.strategy === 'role'
+          && ['combobox', 'listbox'].includes(candidate.value.toLowerCase()),
+      );
+  });
+  return dropdown?.label ?? namedTarget;
 }
 
 /** Remove syntax/UI filler while keeping the business name users recognise. */

@@ -47,6 +47,28 @@ describe('nguồn app của một lượt chạy', () => {
     assert.match(parallel, /'--app-source', args\.appSource/);
   });
 
+  it('bản build tải lên được cài thật trên thiết bị', () => {
+    assert.match(server, /appSource === 'upload' && platform !== 'web' \? \['--reinstall'\]/);
+    assert.match(server, /appSource === 'upload' \? \['--reinstall'\]/);
+  });
+
+  it('workflow chạy đồng thời các nền tảng local', () => {
+    assert.match(studio, /const PLATFORMS = \['web', 'android', 'ios'\] as const/);
+    assert.match(server, /Promise\.all\(execution\.platforms\.map\(async \(platform\)/);
+  });
+
+  it('workflow song song cô lập shared writes rồi chỉ gộp một lần', () => {
+    assert.match(server, /const deferSharedWrites = execution\.platforms\.length > 1/);
+    assert.match(server, /deferSharedWrites \? \['--defer-shared-writes'\] : \[\]/);
+    assert.match(server, /localOutcomes\.flatMap\(\(outcome\) => outcome\.runDirs\)/);
+    assert.match(server, /await mergeRunLearnings\(\{/);
+  });
+
+  it('lượt chạy riêng lẻ giữ nguyên cơ chế ghi dữ liệu hiện tại', () => {
+    assert.match(server, /deferSharedWrites = false/);
+    assert.match(server, /execution\.platforms\.length > 1/);
+  });
+
   it('hai màn chạy đều hỏi, và mặc định là bản có sẵn trên thiết bị', () => {
     for (const [name, source] of [['Local Runner', runner], ['Studio', studio]] as const) {
       assert.match(source, /Nguồn app/, `${name} phải hỏi nguồn app`);

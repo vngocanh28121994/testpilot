@@ -40,6 +40,7 @@ export interface ElementVerifier {
     intent: ElementIntent,
     candidate: ObservedElement,
     allElements?: ObservedElement[],
+    opts?: { allowExactTextProxy?: boolean; visualTextEvidence?: string },
   ): ElementVerification;
 }
 
@@ -48,6 +49,7 @@ export class StandardElementVerifier implements ElementVerifier {
     intent: ElementIntent,
     candidate: ObservedElement,
     allElements: ObservedElement[] = [],
+    opts: { allowExactTextProxy?: boolean; visualTextEvidence?: string } = {},
   ): ElementVerification {
     const checks: VerificationChecks = { exists: true, visible: candidate.visible };
     const evidence: string[] = [];
@@ -74,10 +76,17 @@ export class StandardElementVerifier implements ElementVerifier {
       }
     }
 
+    const exactTextProxy = opts.allowExactTextProxy === true
+      && intent.action === 'tap'
+      && candidate.visible
+      && isUnique(candidate, allElements)
+      && hasExactSemanticName(intent, candidate);
     if (actionRequiresInteractive(intent.action)) {
-      checks.interactive = candidate.interactive !== false;
-      if (candidate.interactive === false) {
+      checks.interactive = candidate.interactive !== false || exactTextProxy;
+      if (candidate.interactive === false && !exactTextProxy) {
         evidence.push('element is not interactive');
+      } else if (exactTextProxy) {
+        evidence.push('exact unique text leaf accepted as a proxy for bounded outcome validation');
       }
     }
 
@@ -95,10 +104,16 @@ export class StandardElementVerifier implements ElementVerifier {
     if (intent.label != null) {
       const candidateText =
         candidate.accessibilityLabel ?? candidate.text ?? candidate.placeholder ?? '';
-      checks.labelMatch = textMatch(candidateText, intent.label) !== 'none';
+      const visualMatch = opts.visualTextEvidence != null
+        && textMatch(opts.visualTextEvidence, intent.label) !== 'none';
+      checks.labelMatch = textMatch(candidateText, intent.label) !== 'none' || visualMatch;
       if (!checks.labelMatch) {
         evidence.push(
           `label mismatch: expected "${intent.label}", element has "${candidateText || '(empty)'}"`,
+        );
+      } else if (visualMatch && textMatch(candidateText, intent.label) === 'none') {
+        evidence.push(
+          `visual text evidence "${opts.visualTextEvidence}" supplements incomplete UI-tree text "${candidateText || '(empty)'}"`,
         );
       }
     }
@@ -164,6 +179,23 @@ function elementSignature(e: ObservedElement): string {
     .filter((v): v is string => v != null)
     .map((v) => v.toLowerCase())
     .join('|');
+}
+
+function isUnique(candidate: ObservedElement, all: ObservedElement[]): boolean {
+  if (all.length <= 1) return true;
+  const sig = elementSignature(candidate);
+  return all.filter(
+    (element) => element.id !== candidate.id
+      && element.visible !== false
+      && elementSignature(element) === sig,
+  ).length === 0;
+}
+
+function hasExactSemanticName(intent: ElementIntent, candidate: ObservedElement): boolean {
+  const wanted = intent.text ?? intent.label;
+  if (!wanted) return false;
+  return [candidate.accessibilityLabel, candidate.text, candidate.placeholder]
+    .some((value) => value != null && textMatch(value, wanted) === 'exact');
 }
 
 function actionRequiresEnabled(action: ActionKind): boolean {

@@ -52,6 +52,41 @@ function assertAliasesUnique(raw: ElementRegistry): void {
   }
 }
 
+/**
+ * Khoá lịch sử thắng của một locator. Phải là DANH TÍNH của locator, không phải
+ * một phần của nó.
+ *
+ * Khoá này từng là `${strategy}:${value}`, bỏ mất `name` — trong khi chính kho
+ * mã này nói thẳng ở chỗ khác rằng "role alone is not identity". Hậu quả đo
+ * được trên registry thật: `role=button name="Đăng nhập"`,
+ * `name="CHUYỂN"` và `name="QUAY LẠI"` cùng ghi vào một khoá `role:button`,
+ * gộp 235 lần thắng của 6 element khác nhau thành một con số vô nghĩa.
+ *
+ * Sai này không chỉ làm bẩn báo cáo. Mọi suy luận "locator nào đã chứng minh
+ * được gì" đều đọc từ đây — kể cả cổng chặn bấm mơ hồ, vốn cho một locator đi
+ * qua khi nó từng thắng. Một `role=button` chưa bao giờ thắng cho element này
+ * vẫn trông như đã thắng 235 lần.
+ */
+export function winnerKey(candidate: LocatorCandidate, recordedValue?: string): string {
+  const value = recordedValue ?? candidate.runtimeTemplateValue ?? candidate.value;
+  return candidate.name ? `${candidate.strategy}:${value}:${candidate.name}` : `${candidate.strategy}:${value}`;
+}
+
+/**
+ * Locator này đã chứng minh được kết quả cho element này bao nhiêu lần.
+ *
+ * Đọc được cả khoá cũ (không có `name`) để dữ liệu đã tích luỹ không mất trắng
+ * khi đổi định dạng — nhưng CHỈ khi ứng viên không có `name`. Một ứng viên có
+ * `name` mà đọc sang khoá cũ thì lại đúng bằng cái nhầm vừa sửa.
+ */
+export function provenWins(element: ElementDef, candidate: LocatorCandidate): number {
+  const winners = element.health?.winners ?? {};
+  const exact = winners[winnerKey(candidate)];
+  if (exact !== undefined) return exact;
+  if (candidate.name) return 0;
+  return winners[`${candidate.strategy}:${candidate.runtimeTemplateValue ?? candidate.value}`] ?? 0;
+}
+
 export class Registry {
   /**
    * The registry exactly as it was read from disk.
@@ -62,6 +97,8 @@ export class Registry {
    * shared starting point once per device. See `changesSinceLoad()`.
    */
   private readonly baseline: ElementRegistry;
+  /** Outcome-invalid runtime candidates removed during this run. */
+  private readonly rejectedCandidates: RegistryCandidateRejection[] = [];
 
   private constructor(
     private readonly path: string,
@@ -186,8 +223,8 @@ export class Registry {
     const health = (el.health ??= { resolutions: 0, heals: 0, winners: {} });
     health.resolutions += 1;
     const recordedValue = winner.runtimeTemplateValue ?? winner.value;
-    const key = `${winner.strategy}:${recordedValue}`;
-    health.winners[key] = (health.winners[key] ?? 0) + 1;
+    health.winners[winnerKey(winner, recordedValue)] =
+      (health.winners[winnerKey(winner, recordedValue)] ?? 0) + 1;
 
     const list = el.candidates[platform] ?? [];
     if (list[0] && (
@@ -197,6 +234,45 @@ export class Registry {
       health.heals += 1;
       health.lastHealedAt = new Date().toISOString();
     }
+  }
+
+  /**
+   * Remove a machine-learned candidate after the action outcome disproves it.
+   * Authored and human-approved locators are deliberately immutable here: a
+   * flaky screen must never silently erase a selector supplied by a person.
+   */
+  rejectCandidate(id: string, platform: Platform, rejected: LocatorCandidate): boolean {
+    const element = this.element(id);
+    const list = element.candidates[platform] ?? [];
+    const next = list.filter((candidate) => !(
+      candidate.origin === 'healed'
+      && candidate.approved !== true
+      && candidate.strategy === rejected.strategy
+      && candidate.value === rejected.value
+      && candidate.name === rejected.name
+    ));
+    if (next.length === list.length) return false;
+    element.candidates[platform] = next;
+    if (!this.rejectedCandidates.some((item) =>
+      item.elementId === id
+      && item.platform === platform
+      && item.strategy === rejected.strategy
+      && item.value === rejected.value
+      && item.name === rejected.name)) {
+      this.rejectedCandidates.push({
+        elementId: id,
+        platform,
+        strategy: rejected.strategy,
+        value: rejected.value,
+        ...(rejected.name ? { name: rejected.name } : {}),
+      });
+    }
+    return true;
+  }
+
+  /** Tombstones consumed by the coordinator when several device runs merge. */
+  rejectionsSinceLoad(): RegistryCandidateRejection[] {
+    return structuredClone(this.rejectedCandidates);
   }
 
   /** Promote a human-approved healed locator to primary for one platform. */
@@ -341,6 +417,14 @@ export class Registry {
   async save(): Promise<void> {
     await writeFile(this.path, JSON.stringify(this.data, null, 2) + '\n', 'utf8');
   }
+}
+
+export interface RegistryCandidateRejection {
+  elementId: string;
+  platform: Platform;
+  strategy: LocatorCandidate['strategy'];
+  value: string;
+  name?: string;
 }
 
 /**

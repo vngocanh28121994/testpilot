@@ -20,7 +20,9 @@ import { collectFarmRun, listRuns as listFarmRuns } from '../farm/devicefarm.js'
 async function main(): Promise<void> {
   const argv = process.argv.slice(2);
   const at = argv.indexOf('--arn');
-  const cfg = await loadConfig(argv.includes('--config') ? argv[argv.indexOf('--config') + 1]! : 'testpilot.config.json');
+  const cfg = await loadConfig(
+    argv.includes('--config') ? argv[argv.indexOf('--config') + 1]! : process.env.TESTPILOT_CONFIG,
+  );
 
   let arn = at >= 0 ? argv[at + 1] : undefined;
   if (!arn) {
@@ -45,7 +47,9 @@ async function main(): Promise<void> {
   );
 
   console.log(`[farm] status=${result.status} result=${result.result}`);
-  console.log(`[farm] counters ${JSON.stringify(result.counters)}`);
+  console.log(
+    `[farm] AWS lifecycle counters (không phải testcase TestPilot) ${JSON.stringify(result.counters)}`,
+  );
   // A failed run is a successful pull: the point is to have the evidence, and
   // exiting non-zero here would make a recovery look like a broken tool.
 }

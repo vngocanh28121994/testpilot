@@ -19,6 +19,7 @@
  */
 
 import type { ElementIntent } from './ElementIntent.js';
+import { isContainerElement } from './UiObservation.js';
 import type { ObservedElement, UiObservation } from './UiObservation.js';
 import { ConfidenceScorer, type MatchScore } from './ConfidenceScorer.js';
 
@@ -102,7 +103,7 @@ export class DeterministicMatcher implements ElementMatcher {
 }
 
 /** Derive the most stable locator from what the platform exposed. */
-function bestLocator(
+export function bestLocator(
   el: ObservedElement,
   platform: UiObservation['platform'],
 ): { strategy: string; value: string } | undefined {
@@ -116,7 +117,7 @@ function bestLocator(
   // virtual table). Matching only a leaf node avoids the ancestor-text trap;
   // the ambiguity and verification gates still run before this locator is
   // accepted or persisted.
-  if (platform === 'web' && el.text && !el.childIds?.length) {
+  if (platform === 'web' && el.text && !isContainerElement(el)) {
     return {
       strategy: 'xpath',
       value: `//*[not(*) and normalize-space(.)=${xpathLiteral(el.text)}]`,

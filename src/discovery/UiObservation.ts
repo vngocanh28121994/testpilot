@@ -54,6 +54,22 @@ export interface ObservedElement {
   parentId?: string;
   /** Child element ids within this observation. */
   childIds?: string[];
+  /**
+   * Phần tử này bọc phần tử khác, tức chữ của nó là chữ của cả cây con.
+   *
+   * Tồn tại song song với `childIds` vì không phải nguồn quan sát nào cũng
+   * đánh được id cho con. Bản quét DOM là một nguồn như vậy: nó thấy rõ node
+   * có con hay không, nhưng không phát id cho từng con — nên trước đây nó
+   * không có cách nào nói ra điều đó, và mọi phần tử nó trả về đều trông như
+   * một lá.
+   *
+   * Hai lớp bảo vệ đọc thuộc tính này, và cả hai cùng im lặng khi nó thiếu:
+   * ConfidenceScorer trừ điểm container, còn ElementMatcher chỉ dựng locator
+   * theo chữ cho một lá. Đo ngày 2026-09-15: tầng AI nhận về một ứng viên có
+   * chữ là "closeĐầu tư nối tiếpĐặc quyền ưu đãiĐược..." — nguyên một cây con
+   * nối lại — và phải tự từ chối bằng heuristic ở tầng cuối.
+   */
+  container?: boolean;
   /** Extra platform-specific attributes (not covered above). */
   attributes?: Record<string, string>;
 }
@@ -81,4 +97,17 @@ export interface UiObservation {
   screenshot?: { path?: string; width?: number; height?: number };
   /** Raw page source / DOM for debugging and offline replay. */
   rawSource?: string;
+}
+
+/**
+ * Phần tử có bọc phần tử khác không — hỏi một lần, ở một chỗ.
+ *
+ * Hai cách diễn đạt cùng tồn tại hợp lệ: cây native/MCP đánh id cho con, bản
+ * quét DOM chỉ nói có/không. Trước khi gộp lại thành câu hỏi này, mỗi nơi tự
+ * hỏi `childIds.length > 0`, nên nguồn nào không phát id thì mọi container của
+ * nó lọt lưới — kể cả `observedToUiObservation`, chỗ tự gán `childIds: []` cho
+ * đúng những phần tử nó biết là container.
+ */
+export function isContainerElement(element: Pick<ObservedElement, 'childIds' | 'container'>): boolean {
+  return element.container === true || (element.childIds?.length ?? 0) > 0;
 }

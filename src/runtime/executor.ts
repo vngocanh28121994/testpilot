@@ -15,6 +15,7 @@ import {
   type ResolveOptions,
   type Resolution,
 } from './resolver.js';
+import { provenWins } from '../core/registry.js';
 import type { ActionKind } from '../discovery/ElementIntent.js';
 import { extractErrorCode, TestPilotError, TestPilotErrorCode } from '../core/ErrorCodes.js';
 import {
@@ -25,6 +26,8 @@ import { performAdaptiveInput } from '../drivers/controlClassifier.js';
 import { normalizeHumanText } from '../core/text.js';
 import { parseDisplayedNumber } from '../core/number.js';
 import { sameDate } from '../drivers/datePicker.js';
+import { resolveDropdownOption } from '../drivers/dropdownSelection.js';
+import { waitForExactSearchResult } from './searchResult.js';
 
 export interface ExecutorOptions {
   /** Extra attempts after the first failure. 1 is enough to classify flakiness. */
@@ -97,6 +100,19 @@ const HEALING_PROBE_LIMIT = 20;
 const DEFAULT_POSTCONDITION_TIMEOUT_MS = 12_000;
 
 /**
+ * Steps whose outcome is evidence about the product, rather than an action.
+ *
+ * The `assert` prefix deliberately makes future assertion intents opt in
+ * automatically. `waitFor` and `focusRegion` predate that naming convention,
+ * so they are the two explicit compatibility entries.
+ */
+export function isVerificationIntent(intent: Intent): boolean {
+  return intent.kind.startsWith('assert')
+    || intent.kind === 'waitFor'
+    || intent.kind === 'focusRegion';
+}
+
+/**
  * Thời gian tối thiểu dành cho lượt resolve có discovery ở cuối một
  * postcondition hụt.
  *
@@ -105,7 +121,7 @@ const DEFAULT_POSTCONDITION_TIMEOUT_MS = 12_000;
  * thì nó không kịp sinh ra ứng viên nào, và lượt chạy trả về "after 1 attempts"
  * y như thể không có discovery.
  */
-const MIN_DISCOVERY_BUDGET_MS = 6_500;
+const MIN_DISCOVERY_BUDGET_MS = 8_500;
 
 interface ActionExpectation {
   elementId: string;
@@ -113,6 +129,8 @@ interface ActionExpectation {
   state: 'visible' | 'absent';
   action: ActionKind;
   source: string;
+  /** The next assertion proves the action semantically, after it executes. */
+  verification?: 'deferred';
 }
 
 export class Executor {
@@ -123,6 +141,10 @@ export class Executor {
    * attach the previous screenshot to whatever ran next.
    */
   private lastShot?: string;
+  /** Latest assertion image, captured while the asserted state is still visible. */
+  private lastAssertionProof?: string;
+  /** Unique screenshot stem for the assertion currently being evaluated. */
+  private assertionShotStem?: string;
   /**
    * Ảnh nhánh thoát vừa chụp, để bước hỏng ngay sau đó khỏi chụp lại.
    *
@@ -132,6 +154,15 @@ export class Executor {
    * cho một bức ảnh, và report hiện nó hai lần liền nhau.
    */
   private lastDeclinedShot?: { path: string; at: number };
+  /**
+   * Chữ vừa được gõ vào một ô, còn hiệu lực cho đúng bước kế tiếp.
+   *
+   * Sống một bước thôi là cố ý: "gõ X rồi bấm kết quả" là một cặp, còn "gõ X
+   * rồi bấm Lưu" thì chữ X không nói gì về nút Lưu. Xem anchorToTypedQuery().
+   */
+  private typedQuery?: string;
+  /** Chữ ấy trong phạm vi bước đang chạy — xem execute(). */
+  private pendingQuery?: string;
   /**
    * Bằng chứng của bước assert vừa chạy: locator thắng và chữ đọc được.
    *
@@ -146,6 +177,8 @@ export class Executor {
    * needs it to grade the step, but it is produced deep inside the tap path.
    */
   private lastUnverified = false;
+  /** Exact causal gap behind `lastUnverified`, for reports and diagnostics. */
+  private lastUnverifiedReason?: string;
   /** Controls tapped so far in the scenario, for step healing. */
   private tappedSoFar: Array<{ elementId: string; label: string }> = [];
   /** Set when a scenario fails after an earlier step proved nothing. */
@@ -210,7 +243,8 @@ export class Executor {
       // explicit stops a later edit from moving the collection down here.
       const healingObservation = this.takeHealingObservation();
       const failed = stepResults.some((s) => s.status === 'failed');
-      // Một ảnh cho mỗi kịch bản xanh, chụp ở trạng thái cuối.
+      // Prefer the latest assertion image: that is the state that made the
+      // scenario green. Toasts and open dropdowns may be gone by scenario end.
       //
       // Ca đỏ xưa nay có ảnh, cây DOM và video; ca xanh chỉ có chữ "passed".
       // Phải chụp TRƯỚC `endScenario` — hàm đó đóng trang, và ảnh chụp sau khi
@@ -218,7 +252,8 @@ export class Executor {
       // ở handler bước hỏng nên ở đây chỉ lo phần xanh.
       const proof = failed
         ? undefined
-        : await this.driver.screenshot?.(`${scenario.id}-a${attempt}-pass`).catch(() => undefined);
+        : this.lastAssertionProof
+          ?? await this.driver.screenshot?.(`${scenario.id}-a${attempt}-pass`).catch(() => undefined);
       const video = await this.driver.endScenario?.(`${scenario.id}-a${attempt}`);
 
       runs.push({
@@ -271,6 +306,23 @@ export class Executor {
     return this.runSteps(steps, id, 1);
   }
 
+  /**
+   * Freeze the screen at the assertion, not after the scenario.
+   *
+   * A successful toast and an opened dropdown are both deliberately
+   * short-lived. The old end-of-scenario/failure-handler screenshots therefore
+   * documented the state after the proof had disappeared. Keeping the image on
+   * `lastShot` also lets a failing step reuse this exact frame instead of taking
+   * a second, later one.
+   */
+  private async captureAssertionState(): Promise<void> {
+    if (!this.assertionShotStem || !this.driver.screenshot) return;
+    const shot = await this.driver.screenshot(this.assertionShotStem).catch(() => undefined);
+    if (!shot) return;
+    this.lastShot = shot;
+    this.lastAssertionProof = shot;
+  }
+
   private async runSteps(
     steps: StepSpec[],
     scenarioId: string,
@@ -283,6 +335,8 @@ export class Executor {
     this.tappedSoFar = [];
     this.lastHealingObservation = undefined;
     this.remembered.clear();
+    this.lastAssertionProof = undefined;
+    this.assertionShotStem = undefined;
 
     for (let index = 0; index < steps.length; index++) {
       const step = steps[index]!;
@@ -292,7 +346,9 @@ export class Executor {
       }
       const t0 = Date.now();
       this.lastShot = undefined;
+      this.assertionShotStem = `${scenarioId}-a${attempt}-l${step.line}-pass`;
       this.lastUnverified = false;
+      this.lastUnverifiedReason = undefined;
       // Xoá ở ĐẦU mỗi bước, không chỉ sau khi gắn: một bước hỏng giữa chừng mà
       // để sót bằng chứng của bước trước thì report gán nhầm chứng cứ cho bước
       // sai — tệ hơn hẳn việc không có chứng cứ.
@@ -304,23 +360,61 @@ export class Executor {
         const expectedLabel = expectation
           ? this.resolver.registry.element(expectation.elementId).label
           : undefined;
+        const previousStep = [...steps.slice(0, index)]
+          .reverse()
+          .find((candidate) => candidate.intent.kind !== 'screenshot');
+        const assertedValues = semanticValuesFromIntent(step.intent)
+          .map((value) => this.expand(value));
         const heal = await this.execute(
           step.intent,
           expectation,
-          [...activeContext, ...(expectedLabel ? [expectedLabel] : [])].slice(-3),
+          [
+            ...activeContext,
+            ...(previousStep ? [`Bước trước: ${previousStep.text}`] : []),
+            `Bước hiện tại: ${step.text}`,
+            ...(expectedLabel ? [`Phần tử kết quả: ${expectedLabel}`] : []),
+            ...(expectation ? [`Kết quả cần chứng minh: ${expectation.source}`] : []),
+            ...assertedValues,
+          ].slice(-6),
           activeContext.at(-1),
         );
+        // Central safety net for every verification kind. Most assertion
+        // branches capture earlier, beside the value/list they evaluate, so
+        // transient UI is still present. This fallback covers early-return
+        // paths such as a postcondition already proven by the preceding action,
+        // and automatically covers future `assert*` intents.
+        if (isVerificationIntent(step.intent) && !this.lastShot) {
+          await this.captureAssertionState();
+        }
         results.push({
           step,
-          // `healed` outranks `unverified`: a heal is the more actionable fact,
-          // and a healed step is reported as such today.
-          status: heal ? 'healed' : this.lastUnverified ? 'unverified' : 'passed',
+          // Causal proof outranks locator telemetry. A step may find a fresh
+          // locator and still fail to prove that its action changed anything;
+          // hiding that behind `healed` recreates the same false-green result.
+          // The `heal` payload remains attached, so no diagnostic is lost.
+          status: this.lastUnverified ? 'unverified' : heal ? 'healed' : 'passed',
           durationMs: Date.now() - t0,
           attempts: 1,
           ...(heal ? { heal } : {}),
           ...(this.lastShot ? { screenshot: this.lastShot } : {}),
           ...(this.lastEvidence ? { evidence: this.lastEvidence } : {}),
+          ...(this.lastUnverifiedReason ? { unverifiedReason: this.lastUnverifiedReason } : {}),
         });
+        // A numerical delta can only be evaluated after the tap has returned.
+        // When it passes, it is stronger proof of the preceding action than a
+        // visibility probe: the business value changed by exactly the amount
+        // the scenario required. Upgrade only the immediately preceding
+        // meaningful step; a screenshot between them is observational and
+        // does not break the causal chain.
+        if (step.intent.kind === 'assertNumberDelta') {
+          confirmTapProvenByNumberDelta(results, step);
+        }
+        if (
+          step.intent.kind === 'assertCollection'
+          && step.intent.check.kind === 'focused'
+        ) {
+          confirmTapProvenByFocusedState(results, step);
+        }
         this.lastEvidence = undefined;
         if (step.intent.kind === 'tap' && 'element' in step.intent) {
           const def = this.resolver.registry.element(step.intent.element);
@@ -345,9 +439,10 @@ export class Executor {
         const conNong = this.lastDeclinedShot
           && Date.now() - this.lastDeclinedShot.at < DECLINED_SHOT_REUSE_MS;
         const shot = this.opts.screenshotOnFailure
-          ? (conNong
+          ? (this.lastShot
+            ?? (conNong
             ? this.lastDeclinedShot!.path
-            : await this.driver.screenshot(stem).catch(() => undefined))
+            : await this.driver.screenshot(stem).catch(() => undefined)))
           : undefined;
         this.lastDeclinedShot = undefined;
         // Captured beside the screenshot, not instead of it: the picture shows
@@ -456,6 +551,80 @@ export class Executor {
     return [value.trim()];
   }
 
+  /**
+   * Cú bấm ngay sau một lần gõ phải trúng thứ phản ánh chữ vừa gõ.
+   *
+   * "Kết quả tìm kiếm đầu tiên" là một locator khớp MỌI lựa chọn trong panel,
+   * nên cái được bấm là cái driver bắt gặp trước — và panel của một
+   * autocomplete thì đổi sau chữ gõ vào, không đổi cùng lúc. Trong khoảng trễ
+   * ấy, lựa chọn còn sót lại từ truy vấn trước vẫn nằm nguyên đó và vẫn bấm
+   * được.
+   *
+   * Đo trên máy thật ngày 2026-09-16: kịch bản gõ "VIC", bấm kết quả đầu tiên,
+   * và thêm mã EVS vào danh mục. Lỗi ấy còn sống được lâu vì assertion kiểm
+   * "dòng đầu tiên là VIC" mà VIC vốn đã nằm sẵn ở đầu danh sách — cú bấm sai
+   * không đổi được kết quả kiểm tra, cho tới hôm mã sai chen lên trước nó.
+   *
+   * Cơ chế này đã có sẵn trong `waitForExactSearchResult` và chạy đúng, nhưng
+   * chỉ cho ô tìm tính năng ở Home. Ở đây nó thành luật chung cho mọi bước gõ
+   * rồi bấm.
+   *
+   * Hai điều kiện thu hẹp phạm vi, và cả hai đều cần:
+   *
+   *   - locator khớp NHIỀU phần tử. Một nút "Lưu" khớp đúng một cái thì chữ
+   *     vừa gõ chẳng liên quan gì tới nó, và neo vào đó sẽ chặn oan.
+   *   - chữ vừa gõ còn hiệu lực đúng một bước, nên "gõ rồi làm việc khác" cũng
+   *     không bị neo.
+   *
+   * Không tìm được thì CHỜ, không bấm đại: panel chưa kịp đổi là trạng thái
+   * tạm, và bấm trong lúc đó chính là lỗi đang sửa. Hết giờ thì hỏng có địa
+   * chỉ, kèm những gì đang thực sự hiện ra.
+   */
+  private async anchorToTypedQuery(
+    actionLabel: string,
+    resolution: Resolution,
+    matches: UiMatchSnapshot | undefined,
+  ): Promise<UiHandle> {
+    const query = this.pendingQuery;
+    if (!query || !matches || matches.count <= 1) return resolution.handle;
+
+    const wanted = normalizeHumanText(query);
+    const reflects = (texts: string[]) =>
+      texts.some((text) => normalizeHumanText(text).includes(wanted));
+    if (matches.texts.length > 0 && reflects(matches.texts)) {
+      const narrowed = await this.driver
+        .find({ ...resolution.candidate, runtimeText: query })
+        .catch(() => null);
+      if (narrowed) return narrowed;
+    }
+
+    const deadline = Date.now()
+      + (this.opts.postconditionTimeoutMs ?? DEFAULT_POSTCONDITION_TIMEOUT_MS);
+    let seen = matches.texts;
+    console.log(
+      `[flow:wait] "${actionLabel}": đang chờ kết quả phản ánh "${query}"…`,
+    );
+    while (Date.now() < deadline) {
+      await sleep(TRANSIENT_POLL_MS);
+      const narrowed = await this.driver
+        .find({ ...resolution.candidate, runtimeText: query })
+        .catch(() => null);
+      if (narrowed && await narrowed.isVisible().catch(() => false)) {
+        console.log(`[flow:wait] "${actionLabel}": đã thấy kết quả cho "${query}".`);
+        return narrowed;
+      }
+      const fresh = this.driver.inspectMatches
+        ? await this.driver.inspectMatches(resolution.candidate).catch(() => undefined)
+        : undefined;
+      if (fresh?.texts.length) seen = fresh.texts;
+    }
+
+    throw new Error(
+      `Không bấm "${actionLabel}": không có kết quả nào phản ánh "${query}" `
+      + `sau khi đã gõ. Đang hiển thị: ${seen.slice(0, 5).map((t) => JSON.stringify(t.slice(0, 40))).join(', ')}.`,
+    );
+  }
+
   /** The observation gathered by the most recent failing attempt, if any. */
   takeHealingObservation(): StepHealingObservation | undefined {
     const observation = this.lastHealingObservation;
@@ -471,10 +640,19 @@ export class Executor {
     contextAnchor?: string,
   ): Promise<StepResult['heal']> {
     this.executeDepth += 1;
+    // Chữ vừa gõ có hiệu lực đúng MỘT bước, và ranh giới của "một bước" nằm ở
+    // đây chứ không ở từng lần thử lại bên trong một bước: bước hỏng rồi thử
+    // lại vẫn là cùng một cú bấm, nên nó phải được neo y như lần đầu. Bước
+    // tiếp theo — dù là bấm, kiểm tra hay gì khác — bắt đầu với bảng sạch.
+    const carried = this.executeDepth === 1 ? this.typedQuery : this.pendingQuery;
+    if (this.executeDepth === 1) this.typedQuery = undefined;
+    const outerPending = this.pendingQuery;
+    this.pendingQuery = carried;
     try {
       return await this.executeIntent(intent, expectation, semanticContext, contextAnchor);
     } finally {
       this.executeDepth -= 1;
+      this.pendingQuery = this.executeDepth === 0 ? undefined : outerPending;
     }
   }
 
@@ -581,6 +759,17 @@ export class Executor {
           locatorParams: intent.locatorParams,
         });
         const text = this.expand(intent.text);
+        // Chữ vừa gõ là NGỮ CẢNH của bước ngay sau nó — nhưng chỉ khi chính
+        // BƯỚC ấy là lệnh gõ, chứ không phải khi một bước phức hợp tự gõ gì đó
+        // bên trong nó.
+        //
+        // `openFeatureFromSearch` gõ tên tính năng vào ô tìm kiếm của Home rồi
+        // tự chọn kết quả bằng waitForExactSearchResult — xong việc, không còn
+        // gì để neo. Không có điều kiện độ sâu này, "Bảng giá cổ phiếu" rò sang
+        // bước đầu tiên của kịch bản: lượt chạy thật in ra
+        // `"Nút tùy chọn dòng": đang chờ kết quả phản ánh "Bảng giá cổ phiếu"`
+        // rồi chờ đến hết giờ.
+        if (this.executeDepth === 1) this.typedQuery = text.trim() || undefined;
         const element = this.resolver.registry.element(intent.element);
         const typeDelay = element.typeDelay;
         const routed = await performAdaptiveInput(
@@ -666,7 +855,8 @@ export class Executor {
         const { r, heal, confirm } = await withElement(intent.element, 'select', {
           locatorParams: intent.locatorParams,
         });
-        await d.selectOption(r.handle, intent.option);
+        const option = await resolveDropdownOption(d, r.handle, intent.option);
+        await d.selectOption(r.handle, option);
         confirm();
         return heal;
       }
@@ -721,6 +911,7 @@ export class Executor {
         const { heal, confirm } = await withElement(intent.element, 'assert-visible', {
           locatorParams: intent.locatorParams,
         });
+        await this.captureAssertionState();
         confirm();
         return heal;
       }
@@ -731,6 +922,7 @@ export class Executor {
           ...(intent.timeoutMs ? { timeoutMs: intent.timeoutMs } : {}),
           locatorParams: intent.locatorParams,
         });
+        await this.captureAssertionState();
         confirm();
         return heal;
       }
@@ -740,6 +932,7 @@ export class Executor {
         const { heal, confirm } = await withElement(intent.element, 'assert-visible', {
           locatorParams: intent.locatorParams,
         });
+        await this.captureAssertionState();
         confirm();
         return heal;
       }
@@ -748,6 +941,7 @@ export class Executor {
         await this.resolver.resolveAbsent(intent.element, {
           locatorParams: intent.locatorParams,
         });
+        await this.captureAssertionState();
         return undefined;
 
       case 'assertOption': {
@@ -760,7 +954,13 @@ export class Executor {
             + `nên không kiểm tra được "${intent.option}" trong "${intent.element}".`,
           );
         }
-        const options = await this.driver.listOptions(r.handle);
+        // The callback runs after the complete option list is visible and
+        // before listOptions restores a panel it opened. This is the only frame
+        // that can prove which choices were actually offered.
+        const options = await this.driver.listOptions(
+          r.handle,
+          () => this.captureAssertionState(),
+        );
         // `undefined` is "cannot tell", and it must never be read as "no
         // options" — that would make an `absent` assertion pass having checked
         // nothing at all.
@@ -791,7 +991,10 @@ export class Executor {
           const present = await this.resolver.isVisibleNow(intent.element, {
             locatorParams: intent.locatorParams,
           });
-          if (!present) return undefined;
+          if (!present) {
+            await this.captureAssertionState();
+            return undefined;
+          }
           const { r, heal, confirm } = await withElement(intent.element, 'assert-text', {
             locatorParams: intent.locatorParams,
           });
@@ -803,16 +1006,19 @@ export class Executor {
           const unwanted = this.expand(intent.text).trim();
           const offender = snapshot.texts.find((value) => value.trim().includes(unwanted));
           if (offender !== undefined) {
+            await this.captureAssertionState();
             throw new Error(
               `Text assertion failed on "${intent.element}": expected not to contain ` +
                 `"${intent.text.trim()}", but found it in "${offender.trim()}".`,
             );
           }
+          await this.captureAssertionState();
           confirm();
           return heal;
         }
         let { r, heal, confirm } = await withElement(intent.element, 'assert-text', {
           locatorParams: intent.locatorParams,
+          semanticText: this.expand(intent.text),
         });
         // Every match, not just the first — the same reason the negative form
         // above reads them all. A label like "Dòng cổ phiếu trong danh mục"
@@ -848,12 +1054,14 @@ export class Executor {
           const next = await withElement(intent.element, 'assert-text', {
             locatorParams: intent.locatorParams,
             excludeCandidateKeys: rejected,
+            semanticText: this.expand(intent.text),
           }).catch(() => null);
           if (!next) break;
           ({ r, heal, confirm } = next);
           snapshot = await read(r);
         }
         if (snapshot.count === 0) {
+          await this.captureAssertionState();
           throw new Error(
             `"${intent.element}" không còn trên màn hình lúc kiểm tra `
             + `(đã thử ${rejected.length + 1} locator). Không kết luận được về nội dung.`,
@@ -899,11 +1107,15 @@ export class Executor {
           const shown = seen.length > 1
             ? `${seen.length} phần tử, ví dụ "${seen.slice(0, 3).join('" / "')}"`
             : `"${seen[0] ?? ''}"`;
+          await this.captureAssertionState();
           throw new Error(
             `Text assertion failed on "${intent.element}": expected ` +
               `${intent.mode === 'equals' ? '' : 'to contain '}"${intent.text.trim()}", got ${shown}.`,
           );
         }
+        // Capture before confirm/return: a toast can disappear between this
+        // successful comparison and the old scenario-end screenshot.
+        await this.captureAssertionState();
         confirm();
         return heal;
       }
@@ -950,6 +1162,7 @@ export class Executor {
             ? (intent.direction === 'increased' ? delta > 0 : delta < 0)
             : delta === expected;
         if (!ok) {
+          await this.captureAssertionState();
           throw new Error(
             `"${this.resolver.registry.element(intent.element).label}" ${
               intent.direction === 'unchanged' ? 'phải không đổi' :
@@ -960,6 +1173,7 @@ export class Executor {
             + `(chênh lệch ${delta >= 0 ? '+' : ''}${delta}).`,
           );
         }
+        await this.captureAssertionState();
         confirm();
         return heal;
       }
@@ -981,11 +1195,13 @@ export class Executor {
                 ? actual <= expected
               : actual === expected;
         if (!ok) {
+          await this.captureAssertionState();
           throw new Error(
             `Numeric assertion failed on "${intent.element}": value "${actualText}" ` +
               `does not satisfy ${intent.operator} ${expected}.`,
           );
         }
+        await this.captureAssertionState();
         confirm();
         return heal;
       }
@@ -993,6 +1209,7 @@ export class Executor {
       case 'assertCollection': {
         const { r, heal, confirm } = await withElement(intent.element, 'assert-text', {
           locatorParams: intent.locatorParams,
+          ...('text' in intent.check ? { semanticText: this.expand(intent.check.text) } : {}),
         });
         const check = intent.check;
         // Counted once, the moment the rows resolve — which is not the moment
@@ -1012,11 +1229,13 @@ export class Executor {
         }
         const verdict = collectionVerdict(check, snapshot, (value) => this.expand(value));
         if (!verdict.ok) {
+          await this.captureAssertionState();
           throw new Error(
             `Collection assertion failed on "${intent.element}": expected ${verdict.expected}; `
             + verdict.observed,
           );
         }
+        await this.captureAssertionState();
         confirm();
         return heal;
       }
@@ -1061,6 +1280,16 @@ export class Executor {
         }
       }
     }
+
+    // Session restoration may redirect to login before Angular has mounted the
+    // form. Resolving immediately used to exhaust the ordinary step budget just
+    // as the username field appeared in the failure screenshot. Wait for the
+    // login surface once; the input below still performs normal resolution and
+    // verification.
+    await this.resolver.resolve('login.usernameField', {
+      timeoutMs: 20_000,
+      discoveryAction: 'input',
+    });
 
     let firstHeal: StepResult['heal'];
     const remember = (heal: StepResult['heal']) => { firstHeal ??= heal; };
@@ -1139,29 +1368,87 @@ export class Executor {
     const remember = (heal: StepResult['heal']) => { firstHeal ??= heal; };
     let lastError: Error | undefined;
 
+    // A fresh scenario may already be on the requested feature (the account
+    // keeps route state between launches). Do not force it through Home search
+    // merely because the first business assertion is not true yet.
+    if (expectation) {
+      // Before searching, a same-route dialog title is not sufficient proof:
+      // TCInvest keeps every toolbox item (including feature names) mounted in
+      // an off-screen Home drawer. Only an actual next-step locator, URL, or a
+      // stable landmark on a non-Home route may skip navigation here.
+      const landmark = await this.featureScreenLandmark(expectation, false);
+      if (landmark) {
+        console.log(`[flow] tính năng "${query}" đã mở sẵn — nhận diện bằng "${landmark}".`);
+        return firstHeal;
+      }
+    }
+
     // Search navigation is read-only and safe to repeat. TCInvest occasionally
     // closes the result drawer while leaving `/home` blank; one fresh search
     // recovers that transient state without turning every action into a retry.
     for (let attempt = 1; attempt <= 2; attempt++) {
       try {
-        remember(await this.execute({ kind: 'tap', element: 'home.searchBox' }));
+        const searchInputAlreadyOpen = await this.resolver.isVisibleNow('home.searchInput', {
+          discoveryAction: 'input',
+        }).catch(() => false);
+        if (!searchInputAlreadyOpen) {
+          remember(await this.execute({ kind: 'tap', element: 'home.searchBox' }));
+        }
         remember(await this.execute({ kind: 'input', element: 'home.searchInput', text: query }));
-        remember(await this.execute({ kind: 'waitFor', element: 'home.searchFirstResult' }));
+        const result = await waitForExactSearchResult(
+          this.driver,
+          query,
+          this.opts.postconditionTimeoutMs ?? DEFAULT_POSTCONDITION_TIMEOUT_MS,
+          TRANSIENT_POLL_MS,
+        );
         const beforeResultUrl = await this.driver.currentUrl?.().catch(() => '') ?? '';
-        // Clicked through the same locator this just waited on, not by the
-        // query text. Searching "Chuyển tiền" leaves that phrase in seven
-        // visible places on this app — the header toolbox, the home grid behind
-        // the dialog, the screen title — and the text lookup returned all
-        // seven, clicking whichever came first in the DOM. That was the right
-        // one until the home screen changed behind the dialog, and then eight
-        // scenarios in one run failed on this single step.
-        // `home.searchFirstResult` matches exactly one node.
-        remember(await this.execute({ kind: 'tap', element: 'home.searchFirstResult' }));
-        if (await this.featureNavigationSucceeded(beforeResultUrl, expectation)) {
+        const clickStarted = Date.now();
+        try {
+          await this.driver.tap(result.handle);
+        } catch (tapError) {
+          // Closing a late notification/walkthrough can replace Angular's
+          // search-result nodes. The handle was exact when obtained but is now
+          // stale; retrying that object only repeats the timeout. First accept
+          // navigation if the click actually landed, otherwise refresh the
+          // query and acquire the exact result again before one bounded retry.
+          if (await this.featureNavigationSucceeded(
+            beforeResultUrl,
+            expectation,
+            this.opts.postconditionTimeoutMs ?? DEFAULT_POSTCONDITION_TIMEOUT_MS,
+          )) {
+            return firstHeal;
+          }
+          await this.driver.dismissOverlay?.().catch(() => false);
+          remember(await this.execute({ kind: 'input', element: 'home.searchInput', text: query }));
+          const fresh = await waitForExactSearchResult(
+            this.driver,
+            query,
+            this.opts.postconditionTimeoutMs ?? DEFAULT_POSTCONDITION_TIMEOUT_MS,
+            TRANSIENT_POLL_MS,
+          );
+          try {
+            await this.driver.tap(fresh.handle);
+          } catch {
+            throw tapError;
+          }
+        }
+        const clickElapsed = Date.now() - clickStarted;
+        if (clickElapsed >= 500) {
+          console.log(`[timing] click kết quả chính xác "${query}": ${clickElapsed}ms`);
+        }
+        // The destination landmark below is the useful readiness condition.
+        // Waiting for global network/DOM idleness first added a fixed pause on
+        // apps with live prices and telemetry, without proving navigation.
+        if (await this.featureNavigationSucceeded(
+          beforeResultUrl,
+          expectation,
+          this.opts.postconditionTimeoutMs ?? DEFAULT_POSTCONDITION_TIMEOUT_MS,
+        )) {
           return firstHeal;
         }
         throw new Error(
-          `Kết quả tìm kiếm "${query}" đã được click nhưng không đổi màn hình hoặc URL.`,
+          `Đã click đúng kết quả "${query}" nhưng màn hình đích không hiển thị `
+          + `${expectation ? `"${expectation.source}"` : 'bằng chứng nhận diện nào'}.`,
         );
       } catch (err) {
         lastError = err as Error;
@@ -1173,20 +1460,34 @@ export class Executor {
           + `(${lastError.message.split('\n')[0]!.trim().slice(0, 160)}) `
           + '— làm mới thao tác tìm kiếm một lần.',
         );
-        await this.driver.dismissOverlay?.().catch(() => false);
-        await sleep(500);
+        await this.returnToHomeForSearch();
       }
     }
 
     throw lastError ?? new Error(`Không mở được tính năng "${query}" từ tìm kiếm.`);
   }
 
+  /** Put a failed inner retry back on a visibly interactive Home surface. */
+  private async returnToHomeForSearch(): Promise<void> {
+    await this.driver.dismissOverlay?.().catch(() => false);
+    for (let attempt = 0; attempt < 3; attempt++) {
+      if (await this.resolver.isVisibleNow('home.searchInput', {
+        discoveryAction: 'input',
+      }).catch(() => false)) return;
+      if (await this.resolver.isVisibleNow('home.searchBox', {
+        discoveryAction: 'tap',
+      }).catch(() => false)) return;
+      await this.driver.back();
+      await sleep(300);
+    }
+    throw new Error('Không thể quay về Trang chủ để thử lại thao tác tìm kiếm.');
+  }
+
   /**
-   * Prove the search navigation itself, independently from the first action on
-   * the destination screen. A freshly generated next-step element may not have
-   * a locator yet; using it as the sole postcondition made a successful route
-   * change look like a failed search and retried against the now-hidden home
-   * input.
+   * A changed route alone is not proof: the stale-result race changed the route
+   * too, but opened e-voting instead of money transfer. The destination must
+   * expose the element implied by the next business step (or match that
+   * element's authored screen URL when one exists).
    */
   private async featureNavigationSucceeded(
     beforeUrl: string,
@@ -1194,20 +1495,123 @@ export class Executor {
     timeoutMs = 5_000,
   ): Promise<boolean> {
     const started = Date.now();
+    let changedRoute = '';
+    let landmarkChecked = false;
     do {
       const current = await this.driver.currentUrl?.().catch(() => '') ?? '';
       if (routeIdentity(current) && routeIdentity(current) !== routeIdentity(beforeUrl)) {
-        console.log(`[flow] feature route đã mở (${current})`);
-        return true;
+        changedRoute = current;
       }
       if (expectation && await this.resolver.isVisibleNow(expectation.elementId, {
         locatorParams: expectation.locatorParams,
       }).catch(() => false)) {
+        console.log(`[flow] màn hình tính năng đã mở và hiển thị "${expectation.source}"`);
         return true;
+      }
+      if (expectation && current) {
+        const element = this.resolver.registry.element(expectation.elementId);
+        const screen = element.screen ? this.resolver.registry.screen(element.screen) : undefined;
+        if (screen?.urlPattern && current.includes(screen.urlPattern)) {
+          console.log(`[flow] màn hình tính năng đã mở (${current})`);
+          return true;
+        }
+      }
+      // Some TCInvest features are dialogs mounted over `/home`, so their URL
+      // never changes. A selector-less first action (the common state for a new
+      // document) cannot identify the destination yet, but the authored screen
+      // title can. Do not accept the same title while the search drawer is
+      // still open: the exact result row itself contains that text.
+      if (expectation) {
+        const searchStillOpen = await this.resolver.isVisibleNow('home.searchInput', {
+          discoveryAction: 'input',
+        }).catch(() => false);
+        if (!searchStillOpen) {
+          const title = await this.resolver.visibleScreenTitleForElement(
+            expectation.elementId,
+          ).catch(() => undefined);
+          if (title) {
+            console.log(`[flow] màn hình tính năng đã mở — nhận diện bằng tiêu đề "${title}".`);
+            return true;
+          }
+        }
+      }
+      // A screen landmark is deliberately weaker than the exact next
+      // expectation, so on web it is usable only after navigation has actually
+      // left the source route. Price Board's "Cơ sở" tab also exists in a Home
+      // widget; accepting that single word while still on /home skipped the
+      // search and made every following locator fail on the wrong page.
+      if (expectation && changedRoute && !landmarkChecked) {
+        landmarkChecked = true;
+        const landmark = await this.featureScreenLandmark(expectation);
+        if (landmark) {
+          console.log(`[flow] màn hình tính năng đã mở — nhận diện bằng "${landmark}".`);
+          return true;
+        }
       }
       await sleep(100);
     } while (Date.now() - started < timeoutMs);
+    if (changedRoute) {
+      console.warn(`[flow] route đã đổi sang ${changedRoute}, nhưng không có bằng chứng đúng màn hình đích.`);
+    }
     return false;
+  }
+
+  /** Exact expected state first; otherwise a stable landmark on its screen. */
+  private async featureScreenLandmark(
+    expectation: ActionExpectation,
+    allowSameRouteScreenTitle = true,
+  ): Promise<string | undefined> {
+    // Android/iOS hybrid runs expose the same WebView URL and the same search
+    // DOM as web. Limiting this guard to platform === 'web' let a visible
+    // search-result row be mistaken for the destination screen title on
+    // Android, so the runner skipped clicking the result and acted on stale
+    // controls mounted underneath the search drawer.
+    // Ô tìm tính năng còn trên màn hình nghĩa là ta vẫn đang ở chỗ xuất phát,
+    // bất kể đường dẫn nói gì.
+    //
+    // Guard này từng hỏi đường dẫn trước — `isHomeLikeRoute`, tức pathname phải
+    // là `/` hoặc `/home`. Đúng với bản web, và chỉ đúng với bản web. Trong
+    // WebView của bản hybrid (Capacitor/Cordova), ngăn kéo "Tìm tính năng" là
+    // một lớp phủ mở trên route đang có, nên pathname không bao giờ là `/home`,
+    // guard không nổ, và cả nhánh landmark bên dưới chạy ngay giữa màn hình
+    // Home. Đo ngày 2026-09-15: bốn kịch bản liên tiếp kết luận "Bảng giá đã mở
+    // sẵn" trong khi app đứng nguyên ở danh mục tính năng.
+    //
+    // Sự hiện diện của chính ngăn kéo ấy là câu trả lời đúng cho mọi nền tảng:
+    // nó nói về thứ đang hiển thị, không suy diễn từ hình dạng URL của một bản
+    // đóng gói cụ thể.
+    const searchStillOpen = await this.resolver.isVisibleNow('home.searchInput', {
+      discoveryAction: 'input',
+    }).catch(() => false);
+    if (searchStillOpen) return undefined;
+
+    if (this.driver.currentUrl) {
+      const current = await this.driver.currentUrl().catch(() => '');
+      if (isHomeLikeRoute(current)) {
+        // A same-route feature dialog is valid only after the search drawer has
+        // gone. This preserves the Home-widget guard while allowing a newly
+        // authored modal screen to be recognised before its actions have
+        // locators.
+        if (!allowSameRouteScreenTitle) return undefined;
+        return this.resolver.visibleScreenTitleForElement(expectation.elementId)
+          .catch(() => undefined);
+      }
+    }
+    if (await this.resolver.isVisibleNow(expectation.elementId, {
+      locatorParams: expectation.locatorParams,
+    }).catch(() => false)) {
+      return expectation.source;
+    }
+    const element = this.resolver.registry.element(expectation.elementId);
+    if (!element.screen) return undefined;
+    const title = await this.resolver.visibleScreenTitleForElement(expectation.elementId)
+      .catch(() => undefined);
+    if (title) return title;
+    const landmark = await this.resolver.visibleLandmarkOnScreen(
+      element.screen,
+      [expectation.elementId],
+    );
+    return landmark?.label;
   }
 
   /**
@@ -1241,6 +1645,8 @@ export class Executor {
       : definition.label;
     const maxAttempts = retryable ? (this.opts.actionHealingAttempts ?? 4) : 1;
     const excluded = new Set<string>();
+    /** Ứng viên bị loại vì mơ hồ, để thông báo cuối nói được nguyên nhân. */
+    const ambiguous: string[] = [];
     let phaseStarted = Date.now();
     const preResolution = expectation
       ? await this.resolver.visibleResolutionNow(expectation.elementId, {
@@ -1268,6 +1674,16 @@ export class Executor {
       try {
         phaseStarted = Date.now();
         resolved = await withElement(elementId, 'tap', {
+          // Ambiguous discovery candidates may be tried only when this action
+          // has an observable proof path. The executor rejects a candidate whose
+          // postcondition fails and asks Resolver for the next ranked candidate.
+          allowAmbiguousDiscovery: Boolean(
+            expectation && (
+              transitionCanBeProven ||
+              expectation.verification === 'deferred' ||
+              preSnapshot
+            )
+          ),
           ...((locatorParams || rowAction) ? {
             locatorParams: { ...locatorParams, ...rowAction },
           } : {}),
@@ -1282,13 +1698,66 @@ export class Executor {
         // click. "0 candidates after exclusion" is only an implementation
         // detail and must not replace the reason healing started.
         if (lastOutcomeError) break;
+        // Hết ứng viên vì tất cả đều mơ hồ là một chẩn đoán, không phải một
+        // lần hết giờ. Nói ra locator nào và mơ hồ ra sao, vì cách sửa nằm ở
+        // chính locator ấy — thu hẹp nó lại, hoặc dùng element có ngữ cảnh
+        // dòng thay vì element chung chung.
+        if (ambiguous.length > 0) {
+          throw new Error(
+            `Không bấm được "${actionLabel}": mọi locator còn lại đều khớp nhiều phần tử `
+            + `bấm được mà không có gì phân biệt (${ambiguous.join(', ')}). `
+            + 'Cần một locator thu hẹp được, hoặc một element mang ngữ cảnh dòng/vùng.',
+          );
+        }
         throw error;
       }
       const { r, heal, confirm } = resolved;
 
+      // Bấm là hành động không lấy lại được, nên "chọn đại một cái" phải bị từ
+      // chối TRƯỚC khi bấm, không phải được phát hiện qua postcondition sau đó.
+      //
+      // Bốn vòng healing trên một locator khớp 20 dòng vẫn bấm đúng dòng đầu cả
+      // bốn lần: mỗi vòng thất bại theo đúng một kiểu, và thông báo cuối cùng
+      // nói "không tạo ra được kết quả" — đúng, nhưng không nói vì sao. Loại
+      // ứng viên ngay ở đây thì vòng sau được dùng cho một locator KHÁC, và
+      // thông báo nói thẳng ra vấn đề là gì.
+      //
+      // Chỉ chặn khi driver tự khẳng định là mơ hồ. `undefined` là "không trả
+      // lời được", và coi nó như "có" sẽ giết mọi locator hợp lệ trên những
+      // driver không thu hẹp được — xem UiMatchSnapshot.ambiguousForAction.
+      //
+      // Và chỉ chặn khi locator này CHƯA TỪNG chứng minh được gì cho element
+      // này. Ranh giới nằm ở lịch sử, không ở số khớp, vì số khớp không phân
+      // biệt được hai chuyện khác hẳn nhau — đo trên máy thật cùng một tối:
+      //
+      //   label="THÊM MÃ"           khớp 2, thắng 10 lần  → cái đầu vẫn luôn đúng
+      //   mat-icon.mat-menu-trigger khớp 53, thắng 0 lần  → mỗi dòng một cái
+      //
+      // Bản đầu của cổng chặn chỉ hỏi driver, nên nó chặn luôn cả cái thứ nhất
+      // và biến bốn kịch bản đang xanh thành đỏ. Một locator đã sinh ra đúng
+      // kết quả mong đợi hàng chục lần thì "phần tử đầu tiên" của nó không còn
+      // là trùng hợp nữa, dù DOM có bao nhiêu phần tử giống nó đi nữa.
+      const matches = this.driver.inspectMatches
+        ? await this.driver.inspectMatches(r.candidate).catch(() => undefined)
+        : undefined;
+      const proven = provenWins(definition, r.candidate);
+      if (matches?.ambiguousForAction && proven === 0) {
+        excluded.add(candidateKey(r.candidate));
+        ambiguous.push(`${r.candidate.strategy}=${r.candidate.value}`);
+        console.warn(
+          `[tap] "${actionLabel}": ${r.candidate.strategy}=${JSON.stringify(r.candidate.value)} `
+          + `khớp ${matches.count} phần tử đang hiển thị, không có gì để chọn giữa chúng, `
+          + 'và chưa từng chứng minh được kết quả nào — bỏ locator này, thử ứng viên khác '
+          + 'thay vì bấm đại.',
+        );
+        continue;
+      }
+
+      const anchored = await this.anchorToTypedQuery(actionLabel, r, matches);
+
       phaseStarted = Date.now();
       try {
-        await this.driver.tap(r.handle);
+        await this.driver.tap(anchored);
       } catch (error) {
         // A click can land and still be reported as failed: what it opens
         // covers the control it was aimed at, so the driver's own actionability
@@ -1302,7 +1771,9 @@ export class Executor {
         // would act on a different row. The outcome is the authority — if what
         // the tap was supposed to produce is already on screen, the tap
         // happened.
-        const provable = expectation && expectation.state !== 'absent';
+        const provable = expectation
+          && expectation.verification !== 'deferred'
+          && expectation.state !== 'absent';
         // Given a window, not a glance. `isVisibleNow` gives each candidate one
         // 250ms attach probe, and what a click opens is usually still animating
         // when the click itself is declared failed — the captured artifact for
@@ -1347,6 +1818,22 @@ export class Executor {
       await this.driver.isIdle().catch(() => {});
       logSlowActionPhase(actionLabel, `idle wait attempt ${attempt}`, phaseStarted);
 
+      if (expectation?.verification === 'deferred') {
+        // The tap resolved and did not throw, but the authoritative proof is
+        // the next numerical assertion. Keep it unverified for now so a failed
+        // assertion cannot accidentally make the action green.
+        if (this.executeDepth <= 1) {
+          this.lastUnverified = true;
+          this.lastUnverifiedReason =
+            `Đang chờ bước "${expectation.source}" đo thay đổi nghiệp vụ sau hành động.`;
+          console.log(
+            `[tap] "${actionLabel}": chờ bước "${expectation.source}" chứng minh kết quả.`,
+          );
+        }
+        confirm();
+        return heal;
+      }
+
       if (!expectation || !transitionCanBeProven) {
         // Visibility could not prove the transition, but contents still might:
         // the element was already on screen, so read it again and see whether
@@ -1372,6 +1859,9 @@ export class Executor {
         // a warning stops being read at all.
         if (this.executeDepth <= 1) {
           this.lastUnverified = true;
+          this.lastUnverifiedReason = expectation
+            ? `Điều kiện "${expectation.source}" đã đúng trước thao tác và trạng thái quan sát được không đổi.`
+            : 'Bước tiếp theo không mô tả một kết quả có thể quan sát để đối chiếu trước và sau thao tác.';
           console.warn(
             `[tap] "${actionLabel}": không có gì chứng minh cú bấm tạo ra thay đổi`
             + (expectation
@@ -1864,6 +2354,15 @@ function expectationAfter(steps: StepSpec[], currentIndex: number): ActionExpect
           action: 'assert-text',
           source: step.text,
         };
+      case 'assertNumberDelta':
+        return {
+          elementId: intent.element,
+          locatorParams: intent.locatorParams,
+          state: 'visible',
+          action: 'assert-text',
+          source: step.text,
+          verification: 'deferred',
+        };
       case 'tap':
       case 'longPress':
       case 'hover':
@@ -1920,8 +2419,59 @@ function expectationAfter(steps: StepSpec[], currentIndex: number): ActionExpect
   return undefined;
 }
 
+function confirmTapProvenByNumberDelta(results: StepResult[], proof: StepSpec): void {
+  for (let index = results.length - 2; index >= 0; index--) {
+    const candidate = results[index]!;
+    if (candidate.step.intent.kind === 'screenshot') continue;
+    if (candidate.status === 'unverified' && candidate.step.intent.kind === 'tap') {
+      candidate.status = 'passed';
+      delete candidate.unverifiedReason;
+      console.log(
+        `[tap] ${candidate.step.text}: đã được bước sau chứng minh — ${proof.text}.`,
+      );
+    }
+    return;
+  }
+}
+
+/**
+ * A focus/highlight assertion is a direct answer to the preceding tap.  It may
+ * follow an idempotency assertion (for example "still exactly one row"), so it
+ * is not necessarily the immediately following line.  Once the UI reports the
+ * row focused, the earlier tap is no longer causally unproven.
+ */
+function confirmTapProvenByFocusedState(results: StepResult[], proof: StepSpec): void {
+  for (let index = results.length - 2; index >= 0; index--) {
+    const candidate = results[index]!;
+    if (candidate.step.intent.kind === 'screenshot') continue;
+    if (candidate.step.intent.kind.startsWith('assert')) continue;
+    if (candidate.status === 'unverified' && candidate.step.intent.kind === 'tap') {
+      candidate.status = 'passed';
+      delete candidate.unverifiedReason;
+      console.log(`[tap] ${candidate.step.text}: đã được trạng thái focus/highlight chứng minh — ${proof.text}.`);
+    }
+    return;
+  }
+}
+
 function normalizeCollectionText(value: string): string {
   return value.normalize('NFC').replace(/\s+/g, ' ').trim().toLocaleLowerCase('vi-VN');
+}
+
+/** Business values that help discovery identify the control being verified. */
+function semanticValuesFromIntent(intent: Intent): string[] {
+  switch (intent.kind) {
+    case 'assertText':
+      return [intent.text];
+    case 'assertOption':
+      return [intent.option];
+    case 'assertCollection':
+      return 'text' in intent.check ? [intent.check.text] : [];
+    case 'select':
+      return [intent.option];
+    default:
+      return [];
+  }
 }
 
 function expectationKey(elementId: string, params?: Record<string, string>): string {
@@ -1935,6 +2485,17 @@ function routeIdentity(value: string): string {
     return `${url.origin}${url.pathname}${url.search}${url.hash}`;
   } catch {
     return value;
+  }
+}
+
+/** Routes that are only the search source, never proof that a feature opened. */
+function isHomeLikeRoute(value: string): boolean {
+  if (!value || value === 'about:blank') return false;
+  try {
+    const path = new URL(value).pathname.replace(/\/+$/, '') || '/';
+    return path === '/' || path === '/home';
+  } catch {
+    return false;
   }
 }
 

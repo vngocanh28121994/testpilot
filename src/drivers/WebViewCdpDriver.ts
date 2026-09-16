@@ -19,7 +19,13 @@ import path from 'node:path';
 import { promisify } from 'node:util';
 import type { Browser, Locator, Page } from 'playwright';
 import type { LocatorCandidate } from '../core/types.js';
-import { protectedSelectors, type ControlInspection, type UiHandle, type UiMatchSnapshot } from './driver.js';
+import {
+  isScopedFeatureSearchResult,
+  protectedSelectors,
+  type ControlInspection,
+  type UiHandle,
+  type UiMatchSnapshot,
+} from './driver.js';
 import { labelContainsXPath, labelSplitAcrossChildrenXPath } from '../core/labelXPath.js';
 import { observeDomInPage, type RawEl } from './domObserve.js';
 import type { ObservedElement, UiObservation } from '../discovery/UiObservation.js';
@@ -94,6 +100,34 @@ async function freePort(): Promise<number> {
 }
 
 /**
+ * Preserve only locator identity that the in-page observer already proved
+ * unique. Shared CSS classes describe a component type, not one control.
+ */
+export function rawDomElementToObservedElement(el: RawEl, i: number): ObservedElement {
+  return {
+    id: `cdp-el-${i}`,
+    role: el.customName ? 'button' : el.tag,
+    text: el.domText || el.value,
+    accessibilityLabel: el.ariaLabel,
+    testId: el.testId,
+    placeholder: el.placeholder,
+    // Identity, most stable first. `name` sits between the two because a form
+    // control keeps it across renders, while Angular Material hands out
+    // `mat-input-0`, `mat-select-14` and renumbers them on every rebuild.
+    resourceId: el.formcontrolname || el.name || (isGeneratedId(el.id) ? undefined : el.id),
+    value: el.value,
+    visible: el.visible,
+    enabled: !el.disabled,
+    interactive: el.interactive,
+    container: el.container,
+    bounds: el.visible ? el.rect : undefined,
+    // `observeDomInPage()` sets this only after querySelectorAll proves the
+    // selector unique. Never recreate `tag.shared-class` here.
+    css: el.css,
+  };
+}
+
+/**
  * Ids frameworks hand out by counter rather than by meaning.
  *
  * Angular Material renumbers `mat-input-0`, `mat-select-14`, `cdk-overlay-6` on
@@ -107,6 +141,11 @@ function isGeneratedId(id: string | undefined): boolean {
 
 function sleep(ms: number): Promise<void> {
   return new Promise((r) => setTimeout(r, ms));
+}
+
+interface ChoicePeerState {
+  target: string;
+  peers: string[];
 }
 
 // ── Handle ────────────────────────────────────────────────────────────────────
@@ -266,7 +305,10 @@ export class WebViewCdpDriver {
     for (let i = 0; i < 10; i++) {
       try {
         const { stdout } = await exec(
-          `curl -s --connect-timeout 2 --max-time 3 http://localhost:${localPort}/json/version`,
+          // `adb forward` listens on IPv4 loopback. On recent macOS,
+          // `localhost` may resolve to ::1 first, producing ECONNREFUSED while
+          // the WebView endpoint is healthy on 127.0.0.1.
+          `curl -s --connect-timeout 2 --max-time 3 http://127.0.0.1:${localPort}/json/version`,
         );
         if (stdout.trim().startsWith('{') || stdout.trim().startsWith('[')) {
           cdpReady = true;
@@ -285,7 +327,7 @@ export class WebViewCdpDriver {
     const { chromium } = await import('playwright').catch(() => {
       throw new Error('[cdp] playwright không được cài đặt trên host này');
     });
-    this.browser = await chromium.connectOverCDP(`http://localhost:${localPort}`);
+    this.browser = await chromium.connectOverCDP(`http://127.0.0.1:${localPort}`);
 
     // 5. Get the live page
     this.page = this.browser.contexts()[0]?.pages()[0] ?? null;
@@ -507,6 +549,66 @@ export class WebViewCdpDriver {
     return false;
   }
 
+  /**
+   * Prefer a duplicate that belongs to the front-most modal layer.
+   *
+   * Angular Material deliberately keeps parent dialogs mounted while opening a
+   * child dialog. Playwright therefore sees both controls as visible even
+   * though the backdrop makes the parent untouchable. DOM order alone picks
+   * the older parent (`add` on the report list) instead of the newer child
+   * (`add` in the template editor). The last visible overlay is the active
+   * interaction layer, matching what the user can actually touch.
+   */
+  private async inFrontModal(locator: Locator): Promise<Locator | undefined> {
+    if (!this.page) return undefined;
+    const layers = this.page.locator(
+      '.cdk-overlay-pane:visible, mat-dialog-container:visible, [role="dialog"]:visible, [aria-modal="true"]:visible',
+    );
+    const layerCount = await this.guarded('front-modal-count', layers.count(), 2000);
+    if (layerCount === 0) return undefined;
+
+    // Walk from newest to oldest. Some frameworks nest mat-dialog-container in
+    // an overlay pane, so the first layer containing a matched node wins.
+    const matchCount = Math.min(await locator.count(), 20);
+    for (let i = layerCount - 1; i >= 0; i--) {
+      const layer = layers.nth(i);
+      // `filter({has})` cannot express "this node is a descendant of layer".
+      // Compare DOM containment directly for the bounded set of duplicates.
+      const layerHandle = await layer.elementHandle();
+      if (!layerHandle) continue;
+      let best: { locator: Locator; rank: number } | undefined;
+      for (let j = 0; j < matchCount; j++) {
+        const nth = locator.nth(j);
+        const reading = await nth.evaluate(
+          (node, layerNode) => {
+            const el = node as HTMLElement;
+            if (!(layerNode as Element).contains(el)) return { inside: false, rank: 0 };
+            const tag = el.tagName.toLowerCase();
+            const role = (el.getAttribute('role') || '').toLowerCase();
+            const ownsAction = /^(button|a|input|select|textarea)$/.test(tag)
+              || /^(button|link|menuitem|option|tab|checkbox|radio|switch)$/.test(role)
+              || el.hasAttribute('onclick')
+              || getComputedStyle(el).cursor === 'pointer';
+            const actionableParent = el.closest('button,[role="button"],a,[onclick]');
+            return {
+              inside: true,
+              // The node that actually owns the action wins. A descendant of a
+              // control is still valid, while a lookalike icon used in help
+              // text deliberately gets no interaction rank.
+              rank: ownsAction ? 3 : actionableParent ? 2 : 0,
+            };
+          },
+          layerHandle,
+        )
+          .catch(() => ({ inside: false, rank: 0 }));
+        if (!reading.inside || !(await isHittable(nth))) continue;
+        if (!best || reading.rank > best.rank) best = { locator: nth, rank: reading.rank };
+      }
+      if (best) return best.locator;
+    }
+    return undefined;
+  }
+
   async find(candidate: LocatorCandidate): Promise<WebViewCdpHandle | null> {
     if (!this.page) return null;
     // A dialog may appear between two scenario steps. Clear only explicitly
@@ -525,6 +627,13 @@ export class WebViewCdpDriver {
       ? toRelativePlaywrightLocator(root, candidate)
       : root.locator(selector);
     try {
+      // Điều kiện "phải chứa chữ này" của lúc chạy, cùng hạng với runtimeScope:
+      // nó thu hẹp cái được chọn, chứ không đổi locator. Xem LocatorCandidate
+      // .runtimeText — nó tồn tại để "kết quả tìm kiếm đầu tiên" không còn là
+      // lựa chọn còn sót lại từ truy vấn trước.
+      if (candidate.runtimeText) {
+        locator = locator.filter({ hasText: candidate.runtimeText });
+      }
       let count = await this.guarded('find', locator.count(), 5000);
       this.stallReported = false;
       // Nothing *visible* — not merely nothing at all. The exact arms kept
@@ -560,6 +669,7 @@ export class WebViewCdpDriver {
           // went back to the hidden node and answered false, forever.
           selector = xpath;
           locator = root.locator(selector);
+          if (candidate.runtimeText) locator = locator.filter({ hasText: candidate.runtimeText });
           count = await this.guarded('find-fallback', locator.count(), 5000);
           if (count > 0) { matched = true; break; }
         }
@@ -571,9 +681,26 @@ export class WebViewCdpDriver {
       let directLocator: Locator | undefined =
         candidate.strategy === 'relative' ? locator : undefined;
       if (count > 1 && candidate.strategy !== 'relative') {
+        directLocator = await this.inFrontModal(locator).catch(() => undefined);
+        if (directLocator) {
+          const target = await directLocator.evaluate((node) => {
+            const control = (node as Element).closest('button,[role="button"],a,[onclick]') ?? node as Element;
+            const layer = control.closest('.cdk-overlay-pane,mat-dialog-container,[role="dialog"],[aria-modal="true"]');
+            return {
+              tag: control.tagName.toLowerCase(),
+              className: String((control as HTMLElement).className || ''),
+              layer: layer?.id || String((layer as HTMLElement | null)?.className || ''),
+            };
+          }).catch(() => null);
+          console.log(
+            `[cdp] ${candidate.strategy}=${JSON.stringify(candidate.value)} khớp ${count} phần tử; `
+            + `chọn ${target?.tag ?? 'phần tử'}${target?.className ? `.${target.className.replace(/\s+/g, '.')}` : ''} `
+            + `trong ${target?.layer || 'dialog đang ở trên cùng'}.`,
+          );
+        }
         // Check the first DOM match before iterating: it is usually the right
         // one, and then nothing else has to be asked about.
-        if (!(await isHittable(locator.first()))) {
+        if (!directLocator && !(await isHittable(locator.first()))) {
           for (let i = 1; i < count; i++) {
             const nth = locator.nth(i);
             if (await isHittable(nth)) {
@@ -583,6 +710,11 @@ export class WebViewCdpDriver {
           }
         }
       }
+      // Handle tự dựng lại locator từ `selector` mỗi lần được hỏi, nên một bộ
+      // lọc chỉ đặt trên biến cục bộ sẽ biến mất ngay sau khi find() trả về —
+      // find() báo thành công còn mọi thao tác sau đó lại quay về locator chưa
+      // lọc. Ghi điều kiện vào directLocator là cách duy nhất nó sống sót.
+      if (candidate.runtimeText && !directLocator) directLocator = locator.first();
       return new WebViewCdpHandle(
         candidate,
         this.page,
@@ -628,7 +760,11 @@ export class WebViewCdpDriver {
 
   async inspectMatches(candidate: LocatorCandidate): Promise<UiMatchSnapshot> {
     if (!this.page) return { count: 0, texts: [], focused: [] };
-    await this.popupInterceptor.clear(this.page, protectedSelectors([candidate])).catch(() => {});
+    // This is a read, not a screen transition. Do not dismiss overlays here:
+    // when an earlier candidate has just gone stale, its inspection must not
+    // close a short-lived toast belonging to the next candidate before the
+    // executor can capture the assertion screenshot. Cleanup stays in resolver
+    // miss-paths and before interactions, consistently with the web driver.
     const root = candidate.runtimeScope ? this.page.locator(candidate.runtimeScope) : this.page;
     // Same order as `find`, and the first arm that sees a visible node wins —
     // an earlier arm matching nothing must not be reported as "no text".
@@ -642,7 +778,7 @@ export class WebViewCdpDriver {
         if (count > 0 && (await this.anyVisible(arm, count))) { locator = arm; break; }
       }
     }
-    return this.guarded('inspectMatches', locator.evaluateAll((nodes) => {
+    const snapshot = await this.guarded('inspectMatches', locator.evaluateAll((nodes) => {
       const visible = nodes.filter((node) => {
         const el = node as HTMLElement;
         const style = getComputedStyle(el);
@@ -654,11 +790,44 @@ export class WebViewCdpDriver {
         texts: visible.map((node) => ((node as HTMLElement).innerText ?? node.textContent ?? '').replace(/\s+/g, ' ').trim()),
         focused: visible.flatMap((node, index) => {
           const el = node as HTMLElement;
-          const selected = el.matches(':focus, [aria-selected="true"], [aria-current="true"], [aria-checked="true"], .focused, .selected, .active');
+          const selected = el.matches(
+            ':focus, :focus-within, [aria-selected="true"], [aria-current="true"], '
+            + '[aria-checked="true"], [aria-pressed="true"], .focused, .selected, .active, .highlight',
+          );
           return selected ? [index] : [];
         }),
       };
     }), 5_000);
+    return { ...snapshot, ambiguousForAction: await this.pickWouldBeArbitrary(locator, snapshot.count) };
+  }
+
+  /**
+   * Bấm vào đây thì driver đang chọn, hay đang đoán?
+   *
+   * `find()` chọn theo hai bậc: lớp modal trên cùng nếu có, không thì phần tử
+   * bấm được đầu tiên. Bậc một là một căn cứ — người dùng cũng chỉ chạm được
+   * lớp trên cùng. Bậc hai thì không: nó chỉ có nghĩa khi đúng một phần tử bấm
+   * được, còn khi có nhiều thì "đầu tiên" là thứ tự DOM, một sự trùng hợp.
+   *
+   * Đo trên máy thật ngày 2026-09-15: `mat-icon.mat-menu-trigger` của
+   * "Nút tùy chọn dòng" khớp 53 phần tử, 20 cái đang hiển thị — mỗi dòng cổ
+   * phiếu một cái. Runner bấm dòng đầu, postcondition không xảy ra, rồi cả
+   * bước hỏng sau bốn vòng healing. Không có gì hỏng ở tầng dưới cả: locator
+   * hợp lệ, phần tử có thật, cú bấm thành công — chỉ là bấm nhầm dòng.
+   *
+   * Đếm có giới hạn, và dừng ngay khi thấy cái bấm được thứ hai: câu hỏi là
+   * "có mơ hồ không", không phải "mơ hồ đến mức nào".
+   */
+  private async pickWouldBeArbitrary(locator: Locator, visible: number): Promise<boolean> {
+    if (visible <= 1) return false;
+    if (await this.inFrontModal(locator).catch(() => undefined)) return false;
+    let hittable = 0;
+    for (let i = 0; i < Math.min(visible, 8); i++) {
+      if (!(await isHittable(locator.nth(i)).catch(() => false))) continue;
+      hittable += 1;
+      if (hittable > 1) return true;
+    }
+    return false;
   }
 
   /**
@@ -710,19 +879,23 @@ export class WebViewCdpDriver {
       });
   }
 
-  async listOptions(handle: WebViewCdpHandle): Promise<string[] | undefined> {
+  async listOptions(
+    handle: WebViewCdpHandle,
+    whileOpen?: () => Promise<void>,
+  ): Promise<string[] | undefined> {
     const page = handle.page;
     const expanded = await handle
       .locator()
       .evaluate((node) => (node as Element).getAttribute('aria-expanded'))
       .catch(() => null);
+    const panelAlreadyOpen = (await page.evaluate(openOptionLabels).catch(() => [])).length > 0;
     // Closed again below when this call is what opened it. An assertion must
     // leave the screen as it found it: reading the options of one dropdown used
     // to leave its panel open, and Material's backdrop then blocked every later
     // step — the very next line, selecting from a *different* dropdown, could
     // not be reached.
     let openedHere = false;
-    if (expanded !== 'true') {
+    if (expanded !== 'true' && !panelAlreadyOpen) {
       // Opened here rather than left to the scenario: a closed dropdown reads
       // as zero choices, and "not among the choices" would then pass having
       // checked nothing.
@@ -745,8 +918,12 @@ export class WebViewCdpDriver {
     while (Date.now() < deadline) {
       const now = await page.evaluate(openOptionLabels).catch(() => []);
       if (now.length > 0 && now.length === previous) {
-        if (openedHere) await this.closeOpenPanel(page);
-        return now;
+        try {
+          await whileOpen?.();
+          return now;
+        } finally {
+          if (openedHere) await this.closeOpenPanel(page);
+        }
       }
       previous = now.length;
       seen = now;
@@ -754,8 +931,12 @@ export class WebViewCdpDriver {
     }
     // Empty after opening and waiting is a real answer for a dropdown with no
     // choices; `undefined` is reserved for "this driver cannot tell".
-    if (openedHere) await this.closeOpenPanel(page);
-    return seen;
+    try {
+      await whileOpen?.();
+      return seen;
+    } finally {
+      if (openedHere) await this.closeOpenPanel(page);
+    }
   }
 
   async selectOption(handle: WebViewCdpHandle, option: string): Promise<void> {
@@ -769,8 +950,11 @@ export class WebViewCdpDriver {
       return;
     }
 
-    await this.popupInterceptor.clear(handle.page, await keep(handle)).catch(() => {});
-    await locator.click({ timeout: 5000 });
+    const alreadyOpen = (await handle.page.evaluate(openOptionLabels).catch(() => [])).length > 0;
+    if (!alreadyOpen) {
+      await this.popupInterceptor.clear(handle.page, await keep(handle)).catch(() => {});
+      await locator.click({ timeout: 5000 });
+    }
 
     // The list animates in, so the option is not there on the first look. Poll
     // rather than sleep: a fast device should not pay for a slow one.
@@ -778,21 +962,244 @@ export class WebViewCdpDriver {
     while (Date.now() < deadline) {
       const opt = await this.findOption(handle.page, option);
       if (opt && (await isHittable(opt))) {
-        await opt.click({ timeout: 5_000 });
-        return;
+        if (await this.clickChoiceWithProof(handle, opt, option)) return;
       }
+      if (await this.clickCustomOptionWithProof(handle, option)) return;
       const found = await this.find({
         strategy: 'label', value: option, weight: 1, origin: 'authored',
       });
       if (found && (await isHittable(found.locator()))) {
-        await this.tap(found);
-        return;
+        if (await this.clickChoiceWithProof(handle, found.locator(), option)) return;
       }
       await sleep(200);
     }
     throw new Error(
       `Mở "${handle.candidate.value}" rồi nhưng không thấy lựa chọn "${option}" nào bấm được.`,
     );
+  }
+
+  /**
+   * Finds a card/radio option rendered as ordinary divs in the picker dialog.
+   *
+   * Frameworks often attach the click to a card while its visible caption is a
+   * nested div. Clicking the caption can be a no-op even though Playwright
+   * reports a successful click. Scope to the dialog that owns the picker and
+   * promote the exact caption to its nearest interaction-owning ancestor.
+   */
+  private async clickCustomOptionWithProof(
+    handle: WebViewCdpHandle,
+    option: string,
+  ): Promise<boolean> {
+    const owner = handle.locator();
+    const layer = owner.locator(
+      'xpath=ancestor-or-self::*[self::mat-dialog-container or @role="dialog" or @aria-modal="true"][1]',
+    );
+    const root = await layer.count().catch(() => 0) > 0
+      ? layer
+      : handle.page.locator('body');
+    const captions = root.getByText(option, { exact: true });
+    const count = Math.min(await captions.count().catch(() => 0), 20);
+    for (let i = 0; i < count; i++) {
+      const caption = captions.nth(i);
+      if (!(await isHittable(caption))) continue;
+
+      // A caption is semantic evidence, not necessarily the interaction owner.
+      // Walk outward through its bounded DOM path and let observed state change
+      // decide which node owns the action. This deliberately does not name a
+      // component class: Angular, React and a native WebView can all wrap the
+      // same caption differently.
+      const targets: Locator[] = [caption];
+      let ancestor = caption;
+      for (let depth = 0; depth < 6; depth++) {
+        ancestor = ancestor.locator('xpath=parent::*');
+        if (await ancestor.count().catch(() => 0) === 0) break;
+        const boundary = await ancestor.evaluate(
+          (node, rootNode) => {
+            if (node === rootNode) return true;
+            const rect = (node as Element).getBoundingClientRect();
+            const rootRect = (rootNode as Element).getBoundingClientRect();
+            return rect.width * rect.height > rootRect.width * rootRect.height * 0.72;
+          },
+          await root.elementHandle(),
+        ).catch(() => true);
+        if (boundary) break;
+        targets.push(ancestor);
+      }
+
+      for (const target of targets) {
+        if (!(await isHittable(target))) continue;
+        // Read diagnostics before the click: a successful choice commonly
+        // closes its dialog, and asking a detached locator afterwards waits for
+        // Playwright's full default timeout despite the action already working.
+        const tagName = await target.evaluate((node) => (node as Element).tagName.toLowerCase())
+          .catch(() => 'element');
+        if (await this.clickChoiceWithProof(handle, target, option, caption, root)) {
+          console.log(
+            `[select] ${JSON.stringify(option)} → ${tagName} được chấp nhận vì trạng thái lựa chọn đã đổi.`,
+          );
+          return true;
+        }
+      }
+    }
+    return false;
+  }
+
+  /**
+   * Click one possible choice target and require causal evidence.
+   *
+   * Class and attribute *values* are recorded as opaque state. We never assume
+   * that a product calls the state `selected`, `active` or anything else. A
+   * choice is proven when the caption disappears with its panel, state moves
+   * from another peer to the intended peer, the intended peer has an explicit
+   * current-state signal, or the owning control starts showing the value.
+   */
+  private async clickChoiceWithProof(
+    handle: WebViewCdpHandle,
+    target: Locator,
+    option: string,
+    caption = target,
+    root: Locator = handle.page.locator('body'),
+  ): Promise<boolean> {
+    if (await this.choiceHasExplicitCurrentState(caption)) {
+      console.log(`[select] ${JSON.stringify(option)} đã là lựa chọn hiện tại.`);
+      return true;
+    }
+
+    const distinctBefore = await this.choiceHasDistinctPeerState(caption, root);
+    const before = await this.choicePeerStates(caption, root);
+    await target.click({ timeout: 5_000 }).catch(() => {});
+
+    for (let attempt = 0; attempt < 5; attempt++) {
+      await sleep(attempt === 0 ? 120 : 140);
+      if (!(await caption.isVisible({ timeout: 100 }).catch(() => false))) return true;
+      if (!distinctBefore && await this.choiceHasDistinctPeerState(caption, root)) return true;
+      if (await this.choiceHasExplicitCurrentState(caption)) return true;
+
+      const ownerText = (await handle.locator().innerText({ timeout: 200 }).catch(() => '')) ?? '';
+      const norm = (value: string) => value.replace(/\s+/g, ' ').trim().toLocaleLowerCase('vi');
+      if (norm(ownerText).includes(norm(option))) return true;
+      const after = await this.choicePeerStates(caption, root);
+      if (this.choiceStateTransferred(before, after)) return true;
+    }
+    return false;
+  }
+
+  /** Standards-based state is proof by itself; opaque state needs a transition. */
+  private async choiceHasExplicitCurrentState(caption: Locator): Promise<boolean> {
+    return caption.evaluate((node) => {
+      let current: Element | null = node as Element;
+      for (let depth = 0; current && depth < 6; depth++, current = current.parentElement) {
+        const values = [
+          current.getAttribute('aria-selected'),
+          current.getAttribute('aria-checked'),
+          current.getAttribute('aria-pressed'),
+          current.getAttribute('aria-current'),
+        ].filter(Boolean).map((value) => value!.toLowerCase());
+        if (values.some((value) => value === 'true' || value === 'page' || value === 'step')) return true;
+      }
+      return false;
+    }).catch(() => false);
+  }
+
+  /**
+   * State fingerprints for the intended option and structurally comparable
+   * peers. Names are opaque; only a before/after transfer is interpreted.
+   */
+  private async choicePeerStates(caption: Locator, root: Locator): Promise<ChoicePeerState[]> {
+    const rootHandle = await root.elementHandle().catch(() => null);
+    if (!rootHandle) return [];
+    return caption.evaluate((node, rootNode) => {
+      const result: Array<{ target: string; peers: string[] }> = [];
+      let current: Element | null = node as Element;
+      for (let depth = 0; current && depth < 6; depth++, current = current.parentElement) {
+        if (current === rootNode) break;
+        const ownClasses = Array.from(current.classList);
+        if (ownClasses.length === 0) continue;
+        const targetAttrs = Array.from(current.attributes)
+          .filter((attr) => !attr.name.startsWith('_ng') && !['id', 'style', 'class'].includes(attr.name))
+          .map((attr) => `${attr.name}=${attr.value}`)
+          .sort();
+        const targetStyle = getComputedStyle(current);
+        const target = JSON.stringify({
+          classes: Array.from(current.classList).sort(),
+          attrs: targetAttrs,
+          visual: [
+            targetStyle.backgroundColor, targetStyle.borderColor, targetStyle.borderWidth,
+            targetStyle.outlineColor, targetStyle.boxShadow, targetStyle.color, targetStyle.fontWeight,
+          ],
+        });
+        const peers = Array.from((rootNode as Element).querySelectorAll(current.tagName))
+          .filter((peer) => peer !== current)
+          .filter((peer) => Array.from(peer.classList).some((token) => ownClasses.includes(token)))
+          .map((peer) => {
+            const attrs = Array.from(peer.attributes)
+            .filter((attr) => !attr.name.startsWith('_ng') && !['id', 'style', 'class'].includes(attr.name))
+            .map((attr) => `${attr.name}=${attr.value}`)
+            .sort();
+            const style = getComputedStyle(peer);
+            return JSON.stringify({
+              classes: Array.from(peer.classList).sort(),
+              attrs,
+              visual: [
+                style.backgroundColor, style.borderColor, style.borderWidth,
+                style.outlineColor, style.boxShadow, style.color, style.fontWeight,
+              ],
+            });
+          });
+        if (peers.length > 0) result.push({ target, peers });
+      }
+      return result;
+    }, rootHandle).catch(() => [] as ChoicePeerState[]);
+  }
+
+  /** A state moved from another peer to the intended peer, and vice versa. */
+  private choiceStateTransferred(before: ChoicePeerState[], after: ChoicePeerState[]): boolean {
+    return before.some((oldLevel, index) => {
+      const newLevel = after[index];
+      if (!newLevel || oldLevel.target === newLevel.target) return false;
+      return oldLevel.peers.includes(newLevel.target) && newLevel.peers.includes(oldLevel.target);
+    });
+  }
+
+  /**
+   * Detects whether the intended peer has an opaque modifier that its siblings
+   * do not have. This is only meaningful as a before/after transition; it is
+   * deliberately not treated as proof that an untouched option was selected.
+   */
+  private async choiceHasDistinctPeerState(caption: Locator, root: Locator): Promise<boolean> {
+    const rootHandle = await root.elementHandle().catch(() => null);
+    if (!rootHandle) return false;
+    return caption.evaluate((node, rootNode) => {
+      let current: Element | null = node as Element;
+      for (let depth = 0; current && depth < 6; depth++, current = current.parentElement) {
+        if (current === rootNode) break;
+        const own: string[] = Array.from(current.classList);
+        const peers: Element[] = Array.from(
+          (rootNode as Element).querySelectorAll(current.tagName),
+        ) as Element[];
+        for (const peer of peers) {
+          if (peer === current) continue;
+          const theirs: string[] = Array.from(peer.classList);
+          const comparable = own.some((token) => theirs.includes(token));
+          if (!comparable) continue;
+
+          // Strict superset: shared structural identity plus an opaque modifier.
+          if (theirs.length > 0 && theirs.length < own.length
+            && theirs.every((token) => own.includes(token))) return true;
+
+          // The modifier may be an arbitrary attribute rather than a class.
+          // Compare opaque name=value pairs; do not guess its vocabulary.
+          const attrs = Array.from(current.attributes)
+            .filter((attr) => !attr.name.startsWith('_ng') && !['id', 'style', 'class'].includes(attr.name))
+            .map((attr) => `${attr.name}=${attr.value}`);
+          const peerAttrs = Array.from(peer.attributes)
+            .filter((attr) => !attr.name.startsWith('_ng') && !['id', 'style', 'class'].includes(attr.name))
+            .map((attr) => `${attr.name}=${attr.value}`);
+          if (peerAttrs.length < attrs.length && peerAttrs.every((attr) => attrs.includes(attr))) return true;
+        }
+      }
+      return false;
+    }, rootHandle).catch(() => false);
   }
 
   /**
@@ -838,7 +1245,9 @@ export class WebViewCdpDriver {
 
   /** Click/tap an element. */
   async tap(handle: WebViewCdpHandle): Promise<void> {
-    await this.popupInterceptor.clear(handle.page, await keep(handle)).catch(() => {});
+    if (!isScopedFeatureSearchResult(handle.candidate)) {
+      await this.popupInterceptor.clear(handle.page, await keep(handle)).catch(() => {});
+    }
     const root = handle.locator();
     const tooltipTrigger = root.locator('[apppopuphover],[tcbstooltip]').first();
     const locator = await tooltipTrigger.isVisible({ timeout: 200 }).catch(() => false)
@@ -847,7 +1256,9 @@ export class WebViewCdpDriver {
     try {
       await locator.click({ timeout: 5000 });
     } catch (err) {
-      const dismissed = await this.popupInterceptor.clear(handle.page, await keep(handle)).catch(() => 0);
+      const dismissed = await this.popupInterceptor
+        .clear(handle.page, await keep(handle), 10, true)
+        .catch(() => 0);
       if (dismissed > 0) {
         await locator.click({ timeout: 5000 });
         return;
@@ -1100,47 +1511,7 @@ export class WebViewCdpDriver {
     const raw: RawEl[] = await this.guarded('observe', this.page.evaluate(observeDomInPage), 10000);
     this.stallReported = false;
 
-    const elements: ObservedElement[] = raw.map((el, i) => {
-      // Build CSS locator candidates from stable classes + tag (e.g. "button.btn-login")
-      // These become `css` strategy candidates during healing, which are far more
-      // stable than text-based XPath for Angular Material components.
-      const cssCandidates: string[] = el.css ? [el.css] : [];
-      if (el.cssClasses) {
-        const classSelectors = el.cssClasses
-          .split(/\s+/)
-          .filter(Boolean)
-          .map((c) => `.${c}`);
-        if (classSelectors.length > 0) {
-          // Tag + all classes is the most specific, least ambiguous selector
-          cssCandidates.push(`${el.tag}${classSelectors.join('')}`);
-          // Tag + first class alone as fallback
-          if (classSelectors.length > 1) cssCandidates.push(`${el.tag}${classSelectors[0]}`);
-        }
-      }
-
-      return {
-        id: `cdp-el-${i}`,
-        role: el.customName ? 'button' : el.tag,
-        text: el.domText || el.value,
-        accessibilityLabel: el.ariaLabel,
-        testId: el.testId,
-        placeholder: el.placeholder,
-        // Identity, most stable first. `name` sits between the two because a
-        // form control keeps it across renders, while Angular Material hands
-        // out `mat-input-0`, `mat-select-14` and renumbers them every time the
-        // view is rebuilt — an id like that is not identity, it is a counter,
-        // and healing that emitted one produced a locator dead on arrival.
-        resourceId: el.formcontrolname || el.name || (isGeneratedId(el.id) ? undefined : el.id),
-        value: el.value,
-        visible: el.visible,
-        enabled: !el.disabled,
-        interactive: true,
-        bounds: el.visible ? el.rect : undefined,
-        // css: most specific stable class-based selector — used by healing to
-        // generate a `css` strategy candidate instead of fragile text XPath.
-        css: cssCandidates[0],
-      };
-    });
+    const elements = raw.map(rawDomElementToObservedElement);
 
     return {
       id: `obs-cdp-${Date.now().toString(36)}`,

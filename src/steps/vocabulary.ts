@@ -1,5 +1,9 @@
 import type { Intent } from '../core/types.js';
 import { parseDisplayedNumber } from '../core/number.js';
+import {
+  ANY_DROPDOWN_OPTION,
+  DEFAULT_DROPDOWN_OPTION,
+} from '../drivers/dropdownSelection.js';
 
 /**
  * The controlled Gherkin vocabulary.
@@ -167,6 +171,22 @@ export const STEP_RULES: StepRule[] = [
     build: (m, ref) => ({ kind: 'clear', element: ref(m[1]!) }),
     doc: 'I clear "<element>"',
     hint: 'Xoá sạch nội dung đang có trong ô nhập.',
+    group: 'Nhập liệu',
+  },
+  {
+    id: 'selectAny',
+    patterns: [new RegExp(`^I select any option from ${Q}$`, 'i')],
+    build: (m, ref) => ({ kind: 'select', element: ref(m[1]!), option: ANY_DROPDOWN_OPTION }),
+    doc: 'I select any option from "<element>"',
+    hint: 'Chọn một giá trị khác giá trị hiện tại trong dropdown.',
+    group: 'Nhập liệu',
+  },
+  {
+    id: 'selectDefault',
+    patterns: [new RegExp(`^I select the default option from ${Q}$`, 'i')],
+    build: (m, ref) => ({ kind: 'select', element: ref(m[1]!), option: DEFAULT_DROPDOWN_OPTION }),
+    doc: 'I select the default option from "<element>"',
+    hint: 'Chọn giá trị mặc định của dropdown.',
     group: 'Nhập liệu',
   },
   {

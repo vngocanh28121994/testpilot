@@ -27,7 +27,9 @@ async function main(): Promise<void> {
 
   console.log(`[farm] ${run.runArn}`);
   console.log(`[farm] status=${run.status} result=${run.result}`);
-  console.log(`[farm] counters ${JSON.stringify(run.counters)}`);
+  console.log(
+    `[farm] AWS lifecycle counters (không phải testcase TestPilot) ${JSON.stringify(run.counters)}`,
+  );
   for (const a of run.artifacts.slice(0, 40)) {
     console.log(`[farm] ${a.type.padEnd(20)} ${a.name} ${a.url}`);
   }

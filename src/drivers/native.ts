@@ -14,6 +14,7 @@ import { WebViewCdpDriver, WebViewCdpHandle, isCdpSessionLost } from './WebViewC
 import { SMART_DISMISS_SCRIPT, type PopupRule } from './PopupInterceptor.js';
 import { parseIosXml } from '../discovery/NativeObservationAdapter.js';
 import { DOM_OBSERVE_SCRIPT, observeDomInPage, type RawEl } from './domObserve.js';
+import { isContainerElement } from '../discovery/UiObservation.js';
 import { checkAppVersion } from './appVersion.js';
 
 const execAsync = promisify(execCb);
@@ -51,10 +52,37 @@ const NATIVE_DIALOG_BUTTONS = [
  * is deliberately absent — those navigate away from the app under test.
  */
 const IOS_ALERT_BUTTONS = [
-  'Cho phép', 'Allow', 'Allow While Using App', 'OK', 'Đồng ý',
+  // Permission grants, from the narrowest choice to the broad fallback.
+  'Allow While Using App', 'Cho phép khi dùng ứng dụng',
+  'Allow Once', 'Cho phép một lần',
+  'Allow Full Access', 'Cho phép toàn quyền',
+  'Allow Limited Access', 'Cho phép quyền truy cập giới hạn',
+  'Continue', 'Tiếp tục', 'Turn On', 'Bật',
+  'Cho phép', 'Allow', 'OK', 'Đồng ý',
+  // Safe ways out when a permission has no grant button we recognise.
+  'Ask App Not to Track', 'Yêu cầu ứng dụng không theo dõi',
   'Không cho phép', "Don't Allow", 'Từ chối',
-  'Để sau', 'Not Now', 'Bỏ qua', 'Skip', 'Cancel', 'Huỷ', 'Hủy', 'Đóng', 'Close',
+  'Để sau', 'Later', 'Not Now', 'Bỏ qua', 'Skip',
+  'Cancel', 'Huỷ', 'Hủy', 'Đóng', 'Close',
 ];
+
+function normaliseAlertButton(label: string): string {
+  return label.trim().replace(/[’‘]/g, "'").replace(/\s+/g, ' ').toLocaleLowerCase();
+}
+
+/**
+ * Pick only an explicitly safe action and return the device's original label.
+ * The original matters because `mobile: alert` requires an exact buttonLabel.
+ * Unknown actions (Delete, Buy, Update…) are deliberately left untouched.
+ */
+export function chooseIosSystemAlertButton(buttons: string[]): string | undefined {
+  const actual = new Map(buttons.map((button) => [normaliseAlertButton(button), button]));
+  for (const preferred of IOS_ALERT_BUTTONS) {
+    const match = actual.get(normaliseAlertButton(preferred));
+    if (match) return match;
+  }
+  return undefined;
+}
 
 /**
  * Names the kind of system window covering the app, or undefined when the app
@@ -513,7 +541,13 @@ export class NativeUiDriver implements UiDriver {
     // a permission unanswered — so the app asks again on the next launch.
     // Starting the session is also what raises the first-launch dialogs on a
     // device the app was just installed on, so this is when they exist.
-    await this.clearBlockingDialogs();
+    if (!isAndroid) {
+      // Some permission sheets are owned by SpringBoard rather than the app.
+      // Without this setting WDA can return an empty alert search even while
+      // the sheet is visibly covering the app.
+      await this.b.updateSettings({ respectSystemAlerts: true }).catch(() => {});
+    }
+    await this.clearBlockingDialogs(5, isAndroid ? 0 : 3_000);
 
     // Do NOT call enterWebview() here — the app has just been attached but no
     // scenario has run yet, so no screen is guaranteed to have a WebView. Each
@@ -685,7 +719,7 @@ export class NativeUiDriver implements UiDriver {
         // Same reason as the Android branch above: bringing the app forward is
         // what makes iOS ask for notifications, and that alert covers the
         // WebView the next step is about to search.
-        await this.clearBlockingDialogs();
+        await this.clearBlockingDialogs(5, 2_000);
         // Với `noReset`, app không còn bị cài lại giữa các lượt — thứ trước đây
         // vô tình dọn sạch phiên đăng nhập. Không xoá storage ở đây thì kịch bản
         // 2 thừa hưởng đúng phiên mà kịch bản 1 vừa đăng nhập, và một bộ kịch
@@ -699,6 +733,10 @@ export class NativeUiDriver implements UiDriver {
     }
     this.webview = undefined;
     if (this.opts.hybrid && !this.cdpConnected) await this.tryEnterWebview();
+    // A first-launch permission sheet can appear while WebView discovery is
+    // waiting. Sweep again here so delayed notification/location/tracking/
+    // photo prompts cannot survive into the first business interaction.
+    if (this.opts.platform === 'ios') await this.clearBlockingDialogs();
     if (this.cdpDriver) {
       await this.cdpDriver.reconnect().catch((err) => {
         console.warn(`[native] CDP reconnect failed: ${(err as Error).message}`);
@@ -882,7 +920,7 @@ export class NativeUiDriver implements UiDriver {
 
     for (;;) {
       seen = await this.contextNames();
-      const found = pickWebviewContext(seen);
+      const found = pickWebviewContext(seen, this.opts.appPackage);
       if (found) {
         try {
           await this.b.switchContext(found);
@@ -901,9 +939,18 @@ export class NativeUiDriver implements UiDriver {
     // Bảo người dùng dựng một tunnel đang chạy sẵn là cách nhanh nhất để họ thôi
     // tin những gì tool nói — đúng chuyện suýt xảy ra ở lượt chạy 03:27.
     const tunnel = this.opts.platform === 'ios' ? await iosTunnelCheck() : undefined;
+    // Chrome nằm trong danh sách trông y như đã tìm thấy WebView, nên câu
+    // "không tìm thấy" đọc lên như tool đếm sai. Nó không đếm sai: WebView của
+    // trình duyệt bị loại có chủ ý, vì bám vào đó là treo 4 phút mỗi lệnh.
+    const browsersOnly = seen.some((c) => BROWSER_CONTEXT.test(c))
+      && !seen.some((c) => c !== 'NATIVE_APP' && !BROWSER_CONTEXT.test(c));
     throw new Error(
       `Không tìm thấy WebView context sau ${Math.round((this.opts.webviewTimeoutMs ?? 30_000) / 1000)}s. ` +
         `Context hiện có: ${seen.join(', ') || '(không có)'}.\n` +
+        (browsersOnly
+          ? 'Cái duy nhất nhìn thấy là WebView của trình duyệt trên máy, không phải của app — '
+            + `bỏ qua có chủ ý. App ${this.opts.appPackage ?? ''} chưa mở WebView nào cho Appium bám vào.\n`
+          : '') +
         (tunnel && !tunnel.ok
           ? `Tunnel cho Web Inspector chưa chạy — đây gần như chắc chắn là nguyên nhân.\n  ${tunnel.detail}\n`
           : '') +
@@ -1162,8 +1209,8 @@ export class NativeUiDriver implements UiDriver {
    * straight into it. Back is the only exit from that one, while a permission
    * request is answered by its own Allow button so the app stops asking.
    */
-  private async clearBlockingDialogs(rounds = 5): Promise<void> {
-    if (this.opts.platform !== 'android') return this.clearIosAlerts(rounds);
+  private async clearBlockingDialogs(rounds = 5, waitForArrivalMs = 0): Promise<void> {
+    if (this.opts.platform !== 'android') return this.clearIosAlerts(rounds, waitForArrivalMs);
     for (let round = 0; round < rounds; round += 1) {
       const focus = await this.focusedWindow();
       const kind = blockingKind(focus, this.opts.appPackage);
@@ -1194,9 +1241,20 @@ export class NativeUiDriver implements UiDriver {
    * alert for the whole session — including one a scenario means to assert on,
    * the same trap the popup interceptor had to be taught to avoid.
    */
-  private async clearIosAlerts(rounds: number): Promise<void> {
+  private async clearIosAlerts(rounds: number, waitForArrivalMs = 0): Promise<void> {
     if (!this.browser) return;
-    for (let round = 0; round < rounds; round += 1) {
+    // Alerts live in the native accessibility tree even when the scenario is
+    // currently driving DOM inside a WebView. Always inspect native, then put
+    // the caller back exactly where it was.
+    const previousWebview = this.webview;
+    if (previousWebview) {
+      await this.b.switchContext('NATIVE_APP').catch(() => {});
+      this.webview = undefined;
+    }
+    try {
+      const arrivalDeadline = Date.now() + waitForArrivalMs;
+      let dismissed = 0;
+      while (dismissed < rounds) {
       // Hỏi cây view trước, thay vì hỏi `mobile: alert` rồi bắt lỗi.
       //
       // Cách cũ đúng về mặt logic nhưng bẩn về mặt log: WebdriverIO ghi ra một
@@ -1207,30 +1265,41 @@ export class NativeUiDriver implements UiDriver {
       //
       // Tìm element thì không có lỗi để mà ghi: không có alert thì trả mảng
       // rỗng. Giá phải trả là một lệnh find mỗi vòng, chỉ chạy lúc mở app.
-      const alerts = await Promise.resolve(this.b.$$('-ios class chain:**/XCUIElementTypeAlert'))
-        .catch(() => []);
-      if (alerts.length === 0) return;
+        const alerts = await Promise.resolve(this.b.$$('-ios class chain:**/XCUIElementTypeAlert'))
+          .catch(() => []);
+        if (alerts.length === 0) {
+          if (Date.now() >= arrivalDeadline) return;
+          await sleep(300);
+          continue;
+        }
 
-      let buttons: string[];
-      try {
-        buttons = (await this.b.execute('mobile: alert', { action: 'getButtons' })) as string[];
-      } catch {
-        return; // alert vừa tự đóng giữa hai lệnh — không có gì để làm nữa
-      }
-      if (!Array.isArray(buttons) || buttons.length === 0) return;
+        let buttons: string[];
+        try {
+          buttons = (await this.b.execute('mobile: alert', { action: 'getButtons' })) as string[];
+        } catch {
+          return; // alert vừa tự đóng giữa hai lệnh — không có gì để làm nữa
+        }
+        if (!Array.isArray(buttons) || buttons.length === 0) return;
 
-      const choice = IOS_ALERT_BUTTONS.find((label) => buttons.includes(label));
-      if (!choice) {
-        console.warn(
-          `[native] hộp thoại iOS có nút [${buttons.join(', ')}] — không nút nào nằm trong danh sách an toàn, để nguyên.`,
-        );
-        return;
+        const choice = chooseIosSystemAlertButton(buttons);
+        if (!choice) {
+          console.warn(
+            `[native] hộp thoại iOS có nút [${buttons.join(', ')}] — không nút nào nằm trong danh sách an toàn, để nguyên.`,
+          );
+          return;
+        }
+        await this.b
+          .execute('mobile: alert', { action: 'accept', buttonLabel: choice })
+          .catch(() => {});
+        console.log(`[native] đóng hộp thoại iOS bằng "${choice}"`);
+        dismissed += 1;
+        await sleep(600);
       }
-      await this.b
-        .execute('mobile: alert', { action: 'accept', buttonLabel: choice })
-        .catch(() => {});
-      console.log(`[native] đóng hộp thoại iOS bằng "${choice}"`);
-      await sleep(600);
+    } finally {
+      if (previousWebview) {
+        await this.b.switchContext(previousWebview).catch(() => {});
+        this.webview = previousWebview;
+      }
     }
   }
 
@@ -1617,9 +1686,9 @@ export class NativeUiDriver implements UiDriver {
     return this.cdpDriver?.saidSince(since);
   }
 
-  async listOptions(h: UiHandle): Promise<string[] | undefined> {
+  async listOptions(h: UiHandle, whileOpen?: () => Promise<void>): Promise<string[] | undefined> {
     if ((this.inWebview || this.cdpConnected) && this.cdpDriver && h instanceof WebViewCdpHandle) {
-      return this.cdpDriver.listOptions(h);
+      return this.cdpDriver.listOptions(h, whileOpen);
     }
     return undefined;
   }
@@ -2005,16 +2074,49 @@ function sleep(ms: number): Promise<void> {
 }
 
 /**
+ * A browser that happens to be running on the device, not the app under test.
+ *
+ * Chrome keeps its debugging socket open whenever it has a tab — including the
+ * tabs the phone's owner left there — so `WEBVIEW_chrome` shows up on any real
+ * device that is also used as a phone.
+ */
+const BROWSER_CONTEXT = /^WEBVIEW_(chrome|com\.android\.chrome|com\.chrome\.\w+|org\.mozilla\.\w+|com\.microsoft\.emmx|com\.opera\.\w+|com\.brave\.\w+|com\.sec\.android\.app\.sbrowser)$/i;
+
+/**
  * Picks the WebView context to drive out of everything Appium reports.
+ *
+ * The app under test comes first, matched by package. Appium lists contexts in
+ * the order it discovered the devtools sockets, and taking the first WebView it
+ * offered picked `WEBVIEW_chrome` on a phone with Chrome open — one slot ahead
+ * of `WEBVIEW_com.fss.tcbs.mobiletrading`, which was sitting right there. The
+ * damage is not a clean failure: chromedriver attaches to a blank Chrome tab
+ * (`url: ""`), every command queues behind a page load that can never finish,
+ * and each one dies 4 minutes later on Appium's proxy timeout. A run reads as
+ * frozen rather than broken, which is the expensive way to be wrong.
  *
  * Exported so it can be tested without a device. It has to accept both naming
  * schemes: Appium normally renames the context to `WEBVIEW_<package>`, but with
  * `enableWebviewDetailsCollection` off — which this driver sets, because that
  * rename breaks the devtools socket name chromedriver derives — it stays
- * `WEBVIEW_<pid>`.
+ * `WEBVIEW_<pid>`. A pid carries no package, so the package match cannot be
+ * required — only preferred.
  */
-export function pickWebviewContext(contexts: string[]): string | undefined {
-  return contexts.find((c) => c !== 'NATIVE_APP' && /WEBVIEW|CHROMIUM/i.test(c));
+export function pickWebviewContext(contexts: string[], appPackage?: string): string | undefined {
+  const webviews = contexts.filter((c) => c !== 'NATIVE_APP' && /WEBVIEW|CHROMIUM/i.test(c));
+  // `WEBVIEW_<package>`, and the `_<pid>` suffix Appium adds for multi-process
+  // WebViews (`WEBVIEW_com.example_1234`).
+  const mine = appPackage
+    && webviews.find((c) => c === `WEBVIEW_${appPackage}` || c.startsWith(`WEBVIEW_${appPackage}_`));
+  if (mine) return mine;
+  // No package match: a browser is never the app under test, so it is the one
+  // candidate worth refusing outright. Anything else — a pid-named context, a
+  // CHROMIUM context — is still a better guess than Chrome.
+  //
+  // When a browser is all there is, nothing is returned. The caller keeps
+  // polling and finally raises its own error, which lists the contexts it saw —
+  // "không tìm thấy WebView, chỉ thấy WEBVIEW_chrome" is a diagnosis. Attaching
+  // to Chrome anyway is a four-minute hang that names nothing.
+  return webviews.find((c) => !BROWSER_CONTEXT.test(c));
 }
 
 /** Webdriver/fetch sometimes exposes the useful socket code only on `cause`. */
@@ -2129,9 +2231,9 @@ function domElementToObserved(el: RawEl, index: number): Observed {
     ...(el.domText ? { text: el.domText } : {}),
     ...(el.placeholder ? { placeholder: el.placeholder } : {}),
     ...(el.css ? { css: el.css } : {}),
-    interactive: /^(a|button|input|select|textarea)$/i.test(el.tag) || Boolean(el.testId),
+    interactive: el.interactive,
     index,
-    container: false,
+    container: el.container,
   };
 }
 
@@ -2151,7 +2253,7 @@ function convertObservedElement(
     css: el.css,
     interactive: el.interactive ?? false,
     index,
-    container: (el.childIds?.length ?? 0) > 0,
+    container: isContainerElement(el),
   };
 }
 

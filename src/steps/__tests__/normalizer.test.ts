@@ -12,6 +12,39 @@ import {
 } from '../../core/contextual.js';
 
 describe('natural-language scenario normalization', () => {
+  it('uses the preceding dropdown context for any and default category choices', () => {
+    const normalized = normalizeNaturalSteps([
+      'Scenario: Danh mục độc lập',
+      '  When I click "mở dropdown Danh mục"',
+      '  And I chọn 1 danh mục bất kỳ',
+      '  When I click "mở dropdown Danh mục"',
+      '  And I chọn danh mục mặc định',
+    ].join('\n'));
+
+    assert.equal(normalized.unresolved.length, 0);
+    assert.match(normalized.content, /And I select any option from "Danh mục"/);
+    assert.match(normalized.content, /And I select the default option from "Danh mục"/);
+  });
+
+  it('binds a shorthand dropdown name to the known combobox label', async () => {
+    const registry = await Registry.load('/dev/null/nonexistent-dropdown-context-registry.json');
+    registry.upsertElement({
+      id: 'priceBoard.categoryDropdown',
+      label: 'Danh mục theo dõi',
+      screen: 'priceBoard',
+      candidates: {
+        web: [{ strategy: 'role', value: 'combobox', name: 'Following Cate', weight: 0.8, origin: 'llm' }],
+      },
+    });
+    const normalized = normalizeNaturalSteps([
+      'Scenario: Chọn danh mục',
+      '  When I click "mở dropdown Danh mục"',
+      '  And I chọn 1 danh mục bất kỳ',
+    ].join('\n'), registry);
+
+    assert.match(normalized.content, /I select any option from "Danh mục theo dõi"/);
+  });
+
   it('inherits @native from Feature and routes the scenario only to mobile', async () => {
     const registry = await Registry.load('/dev/null/nonexistent-native-scope-registry.json');
     const parsed = parseFeature(

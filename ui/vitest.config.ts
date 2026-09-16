@@ -6,7 +6,10 @@ export default defineConfig({
   root: import.meta.dirname,
   plugins: [react()],
   resolve: {
-    alias: { '@': path.resolve(import.meta.dirname, './src') },
+    alias: {
+      '@': path.resolve(import.meta.dirname, './src'),
+      '@evidence': path.resolve(import.meta.dirname, '../src/report/evidenceView.ts'),
+    },
   },
   test: {
     environment: 'jsdom',

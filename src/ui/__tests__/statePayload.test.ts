@@ -30,8 +30,9 @@ describe('/api/state không mang theo thứ không ai đọc', () => {
     assert.match(contracts, /hasLog: boolean;/);
   });
 
-  it('danh sách lượt chạy có giới hạn', () => {
+  it('giới hạn danh sách chung nhưng giữ report được lịch sử tham chiếu', () => {
     assert.match(server, /const MAX_REPORTS = 50;/);
-    assert.match(server, /\.slice\(0, MAX_REPORTS\)/);
+    assert.match(server, /index < MAX_REPORTS \|\| referencedIds\.has\(run\.id\)/);
+    assert.match(server, /new Set\(runs\.flatMap\(\(run\) => run\.runDirs \?\? \[\]\)\)/);
   });
 });

@@ -15,6 +15,7 @@ import {
 import type { Observed } from '../crawl/observe.js';
 import type { LocatorCandidate, Platform } from '../core/types.js';
 import {
+  isScopedFeatureSearchResult,
   protectedSelectors,
   type ControlInspection,
   type UiDriver,
@@ -478,7 +479,52 @@ export class WebUiDriver implements UiDriver {
   }
 
   async launch(target?: string): Promise<void> {
-    await this.p.goto(target ?? this.opts.baseUrl, { waitUntil: 'domcontentloaded', timeout: 60_000 });
+    await this.navigateForLaunch(target ?? this.opts.baseUrl);
+  }
+
+  /**
+   * A scenario must not fail merely because Chrome briefly reports a network
+   * handover or one request keeps `domcontentloaded` waiting after the app has
+   * already painted. This is deliberately bounded: accept a timed-out
+   * navigation only when a non-empty document exists on the expected origin;
+   * otherwise retry one transient failure and surface the final error.
+   */
+  private async navigateForLaunch(target: string): Promise<void> {
+    let lastError: unknown;
+    for (let attempt = 1; attempt <= 2; attempt += 1) {
+      try {
+        await this.p.goto(target, { waitUntil: 'domcontentloaded', timeout: 60_000 });
+        return;
+      } catch (error) {
+        lastError = error;
+        if (await this.hasUsableDocumentAt(target)) {
+          console.warn(
+            `[web] điều hướng báo lỗi nhưng trang đã hiển thị nội dung ở đúng origin — tiếp tục scenario.`,
+          );
+          return;
+        }
+        if (attempt === 2 || !isTransientNavigationError(error)) throw error;
+        console.warn(
+          `[web] điều hướng gặp lỗi mạng tạm thời — thử lại lần cuối: ${(error as Error).message.split('\n')[0]}`,
+        );
+        await new Promise((resolve) => setTimeout(resolve, 500));
+      }
+    }
+    throw lastError;
+  }
+
+  private async hasUsableDocumentAt(target: string): Promise<boolean> {
+    try {
+      const current = new URL(this.p.url());
+      const expected = new URL(target);
+      if (current.origin !== expected.origin) return false;
+      return await this.p.evaluate(() => {
+        const ready = document.readyState === 'interactive' || document.readyState === 'complete';
+        return ready && Boolean(document.body?.childElementCount);
+      });
+    } catch {
+      return false;
+    }
   }
 
   async currentUrl(): Promise<string> {
@@ -527,7 +573,12 @@ export class WebUiDriver implements UiDriver {
   }
 
   async inspectMatches(candidate: LocatorCandidate): Promise<UiMatchSnapshot> {
-    await this.clearOverlays(protectedSelectors([candidate]));
+    // Inspection must be observational. In particular, do not run the popup
+    // interceptor here: an assertion may first inspect a stale dialog locator
+    // while the real proof is a toast in another overlay. Clearing for the
+    // stale candidate closes that toast, and the next candidate can then read
+    // it only during its leave animation; by screenshot time it is gone.
+    // Resolver miss-paths and interaction methods still own overlay cleanup.
     // The same order `find` uses, not a freshly built locator.
     //
     // These two disagreed: `find` located "Tiền chuyển (Phí = 0)" through the
@@ -551,7 +602,14 @@ export class WebUiDriver implements UiDriver {
         texts: visible.map((node) => ((node as HTMLElement).innerText ?? node.textContent ?? '').replace(/\s+/g, ' ').trim()),
         focused: visible.flatMap((node, index) => {
           const el = node as HTMLElement;
-          const selected = el.matches(':focus, [aria-selected="true"], [aria-current="true"], [aria-checked="true"], .focused, .selected, .active');
+          // Product UIs often call this state "highlight", not browser focus.
+          // `:focus-within` also covers a row whose child control owns focus.
+          // These are semantic state markers; visual colour guessing is
+          // deliberately avoided because zebra-striped tables would false-pass.
+          const selected = el.matches(
+            ':focus, :focus-within, [aria-selected="true"], [aria-current="true"], '
+            + '[aria-checked="true"], [aria-pressed="true"], .focused, .selected, .active, .highlight',
+          );
           return selected ? [index] : [];
         }),
       };
@@ -637,11 +695,19 @@ export class WebUiDriver implements UiDriver {
   }
 
   async tap(h: UiHandle): Promise<void> {
-    await this.clearOverlays(protectedSelectors([(h as WebHandle).candidate]));
+    const handle = h as WebHandle;
+    // The search drawer is the target, not an interruption. `find()` already
+    // proved the exact title visible inside that drawer, so a semantic scan of
+    // every overlay here only leaves the visible result waiting on screen.
+    // If another popup really covers it, the failed-click branch below still
+    // forces one safe dismissal pass and retries this exact handle.
+    if (!isScopedFeatureSearchResult(handle.candidate)) {
+      await this.clearOverlays(protectedSelectors([handle.candidate]));
+    }
     // The executor owns retries and postcondition verification. Do not let one
     // covered/stale candidate consume Playwright's 30 s default timeout before
     // the executor can reject it and try the next candidate.
-    const root = (h as WebHandle).locator;
+    const root = handle.locator;
     // A business label may describe a composite header (for example "Giá 1M")
     // while Angular attaches the actual tooltip listener to one child span.
     // Clicking the centre of the header misses that directive. Prefer the one
@@ -665,7 +731,7 @@ export class WebUiDriver implements UiDriver {
         await locator.click({ timeout: 5_000 });
         return;
       }
-      if (await this.clickAnotherMatch(h as WebHandle)) return;
+      if (await this.clickAnotherMatch(handle)) return;
       throw err;
     }
   }
@@ -797,18 +863,19 @@ export class WebUiDriver implements UiDriver {
       });
   }
 
-  async listOptions(h: UiHandle): Promise<string[] | undefined> {
+  async listOptions(h: UiHandle, whileOpen?: () => Promise<void>): Promise<string[] | undefined> {
     const handle = h as WebHandle;
     const expanded = await handle.locator
       .evaluate((node) => (node as Element).getAttribute('aria-expanded'))
       .catch(() => null);
+    const panelAlreadyOpen = (await this.p.evaluate(openOptionLabels).catch(() => [])).length > 0;
     // Closed again below when this call is what opened it. An assertion must
     // leave the screen as it found it: reading the options of one dropdown used
     // to leave its panel open, and Material's backdrop then blocked every later
     // step — the very next line, selecting from a *different* dropdown, could
     // not be reached.
     let openedHere = false;
-    if (expanded !== 'true') {
+    if (expanded !== 'true' && !panelAlreadyOpen) {
       // See the driver interface: opening is part of the contract, because a
       // closed dropdown reads as zero choices and would make "not among the
       // choices" pass without checking anything.
@@ -829,8 +896,12 @@ export class WebUiDriver implements UiDriver {
     while (Date.now() < deadline) {
       const now = await this.p.evaluate(openOptionLabels).catch(() => []);
       if (now.length > 0 && now.length === previous) {
-        if (openedHere) await this.closeOpenPanel(this.p);
-        return now;
+        try {
+          await whileOpen?.();
+          return now;
+        } finally {
+          if (openedHere) await this.closeOpenPanel(this.p);
+        }
       }
       previous = now.length;
       seen = now;
@@ -838,8 +909,12 @@ export class WebUiDriver implements UiDriver {
     }
     // Empty after opening and waiting is a real answer for a dropdown with no
     // choices; `undefined` is reserved for "this driver cannot tell".
-    if (openedHere) await this.closeOpenPanel(this.p);
-    return seen;
+    try {
+      await whileOpen?.();
+      return seen;
+    } finally {
+      if (openedHere) await this.closeOpenPanel(this.p);
+    }
   }
 
   async selectOption(h: UiHandle, option: string): Promise<void> {
@@ -856,7 +931,8 @@ export class WebUiDriver implements UiDriver {
     // the popup interceptor exists to close. No overlay clearing may happen
     // between here and the click on the option, or the run would dismiss the
     // list it just asked for.
-    await handle.locator.click();
+    const alreadyOpen = (await this.p.evaluate(openOptionLabels).catch(() => [])).length > 0;
+    if (!alreadyOpen) await handle.locator.click();
     const panel = this.p.locator(CUSTOM_OPTION_PANEL).last();
     await panel.waitFor({ state: 'visible', timeout: 5_000 });
 
@@ -980,6 +1056,12 @@ export class WebUiDriver implements UiDriver {
   }
 }
 
+function isTransientNavigationError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error);
+  return /Timeout .* exceeded|ERR_NETWORK_CHANGED|ERR_CONNECTION_RESET|ERR_CONNECTION_CLOSED|ERR_TIMED_OUT/i
+    .test(message);
+}
+
 function sanitize(s: string): string {
   return s.replace(/[^a-z0-9-_]+/gi, '_').slice(0, 120);
 }
@@ -1077,6 +1159,15 @@ const OBSERVE_DOM = `(() => {
       var byName = el.tagName.toLowerCase() + '[name=' + JSON.stringify(String(customName)) + ']';
       if (document.querySelectorAll(byName).length === 1) return byName;
     }
+    // Product tours and analytics hooks are authored semantic handles. They
+    // are materially more stable than an nth-of-type path and, for repeated
+    // row controls, repetition is intentional: the scenario asks for the
+    // first/current row and the postcondition proves that the right action ran.
+    var walkthrough = el.getAttribute('data-walkthrough');
+    if (walkthrough) {
+      return el.tagName.toLowerCase() + '[data-walkthrough=' +
+        JSON.stringify(String(walkthrough)) + ']';
+    }
     // A repeated row has no id and no unique text, so the fallback below would
     // hand back div:nth-of-type(7). Inside a virtualised list that is worse
     // than nothing: scrolling renumbers every row. The class the rows share
@@ -1100,6 +1191,22 @@ const OBSERVE_DOM = `(() => {
         var group = document.querySelectorAll('.' + CSS.escape(token));
         if (group.length > 1 && group[0].tagName === el.tagName) return '.' + CSS.escape(token);
       }
+    }
+
+    // Prefer a unique, product-authored class over a positional DOM path.
+    // Component libraries commonly render icon buttons as
+    // button.btn-add containing span "add": the icon
+    // explains the action, but this class identifies the element that actually
+    // owns the click. Framework/state classes are deliberately excluded.
+    var semanticClasses = String(el.getAttribute('class') || '').split(/\\s+/).filter(function (token) {
+      return /^[a-z][a-z0-9_-]{3,}$/i.test(token) &&
+        !/^(?:ng-|mat-|cdk-|active$|disabled$|selected$|focused?$|hover$|show$|open$)/i.test(token);
+    });
+    for (var si = 0; si < semanticClasses.length; si++) {
+      var classSelector = el.tagName.toLowerCase() + '.' + CSS.escape(semanticClasses[si]);
+      try {
+        if (document.querySelectorAll(classSelector).length === 1) return classSelector;
+      } catch (_) {}
     }
 
     var parts = [], node = el;
@@ -1166,6 +1273,7 @@ const OBSERVE_DOM = `(() => {
       var n = seen[role] || 0;
       seen[role] = n + 1;
       var text = (el.innerText || '').trim().replace(/\\s+/g, ' ');
+      var rect = el.getBoundingClientRect();
       return {
         testId: el.getAttribute('data-testid') || el.getAttribute('data-test') ||
                 el.getAttribute('data-cy') || undefined,
@@ -1175,6 +1283,7 @@ const OBSERVE_DOM = `(() => {
         text: text && text.length <= 80 ? text : undefined,
         placeholder: el.getAttribute('placeholder') || undefined,
         css: cssFor(el),
+        bounds: { x: rect.left, y: rect.top, width: rect.width, height: rect.height },
         context: regionFor(el),
         interactive: /^(a|button|input|select|textarea)$/.test(tag) ||
                      el.hasAttribute('onclick') || customControl || pointerControl || navigationControl,

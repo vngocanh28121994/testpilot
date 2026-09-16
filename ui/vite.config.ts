@@ -34,6 +34,10 @@ export default defineConfig(() => ({
   resolve: {
     alias: {
       '@': path.resolve(import.meta.dirname, './src'),
+      // Allowlist đúng một module thuần, không phụ thuộc Node/API. Gallery và
+      // HTML report phải dùng cùng quy tắc evidence nhưng hàng rào @core bên
+      // dưới vẫn chặn mọi value import khác từ backend.
+      '@evidence': path.resolve(import.meta.dirname, '../src/report/evidenceView.ts'),
       // KHÔNG khai báo alias '@core' ở đây, dù tsconfig.app.json có. Cố ý:
       // '@core/*' chỉ được dùng với `import type`, thứ bị xoá sạch lúc build.
       // Nếu ai đó lỡ import một *giá trị* từ backend, Vite phải gãy ngay tại

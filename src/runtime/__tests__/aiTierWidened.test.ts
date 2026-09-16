@@ -17,6 +17,8 @@ import { describe, it } from 'node:test';
 const resolver = readFileSync('src/runtime/resolver.ts', 'utf8');
 const discovery = readFileSync('src/discovery/ElementDiscovery.ts', 'utf8');
 const config = readFileSync('src/config.ts', 'utf8');
+const executor = readFileSync('src/runtime/executor.ts', 'utf8');
+const provider = readFileSync('src/discovery/ai/LlmElementProvider.ts', 'utf8');
 
 describe('tầng AI được mở rộng', () => {
   it('ngưỡng tin cậy hạ xuống 45', () => {
@@ -26,7 +28,10 @@ describe('tầng AI được mở rộng', () => {
   it('khởi động ngay khi có ảnh chụp, không chờ tầng tất định thất bại', () => {
     assert.match(discovery, /onObservation\?: \(observation: UiObservation\) => void;/);
     assert.match(discovery, /opts\.onObservation\?\.\(observation\)/);
-    assert.match(resolver, /onObservation: \(obs\) => \{[\s\S]{0,120}proposeViaAi\(intent, obs, elementId\)/);
+    assert.match(
+      resolver,
+      /onObservation: \(obs\) => \{[\s\S]{0,320}proposeViaAi\([\s\S]{0,120}intent,[\s\S]{0,80}obs,[\s\S]{0,80}elementId/,
+    );
   });
 
   /**
@@ -34,8 +39,9 @@ describe('tầng AI được mở rộng', () => {
    * tốn tiền cho đúng câu trả lời cũ.
    */
   it('hỏi lại được khi màn hình đã đổi, nhưng không hỏi lặp trên cùng màn hình', () => {
-    assert.match(resolver, /const key = `\$\{elementId\}::\$\{observation\.elements\.length\}::\$\{shape\}`/);
-    assert.match(resolver, /if \(this\.aiProposed\.has\(key\)\) return null;/);
+    assert.match(resolver, /private readonly aiProposals = new Map<string, Promise<LocatorCandidate\[\]>>/);
+    assert.match(resolver, /const cached = this\.aiProposals\.get\(key\)/);
+    assert.match(resolver, /this\.aiProposals\.set\(key, task\)/);
   });
 
   /**
@@ -44,5 +50,13 @@ describe('tầng AI được mở rộng', () => {
   it('vẫn giữ xác minh trước khi dùng ứng viên do AI đề xuất', () => {
     assert.match(resolver, /verifySemantically/);
     assert.match(resolver, /persistVerifiedLocator: false/);
+  });
+
+  it('đưa cả mạch bước và hậu điều kiện vào quyết định semantic', () => {
+    assert.match(executor, /`Bước trước: \$\{previousStep\.text\}`/);
+    assert.match(executor, /`Bước hiện tại: \$\{step\.text\}`/);
+    assert.match(executor, /`Kết quả cần chứng minh: \$\{expectation\.source\}`/);
+    assert.match(provider, /clickableAncestorIndex/);
+    assert.match(provider, /tối đa 3/i);
   });
 });

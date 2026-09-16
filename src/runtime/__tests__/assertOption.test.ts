@@ -22,7 +22,7 @@ const handle: UiHandle = {
   text: async () => 'Chọn TK nhận tiền',
 };
 
-function driverWith(listOptions?: () => Promise<string[] | undefined>): UiDriver {
+function driverWith(listOptions?: UiDriver['listOptions']): UiDriver {
   return {
     platform: 'web',
     device: 'test',
@@ -93,5 +93,40 @@ describe('asserting a dropdown choice', () => {
   it('ignores case and spacing, as the scenario writes what a user reads', async () => {
     const driver = driverWith(async () => ['TK  Ký   Quỹ']);
     assert.equal(await run(driver, 'present', 'tk ký quỹ'), undefined);
+  });
+
+  it('captures the offered choices before the dropdown is restored, and reuses that frame on failure', async () => {
+    let panelOpen = true;
+    const shots: string[] = [];
+    const driver = driverWith(async (_handle, whileOpen) => {
+      await whileOpen?.();
+      panelOpen = false;
+      return ['TK Thường', 'TK Ký Quỹ'];
+    });
+    driver.screenshot = async () => {
+      const path = panelOpen ? 'dropdown-open.png' : 'dropdown-closed.png';
+      shots.push(path);
+      return path;
+    };
+
+    const registry = await Registry.load('/dev/null/nonexistent-registry-proof.json');
+    registry.upsertElement({
+      id: 'transfer.destination', label: 'Chọn TK nhận tiền', screen: 'transfer',
+      candidates: { web: [handle.candidate] },
+    });
+    const executor = new Executor(driver, new Resolver(driver, registry, {
+      timeoutMs: 200, pollMs: 50, requireVisible: false, verifyHealedMatch: false,
+    }));
+    const [result] = await executor.runStepsWithoutTeardown([{
+      line: 42,
+      text: '"TK Thường" is not an option in "Chọn TK nhận tiền"',
+      intent: {
+        kind: 'assertOption', element: 'transfer.destination', option: 'TK Thường', expect: 'absent',
+      },
+    } as never], 'dropdown-proof');
+
+    assert.equal(result?.status, 'failed');
+    assert.equal(result?.screenshot, 'dropdown-open.png');
+    assert.deepEqual(shots, ['dropdown-open.png'], 'không được chụp lại sau khi panel đã đóng');
   });
 });

@@ -28,15 +28,18 @@ import type {
 import { proposeStepHypotheses } from '../healing/StepHealer.js';
 import {
   healScenarioSteps,
+  retainVerifiedHealing,
   type ScenarioAttempt,
   type StepPatch,
 } from '../healing/StepHealingLoop.js';
 import type { UiDriver } from '../drivers/driver.js';
 import { Executor } from '../runtime/executor.js';
-import { Resolver, DEFAULT_RESOLVE } from '../runtime/resolver.js';
+import { Resolver, DEFAULT_RESOLVE, hasSameScreenSemanticCandidate } from '../runtime/resolver.js';
 import { ElementDiscovery } from '../discovery/ElementDiscovery.js';
 import { SemanticElementDiscovery } from '../discovery/ai/SemanticElementDiscovery.js';
 import { LlmElementProvider } from '../discovery/ai/LlmElementProvider.js';
+import { GeminiVisionElementProvider } from '../discovery/ai/GeminiVisionElementProvider.js';
+import { VisionElementDiscovery } from '../discovery/ai/VisionElementDiscovery.js';
 import { RuntimeRegistry } from '../discovery/RuntimeRegistry.js';
 import { AppiumMcpElementDiscovery } from '../discovery/mcp/AppiumMcpElementDiscovery.js';
 import { DriverMcpClient } from '../discovery/mcp/DriverMcpClient.js';
@@ -64,7 +67,7 @@ const REPEATED_FAILURE_LIMIT = 3;
 async function main(): Promise<void> {
   await adoptStoredApiKeys();
   const args = parseArgs(process.argv.slice(2));
-  const baseCfg = await loadConfig(args.config ?? 'testpilot.config.json');
+  const baseCfg = await loadConfig(args.config ?? process.env.TESTPILOT_CONFIG);
   // The farm container has no flags of its own; it gets the environment the
   // same way it gets passwords, through the environment it was launched with.
   const envName = args.env ?? process.env.TESTPILOT_ENV ?? baseCfg.defaultEnv;
@@ -260,14 +263,44 @@ async function main(): Promise<void> {
   const runtimeRegistry = await RuntimeRegistry.load('registry/runtime-registry.json');
   const elementDiscovery = new ElementDiscovery(appiumMcp, runtimeRegistry);
 
+  // A locator is valuable as soon as an action proves it, not only when the
+  // entire suite reaches its final `finally`. Persist checkpoints serially so
+  // a killed/crashed run does not make later scenarios (or the next run)
+  // rediscover the same control. Parallel children keep writing only inside
+  // their own run directory; the coordinator remains the sole shared writer.
+  let learningCheckpoint = Promise.resolve();
+  const checkpointVerifiedLearning = () => {
+    const persist = async () => {
+      if (args.deferSharedWrites) {
+        await writeLearned(runDir, {
+          registry: registry.changesSinceLoad(),
+          runtime: runtimeRegistry.raw,
+          rejections: registry.rejectionsSinceLoad(),
+        });
+      } else {
+        await runtimeRegistry.save();
+        await registry.save();
+      }
+    };
+    learningCheckpoint = learningCheckpoint.then(persist, persist).catch((err: Error) => {
+      console.warn(`[learn:checkpoint] chưa lưu được locator vừa học: ${err.message}`);
+    });
+  };
+
   // The AI tier is built only when the config asks for it and a vendor key is
   // present. Absent either, the resolver is byte-for-byte the deterministic one
   // — no network call can enter a run that did not opt in.
   const semanticDiscovery = cfg.discovery.ai.enabled && LlmElementProvider.available()
     ? new SemanticElementDiscovery(new LlmElementProvider(), runtimeRegistry)
     : undefined;
+  const visionDiscovery = cfg.discovery.ai.enabled && GeminiVisionElementProvider.available()
+    ? new VisionElementDiscovery(new GeminiVisionElementProvider(), runtimeRegistry)
+    : undefined;
   if (cfg.discovery.ai.enabled && !semanticDiscovery) {
     console.warn('[discovery:ai] đã bật trong config nhưng chưa có API key — bỏ qua tầng AI.');
+  }
+  if (cfg.discovery.ai.enabled && !visionDiscovery) {
+    console.warn('[discovery:vision] chưa có GEMINI_API_KEY — bỏ qua tầng vision runtime.');
   }
 
   const resolver = new Resolver(driver, registry, {
@@ -275,7 +308,8 @@ async function main(): Promise<void> {
     timeoutMs: cfg.resolve.timeoutMs,
     pollMs: cfg.resolve.pollMs,
     verifyHealedMatch: cfg.resolve.verifyHealedMatch,
-  }, elementDiscovery, semanticDiscovery, cfg.discovery.ai.minConfidence);
+  }, elementDiscovery, semanticDiscovery, cfg.discovery.ai.minConfidence, visionDiscovery, appiumMcp,
+  checkpointVerifiedLearning);
   const executor = new Executor(driver, resolver, {
     retries: args.locatorRetries ?? cfg.executor.retries,
     verifyInput: cfg.executor.verifyInput,
@@ -403,22 +437,29 @@ async function main(): Promise<void> {
       }
     }
   } finally {
-    await driver.stop();
-    // Discovery may have minted selectors for natural-language elements even
-    // when a later step fails. Keep that verified work for the next run.
-    if (args.deferSharedWrites) {
-      // Every one of these stores is written by rewriting the whole file, so
-      // concurrent runs would each erase what the others found. Leave the files
-      // alone and hand the learnings to whoever is coordinating the run; see
-      // mergeRunLearnings(). Flakiness and healing are not written here at all
-      // because both are derived from `results`, which report.json already holds.
-      await writeLearned(runDir, {
-        registry: registry.changesSinceLoad(),
-        runtime: runtimeRegistry.raw,
-      });
-    } else {
-      await runtimeRegistry.save();
-      await registry.save();
+    try {
+      await driver.stop();
+    } finally {
+      // Drain any per-locator write first, then take one final snapshot. A
+      // driver shutdown error must not erase everything the run already proved.
+      await learningCheckpoint;
+      // Discovery may have minted selectors for natural-language elements even
+      // when a later step fails. Keep that verified work for the next run.
+      if (args.deferSharedWrites) {
+        // Every one of these stores is written by rewriting the whole file, so
+        // concurrent runs would each erase what the others found. Leave the files
+        // alone and hand the learnings to whoever is coordinating the run; see
+        // mergeRunLearnings(). Flakiness and healing are not written here at all
+        // because both are derived from `results`, which report.json already holds.
+        await writeLearned(runDir, {
+          registry: registry.changesSinceLoad(),
+          runtime: runtimeRegistry.raw,
+          rejections: registry.rejectionsSinceLoad(),
+        });
+      } else {
+        await runtimeRegistry.save();
+        await registry.save();
+      }
     }
   }
 
@@ -568,11 +609,15 @@ async function main(): Promise<void> {
     kind: args.onFarm ? 'farm' : 'run',
     ...(args.tag ? { tag: args.tag } : {}),
     device: driver.device,
-    status: realFailures.length > 0 ? 'failed' : 'passed',
+    // A run with requested-but-unapproved scenarios is incomplete, never a
+    // successful 0/0 baseline. Exit code 2 below keeps the CLI distinction;
+    // the run store only has terminal passed/failed, so failed is the honest
+    // persisted state for history and retention.
+    status: realFailures.length > 0 || unapproved.length > 0 ? 'failed' : 'passed',
     startedAt,
     finishedAt: report.finishedAt,
     counters: {
-      total: results.length + quarantined.length,
+      total: results.length + quarantined.length + unapproved.length,
       passed: results.filter((r) => r.verdict === 'passed').length,
       failed: realFailures.length,
       quarantined: quarantined.length,
@@ -804,6 +849,7 @@ async function attemptStepHealing(
     + `chứng minh được gì, dòng ${observation.failingLine} fail — thử tìm bước còn thiếu.`,
   );
 
+  let verifiedReplay: ScenarioResult | undefined;
   const outcome = await healScenarioSteps({
     scenario: scenario.name,
     baseline: toAttempt(last!),
@@ -815,6 +861,7 @@ async function attemptStepHealing(
     }),
     runPatched: async (patches: StepPatch[]) => {
       const attempt = await executor.runScenario(scenario, background, patches);
+      verifiedReplay = attempt;
       return toAttempt(attempt.runs.at(-1)!);
     },
   });
@@ -825,9 +872,15 @@ async function attemptStepHealing(
       console.log(`    sau dòng ${patch.afterLine}: ${patch.step}`);
       console.log(`      lý do: ${patch.reason}`);
     }
-    console.log(
-      '    Kịch bản chạy lại đã xanh. Thêm bước trên vào file .feature rồi duyệt lại để áp dụng.',
-    );
+    console.log('    Kịch bản chạy lại đã xanh; kết quả được giữ là flaky/healed thay vì bỏ replay và báo fail.');
+
+    // The replay is execution evidence, not a hypothesis any more. Keeping the
+    // original red attempt and the patched green attempt truthfully reports a
+    // runtime heal as flaky while allowing the suite to continue. The previous
+    // implementation discarded the successful replay and returned the stale
+    // failure, so healing did real work and then made the report look as if it
+    // had never happened.
+    return retainVerifiedHealing(result, verifiedReplay);
   } else if (outcome.kind === 'question') {
     // Recorded, not asked. The run carries on; the report carries the question.
     openQuestions.push({
@@ -842,9 +895,8 @@ async function attemptStepHealing(
   } else if (outcome.kind === 'exhausted') {
     console.log(`[heal:step] ✗ không tìm được bước còn thiếu: ${outcome.reason}`);
   }
-  // The verdict is not rewritten. A patch that only exists in memory did not
-  // fix the suite, and reporting the scenario as passing would be a lie until
-  // somebody applies it.
+  // An unverified hypothesis never changes the verdict. Only the successful
+  // replay handled above is retained as execution evidence.
   return result;
 }
 
@@ -970,6 +1022,7 @@ function warnAboutLocatorlessElements(
           ? [...(element.candidates[platform] ?? []), ...(element.candidates.web ?? [])]
           : (element.candidates[platform] ?? []);
         if (usable.length > 0) continue;
+        if (hasSameScreenSemanticCandidate(registry, intent.element, platform, hybrid)) continue;
         if ((element.health?.resolutions ?? 0) > 0) continue;
         const entry = offenders.get(intent.element)
           ?? { label: element.label, where: [] };
@@ -992,6 +1045,7 @@ function warnAboutLocatorlessElements(
     + 'của element đó thay vì để hai element cho một control.',
   );
 }
+
 
 function assertAccountsResolve(
   features: FeatureSpec[],

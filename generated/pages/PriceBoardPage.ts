@@ -155,4 +155,39 @@ export class PriceBoardPage {
   async doStockRow(): Promise<void> {
     await this.page.tap('priceBoard.stockRow');
   }
+
+  /** Danh mục theo dõi
+   * @testpilot-element priceBoard.categoryDropdown action=assertText
+   */
+  async assertCategoryDropdownText(expected: string, mode: 'equals' | 'contains' | 'notContains' = 'contains'): Promise<void> {
+    await this.page.assertText('priceBoard.categoryDropdown', expected, mode);
+  }
+
+  /** mở dropdown Danh mục
+   * @testpilot-element priceBoard.moDropdownDanhMuc action=tap
+   */
+  async tapMoDropdownDanhMuc(): Promise<void> {
+    await this.page.tap('priceBoard.moDropdownDanhMuc');
+  }
+
+  /** open category
+   * @testpilot-element priceBoard.openCategory action=tap
+   */
+  async tapOpenCategory(): Promise<void> {
+    await this.page.tap('priceBoard.openCategory');
+  }
+
+  /** category not default
+   * @testpilot-element priceBoard.categoryNotDefault action=tap
+   */
+  async tapCategoryNotDefault(): Promise<void> {
+    await this.page.tap('priceBoard.categoryNotDefault');
+  }
+
+  /** category default
+   * @testpilot-element priceBoard.categoryDefault action=tap
+   */
+  async tapCategoryDefault(): Promise<void> {
+    await this.page.tap('priceBoard.categoryDefault');
+  }
 }

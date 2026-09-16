@@ -278,6 +278,8 @@ const Paths = z.object({
   runs: z.string().default('runs'),
   flakeDb: z.string().default('registry/flake.json'),
   healingDb: z.string().default('registry/healing.json'),
+  /** Quyết định "gộp" / "không phải trùng" cho các cặp element bị nghi trùng vai. */
+  duplicateReviewDb: z.string().default('registry/duplicate-review.json'),
   /** Human-reviewed natural-language action macros. */
   actionsDb: z.string().default('registry/actions.json'),
   /** Approval is bound to the exact hash of each generated/edited scenario. */
@@ -443,12 +445,11 @@ export const ConfigSchema = z.object({
   /**
    * The AI fallback for elements no deterministic candidate can find.
    *
-   * Off by default, and deliberately so: a suite whose result depends on a
-   * model reachable over the network is a suite whose red no longer means the
-   * app changed. Turned on, it does not rescue the run it fires in — it writes
-   * what it found into the registry as an unapproved candidate for a human to
-   * review, because a model can be fluently wrong (asked for "Lệnh thường" it
-   * once chose a control reading "Thường", with confidence 90).
+   * Off by default, and deliberately so: a model may rank live candidates but
+   * never decides that an action passed. When enabled, its top proposals are
+   * tried only through the normal verifier/outcome path. A locator is learned
+   * only after the requested state is observed; an AI confidence score alone
+   * is never execution proof.
    */
   discovery: z
     .object({
@@ -695,7 +696,9 @@ export function resolveModel(model: string): string {
   return !model || model === 'auto' ? DEFAULT_LLM_MODEL : model;
 }
 
-export async function loadConfig(file = 'testpilot.config.json'): Promise<TestPilotConfig> {
+export async function loadConfig(
+  file = process.env.TESTPILOT_CONFIG ?? 'testpilot.config.json',
+): Promise<TestPilotConfig> {
   const abs = path.resolve(file);
   if (!existsSync(abs)) {
     throw new Error(`No config at ${abs}. Copy testpilot.config.example.json and edit it.`);
@@ -713,7 +716,7 @@ export async function loadConfig(file = 'testpilot.config.json'): Promise<TestPi
  */
 export async function saveConfig(
   cfg: TestPilotConfig,
-  file = 'testpilot.config.json',
+  file = process.env.TESTPILOT_CONFIG ?? 'testpilot.config.json',
 ): Promise<void> {
   const parsed = ConfigSchema.safeParse(cfg);
   if (!parsed.success) {

@@ -7,6 +7,7 @@ set -euo pipefail
 
 OUT="build/testpilot-appium.zip"
 STAGE="build/farm-stage"
+CONFIG_FILE="${TESTPILOT_CONFIG:-testpilot.config.json}"
 
 # Check the inputs before touching anything. Without this the script dies on a
 # bare `cp: features: No such file or directory`, which says nothing about the
@@ -28,7 +29,7 @@ fi
 # the last free moment before the upload.
 node -e '
   const fs = require("fs");
-  const cfg = JSON.parse(fs.readFileSync("testpilot.config.json", "utf8"));
+  const cfg = JSON.parse(fs.readFileSync(process.argv[1], "utf8"));
   const platform = (cfg.farm && cfg.farm.platform) || "android";
   const reg = JSON.parse(fs.readFileSync(cfg.paths?.registry ?? "registry/elements.json", "utf8"));
 
@@ -128,12 +129,16 @@ node -e '
     console.error("Bỏ tag đó, hoặc thêm @" + platform + ". Chạy như hiện tại là tốn phút thiết bị mà không test gì.");
     process.exit(1);
   }
-'
+' "$CONFIG_FILE"
 
 rm -rf "$STAGE" "$OUT"
 mkdir -p "$STAGE" build
 
 cp -R dist "$STAGE/dist"
+# TypeScript does not delete output for removed source files. `src/run.ts` was
+# the obsolete duplicate runner that broke iOS packaging; do not let an old
+# dist copy survive into a newly built Device Farm package.
+rm -f "$STAGE/dist/run.js" "$STAGE/dist/run.js.map" "$STAGE/dist/run.d.ts"
 rm -rf "$STAGE/dist/ui"
 cp -R features "$STAGE/features"
 cp -R registry "$STAGE/registry"
@@ -147,7 +152,7 @@ cp -R registry "$STAGE/registry"
 # XCUITest driver. Keyed on either platform's hybrid flag, an iOS bundle shipped
 # a 21 MB linux/x64 binary the job then failed to exec — noise in the log at the
 # exact moment someone is reading it to find out why iOS did not start.
-HYBRID=$(node -e 'const c=require("./testpilot.config.json"); const p=c.farm?.platform ?? "android"; process.stdout.write(p === "android" && c.android?.hybrid ? "1" : "")' 2>/dev/null || true)
+HYBRID=$(node -e 'const fs=require("fs"); const c=JSON.parse(fs.readFileSync(process.argv[1],"utf8")); const p=c.farm?.platform ?? "android"; process.stdout.write(p === "android" && c.android?.hybrid ? "1" : "")' "$CONFIG_FILE" 2>/dev/null || true)
 
 if [ -n "$HYBRID" ] && [ -f build/chromedriver/chromedriver ]; then
   mkdir -p "$STAGE/chromedriver"
@@ -163,7 +168,7 @@ elif [ -n "$HYBRID" ]; then
   echo "  Nếu host Device Farm không tải được driver, lượt chạy sẽ chết ở bước chuyển WebView." >&2
   echo "  Chạy: ./scripts/fetch-chromedriver.sh <phiên bản Chrome của máy>" >&2
 fi
-cp testpilot.config.json "$STAGE/"
+cp "$CONFIG_FILE" "$STAGE/testpilot.config.json"
 cp package.json package-lock.json "$STAGE/" 2>/dev/null || cp package.json "$STAGE/"
 
 # Playwright stays. It was stripped here as a "web-only" dependency, which was

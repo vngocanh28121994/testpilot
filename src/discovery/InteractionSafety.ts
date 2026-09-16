@@ -13,15 +13,15 @@
  * Safety checks (deterministic — no AI):
  *   SAFE     — visible, enabled, interactive, not covered, correct context
  *   UNSAFE   — one or more hard safety checks fail (value is known-bad)
- *   AMBIGUOUS— element cannot be uniquely identified on the current screen
- *   UNKNOWN  — critical metadata is missing for a HIGH-risk action.
- *              Per review v6 §15: missing evidence is NOT a silent PASS.
- *              Caller must re-observe or stop — never execute under UNKNOWN.
+ *   AMBIGUOUS— retained for API compatibility; candidate uniqueness is decided
+ *              by AmbiguityPolicy before this actionability check.
+ *   UNKNOWN  — retained for API compatibility; missing Appium metadata does not
+ *              block execution in the configured test environment.
  */
 
 import type { ActionKind, ElementIntent } from './ElementIntent.js';
 import type { ObservedElement } from './UiObservation.js';
-import { classifyActionRisk } from './ActionRisk.js';
+import { textMatch } from './ConfidenceScorer.js';
 
 export type InteractionSafety = 'SAFE' | 'UNSAFE' | 'AMBIGUOUS' | 'UNKNOWN';
 
@@ -63,55 +63,32 @@ export function checkInteractionSafety(
   intent: ElementIntent,
   candidate: ObservedElement,
   allElements: ObservedElement[],
+  opts: { allowExactTextProxy?: boolean } = {},
 ): SafetyCheckResult {
   const evidence: string[] = [];
-  const elementText = candidate.text ?? candidate.accessibilityLabel;
-  const actionRisk = classifyActionRisk(intent.action, elementText);
-
   const visible     = candidate.visible;
   const enabledRaw  = candidate.enabled;
   const interactRaw = candidate.interactive;
   const unique      = isUnique(candidate, allElements);
 
-  // AMBIGUOUS: element cannot be uniquely identified — do not click either element
-  if (!unique) {
-    const msg = 'element shares the same text/role signature with another element on screen (AMBIGUOUS)';
-    evidence.push(msg);
-    return {
-      safety: 'AMBIGUOUS',
-      reason: msg,
-      checks: { exists: true, visible, enabled: enabledRaw, interactive: interactRaw, unique: false },
-      evidence,
-    };
-  }
-
-  // UNKNOWN: HIGH-risk action with missing critical metadata (v6 §15)
-  // Never silently treat missing evidence as PASS for destructive actions.
-  if (actionRisk === 'HIGH') {
-    const missing: string[] = [];
-    if (actionRequiresEnabled(intent.action) && enabledRaw == null) missing.push('enabled');
-    if (actionRequiresInteractive(intent.action) && interactRaw == null) missing.push('interactive');
-
-    if (missing.length > 0) {
-      const msg =
-        `HIGH-risk action "${intent.action}" with missing metadata: ${missing.join(', ')} — ` +
-        `cannot confirm element is safe to interact with`;
-      evidence.push(msg);
-      return {
-        safety: 'UNKNOWN',
-        reason: msg,
-        checks: { exists: true, visible, enabled: enabledRaw, interactive: interactRaw, unique: true },
-        evidence,
-      };
-    }
-  }
-
-  // Hard failures (definitive bad state)
+  // Hard actionability failures only. Business labels such as "Chuyển tiền"
+  // or "Xoá" do not change the policy: these runs use isolated test accounts.
+  // Missing metadata is not evidence of a disabled control; the real driver
+  // action and its postcondition remain authoritative.
   if (!visible) evidence.push('element is not visible on screen');
   if (enabledRaw === false && actionRequiresEnabled(intent.action)) {
     evidence.push(`element is disabled but action "${intent.action}" requires enabled`);
   }
-  if (interactRaw === false && actionRequiresInteractive(intent.action)) {
+  const exactTextProxy = opts.allowExactTextProxy === true
+    && intent.action === 'tap'
+    && visible
+    && unique
+    && hasExactSemanticName(intent, candidate);
+  if (
+    interactRaw === false &&
+    actionRequiresInteractive(intent.action) &&
+    !exactTextProxy
+  ) {
     evidence.push(`element is not interactive but action "${intent.action}" requires it`);
   }
 
@@ -120,11 +97,20 @@ export function checkInteractionSafety(
     visible,
     enabled: enabledRaw,
     interactive: interactRaw,
-    unique: true,
+    unique,
   };
 
   if (evidence.length > 0) {
     return { safety: 'UNSAFE', reason: evidence[0]!, checks, evidence };
+  }
+
+  if (exactTextProxy) {
+    return {
+      safety: 'SAFE',
+      reason: 'Exact unique visible text may proxy its clickable parent; outcome verification required',
+      checks,
+      evidence: ['interactive=false is treated as leaf-node metadata, not proof that its parent cannot be tapped'],
+    };
   }
 
   return { safety: 'SAFE', reason: 'All safety checks passed', checks, evidence: [] };
@@ -182,4 +168,11 @@ function actionRequiresEnabled(action: ActionKind): boolean {
 
 function actionRequiresInteractive(action: ActionKind): boolean {
   return ['tap', 'drag', 'input', 'select', 'check', 'uncheck', 'scroll'].includes(action);
+}
+
+function hasExactSemanticName(intent: ElementIntent, candidate: ObservedElement): boolean {
+  const wanted = intent.text ?? intent.label;
+  if (!wanted) return false;
+  return [candidate.accessibilityLabel, candidate.text, candidate.placeholder]
+    .some((value) => value != null && textMatch(value, wanted) === 'exact');
 }

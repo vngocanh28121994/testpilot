@@ -28,7 +28,7 @@ import {
   type RetentionPolicy,
   type RunMeta,
 } from '../core/runstore.js';
-import { appendDeviceVideos } from '../report/html.js';
+import { appendDeviceVideos, writeHtmlReport } from '../report/html.js';
 import { HealingStore } from '../healing/HealingStore.js';
 
 /**
@@ -102,6 +102,7 @@ export interface FarmRunResult {
   runArn: string;
   status: string;
   result: string;
+  /** AWS lifecycle counters (setup/test/teardown), not TestPilot testcase totals. */
   counters: Record<string, number | undefined>;
   artifacts: Array<{ name: string; type: string; url: string }>;
   /** Local run directories created during this run (one per device). */
@@ -630,7 +631,10 @@ export async function scheduleFarmRun(
   }
 
   const client = await makeClient(cfg.region);
-  const specPath = await renderTestSpec(cfg.testSpecPath, cfg.env ?? {});
+  const specPath = await validatedTestSpec(cfg.testSpecPath);
+  const environmentVariables = Object.entries(cfg.env ?? {})
+    .filter(([name]) => /^[A-Za-z_][A-Za-z0-9_]*$/.test(name))
+    .map(([name, value]) => ({ name, value }));
 
   stage(1);
   log(`Upload ${cfg.platform === 'android' ? 'APK' : 'IPA'}: ${path.basename(cfg.appPath)}`);
@@ -659,7 +663,10 @@ export async function scheduleFarmRun(
       devicePoolArn: cfg.devicePoolArn,
       name: cfg.runName || `testpilot-${new Date().toISOString()}`,
       test: { type: 'APPIUM_NODE', testPackageArn: testArn, testSpecArn: specArn },
-      configuration: { billingMethod: 'METERED' },
+      configuration: {
+        billingMethod: 'METERED',
+        ...(environmentVariables.length > 0 ? { environmentVariables } : {}),
+      },
       executionConfiguration: {
         ...(cfg.jobTimeoutMinutes ? { jobTimeoutMinutes: cfg.jobTimeoutMinutes } : {}),
         videoCapture: cfg.videoCapture ?? true,
@@ -697,6 +704,10 @@ export async function collectFarmRun(
   const run = await waitForRun(client, runArn, cfg.timeoutMs ?? 60 * 60_000, log);
 
   stage(3);
+  log(
+    'AWS đã chạy xong. TestPilot đang tải và ghép report, ảnh, video của từng thiết bị; ' +
+      'bước này có thể mất thêm vài phút.',
+  );
   // Per job, because a device pool produces one job per device and each has its
   // own report, its own screenshots and its own verdict.
   const jobs = await listJobs(client, runArn);
@@ -705,7 +716,8 @@ export async function collectFarmRun(
 
   const runDirs: string[] = [];
   if (cfg.runsDir) {
-    for (const job of jobs) {
+    for (const [index, job] of jobs.entries()) {
+      log(`Đang thu artifact ${index + 1}/${jobs.length}: ${job.deviceName}.`);
       const jobArtifacts = await listArtifacts(client, job.arn);
       let runDir = await pullReport(
         jobArtifacts,
@@ -731,6 +743,7 @@ export async function collectFarmRun(
       // passing run is gone.
       await pullFarmVideos(jobArtifacts, runDir, log);
       await stampFarmMeta(runDir, runArn, job);
+      await logTestPilotCaseSummary(runDir, job.deviceName, log);
       await linkLatest(cfg.reportsDir ?? 'reports', cfg.platform, runDir);
     }
     // Once, after every device is in: pruning between jobs could delete a run
@@ -794,40 +807,15 @@ async function upload(
 }
 
 /**
- * The checked-in testspec has no environment block, because what the app under
- * test needs differs per team and per environment. Rather than make people edit
- * YAML, the configured variables are injected as `export` lines at the top of
- * the `test` phase — the last place they can be set before the runner starts.
- *
- * Returns the original path untouched when there is nothing to inject, so the
- * common case still uploads the file you can read in the repo.
+ * Validate the checked-in spec before uploading it. Run-specific variables are
+ * sent through ScheduleRun.configuration.environmentVariables instead of being
+ * written as literal `export` commands: Device Farm prints every testspec
+ * command, which previously exposed account passwords in TESTSPEC_OUTPUT.
  */
-export async function renderTestSpec(
-  testSpecPath: string,
-  env: Record<string, string>,
-): Promise<string> {
-  const entries = Object.entries(env).filter(([k]) => /^[A-Za-z_][A-Za-z0-9_]*$/.test(k));
-  if (entries.length === 0) return testSpecPath;
-
+async function validatedTestSpec(testSpecPath: string): Promise<string> {
   const yaml = await readFile(path.resolve(testSpecPath), 'utf8');
   assertCommandsAreStrings(testSpecPath, yaml);
-  const marker = /^(\s+)test:\n(\s+)commands:\n/m.exec(yaml);
-  if (!marker) {
-    throw new Error(`${testSpecPath} không có phase "test:" để chèn biến môi trường.`);
-  }
-
-  const indent = `${marker[2]}  `;
-  const exports = entries
-    .map(([k, v]) => `${indent}- export ${k}=${shellQuote(v)}\n`)
-    .join('');
-  const patched = yaml.slice(0, marker.index + marker[0].length) +
-    exports +
-    yaml.slice(marker.index + marker[0].length);
-
-  const out = path.join(os.tmpdir(), 'testpilot-farm', `testspec-${Date.now()}.yml`);
-  await mkdir(path.dirname(out), { recursive: true });
-  await writeFile(out, patched, 'utf8');
-  return out;
+  return testSpecPath;
 }
 
 /**
@@ -862,11 +850,6 @@ function assertCommandsAreStrings(file: string, yaml: string): void {
   );
 }
 
-/** Single-quote for POSIX sh, so a value with spaces or $ cannot run anything. */
-function shellQuote(value: string): string {
-  return `'${value.replace(/'/g, `'\\''`)}'`;
-}
-
 async function waitForRun(
   client: DeviceFarmClient,
   arn: string,
@@ -879,9 +862,7 @@ async function waitForRun(
     const { run } = await client.send(new GetRunCommand({ arn }));
     const status = run?.status ?? 'UNKNOWN';
     if (status !== last) {
-      const c = run?.counters;
-      const counts = c ? ` (${c.passed ?? 0} passed / ${c.failed ?? 0} failed / ${c.total ?? 0})` : '';
-      log(`${status}${counts}`);
+      log(formatAwsLifecycle(status, run?.counters));
       last = status;
     }
     if (status === 'COMPLETED') return run!;
@@ -889,6 +870,84 @@ async function waitForRun(
       throw new Error(`Run ${arn} did not complete within ${Math.round(timeoutMs / 60000)}m.`);
     }
     await sleep(30_000);
+  }
+}
+
+/**
+ * Device Farm custom environments expose one Setup, Tests and Teardown item
+ * per device. Their aggregate looks like a testcase count but is not one: our
+ * scenarios all run inside the single command represented by "Tests Suite".
+ */
+export function formatAwsLifecycle(
+  status: string,
+  counters?: {
+    total?: number;
+    passed?: number;
+    failed?: number;
+  },
+): string {
+  const total = counters?.total ?? 0;
+  if (total === 0) return `AWS Device Farm: ${status}`;
+  return (
+    `AWS Device Farm: ${status} — lifecycle ${counters?.passed ?? 0} passed / ` +
+    `${counters?.failed ?? 0} failed / tổng ${total} mục ` +
+    '(Setup, Tests, Teardown; không phải testcase TestPilot)'
+  );
+}
+
+interface TestPilotReportShape {
+  report?: {
+    results?: Array<{ verdict?: string }>;
+    quarantined?: unknown[];
+  };
+}
+
+interface TestPilotMetaShape {
+  counters?: { failed?: number };
+}
+
+/** Builds the granular count that AWS cannot provide for a custom environment. */
+export function formatTestPilotCases(
+  deviceName: string,
+  payload: TestPilotReportShape,
+  meta?: TestPilotMetaShape,
+): string | undefined {
+  const results = payload.report?.results;
+  if (!results) return undefined;
+  const passed = results.filter((result) => result.verdict === 'passed').length;
+  const failed = results.filter((result) => result.verdict === 'failed').length;
+  const flaky = results.filter((result) => result.verdict === 'flaky').length;
+  const quarantined = payload.report?.quarantined?.length ?? 0;
+  const total = results.length + quarantined;
+  const knownIssues = Math.max(0, failed - (meta?.counters?.failed ?? failed));
+  return (
+    `TestPilot testcase — ${deviceName}: ${passed} passed / ${failed} failed` +
+    `${flaky ? ` / ${flaky} flaky` : ''}` +
+    `${quarantined ? ` / ${quarantined} chưa duyệt` : ''}` +
+    ` / tổng ${total} testcase` +
+    `${knownIssues ? ` (${knownIssues} known issue)` : ''}.`
+  );
+}
+
+async function logTestPilotCaseSummary(
+  runDir: string,
+  deviceName: string,
+  log: FarmLog,
+): Promise<void> {
+  try {
+    const [payload, meta] = await Promise.all([
+      readFile(path.join(runDir, 'report.json'), 'utf8'),
+      readFile(path.join(runDir, 'meta.json'), 'utf8'),
+    ]);
+    const line = formatTestPilotCases(
+      deviceName,
+      JSON.parse(payload) as TestPilotReportShape,
+      JSON.parse(meta) as TestPilotMetaShape,
+    );
+    if (line) log(line);
+  } catch {
+    // A missing summary must not discard the report, videos and screenshots
+    // that were already recovered successfully.
   }
 }
 
@@ -1262,7 +1321,7 @@ function sleep(ms: number): Promise<void> {
  */
 async function createFallbackRunDir(
   runsDir: string,
-  platform: string,
+  platform: 'android' | 'ios',
   job: FarmJob,
   runArn: string,
   log: FarmLog,
@@ -1283,6 +1342,31 @@ async function createFallbackRunDir(
       farmRunArn: runArn,
     };
     await writeRunMeta(dir, meta);
+    // listReports deliberately indexes self-contained report directories. A
+    // meta.json + video-only fallback was therefore invisible to the UI: the
+    // exact evidence this branch saved never reached the browser. Write an
+    // honest interrupted report first; pullFarmVideos appends the recording to
+    // it immediately afterwards.
+    await writeHtmlReport(
+      {
+        runId: dirName,
+        startedAt: now,
+        finishedAt: now,
+        status: 'interrupted',
+        results: [],
+        healSuggestions: [],
+        quarantined: [],
+        interruption: {
+          reason: 'Device Farm không trả về report từ test runner; chỉ khôi phục được artifact của thiết bị.',
+          platform,
+          device: meta.device,
+          notRun: [],
+          source: 'metadata',
+        },
+      },
+      [],
+      dir,
+    );
     log(`${job.deviceName}: tạo thư mục fallback để lưu video → ${dir}`);
     return dir;
   } catch (err) {

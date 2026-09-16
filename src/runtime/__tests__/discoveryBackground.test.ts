@@ -23,7 +23,10 @@ describe('discovery chạy nền', () => {
   });
 
   it('kết quả về muộn vẫn được dùng ở tick sau', () => {
-    assert.match(source, /\.then\(\(c\) => \{ discovered = c; \}\)/);
+    // Kết quả về muộn vẫn ghi vào `discovered`, nhưng chỉ khi còn thuộc thế hệ
+    // hiện tại: một lần gỡ overlay làm màn hình đổi sẽ tăng generation và câu
+    // trả lời dựa trên cây cũ phải bị bỏ, không được dùng cho màn hình mới.
+    assert.match(source, /\.then\(\(c\) => \{\s*if \(generation === discoveryGeneration\) discovered = c;/);
     assert.match(source, /if \(discovered && !excluded\.has\(candidateKey\(discovered\)\)\) \{/);
   });
 
@@ -41,7 +44,7 @@ describe('discovery chạy nền', () => {
    * trả lời đúng bị vứt đi.
    */
   it('chờ thêm cho discovery dang dở trước khi báo hỏng', () => {
-    assert.match(source, /const DISCOVERY_GRACE_MS = 4_000;/);
+    assert.match(source, /const DISCOVERY_GRACE_MS = 6_000;/);
     assert.match(source, /if \(!late && discoveryTask && !discoverySettled\) \{/);
     assert.match(source, /Promise\.race\(\[\s*discoveryTask,/);
   });

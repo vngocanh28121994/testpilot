@@ -56,6 +56,7 @@ export function observedToUiObservation(
       testId: o.testId,
       placeholder: o.placeholder,
       css: o.css,
+      bounds: o.bounds,
       attributes: o.context?.length ? { region: o.context.join(' > ') } : undefined,
       // observe() only returns elements that exist and are visible.
       // enabled/focused/selected are not tracked in Observed.
@@ -63,7 +64,7 @@ export function observedToUiObservation(
       enabled: true,
       interactive: o.interactive,
       index: o.index,
-      childIds: o.container ? [] : undefined,
+      container: o.container,
     }),
   );
 

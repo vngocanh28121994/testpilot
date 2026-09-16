@@ -15,7 +15,7 @@
  * Healing engages only where a scenario actually failed, because there the
  * unverified step is the suspect for the failure.
  */
-import type { StepStatus } from '../core/types.js';
+import type { ScenarioResult, StepStatus } from '../core/types.js';
 import {
   decideStepHealing,
   type AskDecision,
@@ -70,6 +70,23 @@ export type HealingOutcome =
 
 export const DEFAULT_MAX_ATTEMPTS = 3;
 
+/** Preserve both sides of a runtime heal: the failed baseline and proven replay. */
+export function retainVerifiedHealing(
+  baseline: ScenarioResult,
+  replayed: ScenarioResult | undefined,
+): ScenarioResult {
+  const replay = replayed?.runs.at(-1);
+  if (replay?.status !== 'passed') return baseline;
+  return {
+    ...baseline,
+    runs: [
+      ...baseline.runs,
+      { ...replay, attempt: baseline.runs.length + 1 },
+    ],
+    verdict: 'flaky',
+  };
+}
+
 export async function healScenarioSteps(deps: HealingLoopDeps): Promise<HealingOutcome> {
   const budget = deps.maxAttempts ?? DEFAULT_MAX_ATTEMPTS;
   if (deps.baseline.passed) {
@@ -115,6 +132,17 @@ export async function healScenarioSteps(deps: HealingLoopDeps): Promise<HealingO
       elementId: decision.hypothesis.elementId,
       reason: decision.hypothesis.reason,
     };
+    if (patches.some((patch) =>
+      patch.afterLine === candidate.afterLine
+      && patch.elementId === candidate.elementId
+      && patch.step === candidate.step)) {
+      return {
+        kind: 'exhausted',
+        patches,
+        reason: `Healing lại đề xuất đúng thao tác "${candidate.step}" tại cùng vị trí; `
+          + 'chạy lại lần nữa không tạo thêm bằng chứng nên đã dừng.',
+      };
+    }
     const next = await deps.runPatched([...patches, candidate]);
 
     const broke = newFailures(current, next);

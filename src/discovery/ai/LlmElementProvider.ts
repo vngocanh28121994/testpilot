@@ -18,6 +18,7 @@ import { firstJsonObject } from '../../llm/json.js';
 import type { ElementIntent } from '../ElementIntent.js';
 import type { ObservedElement, UiObservation } from '../UiObservation.js';
 import type { LlmProvider, SemanticDiscoveryResponse } from './AiDiscoveryTypes.js';
+import { normalizeHumanText } from '../../core/text.js';
 
 /**
  * How many elements of a screen to describe.
@@ -56,19 +57,31 @@ export class LlmElementProvider implements LlmProvider {
       temperature: 0,
     });
 
-    const parsed = parseChoice(raw);
-    if (!parsed || parsed.index < 0 || parsed.index >= shortlist.length) {
+    const parsed = parseChoices(raw)
+      .filter((choice) => choice.index >= 0 && choice.index < shortlist.length)
+      .slice(0, 3);
+    if (parsed.length === 0) {
       this.log(`[semantic-ai] không chọn được: ${raw.slice(0, 120)}`);
       return { modelId: this.model };
     }
 
-    const picked = shortlist[parsed.index]!;
-    return {
-      candidate: {
+    const candidates = parsed.map((choice) => {
+      const picked = shortlist[choice.index]!;
+      const ancestor = choice.clickableAncestorIndex != null
+        ? shortlist[choice.clickableAncestorIndex]
+        : undefined;
+      return {
         observedElementId: picked.id,
-        confidence: clampConfidence(parsed.confidence),
-        reasoning: parsed.reason,
-      },
+        confidence: clampConfidence(choice.confidence),
+        reasoning: choice.reason,
+        ...(ancestor && ancestor.id !== picked.id
+          ? { clickableAncestorObservedElementId: ancestor.id }
+          : {}),
+      };
+    });
+    return {
+      candidates,
+      candidate: candidates[0],
       modelId: this.model,
     };
   }
@@ -80,6 +93,8 @@ const SYSTEM = [
   'Quy tắc bắt buộc:',
   '- Bước INPUT/SELECT phải trỏ vào ô nhập được dữ liệu, KHÔNG phải nhãn mô tả ô đó.',
   '- Bước TAP phải trỏ vào phần tử bấm được, không phải đoạn văn bản tĩnh.',
+  '- Trả tối đa 3 phương án xếp theo độ phù hợp. Nếu chữ/icon là node con, chỉ ra clickableAncestorIndex.',
+  '- Không tự kết luận action thành công; bước sau của kịch bản là bằng chứng bắt buộc.',
   '- Nếu không có phần tử nào thực sự đúng, trả index -1. Đoán bừa tệ hơn là không trả lời.',
 ].join('\n');
 
@@ -92,16 +107,58 @@ const SYSTEM = [
 function shortlistFor(intent: ElementIntent, all: ObservedElement[]): ObservedElement[] {
   const usable = all.filter((e) => e.visible && describes(e));
   const wantsInput = intent.action === 'input' || intent.action === 'select';
+  const intentWords = meaningfulWords([
+    intent.label,
+    intent.text,
+    ...(intent.context ?? []),
+  ].filter(Boolean).join(' '));
   const rank = (e: ObservedElement): number => {
     let score = 0;
     if (e.interactive) score += 2;
     if (wantsInput && /input|textbox|combobox|searchbox|textarea|select/i.test(e.role ?? '')) score += 3;
     if (e.testId || e.resourceId) score += 1;
     if (e.accessibilityLabel || e.placeholder) score += 1;
+    const elementWords = meaningfulWords([
+      e.text, e.accessibilityLabel, e.placeholder, e.attributes?.region,
+    ].filter(Boolean).join(' '));
+    score += Math.min(4, [...elementWords].filter((word) => intentWords.has(word)).length * 2);
     return score;
   };
-  return [...usable].sort((a, b) => rank(b) - rank(a)).slice(0, MAX_ELEMENTS);
+  const ranked = [...usable].sort((a, b) => rank(b) - rank(a));
+  const selected = ranked.slice(0, MAX_ELEMENTS);
+  const selectedIds = new Set(selected.map((element) => element.id));
+  const byId = new Map(all.map((element) => [element.id, element]));
+
+  // If a semantic text/icon leaf made the cut, its actionable ancestors must
+  // be in the same prompt or the model can identify the caption but has no way
+  // to nominate the control that owns the click.
+  for (const leaf of [...selected]) {
+    let parent = leaf.parentId ? byId.get(leaf.parentId) : undefined;
+    while (parent) {
+      if (parent.visible && describes(parent) && !selectedIds.has(parent.id)) {
+        if (selected.length >= MAX_ELEMENTS) {
+          const removed = selected.pop();
+          if (removed) selectedIds.delete(removed.id);
+        }
+        selected.push(parent);
+        selectedIds.add(parent.id);
+      }
+      parent = parent.parentId ? byId.get(parent.parentId) : undefined;
+    }
+  }
+  return selected;
 }
+
+function meaningfulWords(value: string): Set<string> {
+  return new Set(normalizeHumanText(value)
+    .split(/\s+/)
+    .filter((word) => word.length >= 2 && !SEMANTIC_STOP_WORDS.has(word)));
+}
+
+const SEMANTIC_STOP_WORDS = new Set([
+  'buoc', 'hien', 'tai', 'ket', 'qua', 'can', 'chung', 'minh',
+  'the', 'this', 'that', 'current', 'expected', 'visible',
+]);
 
 /** An element with nothing readable about it cannot be chosen on evidence. */
 function describes(e: ObservedElement): boolean {
@@ -115,8 +172,9 @@ function promptFor(
   elements: ObservedElement[],
   all: ObservedElement[],
 ): string {
+  const indexById = new Map(elements.map((element, index) => [element.id, index]));
   const listing = elements
-    .map((e, i) => `#${i} ${describe(e)}${nearbyText(e, all)}`)
+    .map((e, i) => `#${i} ${describe(e, indexById)}${nearbyText(e, all)}`)
     .join('\n');
   return [
     `Hành động: ${intent.action.toUpperCase()}`,
@@ -127,12 +185,12 @@ function promptFor(
     'Các phần tử đang hiển thị:',
     listing,
     '',
-    'Trả JSON: {"index": <số sau dấu #>, "confidence": <0-100>, "reason": "<một câu>"}',
-    'Không có phần tử đúng thì trả {"index": -1, "confidence": 0, "reason": "..."}',
+    'Trả JSON: {"candidates":[{"index":<số #>,"clickableAncestorIndex":<số # hoặc bỏ qua>,"confidence":<0-100>,"reason":"<một câu>"}]}',
+    'Xếp tốt nhất trước, tối đa 3. Không có phần tử đúng thì trả {"candidates":[]}.',
   ].filter(Boolean).join('\n');
 }
 
-function describe(e: ObservedElement): string {
+function describe(e: ObservedElement, indexById: Map<string, number>): string {
   return [
     e.role ? `role=${e.role}` : '',
     e.resourceId ? `name=${e.resourceId}` : '',
@@ -143,6 +201,10 @@ function describe(e: ObservedElement): string {
     e.attributes?.region ? `region="${trim(e.attributes.region, 80)}"` : '',
     e.interactive ? 'bấm-được' : '',
     e.enabled === false ? 'disabled' : '',
+    e.parentId && indexById.has(e.parentId) ? `parent=#${indexById.get(e.parentId)}` : '',
+    e.childIds?.length
+      ? `children=${e.childIds.flatMap((id) => indexById.has(id) ? [`#${indexById.get(id)}`] : []).join(',')}`
+      : '',
   ].filter(Boolean).join(' ');
 }
 
@@ -179,7 +241,12 @@ function nearbyText(el: ObservedElement, all: ObservedElement[]): string {
 
 const trim = (s: string, n: number) => (s.length > n ? `${s.slice(0, n)}…` : s);
 
-interface Choice { index: number; confidence: number; reason: string }
+interface Choice {
+  index: number;
+  confidence: number;
+  reason: string;
+  clickableAncestorIndex?: number;
+}
 
 /**
  * Reads the model's answer out of whatever it wrapped the JSON in.
@@ -187,25 +254,33 @@ interface Choice { index: number; confidence: number; reason: string }
  * Tolerant of prose and code fences on purpose: a provider that throws on a
  * stray "Here you go:" turns a usable answer into a failed lookup.
  */
-function parseChoice(raw: string): Choice | undefined {
+export function parseChoices(raw: string): Choice[] {
   // Cùng bộ tách với genspec. Chỗ này hỏng còn lặng lẽ hơn: nó trả undefined,
   // nên "model trả hai JSON" trông y hệt "model không tìm được element nào".
   let text: string;
   try {
     text = firstJsonObject(raw);
   } catch {
-    return undefined;
+    return [];
   }
   try {
-    const parsed = JSON.parse(text) as Partial<Choice>;
-    if (typeof parsed.index !== 'number') return undefined;
-    return {
-      index: parsed.index,
-      confidence: Number(parsed.confidence) || 0,
-      reason: String(parsed.reason ?? '').slice(0, 200),
-    };
+    const parsed = JSON.parse(text) as Partial<Choice> & { candidates?: Partial<Choice>[] };
+    const rawChoices = Array.isArray(parsed.candidates) ? parsed.candidates : [parsed];
+    const seen = new Set<number>();
+    return rawChoices.flatMap((choice) => {
+      if (typeof choice.index !== 'number' || choice.index < 0 || seen.has(choice.index)) return [];
+      seen.add(choice.index);
+      return [{
+        index: choice.index,
+        confidence: Number(choice.confidence) || 0,
+        reason: String(choice.reason ?? '').slice(0, 200),
+        ...(typeof choice.clickableAncestorIndex === 'number'
+          ? { clickableAncestorIndex: choice.clickableAncestorIndex }
+          : {}),
+      }];
+    });
   } catch {
-    return undefined;
+    return [];
   }
 }
 

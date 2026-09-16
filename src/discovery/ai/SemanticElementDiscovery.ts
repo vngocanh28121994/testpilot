@@ -14,19 +14,25 @@ import {
 
 import type { ElementIntent } from '../ElementIntent.js';
 import type { UiObservation } from '../UiObservation.js';
-import type { DiscoveryResult, ObservationProvider } from '../ElementDiscovery.js';
+import type { DiscoveryResult } from '../ElementDiscovery.js';
 import type { RuntimeLocator } from '../RuntimeRegistry.js';
 import { StandardElementVerifier } from '../ElementVerifier.js';
 import { RuntimeRegistry } from '../RuntimeRegistry.js';
 import type { LlmProvider } from './AiDiscoveryTypes.js';
 import { textMatch, type MatchScore } from '../ConfidenceScorer.js';
 import { normalizeHumanText } from '../../core/text.js';
+import { checkInteractionSafety } from '../InteractionSafety.js';
+import type { ElementMatch } from '../ElementMatcher.js';
 
 export interface SemanticDiscoveryOptions {
   /** Confidence floor — AI candidates below this are rejected (default 60). */
   minConfidence?: number;
   /** Platform tag stored in the registry on success. */
   platform?: string;
+  /** Runtime resolver owns persistence after an observable action outcome. */
+  persistSuggestedLocator?: boolean;
+  /** Permit an exact visible text leaf when the executor can verify the outcome. */
+  allowExactTextProxy?: boolean;
 }
 
 /**
@@ -69,109 +75,114 @@ export class SemanticElementDiscovery {
     if (response.modelId) evidence.push(`[semantic-ai] model=${response.modelId}`);
     if (response.tokensUsed != null) evidence.push(`[semantic-ai] tokens=${response.tokensUsed}`);
 
-    const candidate = response.candidate;
-    if (!candidate) {
-      evidence.push('[semantic-ai] LLM returned no candidate');
+    const proposals = [...(response.candidates ?? []), ...(response.candidate ? [response.candidate] : [])]
+      .filter((candidate, index, all) =>
+        all.findIndex((other) => other.observedElementId === candidate.observedElementId) === index)
+      .slice(0, 3);
+    if (proposals.length === 0) {
+      evidence.push('[semantic-ai] LLM returned no candidates');
       return { intent, method: 'failed', observation, evidence };
     }
 
-    evidence.push(
-      `[semantic-ai] candidate elementId=${candidate.observedElementId} confidence=${candidate.confidence}`,
-    );
-    evidence.push(`[semantic-ai] reasoning: ${candidate.reasoning}`);
+    const accepted: Array<{
+      match: ElementMatch;
+      locator: { strategy: string; value: string };
+      verification: ReturnType<StandardElementVerifier['verify']>;
+      safety: ReturnType<typeof checkInteractionSafety>;
+    }> = [];
 
-    // ── Confidence threshold ──────────────────────────────────────────────────
-    if (candidate.confidence < minConf) {
+    for (const [rank, candidate] of proposals.entries()) {
       evidence.push(
-        `[semantic-ai] confidence ${candidate.confidence} below threshold ${minConf} — rejected`,
+        `[semantic-ai] candidate #${rank + 1} elementId=${candidate.observedElementId} confidence=${candidate.confidence}`,
       );
-      return { intent, method: 'failed', observation, evidence };
-    }
+      evidence.push(`[semantic-ai] reasoning: ${candidate.reasoning}`);
+      if (candidate.confidence < minConf) {
+        evidence.push(`[semantic-ai] candidate #${rank + 1} below threshold ${minConf} — rejected`);
+        continue;
+      }
 
-    // ── Resolve observed element ──────────────────────────────────────────────
-    const el = observation.elements.find((e) => e.id === candidate.observedElementId);
-    if (!el) {
+      const semanticEl = observation.elements.find((e) => e.id === candidate.observedElementId);
+      if (!semanticEl) {
+        evidence.push(`[semantic-ai] candidate #${rank + 1} is not in the observation — rejected`);
+        continue;
+      }
+      const objection = aiAnswerObjection(intent, semanticEl);
+      if (objection) {
+        evidence.push(`[semantic-ai] candidate #${rank + 1} từ chối: ${objection}`);
+        continue;
+      }
+
+      const actionEl = resolveActionElement(candidate.clickableAncestorObservedElementId, semanticEl, observation);
+      if (candidate.clickableAncestorObservedElementId && actionEl === semanticEl) {
+        evidence.push(`[semantic-ai] clickable ancestor không chứng minh được quan hệ cha–con — dùng chính node đã chọn`);
+      } else if (actionEl !== semanticEl) {
+        evidence.push(`[semantic-ai] action target ${actionEl.id} owns semantic leaf ${semanticEl.id}`);
+      }
+      const verificationEl = actionEl === semanticEl ? actionEl : {
+        ...actionEl,
+        text: semanticEl.text ?? actionEl.text,
+        accessibilityLabel: semanticEl.accessibilityLabel ?? actionEl.accessibilityLabel,
+      };
+      const verifyOpts = { allowExactTextProxy: opts.allowExactTextProxy === true };
+      const safety = checkInteractionSafety(intent, verificationEl, observation.elements, verifyOpts);
+      if (safety.safety !== 'SAFE') {
+        evidence.push(`[semantic-ai] candidate #${rank + 1} safety=${safety.safety}: ${safety.reason}`);
+        continue;
+      }
+      const verification = this.verifier.verify(intent, verificationEl, observation.elements, verifyOpts);
       evidence.push(
-        `[semantic-ai] candidate observedElementId="${candidate.observedElementId}" not in observation`,
+        `[semantic-ai] candidate #${rank + 1} verification: ${verification.passed ? 'PASSED' : 'FAILED'} score=${verification.score}`,
       );
-      return { intent, method: 'failed', observation, evidence };
-    }
-
-    // ── Guard written for AI answers specifically ─────────────────────────────
-    // The shared verifier accepts a *substring* label match, which is right for
-    // a locator someone authored and wrong for a guess: asked for "Lệnh thường"
-    // the model picked a control reading "Thường" — a different field entirely —
-    // with confidence 90, and the substring rule waved it through. A model is
-    // fluent enough to make a wrong answer look plausible, so its answers are
-    // held to what a human reading the screen would accept.
-    const objection = aiAnswerObjection(intent, el);
-    if (objection) {
-      evidence.push(`[semantic-ai] từ chối: ${objection}`);
-      return { intent, method: 'failed', observation, evidence };
-    }
-
-    // ── Verification ──────────────────────────────────────────────────────────
-    const verification = this.verifier.verify(intent, el, observation.elements);
-    evidence.push(
-      `[semantic-ai] verification: ${verification.passed ? 'PASSED' : 'FAILED'} score=${verification.score}`,
-    );
-    for (const line of verification.evidence) evidence.push(`  · ${line}`);
-
-    const locator = refineLocator(el, candidate.suggestedLocator);
-
-    if (!verification.passed) {
-      return {
-        intent,
-        method: 'semantic-ai',
+      if (!verification.passed) continue;
+      const locator = refineLocator(actionEl, candidate.suggestedLocator);
+      if (!locator) {
+        evidence.push(`[semantic-ai] candidate #${rank + 1} has no usable locator`);
+        continue;
+      }
+      accepted.push({
         locator,
+        verification,
+        safety,
         match: {
           intentId: intent.id,
-          observedElementId: el.id,
+          observedElementId: actionEl.id,
           confidence: candidate.confidence,
           method: 'semantic-ai',
           reasons: [candidate.reasoning],
           penalties: [],
-          verified: false,
+          verified: true,
           locator,
-          score: aiMatchScore(candidate.observedElementId, candidate.confidence, candidate.reasoning),
+          score: aiMatchScore(actionEl.id, candidate.confidence, candidate.reasoning),
         },
-        verification,
-        observation,
-        evidence,
-      };
+      });
     }
 
+    const best = accepted[0];
+    if (!best) return { intent, method: 'failed', observation, evidence };
+
     // ── Store in registry ─────────────────────────────────────────────────────
-    if (locator) {
+    if (opts.persistSuggestedLocator !== false) {
       const loc: RuntimeLocator = {
-        strategy: locator.strategy,
-        value: locator.value,
+        strategy: best.locator.strategy,
+        value: best.locator.value,
         source: 'ai-discovered',
         status: 'suggested',
-        confidence: candidate.confidence / 100,
+        confidence: best.match.confidence / 100,
         verifiedAt: new Date().toISOString(),
         ...(opts.platform ? { platform: opts.platform } : {}),
       };
       this.registry.upsertLocator(intent.id, loc);
-      evidence.push(`[semantic-ai] stored: ${locator.strategy}="${locator.value}" status=suggested`);
+      evidence.push(`[semantic-ai] stored: ${best.locator.strategy}="${best.locator.value}" status=suggested`);
     }
 
     return {
       intent,
       method: 'semantic-ai',
-      locator,
-      match: {
-        intentId: intent.id,
-        observedElementId: el.id,
-        confidence: candidate.confidence,
-        method: 'semantic-ai',
-        reasons: [candidate.reasoning],
-        penalties: [],
-        verified: true,
-        locator,
-        score: aiMatchScore(candidate.observedElementId, candidate.confidence, candidate.reasoning),
-      },
-      verification,
+      locator: best.locator,
+      match: best.match,
+      ...(accepted.length > 1 ? { alternatives: accepted.slice(1).map((item) => item.match) } : {}),
+      verification: best.verification,
+      safety: best.safety,
       observation,
       evidence,
     };
@@ -240,4 +251,38 @@ function sharesAWord(a: string, b: string): boolean {
   const words = (t: string) => new Set(normalizeHumanText(t).split(/\s+/).filter(Boolean));
   const left = words(a);
   return [...words(b)].some((w) => left.has(w));
+}
+
+export function resolveActionElement(
+  ancestorId: string | undefined,
+  semanticEl: ObservedElement,
+  observation: UiObservation,
+): ObservedElement {
+  if (!ancestorId) return semanticEl;
+  const ancestor = observation.elements.find((element) => element.id === ancestorId);
+  if (!ancestor || ancestor.visible === false || ancestor.enabled === false) return semanticEl;
+  if (!isAncestorOf(ancestor, semanticEl, observation.elements)) return semanticEl;
+  return ancestor;
+}
+
+function isAncestorOf(
+  ancestor: ObservedElement,
+  child: ObservedElement,
+  elements: ObservedElement[],
+): boolean {
+  const byId = new Map(elements.map((element) => [element.id, element]));
+  let cursor = child.parentId ? byId.get(child.parentId) : undefined;
+  while (cursor) {
+    if (cursor.id === ancestor.id) return true;
+    cursor = cursor.parentId ? byId.get(cursor.parentId) : undefined;
+  }
+  if (!ancestor.bounds || !child.bounds) return false;
+  const ax2 = ancestor.bounds.x + ancestor.bounds.width;
+  const ay2 = ancestor.bounds.y + ancestor.bounds.height;
+  const cx2 = child.bounds.x + child.bounds.width;
+  const cy2 = child.bounds.y + child.bounds.height;
+  return ancestor.bounds.x <= child.bounds.x
+    && ancestor.bounds.y <= child.bounds.y
+    && ax2 >= cx2
+    && ay2 >= cy2;
 }

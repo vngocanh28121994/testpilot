@@ -9,7 +9,7 @@
       "file": "them-ma-co-phieu.feature",
       "featureId": "them-ma-co-phieu",
       "displayName": "Thêm mã cổ phiếu trên Bảng giá cổ phiếu",
-      "updatedAt": "2026-09-12T19:39:59.490Z"
+      "updatedAt": "2026-09-15T08:20:49.171Z"
     },
     "confluence:digital-horus.atlassian.net:983041": {
       "sourceKey": "confluence:digital-horus.atlassian.net:983041",
@@ -20,6 +20,16 @@
       "featureId": "chuyen-tien-noi-bo",
       "displayName": "Chuyển tiền nội bộ",
       "updatedAt": "2026-09-12T19:37:28.260Z"
+    },
+    "confluence:digital-horus.atlassian.net:6356993": {
+      "sourceKey": "confluence:digital-horus.atlassian.net:6356993",
+      "refs": [
+        "confluence:digital-horus.atlassian.net:6356993"
+      ],
+      "file": "them-moi-template-bao-cao-cua-toi.feature",
+      "featureId": "them-moi-template-bao-cao-cua-toi",
+      "displayName": "Thêm mới template Báo cáo của tôi",
+      "updatedAt": "2026-09-15T11:42:33.566Z"
     }
   }
 }

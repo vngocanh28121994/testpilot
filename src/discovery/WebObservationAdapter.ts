@@ -108,6 +108,14 @@ export const OBSERVE_DOM_FULL = /* js */ `(() => {
       var id = CSS.escape(el.id);
       try { if (document.querySelectorAll('#' + id).length === 1) return '#' + id; } catch(_) {}
     }
+    var semanticClasses = String(el.getAttribute('class') || '').split(/\\s+/).filter(function(token) {
+      return /^[a-z][a-z0-9_-]{3,}$/i.test(token) &&
+        !/^(?:ng-|mat-|cdk-|active$|disabled$|selected$|focused?$|hover$|show$|open$)/i.test(token);
+    });
+    for (var si = 0; si < semanticClasses.length; si++) {
+      var classSelector = el.tagName.toLowerCase() + '.' + CSS.escape(semanticClasses[si]);
+      try { if (document.querySelectorAll(classSelector).length === 1) return classSelector; } catch(_) {}
+    }
     var parts = [], node = el;
     while (node && node !== document.body && parts.length < 5) {
       var tag = node.tagName.toLowerCase();

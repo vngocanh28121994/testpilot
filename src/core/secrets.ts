@@ -209,8 +209,8 @@ export async function farmSecretEnv(
   }
   if (sent.length > 0) {
     log(
-      `Gửi mật khẩu của ${sent.length} account lên testspec: ${sent.join(', ')} ` +
-        '(plaintext trên S3 — nhớ đổi mật khẩu sau khi test).',
+      `Gửi mật khẩu của ${sent.length} account qua biến môi trường của Device Farm: ` +
+        `${sent.join(', ')} (không ghi giá trị vào testspec/log).`,
     );
   }
   return env;

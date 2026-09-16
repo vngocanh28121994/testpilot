@@ -6,6 +6,10 @@ import { McpElementIdentityResolver } from '../mcp/ElementIdentityResolver.js';
 import type { UiObservation } from '../UiObservation.js';
 import type { ElementIntent } from '../ElementIntent.js';
 import type { ObservationProvider } from '../ElementDiscovery.js';
+import { checkInteractionSafety } from '../InteractionSafety.js';
+import { verifyRuntime } from '../RuntimeVerification.js';
+import { SemanticElementDiscovery } from '../ai/SemanticElementDiscovery.js';
+import { parseChoices } from '../ai/LlmElementProvider.js';
 
 // ── helpers ───────────────────────────────────────────────────────────────────
 
@@ -153,6 +157,69 @@ describe('ElementDiscovery — no matching elements', () => {
 // ── deterministic match ───────────────────────────────────────────────────────
 
 describe('ElementDiscovery — deterministic match', () => {
+  it('promotes an exact card caption to its clickable ancestor without an ambiguity override', async () => {
+    const reg = await emptyRegistry();
+    const obs = makeObservation({
+      platform: 'web',
+      source: 'browser',
+      elements: [
+        {
+          id: 'monthly-card', css: '.report-card', role: 'div',
+          visible: true, enabled: true, interactive: true, childIds: ['monthly-caption'],
+        },
+        {
+          id: 'monthly-caption', role: 'span', text: 'Lợi nhuận theo tháng',
+          visible: true, enabled: true, interactive: false, parentId: 'monthly-card',
+        },
+      ],
+    });
+    const discovery = new ElementDiscovery(makeProvider(obs), reg);
+
+    const result = await discovery.discover(
+      makeIntent({
+        id: 'addCardSheet.cardMonthlyProfit', label: 'Thẻ Lợi nhuận theo tháng',
+        action: 'tap', screen: 'addCardSheet', semanticRole: undefined,
+      }),
+      { minConfidence: 40, persistVerifiedLocator: false, screen: 'addCardSheet' },
+    );
+
+    assert.equal(result.method, 'deterministic');
+    assert.equal(result.locator?.strategy, 'css');
+    assert.equal(result.locator?.value, '.report-card');
+    assert.equal(result.match?.observedElementId, 'monthly-card');
+  });
+
+  it('returns the clickable parent locator for a matched icon leaf', async () => {
+    const reg = await emptyRegistry();
+    const obs = makeObservation({
+      platform: 'web',
+      source: 'browser',
+      elements: [
+        {
+          id: 'add-button', css: 'button.btn-add', role: 'button',
+          visible: true, enabled: true, interactive: true, childIds: ['add-icon'],
+        },
+        {
+          id: 'add-icon', role: 'span', text: 'add',
+          visible: true, enabled: true, interactive: false, parentId: 'add-button',
+        },
+      ],
+    });
+    const discovery = new ElementDiscovery(makeProvider(obs), reg);
+
+    const result = await discovery.discover(
+      makeIntent({
+        id: 'myReports.addReportButton', label: 'Nút thêm mới báo cáo', action: 'tap', screen: 'myReports',
+      }),
+      { allowAmbiguousCandidates: true, persistVerifiedLocator: false, screen: 'myReports' },
+    );
+
+    assert.equal(result.method, 'deterministic');
+    assert.equal(result.locator?.strategy, 'css');
+    assert.equal(result.locator?.value, 'button.btn-add');
+    assert.equal(result.match?.observedElementId, 'add-button');
+  });
+
   it('finds element by testId with high confidence', async () => {
     const reg = await emptyRegistry();
     const obs = makeObservation({
@@ -350,6 +417,123 @@ describe('ElementDiscovery — G05 ambiguity policy', () => {
       result.ambiguity?.outcome === 'AMBIGUOUS' ||
       result.safety?.safety === 'AMBIGUOUS';
     assert.ok(blockedByAmbiguity, `expected AMBIGUOUS block, got ambiguity=${result.ambiguity?.outcome} safety=${result.safety?.safety}`);
+  });
+
+  it('collapses duplicate observation records for the same provider element', async () => {
+    const reg = await emptyRegistry();
+    const shared = {
+      provider: 'appium-mcp',
+      providerElementId: 'native-confirm-1',
+      role: 'android.widget.Button',
+      text: 'Confirm',
+      accessibilityLabel: 'Confirm',
+      visible: true,
+      enabled: true,
+      interactive: true,
+    };
+    const obs = makeObservation({
+      source: 'appium-mcp',
+      elements: [
+        { id: 'tp-el-0', testId: 'btn-confirm-a', index: 0, ...shared },
+        { id: 'tp-el-1', testId: 'btn-confirm-b', index: 1, ...shared },
+      ],
+    });
+
+    const result = await new ElementDiscovery(makeProvider(obs), reg).discover(
+      makeIntent({ label: 'Confirm', semanticRole: 'button', action: 'tap' }),
+      { persistVerifiedLocator: false },
+    );
+
+    assert.equal(result.method, 'deterministic');
+    assert.equal(result.ambiguity?.outcome, 'CLEAR');
+    assert.ok(result.evidence.some((line) => line.includes('collapsed 1')));
+  });
+
+  it('exposes ranked alternatives only when outcome validation is explicitly enabled', async () => {
+    const reg = await emptyRegistry();
+    const obs = makeObservation({
+      elements: [
+        {
+          id: 'el-0', role: 'android.widget.Button', text: 'Confirm',
+          accessibilityLabel: 'Confirm', testId: 'btn-confirm-a', visible: true,
+          enabled: true, interactive: true, index: 0,
+        },
+        {
+          id: 'el-1', role: 'android.widget.Button', text: 'Confirm',
+          accessibilityLabel: 'Confirm', testId: 'btn-confirm-b', visible: true,
+          enabled: true, interactive: true, index: 1,
+        },
+      ],
+    });
+    const discovery = new ElementDiscovery(makeProvider(obs), reg);
+
+    const intent = makeIntent({ label: 'Confirm' });
+    const strict = await discovery.discover(intent, { persistVerifiedLocator: false });
+    assert.equal(strict.method, 'failed');
+    assert.equal(strict.ambiguity?.outcome, 'AMBIGUOUS');
+
+    const bounded = await discovery.discover(intent, {
+      persistVerifiedLocator: false,
+      allowAmbiguousCandidates: true,
+    });
+    assert.equal(bounded.method, 'deterministic');
+    assert.equal(bounded.ambiguity?.outcome, 'AMBIGUOUS');
+    assert.equal(bounded.alternatives?.length, 1);
+  });
+
+  it('does not block test-account actions because Appium omitted metadata', () => {
+    const intent = makeIntent({ label: 'Chuyển tiền', action: 'tap' });
+    const element = {
+      id: 'transfer', role: 'android.widget.Button', text: 'Chuyển tiền', visible: true,
+    };
+
+    assert.equal(checkInteractionSafety(intent, element, [element]).safety, 'SAFE');
+    assert.equal(verifyRuntime(intent, element).status, 'PASS');
+  });
+
+  it('allows an exact unique text leaf only on the bounded outcome-validation path', async () => {
+    const reg = await emptyRegistry();
+    const obs = makeObservation({
+      platform: 'web',
+      source: 'browser',
+      elements: [{
+        id: 'delete-option',
+        role: 'text',
+        text: 'Xóa khỏi danh mục',
+        visible: true,
+        enabled: true,
+        interactive: false,
+      }],
+    });
+    const discovery = new ElementDiscovery(makeProvider(obs), reg);
+    const menuIntent = makeIntent({
+      id: 'priceBoard.deleteOption',
+      action: 'tap',
+      label: 'Tùy chọn Xóa khỏi danh mục',
+      semanticRole: undefined,
+      screen: 'stockOptionsMenu',
+    });
+
+    const strict = await discovery.discover(menuIntent, {
+      context: 'healing',
+      platform: 'web',
+      screen: 'stockOptionsMenu',
+      persistVerifiedLocator: false,
+    });
+    assert.equal(strict.method, 'failed');
+    assert.equal(strict.safety?.safety, 'UNSAFE');
+
+    const bounded = await discovery.discover(menuIntent, {
+      context: 'healing',
+      platform: 'web',
+      screen: 'stockOptionsMenu',
+      persistVerifiedLocator: false,
+      allowAmbiguousCandidates: true,
+    });
+    assert.equal(bounded.method, 'deterministic');
+    assert.equal(bounded.safety?.safety, 'SAFE');
+    assert.match(bounded.safety?.reason ?? '', /outcome verification required/);
+    assert.ok(bounded.verification?.passed);
   });
 });
 
@@ -600,5 +784,83 @@ describe('ElementDiscovery — options', () => {
 
     assert.equal(result.method, 'failed');
     assert.ok(result.evidence.some((e) => e.includes('99')));
+  });
+});
+
+describe('Semantic AI — ranked runtime proposals', () => {
+  it('reads both the ranked response and the legacy single-candidate response', () => {
+    assert.deepEqual(
+      parseChoices('{"candidates":[{"index":2,"confidence":91,"reason":"best"},{"index":4,"confidence":72,"reason":"backup"}]}')
+        .map((choice) => choice.index),
+      [2, 4],
+    );
+    assert.equal(parseChoices('{"index":3,"confidence":80,"reason":"legacy"}')[0]?.index, 3);
+  });
+
+  it('returns verified alternatives and does not persist them before runtime outcome', async () => {
+    const reg = await emptyRegistry();
+    const observation = makeObservation({
+      elements: [
+        { id: 'first', testId: 'candidate-a', text: 'Alpha', visible: true, enabled: true, interactive: true },
+        { id: 'second', testId: 'candidate-b', text: 'Beta', visible: true, enabled: true, interactive: true },
+      ],
+    });
+    const llm = {
+      findElement: async () => ({
+        candidates: [
+          { observedElementId: 'first', confidence: 91, reasoning: 'best structural match' },
+          { observedElementId: 'second', confidence: 78, reasoning: 'second structural match' },
+        ],
+      }),
+    };
+    const discovery = new SemanticElementDiscovery(llm, reg);
+    const result = await discovery.discover(
+      makeIntent({ id: 'business.unknownControl', label: 'Business control', action: 'assert-visible' }),
+      observation,
+      { minConfidence: 45, persistSuggestedLocator: false },
+    );
+
+    assert.equal(result.locator?.value, 'candidate-a');
+    assert.equal(result.alternatives?.[0]?.locator?.value, 'candidate-b');
+    assert.deepEqual(reg.allLocators('business.unknownControl'), []);
+  });
+
+  it('uses a proven clickable ancestor while keeping the leaf text as semantic evidence', async () => {
+    const reg = await emptyRegistry();
+    const observation = makeObservation({
+      platform: 'web',
+      source: 'browser',
+      elements: [
+        {
+          id: 'menu-button', testId: 'delete-from-category', role: 'button',
+          visible: true, enabled: true, interactive: true, childIds: ['menu-caption'],
+        },
+        {
+          id: 'menu-caption', role: 'text', text: 'Xóa khỏi danh mục',
+          visible: true, enabled: true, interactive: false, parentId: 'menu-button',
+        },
+      ],
+    });
+    const discovery = new SemanticElementDiscovery({
+      findElement: async () => ({
+        candidates: [{
+          observedElementId: 'menu-caption',
+          clickableAncestorObservedElementId: 'menu-button',
+          confidence: 94,
+          reasoning: 'caption belongs to the menu button',
+        }],
+      }),
+    }, reg);
+    const result = await discovery.discover(
+      makeIntent({
+        id: 'priceBoard.deleteOption', label: 'Tùy chọn Xóa khỏi danh mục',
+        action: 'tap', semanticRole: undefined,
+      }),
+      observation,
+      { minConfidence: 45, persistSuggestedLocator: false, allowExactTextProxy: true },
+    );
+
+    assert.equal(result.locator?.value, 'delete-from-category');
+    assert.ok(result.evidence.some((line) => line.includes('owns semantic leaf')));
   });
 });

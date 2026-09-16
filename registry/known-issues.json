@@ -1,4 +1,13 @@
 {
   "version": 1,
-  "entries": {}
+  "entries": {
+    "chuyen-tien-noi-bo-tieu-khoan-a-chon-o-ich-khong-xuat-hien-o-dropdown-nguon": {
+      "id": "chuyen-tien-noi-bo-tieu-khoan-a-chon-o-ich-khong-xuat-hien-o-dropdown-nguon",
+      "filename": "chuyen-tien-noi-bo.feature",
+      "scenarioName": "Tiểu khoản đã chọn ở đích không xuất hiện ở dropdown nguồn",
+      "contentHash": "d2bacef4bbc1f42ee08edf3cbd0651b85ef8e73b022e4d61ea7cb6e0c0e3da49",
+      "note": "Không làm",
+      "markedAt": "2026-09-13T09:21:24.353Z"
+    }
+  }
 }

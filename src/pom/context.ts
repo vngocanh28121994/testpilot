@@ -26,7 +26,7 @@ export interface PomContextOptions {
  * second, weaker execution path.
  */
 export async function createPomPageContext(opts: PomContextOptions = {}): Promise<BasePage> {
-  const baseCfg = await loadConfig(opts.configPath ?? 'testpilot.config.json');
+  const baseCfg = await loadConfig(opts.configPath ?? process.env.TESTPILOT_CONFIG);
   // Same precedence as the CLI runner, so a generated spec and `npm run run:*`
   // cannot end up on different environments or different accounts.
   const envName = process.env.TESTPILOT_ENV ?? baseCfg.defaultEnv;

@@ -15,8 +15,8 @@ import RunnerHistoryPanel from '@/panels/RunnerHistory';
 const sameDay = [
   // `url` có mặt vì dữ liệu thật luôn có: thiếu nó thì thẻ "Mở report" không có
   // href, không còn là một link, và test hỏi theo vai trò sẽ không thấy gì.
-  { id: 'r-1', platform: 'android', tag: '@a', status: 'failed', url: '/runs/r-1/index.html', startedAt: '2026-09-08T04:40:00.000Z', counters: { passed: 0, failed: 4 } },
-  { id: 'r-2', platform: 'android', tag: '@a', status: 'passed', url: '/runs/r-2/index.html', startedAt: '2026-09-08T05:03:00.000Z', counters: { passed: 8, failed: 1 } },
+  { id: 'r-1', kind: 'run', platform: 'android', tag: '@a', status: 'failed', url: '/runs/r-1/index.html', startedAt: '2026-09-08T04:40:00.000Z', counters: { passed: 0, failed: 4 } },
+  { id: 'r-2', kind: 'run', platform: 'android', tag: '@a', status: 'passed', url: '/runs/r-2/index.html', startedAt: '2026-09-08T05:03:00.000Z', counters: { passed: 8, failed: 1 } },
 ];
 
 const render = async (runId?: string) => {
@@ -25,6 +25,14 @@ const render = async (runId?: string) => {
 };
 
 describe('Chi tiết lượt chạy — bộ chọn', () => {
+  it('dùng tiêu đề chung vì màn này được mở từ nhiều nguồn thực thi', async () => {
+    await render();
+    expect(
+      await screen.findByRole('heading', { name: 'Chi tiết kết quả kiểm thử' }),
+    ).toBeInTheDocument();
+    expect(screen.queryByText('Chi tiết lượt chạy local')).not.toBeInTheDocument();
+  });
+
   it('mỗi lượt chạy mang giờ riêng, không chỉ ngày', async () => {
     await render();
     // Chờ NỘI DUNG, không chờ cái vỏ: <ul> có mặt ngay từ lần render đầu, nên
@@ -39,6 +47,13 @@ describe('Chi tiết lượt chạy — bộ chọn', () => {
     await render();
     expect(await screen.findByText('8✓')).toBeInTheDocument();
     expect(screen.getByText('4✗')).toBeInTheDocument();
+  });
+
+  it('nói rõ nguồn thực thi thay vì suy ra mọi report đều là local', async () => {
+    await render();
+    const list = await screen.findByRole('list', { name: 'Các lượt chạy' });
+    await within(list).findAllByRole('button');
+    expect(within(list).getAllByText('Local Runner')).toHaveLength(2);
   });
 
   /**
@@ -100,13 +115,13 @@ describe('Chi tiết lượt chạy — report không tồn tại', () => {
 
     expect(await screen.findByText(/Lượt chạy này chưa có report/)).toBeInTheDocument();
     // Và KHÔNG lặng lẽ hiện report của lượt khác.
-    expect(screen.queryByRole('link', { name: 'Mở report' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Mở report HTML' })).not.toBeInTheDocument();
   });
 
   it('không chỉ đích danh lượt nào thì vẫn mở lượt mới nhất như cũ', async () => {
     server.use(http.get(ROUTES.state, () => HttpResponse.json({ ...stateFixture, reports: sameDay })));
     renderWithRouter(<RunnerHistoryPanel />, { path: '/runner/history' });
 
-    expect(await screen.findByRole('link', { name: 'Mở report' })).toBeInTheDocument();
+    expect(await screen.findByRole('link', { name: 'Mở report HTML' })).toBeInTheDocument();
   });
 });

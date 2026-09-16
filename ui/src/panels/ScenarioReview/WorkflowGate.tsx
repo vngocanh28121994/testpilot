@@ -4,6 +4,7 @@ import { toast } from 'sonner';
 import { PlayCircle, X } from 'lucide-react';
 import { useNavigate } from '@tanstack/react-router';
 import { WorkflowCompletion, useWorkflowCompletion } from '@/components/WorkflowCompletion';
+import { Dropdown } from '@/components/Dropdown';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -38,6 +39,9 @@ export function WorkflowGate({ runs }: { runs: RunHistoryEntry[] }) {
 function Gate({ run }: { run: RunHistoryEntry }) {
   const client = useQueryClient();
   const [answers, setAnswers] = useState<Record<string, string[]>>({});
+  const [appSource, setAppSource] = useState<'device' | 'upload'>(
+    run.execution?.appSource ?? 'device',
+  );
   const job = useWorkflowCompletion();
   const navigate = useNavigate();
 
@@ -118,13 +122,33 @@ function Gate({ run }: { run: RunHistoryEntry }) {
             một quyết định mới làm được nửa là cách hỏng âm thầm nhất. */}
         {pending.length === 0 && (
           <div className="flex flex-col gap-3">
+            {run.execution?.platforms.some((platform) => platform !== 'web') && (
+              <div className="max-w-sm">
+                <label className="mb-1 block text-sm font-medium" htmlFor="workflow-app-source">
+                  Nguồn app cho lần chạy
+                </label>
+                <Dropdown
+                  id="workflow-app-source"
+                  aria-label="Nguồn app cho lần chạy"
+                  value={appSource}
+                  onChange={(value) => setAppSource(value as 'device' | 'upload')}
+                  options={[
+                    { value: 'device', label: 'Bản có sẵn trên thiết bị' },
+                    { value: 'upload', label: 'Bản build đã tải lên' },
+                  ]}
+                />
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Áp dụng cho Android/iOS của workflow này; web không bị ảnh hưởng.
+                </p>
+              </div>
+            )}
             <div className="flex flex-wrap items-center gap-2">
               <Button
                 size="sm"
                 className="whitespace-nowrap"
                 disabled={job.status === 'running'}
                 onClick={() => {
-                  job.start({ runId: run.id });
+                  job.start({ runId: run.id, appSource });
                   // Quay về Studio để cả luồng khép kín tại một chỗ: chính từ
                   // đó người dùng khởi động workflow, và log chạy test hiện
                   // tiếp ngay dưới log sinh kịch bản. Luồng không bị gián đoạn

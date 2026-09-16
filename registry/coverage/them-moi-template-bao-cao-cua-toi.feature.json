@@ -1,0 +1,327 @@
+{
+  "version": 1,
+  "featureFile": "them-moi-template-bao-cao-cua-toi.feature",
+  "generatedAt": "2026-09-15T11:42:33.568Z",
+  "repaired": false,
+  "sourceUnits": 20,
+  "classifiedSources": 20,
+  "requirements": [
+    {
+      "id": "REQ-001",
+      "key": "req:53ec3b2efc868ee120a2",
+      "sourceId": "SRC-001",
+      "priority": "P0",
+      "rule": "Thêm được template mới trên Báo cáo của tôi",
+      "sourceQuote": "Mục tiêu: Thêm được template mới trên Báo cáo của tôi",
+      "expectedResult": "Template mới được thêm vào danh sách Báo cáo của tôi",
+      "sourceRef": "https://digital-horus.atlassian.net/wiki/spaces/SD/pages/6356993/Ch+c+n+ng+Th+m+m+i+template+B+o+c+o+c+a+t+i"
+    },
+    {
+      "id": "REQ-002",
+      "key": "req:e426f42e80491e0d1750",
+      "sourceId": "SRC-003",
+      "priority": "P0",
+      "rule": "Click button plus để mở chức năng Thêm mới",
+      "sourceQuote": "Click vào button :plus: để mở chức năng Thêm mới",
+      "expectedResult": "Mở chức năng Thêm mới",
+      "sourceRef": "https://digital-horus.atlassian.net/wiki/spaces/SD/pages/6356993/Ch+c+n+ng+Th+m+m+i+template+B+o+c+o+c+a+t+i"
+    },
+    {
+      "id": "REQ-003",
+      "key": "req:99792c49828493d251aa",
+      "sourceId": "SRC-004",
+      "priority": "P0",
+      "rule": "Có 2 loại báo cáo, chọn từng loại rồi bấm Tiếp tục để mở màn hình thêm mới tương ứng",
+      "sourceQuote": "Có 2 loại báo cáo, chọn từng loại, sau đó bấm Tiếp tục để mở màn hình thêm mới tương ứng:",
+      "expectedResult": "Mở màn hình thêm mới tương ứng với loại báo cáo đã chọn",
+      "sourceRef": "https://digital-horus.atlassian.net/wiki/spaces/SD/pages/6356993/Ch+c+n+ng+Th+m+m+i+template+B+o+c+o+c+a+t+i"
+    },
+    {
+      "id": "REQ-004",
+      "key": "req:2f6b974d346c55fd87e5",
+      "sourceId": "SRC-006",
+      "priority": "P1",
+      "rule": "Mỗi loại báo cáo mở ra 1 màn hình có giao diện khác nhau",
+      "sourceQuote": "Chú ý: Mỗi loại báo cáo mở ra 1 màn hình có giao diện khác nhau.",
+      "expectedResult": "Màn hình thêm mới khác nhau theo từng loại báo cáo",
+      "sourceRef": "https://digital-horus.atlassian.net/wiki/spaces/SD/pages/6356993/Ch+c+n+ng+Th+m+m+i+template+B+o+c+o+c+a+t+i"
+    },
+    {
+      "id": "REQ-005",
+      "key": "req:209c3b569eeec62ea19a",
+      "sourceId": "SRC-009",
+      "priority": "P1",
+      "rule": "Khi ấn Thêm mới, hiển thị màn hình empty state (chưa add thẻ nào)",
+      "sourceQuote": "Khi ấn Thêm mới, hiển thị màn hình empty state (chưa add thẻ nào)",
+      "expectedResult": "Màn hình Thêm mới ở trạng thái empty state",
+      "sourceRef": "https://digital-horus.atlassian.net/wiki/spaces/SD/pages/6356993/Ch+c+n+ng+Th+m+m+i+template+B+o+c+o+c+a+t+i"
+    },
+    {
+      "id": "REQ-006",
+      "key": "req:971470eb5b2660469a85",
+      "sourceId": "SRC-010",
+      "priority": "P0",
+      "rule": "Tiếp tục bấm plus để mở màn hình Thêm mới các thẻ",
+      "sourceQuote": "Tiếp tục bấm :plus: để mở màn hình Thêm mới các thẻ",
+      "expectedResult": "Mở màn hình chọn thẻ",
+      "sourceRef": "https://digital-horus.atlassian.net/wiki/spaces/SD/pages/6356993/Ch+c+n+ng+Th+m+m+i+template+B+o+c+o+c+a+t+i"
+    },
+    {
+      "id": "REQ-007",
+      "key": "req:288178bf655eff981d4d",
+      "sourceId": "SRC-014",
+      "priority": "P1",
+      "rule": "Mặc định không chọn thẻ nào",
+      "sourceQuote": "Mặc định không chọn thẻ nào.",
+      "expectedResult": "Không có thẻ nào được chọn khi mở màn hình",
+      "sourceRef": "https://digital-horus.atlassian.net/wiki/spaces/SD/pages/6356993/Ch+c+n+ng+Th+m+m+i+template+B+o+c+o+c+a+t+i"
+    },
+    {
+      "id": "REQ-008",
+      "key": "req:0d6a61e746a544d10374",
+      "sourceId": "SRC-015",
+      "priority": "P1",
+      "rule": "Bấm vào 1 thẻ thì select, click lần thứ 2 thì unselect",
+      "sourceQuote": "Khi bấm vào 1 thẻ thì select thẻ đó, click lần thứ 2 thì unselect",
+      "expectedResult": "Thẻ chuyển đổi trạng thái chọn/bỏ chọn theo số lần click",
+      "sourceRef": "https://digital-horus.atlassian.net/wiki/spaces/SD/pages/6356993/Ch+c+n+ng+Th+m+m+i+template+B+o+c+o+c+a+t+i"
+    },
+    {
+      "id": "REQ-009",
+      "key": "req:85844c55c2dfe6871101",
+      "sourceId": "SRC-016",
+      "priority": "P1",
+      "rule": "Sau khi chọn xong, click cross_mark quay lại màn hình Thêm mới; nếu có tích chọn thẻ bất kỳ thì hiển thị các thẻ đó ở màn hình Thêm mới",
+      "sourceQuote": "Sau khi chọn xong, click :cross_mark: để quay lại màn hình Thêm mới, nếu có tích chọn thẻ bất kỳ, hiển thị các thẻ đó ở màn hình Thêm mới",
+      "expectedResult": "Các thẻ đã chọn hiển thị trên màn hình Thêm mới",
+      "sourceRef": "https://digital-horus.atlassian.net/wiki/spaces/SD/pages/6356993/Ch+c+n+ng+Th+m+m+i+template+B+o+c+o+c+a+t+i"
+    },
+    {
+      "id": "REQ-010",
+      "key": "req:a97824260ef65b4e4039",
+      "sourceId": "SRC-017",
+      "priority": "P1",
+      "rule": "Nếu không chọn thẻ nào thì quay lại màn hình Thêm mới vẫn ở trạng thái empty state",
+      "sourceQuote": "Nếu không chọn thẻ nào, thì quay lại thì màn hình Thêm mới vẫn ở trạng thái empty state.",
+      "expectedResult": "Màn hình Thêm mới vẫn empty state",
+      "sourceRef": "https://digital-horus.atlassian.net/wiki/spaces/SD/pages/6356993/Ch+c+n+ng+Th+m+m+i+template+B+o+c+o+c+a+t+i"
+    },
+    {
+      "id": "REQ-011",
+      "key": "req:2582f69bf1b5996c8534",
+      "sourceId": "SRC-018",
+      "priority": "P1",
+      "rule": "Button Lưu chỉ enable khi có chọn thẻ, không có thẻ nào thì disable",
+      "sourceQuote": "Button Lưu chỉ enable khi có chọn thẻ, không có thẻ nào thì disable.",
+      "expectedResult": "Button Lưu enable khi có thẻ, disable khi không có thẻ",
+      "sourceRef": "https://digital-horus.atlassian.net/wiki/spaces/SD/pages/6356993/Ch+c+n+ng+Th+m+m+i+template+B+o+c+o+c+a+t+i"
+    },
+    {
+      "id": "REQ-012",
+      "key": "req:96d392579dfd3cd251ea",
+      "sourceId": "SRC-019",
+      "priority": "P0",
+      "rule": "Bấm Lưu để nhập tên template",
+      "sourceQuote": "Bấm Lưu để nhập tên template",
+      "expectedResult": "Mở popup nhập tên template",
+      "sourceRef": "https://digital-horus.atlassian.net/wiki/spaces/SD/pages/6356993/Ch+c+n+ng+Th+m+m+i+template+B+o+c+o+c+a+t+i"
+    },
+    {
+      "id": "REQ-013",
+      "key": "req:cc46f1107a2ef2949e7e",
+      "sourceId": "SRC-020",
+      "priority": "P0",
+      "rule": "Sau khi thêm thành công, hiển thị template vừa thêm ở danh sách, đồng thời hiển thị thông báo thành công",
+      "sourceQuote": "Sau khi thêm thành công, hiển thị template vừa thêm ở danh sách, đồng thời hiển thị thông báo thành công",
+      "expectedResult": "Template mới xuất hiện trong danh sách và có thông báo thành công",
+      "sourceRef": "https://digital-horus.atlassian.net/wiki/spaces/SD/pages/6356993/Ch+c+n+ng+Th+m+m+i+template+B+o+c+o+c+a+t+i"
+    }
+  ],
+  "audit": {
+    "decision": "ready",
+    "mappings": [
+      {
+        "requirementId": "REQ-001",
+        "requirementKey": "req:53ec3b2efc868ee120a2",
+        "status": "covered",
+        "scenarios": [
+          "Thêm mới template báo cáo thành công"
+        ],
+        "evidence": [
+          "Then \"Mục báo cáo trong danh sách\" shows \"Template test\"",
+          "And \"Thông báo\" shows \"Lưu mẫu thành công\""
+        ],
+        "reason": "Scenario thêm template mới và assert template xuất hiện trong danh sách Báo cáo của tôi."
+      },
+      {
+        "requirementId": "REQ-002",
+        "requirementKey": "req:e426f42e80491e0d1750",
+        "status": "covered",
+        "scenarios": [
+          "Mở chức năng Thêm mới từ nút thêm mới báo cáo"
+        ],
+        "evidence": [
+          "When I click \"Nút thêm mới báo cáo\"",
+          "Then \"Chọn loại nội dung hiển thị\" is visible"
+        ],
+        "reason": "Click nút plus và assert màn hình chọn loại nội dung hiển thị mở ra."
+      },
+      {
+        "requirementId": "REQ-003",
+        "requirementKey": "req:99792c49828493d251aa",
+        "status": "covered",
+        "scenarios": [
+          "Chọn loại báo cáo Cá nhân và bấm Tiếp tục mở màn hình thêm mới",
+          "Chọn loại báo cáo Doanh nghiệp và thị trường và bấm Tiếp tục mở màn hình thêm mới"
+        ],
+        "evidence": [
+          "And I select \"Cá nhân\" from \"Chọn loại nội dung hiển thị\"",
+          "And I click \"Nút TIẾP TỤC\"",
+          "Then \"Tiêu đề Báo cáo mẫu chưa có tên\" is visible",
+          "And I click \"Khung lựa chọn Doanh nghiệp và thị trường\"",
+          "Then \"Khung cảnh báo hỗ trợ trên điện thoại\" is visible"
+        ],
+        "reason": "Có scenario cho cả hai loại báo cáo, mỗi loại assert màn hình thêm mới tương ứng."
+      },
+      {
+        "requirementId": "REQ-004",
+        "requirementKey": "req:2f6b974d346c55fd87e5",
+        "status": "covered",
+        "scenarios": [
+          "Mỗi loại báo cáo mở ra màn hình thêm mới có giao diện khác nhau"
+        ],
+        "evidence": [
+          "Then \"Hình ảnh minh họa trạng thái trống\" is visible",
+          "And \"Khung cảnh báo hỗ trợ trên điện thoại\" is not visible"
+        ],
+        "reason": "Scenario so sánh giao diện giữa hai loại báo cáo, assert sự khác biệt."
+      },
+      {
+        "requirementId": "REQ-005",
+        "requirementKey": "req:209c3b569eeec62ea19a",
+        "status": "covered",
+        "scenarios": [
+          "Màn hình Thêm mới hiển thị empty state khi chưa thêm thẻ"
+        ],
+        "evidence": [
+          "Then \"Hình ảnh minh họa trạng thái trống\" is visible",
+          "And \"Thẻ nội dung trong báo cáo\" count is equal to \"0\""
+        ],
+        "reason": "Assert màn hình Thêm mới ở trạng thái empty state với 0 thẻ."
+      },
+      {
+        "requirementId": "REQ-006",
+        "requirementKey": "req:971470eb5b2660469a85",
+        "status": "covered",
+        "scenarios": [
+          "Bấm nút thêm thẻ mở màn hình chọn thẻ"
+        ],
+        "evidence": [
+          "And I click \"Nút nổi thêm thẻ\"",
+          "Then \"Thẻ Lợi nhuận theo tháng\" is visible",
+          "And \"Thẻ Thống kê giao dịch CP\" is visible",
+          "And \"Thẻ Tài sản\" is visible"
+        ],
+        "reason": "Click nút plus và assert màn hình chọn thẻ hiển thị các thẻ."
+      },
+      {
+        "requirementId": "REQ-007",
+        "requirementKey": "req:288178bf655eff981d4d",
+        "status": "covered",
+        "scenarios": [
+          "Mặc định không chọn thẻ nào khi mở màn hình chọn thẻ"
+        ],
+        "evidence": [
+          "And I click \"Nút đóng popup Thêm thẻ\"",
+          "Then \"Thẻ nội dung trong báo cáo\" count is equal to \"0\""
+        ],
+        "reason": "Mở màn hình chọn thẻ, đóng popup, assert không có thẻ nào được chọn."
+      },
+      {
+        "requirementId": "REQ-008",
+        "requirementKey": "req:0d6a61e746a544d10374",
+        "status": "covered",
+        "scenarios": [
+          "Bấm thẻ lần thứ hai bỏ chọn thẻ"
+        ],
+        "evidence": [
+          "And I click \"Thẻ Lợi nhuận theo tháng\"",
+          "And I click \"Thẻ Lợi nhuận theo tháng\"",
+          "Then \"Thẻ nội dung trong báo cáo\" count is equal to \"0\""
+        ],
+        "reason": "Click thẻ hai lần và assert thẻ bị bỏ chọn (count = 0)."
+      },
+      {
+        "requirementId": "REQ-009",
+        "requirementKey": "req:85844c55c2dfe6871101",
+        "status": "covered",
+        "scenarios": [
+          "Các thẻ đã chọn hiển thị trên màn hình Thêm mới sau khi quay lại"
+        ],
+        "evidence": [
+          "And I click \"Thẻ Lợi nhuận theo tháng\"",
+          "And I click \"Nút đóng popup Thêm thẻ\"",
+          "Then \"Thẻ nội dung trong báo cáo\" count is equal to \"1\""
+        ],
+        "reason": "Chọn thẻ, đóng popup, assert thẻ đã chọn hiển thị trên màn hình Thêm mới."
+      },
+      {
+        "requirementId": "REQ-010",
+        "requirementKey": "req:a97824260ef65b4e4039",
+        "status": "covered",
+        "scenarios": [
+          "Không chọn thẻ nào thì màn hình Thêm mới vẫn ở trạng thái empty state"
+        ],
+        "evidence": [
+          "And I click \"Nút đóng popup Thêm thẻ\"",
+          "Then \"Hình ảnh minh họa trạng thái trống\" is visible",
+          "And \"Thẻ nội dung trong báo cáo\" count is equal to \"0\""
+        ],
+        "reason": "Không chọn thẻ, quay lại, assert màn hình Thêm mới vẫn empty state."
+      },
+      {
+        "requirementId": "REQ-011",
+        "requirementKey": "req:2582f69bf1b5996c8534",
+        "status": "covered",
+        "scenarios": [
+          "Nút Lưu disable khi không có thẻ nào được chọn",
+          "Nút Lưu enable khi có thẻ được chọn"
+        ],
+        "evidence": [
+          "Then \"Nút Lưu\" is not visible",
+          "Then \"Nút Lưu\" is visible"
+        ],
+        "reason": "Có scenario cho cả trạng thái disable (không có thẻ) và enable (có thẻ)."
+      },
+      {
+        "requirementId": "REQ-012",
+        "requirementKey": "req:96d392579dfd3cd251ea",
+        "status": "covered",
+        "scenarios": [
+          "Bấm Lưu mở popup nhập tên template"
+        ],
+        "evidence": [
+          "And I click \"Nút Lưu\"",
+          "Then \"Tên của thiết kế\" is visible",
+          "And \"Nút LƯU trong popup\" is visible"
+        ],
+        "reason": "Click Lưu và assert popup nhập tên template hiển thị."
+      },
+      {
+        "requirementId": "REQ-013",
+        "requirementKey": "req:cc46f1107a2ef2949e7e",
+        "status": "covered",
+        "scenarios": [
+          "Thêm mới template báo cáo thành công"
+        ],
+        "evidence": [
+          "Then \"Mục báo cáo trong danh sách\" shows \"Template test\"",
+          "And \"Thông báo\" shows \"Lưu mẫu thành công\""
+        ],
+        "reason": "Assert template mới xuất hiện trong danh sách và có thông báo thành công."
+      }
+    ],
+    "missingRequirementIds": []
+  },
+  "auditedAt": "2026-09-15T11:43:08.820Z"
+}

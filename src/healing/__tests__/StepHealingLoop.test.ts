@@ -10,10 +10,12 @@ import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import {
   healScenarioSteps,
+  retainVerifiedHealing,
   type ScenarioAttempt,
   type StepPatch,
 } from '../StepHealingLoop.js';
 import type { StepHypothesis } from '../StepHealer.js';
+import type { ScenarioResult } from '../../core/types.js';
 
 const addButton = (over: Partial<StepHypothesis> = {}): StepHypothesis => ({
   step: 'I click "Thêm mã"',
@@ -197,7 +199,7 @@ describe('when it cannot decide alone', () => {
 });
 
 describe('budget', () => {
-  it('never spends more replays than it was given', async () => {
+  it('stops instead of replaying the same ineffective patch', async () => {
     let runs = 0;
     await healScenarioSteps({
       scenario: 'S',
@@ -207,6 +209,29 @@ describe('budget', () => {
       runPatched: async () => { runs++; return failing(); },
       maxAttempts: 3,
     });
-    assert.equal(runs, 3);
+    assert.equal(runs, 1);
+  });
+});
+
+describe('a replay that actually healed the scenario', () => {
+  it('keeps the red baseline and green replay instead of returning the stale failure', () => {
+    const scenario = {
+      id: 's', name: 'S', tags: [], platforms: ['web'], steps: [],
+    } as ScenarioResult['scenario'];
+    const baseline: ScenarioResult = {
+      scenario, platform: 'web', device: 'mock', verdict: 'failed',
+      runs: [{ attempt: 1, status: 'failed', steps: [], startedAt: 't1', durationMs: 1 }],
+    };
+    const replay: ScenarioResult = {
+      scenario, platform: 'web', device: 'mock', verdict: 'passed',
+      runs: [{ attempt: 1, status: 'passed', steps: [], startedAt: 't2', durationMs: 2 }],
+    };
+
+    const retained = retainVerifiedHealing(baseline, replay);
+    assert.equal(retained.verdict, 'flaky');
+    assert.deepEqual(retained.runs.map((run) => [run.attempt, run.status]), [
+      [1, 'failed'],
+      [2, 'passed'],
+    ]);
   });
 });

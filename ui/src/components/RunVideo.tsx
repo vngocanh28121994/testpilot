@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import type { ReportView } from '@core/ui/contracts.js';
 
 /**
@@ -30,7 +30,20 @@ export function RunVideo({
   // Chỉ bản ghi CẢ lượt mới có đoạn cài đặt để bỏ qua và nhiều kịch bản để đánh
   // mốc. Clip riêng của một kịch bản vốn đã bắt đầu ở đúng chỗ của nó.
   const whole = report.wholeVideoUrls?.includes(url) ?? false;
-  const chapters = whole ? (report.chapters ?? []) : [];
+  const chapters = useMemo(() => {
+    if (!whole) return [];
+    // Server normally sends timeline order, but imported/older reports are not
+    // guaranteed to. Keep equal timestamps stable so a retry at the same
+    // recorded second cannot jump around between renders.
+    return (report.chapters ?? [])
+      .map((chapter, index) => ({ chapter, index }))
+      .sort((left, right) => {
+        const leftAt = Number.isFinite(left.chapter.at) ? left.chapter.at : Number.POSITIVE_INFINITY;
+        const rightAt = Number.isFinite(right.chapter.at) ? right.chapter.at : Number.POSITIVE_INFINITY;
+        return leftAt - rightAt || left.index - right.index;
+      })
+      .map(({ chapter }) => chapter);
+  }, [report.chapters, whole]);
 
   const seek = (seconds: number) => {
     const el = video.current;
@@ -69,23 +82,42 @@ export function RunVideo({
         </figcaption>
       )}
       {chapters.length > 1 && (
-        <ul className="flex flex-wrap gap-1.5">
-          {chapters.map((chapter) => (
-            <li key={`${chapter.name}-${chapter.at}`}>
-              <button
-                type="button"
-                className="border-border hover:bg-muted rounded border px-2 py-1 text-left text-xs"
-                onClick={() => seek(chapter.at)}
-              >
-                <span className={chapter.status === 'passed' ? 'text-status-pass' : 'text-status-fail'}>
-                  ●
-                </span>{' '}
-                {chapter.name}
-              </button>
-            </li>
-          ))}
-        </ul>
+        <ol className="grid grid-cols-1 gap-1.5 md:grid-cols-2 xl:grid-cols-3">
+          {chapters.map((chapter, index) => {
+            const videoAt = Math.max(0, (skipped ?? 0) + chapter.at);
+            return (
+              <li key={`${chapter.name}-${chapter.at}-${index}`}>
+                <button
+                  type="button"
+                  className="border-border hover:bg-muted flex h-full w-full items-start gap-2 rounded border px-2 py-1.5 text-left text-xs"
+                  onClick={() => seek(chapter.at)}
+                >
+                  <time
+                    className="text-muted-foreground shrink-0 font-mono text-[0.6875rem] leading-5 tabular-nums"
+                    dateTime={`PT${videoAt.toFixed(3)}S`}
+                  >
+                    {formatTimestamp(videoAt)}
+                  </time>
+                  <span className={chapter.status === 'passed' ? 'text-status-pass leading-5' : 'text-status-fail leading-5'}>
+                    ●
+                  </span>
+                  <span className="leading-5">{chapter.name}</span>
+                </button>
+              </li>
+            );
+          })}
+        </ol>
       )}
     </figure>
   );
+}
+
+function formatTimestamp(seconds: number): string {
+  const total = Math.max(0, Math.floor(Number.isFinite(seconds) ? seconds : 0));
+  const hours = Math.floor(total / 3600);
+  const minutes = Math.floor((total % 3600) / 60);
+  const rest = total % 60;
+  return hours > 0
+    ? [hours, minutes, rest].map((part) => String(part).padStart(2, '0')).join(':')
+    : [minutes, rest].map((part) => String(part).padStart(2, '0')).join(':');
 }

@@ -238,6 +238,30 @@ export async function auditFeatureCoverage(
   };
 }
 
+export type CoverageAuditAttempt =
+  | { ok: true; audit: CoverageAudit }
+  | { ok: false; error: string };
+
+/**
+ * Coverage after human review is advisory. A model outage must not turn an
+ * already-approved suite into a failed workflow before a browser or device is
+ * even opened.
+ */
+export async function tryAuditFeatureCoverage(
+  feature: string,
+  requirements: CoverageRequirement[],
+  opts: CoverageOptions,
+): Promise<CoverageAuditAttempt> {
+  try {
+    return { ok: true, audit: await auditFeatureCoverage(feature, requirements, opts) };
+  } catch (err) {
+    return {
+      ok: false,
+      error: err instanceof Error ? err.message : String(err),
+    };
+  }
+}
+
 /**
  * Audit and repair once before handing the draft to human review.
  *

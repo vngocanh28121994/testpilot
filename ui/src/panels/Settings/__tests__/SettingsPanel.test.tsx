@@ -11,6 +11,18 @@ import SettingsPanel from '@/panels/Settings';
 const ready = () => screen.findByLabelText('Transport');
 
 describe('SettingsPanel', () => {
+  it('hiện profile user, không lộ đường dẫn hoặc config kỹ thuật', async () => {
+    await renderWithRouter(<SettingsPanel />);
+    await ready();
+
+    expect(screen.getByText('qa-user')).toBeInTheDocument();
+    expect(screen.getByText('Profile riêng')).toBeInTheDocument();
+    expect(screen.queryByText('/tmp/testpilot.config.json')).not.toBeInTheDocument();
+    expect(screen.queryByText('Cấu hình đang áp dụng')).not.toBeInTheDocument();
+    expect(screen.queryByText('https://example.com')).not.toBeInTheDocument();
+    expect(screen.queryByText('verifyHealedMatch')).not.toBeInTheDocument();
+  });
+
   /**
    * R9 — bí mật không bao giờ quay lại trình duyệt.
    *

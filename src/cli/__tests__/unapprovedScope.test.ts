@@ -27,9 +27,9 @@ describe('phạm vi của danh sách chưa duyệt', () => {
    */
   it('vòng chạy dùng lại đúng predicate đó', () => {
     assert.match(source, /if \(!inScope\(scenario\)\) continue;/);
-    // Không còn bản sao của luật lọc nằm rải rác.
-    const copies = source.match(/scenario\.platforms\.includes\(platform\)/g) ?? [];
-    assert.equal(copies.length, 1, 'luật lọc nền tảng bị chép ra nhiều chỗ');
+    // Luật thật sống trong core/tagScope; run.ts chỉ được gọi nó, không chép
+    // lại phép kiểm tra platform tại chỗ.
+    assert.doesNotMatch(source, /scenario\.platforms\.includes\(platform\)/);
   });
 
   it('giữ nguyên kịch bản chứ không chỉ tên', () => {
@@ -38,5 +38,10 @@ describe('phạm vi của danh sách chưa duyệt', () => {
       /const unapproved = feature\.scenarios\.filter\(\(scenario\) => !approvedNames\.has\(scenario\.name\)\);/,
       'chỉ giữ tên thì không lọc được theo tag và nền tảng',
     );
+  });
+
+  it('lưu lượt chưa duyệt là incomplete/failed, không phải passed 0/0', () => {
+    assert.match(source, /realFailures\.length > 0 \|\| unapproved\.length > 0 \? 'failed' : 'passed'/);
+    assert.match(source, /total: results\.length \+ quarantined\.length \+ unapproved\.length/);
   });
 });

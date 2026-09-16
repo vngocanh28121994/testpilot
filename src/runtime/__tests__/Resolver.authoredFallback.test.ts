@@ -19,7 +19,7 @@ import { describe, it } from 'node:test';
 import { Registry } from '../../core/registry.js';
 import type { LocatorCandidate } from '../../core/types.js';
 import type { UiDriver, UiHandle } from '../../drivers/driver.js';
-import { Resolver } from '../resolver.js';
+import { ElementNotFoundError, Resolver } from '../resolver.js';
 
 const primary: LocatorCandidate = {
   strategy: 'role', value: 'combobox', weight: 0.9, origin: 'llm',
@@ -103,5 +103,39 @@ describe('an authored fallback candidate', () => {
     const r = await resolver.resolve('transfer.sourceAccount');
     assert.equal(r.candidate.strategy, 'role');
     assert.equal(r.healed, false);
+  });
+});
+
+describe('a new action name for an already-known control', () => {
+  it('reuses a same-screen semantic sibling instead of requiring a hardcoded locator', async () => {
+    const reg = await Registry.load('/dev/null/nonexistent-semantic-sibling.json');
+    reg.upsertElement({
+      id: 'priceBoard.openCategoryDropdown', label: 'mở dropdown Danh mục', screen: 'priceBoard',
+      candidates: {},
+    });
+    reg.upsertElement({
+      id: 'priceBoard.categoryDropdown', label: 'Danh mục theo dõi', screen: 'priceBoard',
+      candidates: { web: [{ strategy: 'role', value: 'combobox', name: 'Following Cate', weight: 0.8, origin: 'llm' }] },
+      health: { resolutions: 20, heals: 0, winners: {} },
+    });
+    const candidate = reg.element('priceBoard.categoryDropdown').candidates.web![0]!;
+    const resolver = new Resolver(driverThatOnlyKnows(candidate), reg, options);
+
+    const result = await resolver.resolve('priceBoard.openCategoryDropdown');
+    assert.equal(result.candidate.strategy, 'role');
+    assert.equal(result.candidate.value, 'combobox');
+  });
+
+  it('does not borrow a merely same-screen control without shared business words', async () => {
+    const reg = await Registry.load('/dev/null/nonexistent-semantic-stranger.json');
+    reg.upsertElement({ id: 'p.openCategory', label: 'mở dropdown Danh mục', screen: 'p', candidates: {} });
+    reg.upsertElement({
+      id: 'p.delete', label: 'Xoá khỏi danh sách', screen: 'p',
+      candidates: { web: [{ strategy: 'testId', value: 'delete', weight: 0.9, origin: 'authored' }] },
+    });
+    const resolver = new Resolver(driverThatOnlyKnows(
+      reg.element('p.delete').candidates.web![0]!,
+    ), reg, { ...options, timeoutMs: 30, pollMs: 5 });
+    await assert.rejects(() => resolver.resolve('p.openCategory'), ElementNotFoundError);
   });
 });

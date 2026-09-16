@@ -16,7 +16,11 @@ import type { RuntimeLocator } from '../RuntimeRegistry.js';
 import { StandardElementVerifier } from '../ElementVerifier.js';
 import { RuntimeRegistry } from '../RuntimeRegistry.js';
 import type { VisionLlmProvider } from './AiDiscoveryTypes.js';
-import type { MatchScore } from '../ConfidenceScorer.js';
+import { textMatch, type MatchScore } from '../ConfidenceScorer.js';
+import { checkInteractionSafety } from '../InteractionSafety.js';
+import { resolveActionElement } from './SemanticElementDiscovery.js';
+import type { ElementMatch } from '../ElementMatcher.js';
+import { normalizeHumanText } from '../../core/text.js';
 
 export interface VisionDiscoveryOptions {
   /** Confidence floor for the vision candidate (default 60). */
@@ -28,6 +32,10 @@ export interface VisionDiscoveryOptions {
    * using bounding box overlap.  Requires `observation` to be provided.
    */
   correlateWithObservation?: boolean;
+  /** Runtime resolver persists only after the action's observable outcome. */
+  persistSuggestedLocator?: boolean;
+  /** Permit an exact visible-text proxy only when outcome validation follows. */
+  allowExactTextProxy?: boolean;
 }
 
 export class VisionElementDiscovery {
@@ -72,114 +80,169 @@ export class VisionElementDiscovery {
     if (response.tokensUsed != null) evidence.push(`[vision] tokens=${response.tokensUsed}`);
     if (response.description) evidence.push(`[vision] description: ${response.description}`);
 
-    const candidate = response.candidate;
-    if (!candidate) {
+    const proposals = [...(response.candidates ?? []), ...(response.candidate ? [response.candidate] : [])]
+      .filter((candidate, index, all) =>
+        all.findIndex((other) =>
+          other.observedElementId === candidate.observedElementId &&
+          other.clickableAncestorObservedElementId === candidate.clickableAncestorObservedElementId,
+        ) === index)
+      .slice(0, 3);
+    if (proposals.length === 0) {
       evidence.push('[vision] LLM returned no candidate');
       return { intent, method: 'failed', observation, evidence };
     }
-
-    evidence.push(
-      `[vision] candidate elementId=${candidate.observedElementId} confidence=${candidate.confidence}`,
-    );
-    evidence.push(`[vision] reasoning: ${candidate.reasoning}`);
-
-    // ── Confidence threshold ──────────────────────────────────────────────────
-    if (candidate.confidence < minConf) {
-      evidence.push(
-        `[vision] confidence ${candidate.confidence} below threshold ${minConf} — rejected`,
-      );
-      return { intent, method: 'failed', observation, evidence };
-    }
-
-    // ── Correlate with observation ────────────────────────────────────────────
-    let el: ObservedElement | undefined;
-
-    if (observation && candidate.observedElementId) {
-      el = observation.elements.find((e) => e.id === candidate.observedElementId);
-    }
-
-    // If element ID didn't match directly, try bounds correlation
-    if (!el && observation && response.bounds) {
-      el = findByBoundsOverlap(observation.elements, response.bounds);
-      if (el) {
-        evidence.push(`[vision] correlated to element ${el.id} via bounds overlap`);
-      }
-    }
-
-    if (!el) {
-      if (observation) {
-        evidence.push('[vision] could not correlate vision result to any observed element');
-        // Without a verified element, we cannot safely return a locator
-        return { intent, method: 'failed', observation, evidence };
-      }
-      // No observation at all — create a synthetic placeholder for evidence only
+    if (!observation) {
       evidence.push('[vision] no observation available for correlation or verification');
       return { intent, method: 'failed', evidence };
     }
 
-    // ── Verification ──────────────────────────────────────────────────────────
-    const verification = this.verifier.verify(intent, el, observation?.elements ?? []);
-    evidence.push(
-      `[vision] verification: ${verification.passed ? 'PASSED' : 'FAILED'} score=${verification.score}`,
-    );
-    for (const line of verification.evidence) evidence.push(`  · ${line}`);
+    const accepted: Array<{
+      match: ElementMatch;
+      locator: { strategy: string; value: string };
+      verification: ReturnType<StandardElementVerifier['verify']>;
+      safety: ReturnType<typeof checkInteractionSafety>;
+    }> = [];
 
-    // Cùng một chốt với tầng ngữ nghĩa: xem chú thích ở refineLocator().
-    const locator = refineLocator(el, candidate.suggestedLocator);
+    for (const [rank, candidate] of proposals.entries()) {
+      evidence.push(
+        `[vision] candidate #${rank + 1} elementId=${candidate.observedElementId} confidence=${candidate.confidence}`,
+      );
+      evidence.push(`[vision] reasoning: ${candidate.reasoning}`);
+      if (candidate.confidence < minConf) {
+        evidence.push(`[vision] candidate #${rank + 1} below threshold ${minConf} — rejected`);
+        continue;
+      }
 
-    if (!verification.passed) {
-      return {
-        intent,
-        method: 'vision',
+      let el = observation.elements.find((item) => item.id === candidate.observedElementId);
+      const bounds = candidate.visualBounds ?? (rank === 0 ? response.bounds : undefined);
+      if (!el && bounds) {
+        el = findByBoundsOverlap(observation.elements, bounds);
+        if (el) evidence.push(`[vision] candidate #${rank + 1} correlated to ${el.id} via bounds`);
+      }
+      if (!el) {
+        evidence.push(`[vision] candidate #${rank + 1} could not correlate to a real observed node`);
+        continue;
+      }
+
+      // The model must identify what it actually saw, not merely return a node
+      // id. This allows screenshot text to fill accessibility gaps while still
+      // rejecting a visually unrelated but clickable node.
+      const wanted = intent.text ?? intent.label;
+      const treeText = el.accessibilityLabel ?? el.text ?? el.placeholder ?? '';
+      const treeSemanticMatch = wanted ? textMatch(treeText, wanted) !== 'none' : true;
+      const visualSemanticMatch = wanted && candidate.visualText
+        ? textMatch(candidate.visualText, wanted) !== 'none'
+        : false;
+      const visualIdentity = candidate.visualDescription ?? candidate.reasoning;
+      // Icon-only controls have no useful UI-tree text and often no literal
+      // screenshot text either. Accept Gemini's semantic description only as
+      // a provisional identity when it is tied to a bounded live node, is
+      // high-confidence, and the caller promises an observable postcondition.
+      // The locator is still not persisted until that outcome succeeds.
+      const boundedVisualIdentity = Boolean(
+        wanted &&
+        opts.allowExactTextProxy === true &&
+        candidate.confidence >= 80 &&
+        el.bounds &&
+        visualIdentity &&
+        semanticDescriptionMatch(visualIdentity, wanted),
+      );
+      if (wanted && !treeSemanticMatch && !visualSemanticMatch && !boundedVisualIdentity) {
+        evidence.push(
+          `[vision] candidate #${rank + 1} rejected: neither UI-tree text "${treeText || '(empty)'}" ` +
+          `nor visual evidence "${candidate.visualText ?? visualIdentity ?? '(missing)'}" matches "${wanted}"`,
+        );
+        continue;
+      }
+      if (visualSemanticMatch && !treeSemanticMatch) {
+        evidence.push(
+          `[vision] candidate #${rank + 1} visual text "${candidate.visualText}" supplements UI-tree text "${treeText || '(empty)'}"`,
+        );
+      }
+      if (boundedVisualIdentity && !treeSemanticMatch && !visualSemanticMatch) {
+        evidence.push(
+          `[vision] candidate #${rank + 1} uses bounded icon identity "${visualIdentity}" ` +
+          'provisionally; the action outcome must verify before persistence',
+        );
+      }
+
+      const actionEl = resolveActionElement(
+        candidate.clickableAncestorObservedElementId,
+        el,
+        observation,
+      );
+      const verificationEl = actionEl === el ? actionEl : {
+        ...actionEl,
+        text: el.text ?? actionEl.text,
+        accessibilityLabel: el.accessibilityLabel ?? actionEl.accessibilityLabel,
+      };
+      const verifyOpts = {
+        allowExactTextProxy: opts.allowExactTextProxy === true,
+        ...(visualSemanticMatch && candidate.visualText
+          ? { visualTextEvidence: candidate.visualText }
+          : {}),
+      };
+      const safety = checkInteractionSafety(intent, verificationEl, observation.elements, verifyOpts);
+      if (safety.safety !== 'SAFE') {
+        evidence.push(`[vision] candidate #${rank + 1} safety=${safety.safety}: ${safety.reason}`);
+        continue;
+      }
+      const verification = this.verifier.verify(intent, verificationEl, observation.elements, verifyOpts);
+      evidence.push(
+        `[vision] candidate #${rank + 1} verification: ${verification.passed ? 'PASSED' : 'FAILED'} score=${verification.score}`,
+      );
+      for (const line of verification.evidence) evidence.push(`  · ${line}`);
+      if (!verification.passed) continue;
+
+      const locator = refineLocator(actionEl, candidate.suggestedLocator);
+      if (!locator) {
+        evidence.push(`[vision] candidate #${rank + 1} has no usable locator`);
+        continue;
+      }
+      accepted.push({
         locator,
+        verification,
+        safety,
         match: {
           intentId: intent.id,
-          observedElementId: el.id,
+          observedElementId: actionEl.id,
           confidence: candidate.confidence,
           method: 'vision',
           reasons: [candidate.reasoning],
           penalties: [],
-          verified: false,
+          verified: true,
           locator,
-          score: aiMatchScore(candidate.observedElementId, candidate.confidence, candidate.reasoning),
+          score: aiMatchScore(actionEl.id, candidate.confidence, candidate.reasoning),
         },
-        verification,
-        observation,
-        evidence,
-      };
+      });
     }
 
+    const best = accepted[0];
+    if (!best) return { intent, method: 'failed', observation, evidence };
+
     // ── Store in registry ─────────────────────────────────────────────────────
-    if (locator) {
+    if (opts.persistSuggestedLocator !== false) {
       const loc: RuntimeLocator = {
-        strategy: locator.strategy,
-        value: locator.value,
+        strategy: best.locator.strategy,
+        value: best.locator.value,
         source: 'ai-discovered',   // vision result treated as AI-sourced
         status: 'suggested',
-        confidence: candidate.confidence / 100,
+        confidence: best.match.confidence / 100,
         verifiedAt: new Date().toISOString(),
         ...(opts.platform ? { platform: opts.platform } : {}),
       };
       this.registry.upsertLocator(intent.id, loc);
-      evidence.push(`[vision] stored: ${locator.strategy}="${locator.value}" status=suggested`);
+      evidence.push(`[vision] stored: ${best.locator.strategy}="${best.locator.value}" status=suggested`);
     }
 
     return {
       intent,
       method: 'vision',
-      locator,
-      match: {
-        intentId: intent.id,
-        observedElementId: el.id,
-        confidence: candidate.confidence,
-        method: 'vision',
-        reasons: [candidate.reasoning],
-        penalties: [],
-        verified: true,
-        locator,
-        score: aiMatchScore(candidate.observedElementId, candidate.confidence, candidate.reasoning),
-      },
-      verification,
+      locator: best.locator,
+      match: best.match,
+      ...(accepted.length > 1 ? { alternatives: accepted.slice(1).map((item) => item.match) } : {}),
+      verification: best.verification,
+      safety: best.safety,
       observation,
       evidence,
     };
@@ -190,6 +253,24 @@ export class VisionElementDiscovery {
 
 function aiMatchScore(candidateId: string, confidence: number, reasoning: string): MatchScore {
   return { candidateId, score: confidence, reasons: [reasoning], penalties: [] };
+}
+
+/**
+ * A visual description is prose, so inserting a shape between business words
+ * ("nút 3 dấu chấm tùy chọn dòng") must not make it less equivalent to the
+ * concise intent ("nút tùy chọn dòng"). Require every meaningful intent word;
+ * this is containment, not fuzzy guessing.
+ */
+function semanticDescriptionMatch(description: string, wanted: string): boolean {
+  if (textMatch(description, wanted) !== 'none') return true;
+  const stop = new Set(['nut', 'button', 'icon', 'control', 'phan', 'tu', 'element']);
+  const words = (value: string) => normalizeHumanText(value)
+    .split(/\s+/)
+    .filter((word) => word.length >= 2 && !stop.has(word));
+  const expected = [...new Set(words(wanted))];
+  if (expected.length < 2) return false;
+  const actual = new Set(words(description));
+  return expected.every((word) => actual.has(word));
 }
 
 

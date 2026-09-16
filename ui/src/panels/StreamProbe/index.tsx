@@ -52,7 +52,12 @@ export default function StreamProbePanel() {
       {/* Dùng chung LogView như mọi chỗ hiển thị log khác. `data-testid` giữ
           trên vỏ ngoài để không phải mở thêm API cho một trang tạm. */}
       <div data-testid="log">
-        <LogView logs={job.logs} className="mt-3 max-h-96" label="Log probe" />
+        <LogView
+          logs={job.logs}
+          active={job.status === 'running'}
+          className="mt-3 max-h-96"
+          label="Log probe"
+        />
       </div>
     </AppShell>
   );

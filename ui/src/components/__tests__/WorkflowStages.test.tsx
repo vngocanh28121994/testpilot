@@ -87,4 +87,18 @@ describe('WorkflowStages — chờ máy hay chờ người', () => {
     render(<WorkflowStages stages={atReview} />);
     expect(screen.getByLabelText('đang chạy')).toBeInTheDocument();
   });
+
+  it('workflow cũ đã fail không còn vẽ stage cuối là đang loading', () => {
+    render(<WorkflowStages stages={atReview} runStatus="failed" />);
+    expect(screen.queryByLabelText('đang chạy')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('đang chờ bạn')).not.toBeInTheDocument();
+    expect(screen.getByLabelText('hỏng')).toBeInTheDocument();
+  });
+
+  it('workflow cũ đã pass coi stage running còn sót lại là đã xong', () => {
+    render(<WorkflowStages stages={atReview} runStatus="passed" />);
+    expect(screen.queryByLabelText('đang chạy')).not.toBeInTheDocument();
+    expect(screen.getAllByLabelText('đã xong')).toHaveLength(2);
+    expect(screen.getByText('2/3 bước')).toBeInTheDocument();
+  });
 });
