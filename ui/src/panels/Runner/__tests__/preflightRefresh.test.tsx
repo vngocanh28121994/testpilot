@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import userEvent from '@testing-library/user-event';
 import { screen } from '@testing-library/react';
-import { http, HttpResponse, delay } from 'msw';
+import { http, HttpResponse } from 'msw';
 import { server } from '@/test/mocks/server';
 import { ROUTES } from '@/api/routes';
 import { renderWithRouter } from '@/test/utils';
@@ -24,22 +24,35 @@ describe('Kiểm tra lại', () => {
   });
 
   it('bấm thì nút tự khoá và nói đang chạy', async () => {
-    // Mock trả lời tức thì thì trạng thái "đang chạy" nháy qua trong một frame.
-    // Thêm độ trễ để test đo được đúng thứ người dùng nhìn thấy trên máy thật,
-    // nơi mỗi lần dò mất khoảng 150ms.
-    server.use(
-      http.get(ROUTES.preflight, async () => {
-        await delay(120);
-        return HttpResponse.json({ platform: 'web', ok: true, checks: [] });
-      }),
-    );
     const user = userEvent.setup();
     await render();
     const button = await screen.findByRole('button', { name: 'Kiểm tra lại' });
+
+    // Cửa chặn do TEST mở, thay cho `delay(120)`.
+    //
+    // Trạng thái "đang chạy" chỉ tồn tại đúng bằng thời gian request. Với một
+    // độ trễ cố định, test phải nhìn thấy nó trong 120ms tính bằng đồng hồ
+    // thật — và khi cả suite chạy song song thì cửa sổ ấy đóng trước khi test
+    // kịp nhìn. Đo ngày 2026-09-18: đỏ 2 trên 3 lần chạy đầy đủ, xanh mọi lần
+    // chạy riêng. Giữ cửa mở cho tới khi đã khẳng định xong thì không còn gì
+    // để đua: request kết thúc đúng lúc test cho phép.
+    let release!: () => void;
+    const held = new Promise<void>((resolve) => { release = resolve; });
+    server.use(
+      http.get(ROUTES.preflight, async () => {
+        await held;
+        return HttpResponse.json({ platform: 'web', ok: true, checks: [] });
+      }),
+    );
+
     await user.click(button);
     // Ngay sau khi bấm, nút đổi nhãn và không bấm chồng được.
     const busy = await screen.findByRole('button', { name: 'Đang kiểm tra…' });
     expect(busy).toBeDisabled();
+
+    // Trả lời nốt, để handler không treo sang ca sau.
+    release();
+    expect(await screen.findByRole('button', { name: 'Kiểm tra lại' })).toBeEnabled();
   });
 
   it('xong thì trở lại nhãn cũ', async () => {

@@ -63,9 +63,23 @@ describe('DashboardPanel', () => {
     expect(await screen.findByText('Chưa sinh feature nào.')).toBeInTheDocument();
   });
 
+  /**
+   * Hai alert, không phải một — và đó là chủ ý.
+   *
+   * `StateErrorBanner` ở AppShell nói "máy chủ đang lỗi" cho MỌI màn hình, còn
+   * panel nói lỗi của riêng nó. `findByRole('alert')` từng đủ vì chỉ có một;
+   * từ khi có banner thì nó ném "found multiple elements" — test đỏ vì giao
+   * diện tốt lên, nên phải nói rõ mong đợi cả hai thay vì gọi cái đầu tiên.
+   */
   it('hiện lỗi khi /api/state hỏng', async () => {
     server.use(http.get(ROUTES.state, () => HttpResponse.json({ error: 'config hỏng' }, { status: 500 })));
     await renderWithRouter(<DashboardPanel />);
-    expect(await screen.findByRole('alert')).toHaveTextContent('config hỏng');
+
+    const alerts = await screen.findAllByRole('alert');
+    const banner = alerts.find((el) => el.hasAttribute('data-state-error'));
+    const panelAlert = alerts.find((el) => !el.hasAttribute('data-state-error'));
+
+    expect(banner).toHaveTextContent('Máy chủ đang lỗi');
+    expect(panelAlert).toHaveTextContent('config hỏng');
   });
 });
