@@ -257,3 +257,59 @@ describe('LogView — dòng tổng kết có Known issue', () => {
     expect(screen.queryByText(/known issue/)).not.toBeInTheDocument();
   });
 });
+
+/**
+ * Log của workflow cũng phải được nhận diện như log của Local Runner.
+ *
+ * Workflow chạy nhiều nền tảng song song và trộn dòng vào một luồng, nên
+ * `server.ts` gói mỗi dòng lại thành `[android] …`. Mọi luật trong LogView đều
+ * neo `^`, nên tiền tố ấy đẩy chúng ra khỏi mỏ neo và cả bộ nhận diện chết một
+ * lượt — dòng ✓/✗ mất màu, `[run:dir]` lẽ ra bị ẩn thì hiện ra, cảnh báo mất
+ * nhấn mạnh. Cùng một component, cùng một dòng, chỉ khác cái tiền tố.
+ */
+describe('LogView — log workflow có tiền tố nền tảng', () => {
+  it('nhận ra verdict dù dòng bị gói tiền tố', () => {
+    const { container } = render(
+      <LogView logs={['[android] [run:passed] ✓ Mở chức năng Thêm mã cổ phiếu']} label="l" />,
+    );
+    const row = container.querySelector('[data-log-row="testcase"]');
+    expect(row).not.toBeNull();
+    expect(row!.textContent).toMatch(/Mở chức năng Thêm mã cổ phiếu/);
+    // Tiền tố giữ lại thành nhãn, không vứt đi: workflow trộn nhiều nền tảng.
+    expect(row!.textContent).toMatch(/android/);
+  });
+
+  it('vẫn ẩn [run:dir] khi nó bị gói tiền tố', () => {
+    const { container } = render(
+      <LogView logs={['[android] [run:dir] runs/2026-09-16T00-00-00Z-android']} label="l" />,
+    );
+    expect(container.textContent).not.toContain('runs/');
+  });
+
+  /**
+   * Hai nền tảng chạy cùng một kịch bản thì tên trùng nhau. Gộp "đang chạy" với
+   * kết quả mà không tách theo nền tảng thì ✓ của android ghi đè lên dòng của
+   * web, và web mất kết quả của mình.
+   */
+  it('không gộp nhầm kết quả của hai nền tảng cùng tên kịch bản', () => {
+    const { container } = render(
+      <LogView
+        logs={[
+          '[web] [run:running] … Đăng nhập',
+          '[android] [run:running] … Đăng nhập',
+          '[android] [run:passed] ✓ Đăng nhập',
+        ]}
+        label="l"
+      />,
+    );
+    expect(container.querySelectorAll('[data-log-row="testcase"]')).toHaveLength(2);
+  });
+
+  /** Dòng không có tiền tố — Local Runner — phải y nguyên như trước. */
+  it('không đụng tới dòng vốn không có tiền tố', () => {
+    const { container } = render(<LogView logs={['[run:passed] ✓ Đăng nhập']} label="l" />);
+    const row = container.querySelector('[data-log-row="testcase"]');
+    expect(row).not.toBeNull();
+    expect(row!.textContent).not.toMatch(/android|ios|\bweb\b/);
+  });
+});

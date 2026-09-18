@@ -28,7 +28,11 @@ const interceptor = readFileSync('src/drivers/PopupInterceptor.ts', 'utf8');
 function healingDecision(): string {
   const at = executor.indexOf('lastOutcomeError = err as Error;');
   assert.ok(at > 0, 'the healing catch block is gone');
-  return executor.slice(at, at + 1800);
+  // Rộng hơn nhánh catch một chút, vì mỗi lý do "đừng đổ cho locator" được
+  // thêm vào đây đều kèm phần giải thích vì sao. Cắt sát quá thì test hỏng mỗi
+  // lần có thêm một lý do đúng — đúng kiểu hỏng làm người ta nới assertion thay
+  // vì đọc nó.
+  return executor.slice(at, at + 4000);
 }
 
 describe('a failed postcondition after a successful action', () => {
@@ -47,6 +51,14 @@ describe('a failed postcondition after a successful action', () => {
     assert.ok(said > 0 && reject > 0 && exclude > 0, 'expected all three steps');
     assert.ok(said < reject, 'the locator is demoted before the app is consulted');
     assert.ok(said < exclude, 'the candidate is excluded before the app is consulted');
+
+    // Cùng một luật cho mọi lý do "thủ phạm nằm chỗ khác": hậu điều kiện chưa
+    // từng resolve cũng phải được hỏi TRƯỚC, nếu không thì locator đã bị gỡ mất
+    // rồi mới phát hiện ra là gỡ oan.
+    const accuse = body.indexOf('expectationCanAccuse');
+    assert.ok(accuse > 0, 'the never-seen-expectation check is gone');
+    assert.ok(accuse < reject, 'the locator is demoted before the expectation is judged');
+    assert.ok(accuse < exclude, 'the candidate is excluded before the expectation is judged');
   });
 
   it('reports what the application said, and that it is not a locator fault', () => {

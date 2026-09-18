@@ -40,6 +40,35 @@ describe('neo cú bấm vào chữ vừa gõ', () => {
   });
 
   /**
+   * Đếm thôi thì không đủ, và thiếu điều kiện này luật tự bắn vào chân mình.
+   *
+   * `transfer.submitButton` chỉ có `label:CHUYỂN`, mà màn Chuyển tiền có ba
+   * phần tử mang đúng chữ đó. Điều kiện đếm mở cổng, rồi runner chờ một nút
+   * submit "phản ánh 1000" cho tới hết giờ. Ngày 2026-09-16 nó giết 4/8 kịch
+   * bản — đúng 4 kịch bản có mẫu gõ-rồi-bấm-CHUYỂN, không sót cái nào. Cùng
+   * feature ấy chạy 9/10 xanh ngày 14-09, trước khi luật này tồn tại.
+   *
+   * Nội dung phân biệt được hai thứ mà con số thì không: một panel kết quả có
+   * mỗi dòng một chữ, một locator trùng nhãn khớp cùng một chữ vài lần.
+   */
+  it('không neo khi các phần tử khớp mang cùng một nội dung', () => {
+    assert.match(method, /const distinct = new Set\(matches\.texts\.map\(/);
+    assert.match(
+      method,
+      /if \(matches\.texts\.length > 1 && distinct\.size === 1\)[\s\S]{0,400}return resolution\.handle;/,
+    );
+  });
+
+  /**
+   * Và phải NÓI RA. Một locator khớp ba phần tử giống hệt nhau là thứ cần sửa
+   * ở registry; chỗ này là nơi duy nhất nhìn thấy nó, nên im lặng bỏ qua thì
+   * lỗi dữ liệu vẫn còn nguyên mà không ai biết.
+   */
+  it('nói ra locator trùng nhãn thay vì im lặng bỏ qua', () => {
+    assert.match(method, /console\.warn\([\s\S]{0,300}locator trùng nhãn/);
+  });
+
+  /**
    * Không thấy kết quả phản ánh truy vấn thì CHỜ. Bấm trong lúc panel chưa kịp
    * đổi chính là lỗi đang sửa, nên đường thoát duy nhất là hết giờ rồi hỏng.
    */

@@ -5,6 +5,7 @@ import { Header } from './Header';
 import { Main } from './Main';
 import { ThemeSwitch } from '@/components/ThemeSwitch';
 import { DotBackground } from '@/components/DotBackground';
+import { StateErrorBanner } from '@/components/StateErrorBanner';
 
 /**
  * Khung trang dùng chung, theo khuôn authenticated-layout của sen:
@@ -52,7 +53,10 @@ export function AppShell({
             <ThemeSwitch />
           </div>
         </Header>
-        <Main className="relative z-10">{children}</Main>
+        <Main className="relative z-10">
+          <StateErrorBanner />
+          {children}
+        </Main>
       </SidebarInset>
     </SidebarProvider>
   );

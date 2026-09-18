@@ -87,4 +87,25 @@ export class AddStockModalPage {
   async assertSuggestionListVisible(): Promise<void> {
     await this.page.assertVisible('addStockSearch.suggestionList');
   }
+
+  /** Nút thêm mã cổ phiếu
+   * @testpilot-element addStockModal.addStockButton action=tap
+   */
+  async tapAddStockButton(): Promise<void> {
+    await this.page.tap('addStockModal.addStockButton');
+  }
+
+  /** Ô tìm kiếm mã cổ phiếu
+   * @testpilot-element addStockModal.searchInput action=assertText
+   */
+  async assertSearchInputText(expected: string, mode: 'equals' | 'contains' | 'notContains' = 'contains'): Promise<void> {
+    await this.page.assertText('addStockModal.searchInput', expected, mode);
+  }
+
+  /** Nút thêm mã trong popup
+   * @testpilot-element addStockModal.addStockButton action=assertVisible
+   */
+  async assertAddStockButtonVisible(): Promise<void> {
+    await this.page.assertVisible('addStockModal.addStockButton');
+  }
 }

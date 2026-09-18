@@ -7,9 +7,15 @@ import type {
   VisionLlmProvider,
 } from './AiDiscoveryTypes.js';
 import { iconMeaningMatches } from '../ConfidenceScorer.js';
+import {
+  DEFAULT_VISION_MODEL_CHAIN,
+  ExhaustedModels,
+  shouldTryNextModel,
+  visionModelChain,
+} from './geminiModels.js';
 
 const GEMINI_BASE_URL = 'https://generativelanguage.googleapis.com/v1beta';
-const DEFAULT_MODEL = 'gemini-3.6-flash';
+const DEFAULT_MODEL = DEFAULT_VISION_MODEL_CHAIN[0];
 const RUNTIME_TIMEOUT_MS = 12_000;
 const MAX_OBSERVED_ELEMENTS = 160;
 const PRIMARY_OUTPUT_TOKENS = 1_800;
@@ -61,11 +67,32 @@ const RESPONSE_JSON_SCHEMA = {
  * discovery have no usable candidate.
  */
 export class GeminiVisionElementProvider implements VisionLlmProvider {
+  /**
+   * Model nào đã cạn quota, nhớ suốt đời provider.
+   *
+   * Không nhớ thì mỗi element cần thị giác lại gọi model đã chết một lần trước
+   * khi sang model sống — hàng chục round-trip chỉ để nhận lại đúng lỗi 429 đã
+   * biết từ element đầu tiên.
+   */
+  private readonly exhausted = new ExhaustedModels();
+
+  private readonly chain: readonly string[];
+
   constructor(
     private readonly key = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY || '',
-    private readonly model = process.env.GEMINI_VISION_MODEL?.trim() || DEFAULT_MODEL,
+    // Nhận cả một model lẻ: phần lớn nơi gọi chỉ muốn ghim đúng một model, và
+    // bắt chúng bọc thành mảng chỉ để dùng được chuỗi fallback là bắt trả giá
+    // cho một tính năng chúng không dùng.
+    models: string | readonly string[] = visionModelChain(),
     private readonly fetcher: typeof fetch = fetch,
-  ) {}
+  ) {
+    this.chain = typeof models === 'string' ? visionModelChain(models) : models;
+  }
+
+  /** Model sẽ được gọi trước tiên ở lần tới — thứ báo cáo và log cần biết. */
+  get model(): string {
+    return this.exhausted.usable(this.chain)[0] ?? DEFAULT_MODEL;
+  }
 
   static available(): boolean {
     return Boolean(process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY);
@@ -81,8 +108,42 @@ export class GeminiVisionElementProvider implements VisionLlmProvider {
       throw new Error('Runtime vision cần UI observation cùng thời điểm với screenshot.');
     }
 
+    const chain = this.exhausted.usable(this.chain);
+    const failures: string[] = [];
+    for (const model of chain) {
+      try {
+        return await this.askOneModel(model, intent, screenshotBase64, observation, {
+          hasFallback: model !== chain[chain.length - 1],
+        });
+      } catch (err) {
+        const message = (err as Error).message;
+        this.exhausted.remember(model, message);
+        failures.push(`${model}: ${message.slice(0, 120)}`);
+        // Chỉ chuyển model khi lỗi thuộc về CHÍNH model — hết quota, không có
+        // model ấy, dịch vụ lỗi. Ảnh hỏng, thiếu key hay JSON không parse được
+        // thì model sau cũng hỏng y hệt, và thử tiếp chỉ làm chậm lúc hỏng rồi
+        // giấu mất nguyên nhân thật sau hai lỗi giống nhau.
+        if (!shouldTryNextModel(message)) throw err;
+        if (model !== chain[chain.length - 1]) {
+          console.warn(`[discovery:vision] ${model} không gọi được — chuyển sang model dự phòng.`);
+        }
+      }
+    }
+    // Nói ra từng model đã thử và hỏng vì gì. Một dòng "Gemini Vision 429" mà
+    // không biết nó nói về model nào thì không truy được, và đó đúng là thứ
+    // chuỗi fallback này làm phức tạp thêm.
+    throw new Error(`Gemini Vision hỏng ở mọi model — ${failures.join(' | ')}`);
+  }
+
+  private async askOneModel(
+    model: string,
+    intent: ElementIntent,
+    screenshotBase64: string,
+    observation: UiObservation,
+    { hasFallback }: { hasFallback: boolean },
+  ): Promise<VisionDiscoveryResponse> {
     const elements = shortlist(observation.elements, intent);
-    const endpoint = `${GEMINI_BASE_URL}/models/${encodeURIComponent(this.model)}:generateContent`;
+    const endpoint = `${GEMINI_BASE_URL}/models/${encodeURIComponent(model)}:generateContent`;
     let totalTokens = 0;
     let lastError: Error | undefined;
     for (const [attempt, maxOutputTokens] of [PRIMARY_OUTPUT_TOKENS, RETRY_OUTPUT_TOKENS].entries()) {
@@ -123,7 +184,14 @@ export class GeminiVisionElementProvider implements VisionLlmProvider {
         // Capacity/rate-limit failures are explicitly transient. Keep auth,
         // model-name and malformed-request errors fail-fast so a bad config is
         // not hidden behind a duplicate request.
-        if (attempt === 0 && (response.status === 429 || response.status >= 500)) {
+        //
+        // Nhưng khi còn model dự phòng thì 429 không đáng thử lại tại chỗ: một
+        // model vừa nói hết quota sẽ không đổi ý sau 250ms, và chuyển sang
+        // model khác vừa nhanh hơn vừa có cơ may thành công. Không còn gì để
+        // chuyển thì thử lại vẫn hơn là bỏ cuộc — đó là hành vi cũ, và nó chỉ
+        // đúng trong đúng trường hợp ấy.
+        const retryInPlace = response.status >= 500 || !hasFallback;
+        if (attempt === 0 && retryInPlace && (response.status === 429 || response.status >= 500)) {
           lastError = error;
           await new Promise((resolve) => setTimeout(resolve, 250));
           continue;
@@ -151,7 +219,7 @@ export class GeminiVisionElementProvider implements VisionLlmProvider {
         const parsed = parseVisionAnswer(raw, elements);
         return {
           ...parsed,
-          modelId: this.model,
+          modelId: model,
           ...(totalTokens > 0 ? { tokensUsed: totalTokens } : {}),
         };
       } catch (err) {

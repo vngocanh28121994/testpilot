@@ -1061,6 +1061,24 @@ export class WebViewCdpDriver {
     root: Locator = handle.page.locator('body'),
   ): Promise<boolean> {
     if (await this.choiceHasExplicitCurrentState(caption)) {
+      // Đóng panel trước khi thoát. Mọi nhánh khác của hàm này kết thúc bằng
+      // một cú bấm vào option, và bấm option thì panel tự đóng — nhánh tắt này
+      // là nhánh DUY NHẤT thoát ra mà panel nó vừa mở vẫn còn trên màn hình.
+      //
+      // Để mở không phải là xấu xí, nó là sai kết quả: `selectOption()` thấy đã
+      // có panel mở thì KHÔNG bấm vào control của mình nữa, mà đi tìm option
+      // ngay trong panel đang mở. Nên bước sau chọn cho một dropdown khác sẽ
+      // chọn nhầm vào panel còn sót lại này.
+      //
+      // Đo trên máy thật 2026-09-16, kịch bản "Thường → Ký Quỹ": bước chọn
+      // NGUỒN thấy TK Thường đã selected nên thoát sớm và bỏ panel nguồn mở;
+      // bước chọn ĐÍCH lấy "TK Ký Quỹ" ngay trong panel ấy. Kết quả: nguồn
+      // thành Ký Quỹ, ô đích chưa từng được chạm tới, và không có đồng nào
+      // được chuyển — trong khi kịch bản báo xanh.
+      //
+      // `listOptions` đã học đúng bài này rồi (xem `openedHere` ở đó): một
+      // thao tác phải trả màn hình về như lúc nó nhận.
+      await this.closeOpenPanel(handle.page);
       console.log(`[select] ${JSON.stringify(option)} đã là lựa chọn hiện tại.`);
       return true;
     }

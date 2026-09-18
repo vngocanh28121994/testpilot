@@ -65,6 +65,9 @@ export function observedToUiObservation(
       interactive: o.interactive,
       index: o.index,
       container: o.container,
+      // Cùng một mảng, cùng thứ tự, cùng quy ước id `obs-<i>` — nên chỉ số của
+      // nguồn quan sát dịch thẳng thành id ở đây.
+      ...(o.parentIndex !== undefined ? { parentId: `obs-${o.parentIndex}` } : {}),
     }),
   );
 

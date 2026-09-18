@@ -1,19 +1,19 @@
 {
   "version": 1,
   "featureFile": "them-ma-co-phieu.feature",
-  "generatedAt": "2026-09-15T08:20:49.173Z",
+  "generatedAt": "2026-09-16T08:33:15.393Z",
   "repaired": true,
-  "sourceUnits": 13,
-  "classifiedSources": 13,
+  "sourceUnits": 15,
+  "classifiedSources": 15,
   "requirements": [
     {
       "id": "REQ-001",
       "key": "req:3ab143db58c93bf8a7c3",
       "sourceId": "SRC-001",
       "priority": "P0",
-      "rule": "Mục tiêu chính: thêm được mã cổ phiếu trên Bảng giá cổ phiếu",
+      "rule": "Thêm được mã cổ phiếu trên Bảng giá cổ phiếu",
       "sourceQuote": "Mục tiêu: Thêm được mã cổ phiếu trên Bảng giá cổ phiếu",
-      "expectedResult": "Mã cổ phiếu được thêm vào danh mục trên Bảng giá",
+      "expectedResult": "Mã cổ phiếu được thêm vào danh mục trên Bảng giá cổ phiếu",
       "sourceRef": "https://digital-horus.atlassian.net/wiki/spaces/SD/pages/196994/Ch+c+n+ng+Th+m+m+c+phi+u"
     },
     {
@@ -23,7 +23,7 @@
       "priority": "P0",
       "rule": "Click button plus để mở chức năng Thêm mã cổ phiếu",
       "sourceQuote": "Click vào button :plus: để mở chức năng Thêm mã cổ phiếu",
-      "expectedResult": "Mở chức năng Thêm mã cổ phiếu",
+      "expectedResult": "Chức năng Thêm mã cổ phiếu được mở",
       "sourceRef": "https://digital-horus.atlassian.net/wiki/spaces/SD/pages/196994/Ch+c+n+ng+Th+m+m+c+phi+u"
     },
     {
@@ -41,75 +41,95 @@
       "key": "req:933715713ae43a01e001",
       "sourceId": "SRC-005",
       "priority": "P1",
-      "rule": "Tìm kiếm theo mã, ưu tiên kết quả theo mã hơn",
+      "rule": "Tìm kiếm được theo mã, ưu tiên kết quả theo mã hơn",
       "sourceQuote": "Tìm kiếm được theo mã (ưu tiên hơn)",
       "expectedResult": "Kết quả khớp theo mã được ưu tiên hiển thị",
       "sourceRef": "https://digital-horus.atlassian.net/wiki/spaces/SD/pages/196994/Ch+c+n+ng+Th+m+m+c+phi+u"
     },
     {
       "id": "REQ-005",
-      "key": "req:76c332282062516dddcd",
+      "key": "req:bb1a760992867d6a0093",
       "sourceId": "SRC-006",
       "priority": "P1",
-      "rule": "Tìm kiếm theo tên doanh nghiệp",
+      "rule": "Cần nhập đủ 3 ký tự của cổ phiếu hoặc chọn mã hiển thị trong danh sách kết quả",
+      "sourceQuote": "Cần nhập đủ 3 kí tự của cổ phiếu, hoặc chọn mã cổ phiếu hiển thị ra trên danh sách kết quả tìm kiếm.",
+      "expectedResult": "Hiển thị danh sách kết quả khi nhập đủ 3 ký tự; cho phép chọn mã từ danh sách",
+      "sourceRef": "https://digital-horus.atlassian.net/wiki/spaces/SD/pages/196994/Ch+c+n+ng+Th+m+m+c+phi+u"
+    },
+    {
+      "id": "REQ-006",
+      "key": "req:4ea572d4f7e435cca734",
+      "sourceId": "SRC-007",
+      "priority": "P0",
+      "rule": "Bấm icon plus lần nữa để thêm mã đã chọn vào danh mục",
+      "sourceQuote": "Bấm vào icon :plus: lần nữa để thêm mã đã chọn vào danh mục",
+      "expectedResult": "Mã đã chọn được thêm vào danh mục",
+      "sourceRef": "https://digital-horus.atlassian.net/wiki/spaces/SD/pages/196994/Ch+c+n+ng+Th+m+m+c+phi+u"
+    },
+    {
+      "id": "REQ-007",
+      "key": "req:76c332282062516dddcd",
+      "sourceId": "SRC-008",
+      "priority": "P1",
+      "rule": "Tìm kiếm được theo tên doanh nghiệp",
       "sourceQuote": "Tìm kiếm được theo tên doanh nghiệp",
       "expectedResult": "Hiển thị kết quả khớp theo tên doanh nghiệp",
       "sourceRef": "https://digital-horus.atlassian.net/wiki/spaces/SD/pages/196994/Ch+c+n+ng+Th+m+m+c+phi+u"
     },
     {
-      "id": "REQ-006",
-      "key": "req:a14b54e9364903b891e3",
-      "sourceId": "SRC-007",
-      "priority": "P1",
-      "rule": "Giới hạn tối đa hiển thị 5 kết quả",
-      "sourceQuote": "Tối đa hiển thị 5 kết quả",
-      "expectedResult": "Chỉ hiển thị tối đa 5 kết quả tìm kiếm",
-      "sourceRef": "https://digital-horus.atlassian.net/wiki/spaces/SD/pages/196994/Ch+c+n+ng+Th+m+m+c+phi+u"
-    },
-    {
-      "id": "REQ-007",
-      "key": "req:8365484189f36d50c010",
-      "sourceId": "SRC-008",
-      "priority": "P1",
-      "rule": "Tự động lọc trùng khi kết quả theo mã trùng với kết quả theo tên doanh nghiệp",
-      "sourceQuote": "Tự động lọc trùng khi kết quả tìm kiếm từ mã trùng với kết quả tìm được theo tên doanh nghiệp",
-      "expectedResult": "Kết quả trùng được lọc, không hiển thị lặp",
-      "sourceRef": "https://digital-horus.atlassian.net/wiki/spaces/SD/pages/196994/Ch+c+n+ng+Th+m+m+c+phi+u"
-    },
-    {
       "id": "REQ-008",
-      "key": "req:f64c31619d444352869e",
+      "key": "req:a14b54e9364903b891e3",
       "sourceId": "SRC-009",
       "priority": "P1",
-      "rule": "Nếu chọn mã chưa có trong danh mục thì thêm mới vào dòng đầu tiên trên table",
+      "rule": "Tối đa hiển thị 5 kết quả",
+      "sourceQuote": "Tối đa hiển thị 5 kết quả",
+      "expectedResult": "Danh sách kết quả tìm kiếm hiển thị tối đa 5 mục",
+      "sourceRef": "https://digital-horus.atlassian.net/wiki/spaces/SD/pages/196994/Ch+c+n+ng+Th+m+m+c+phi+u"
+    },
+    {
+      "id": "REQ-009",
+      "key": "req:8365484189f36d50c010",
+      "sourceId": "SRC-010",
+      "priority": "P1",
+      "rule": "Tự động lọc trùng khi kết quả tìm theo mã trùng với kết quả tìm theo tên doanh nghiệp",
+      "sourceQuote": "Tự động lọc trùng khi kết quả tìm kiếm từ mã trùng với kết quả tìm được theo tên doanh nghiệp",
+      "expectedResult": "Kết quả trùng lặp bị loại bỏ, chỉ hiển thị một lần",
+      "sourceRef": "https://digital-horus.atlassian.net/wiki/spaces/SD/pages/196994/Ch+c+n+ng+Th+m+m+c+phi+u"
+    },
+    {
+      "id": "REQ-010",
+      "key": "req:f64c31619d444352869e",
+      "sourceId": "SRC-011",
+      "priority": "P1",
+      "rule": "Nếu chọn mã chưa có trong danh mục hiện có thì thêm mới vào dòng đầu tiên trên table",
       "sourceQuote": "Nếu chọn mã cổ phiếu chưa có trong danh mục hiện có → Thêm mới vào dòng đầu tiên trên table",
       "expectedResult": "Mã mới được thêm vào dòng đầu tiên của table",
       "sourceRef": "https://digital-horus.atlassian.net/wiki/spaces/SD/pages/196994/Ch+c+n+ng+Th+m+m+c+phi+u"
     },
     {
-      "id": "REQ-009",
-      "key": "req:5d9c9f9f6405d8d976ef",
-      "sourceId": "SRC-010",
-      "priority": "P1",
-      "rule": "Nếu chọn mã đã có trong danh mục thì không thêm mới, tự động scroll tới vị trí mã và focus dòng đó",
-      "sourceQuote": "Nếu chọn mã cổ phiếu đã có trong danh mục → Không thêm mới, tự động scroll tới vị trí của mã đó trên table và focus vào dòng đó",
-      "expectedResult": "Không thêm mới, table scroll tới mã và focus vào dòng đó",
-      "sourceRef": "https://digital-horus.atlassian.net/wiki/spaces/SD/pages/196994/Ch+c+n+ng+Th+m+m+c+phi+u"
-    },
-    {
-      "id": "REQ-010",
-      "key": "req:1a36e19f06e2cad21380",
-      "sourceId": "SRC-011",
-      "priority": "P1",
-      "rule": "Xoá mã khỏi danh mục bằng cách bấm vào … của dòng tương ứng",
-      "sourceQuote": "Có thể xoá mã khỏi danh mục bằng cách bấm vào … của dòng tương ứng.",
-      "expectedResult": "Mở menu thao tác của dòng mã",
-      "sourceRef": "https://digital-horus.atlassian.net/wiki/spaces/SD/pages/196994/Ch+c+n+ng+Th+m+m+c+phi+u"
-    },
-    {
       "id": "REQ-011",
-      "key": "req:7447144b7e38088e1f2d",
+      "key": "req:5d9c9f9f6405d8d976ef",
       "sourceId": "SRC-012",
+      "priority": "P1",
+      "rule": "Nếu chọn mã đã có trong danh mục thì không thêm mới, tự động scroll tới vị trí mã đó và focus vào dòng đó",
+      "sourceQuote": "Nếu chọn mã cổ phiếu đã có trong danh mục → Không thêm mới, tự động scroll tới vị trí của mã đó trên table và focus vào dòng đó",
+      "expectedResult": "Không thêm mới; table scroll tới và focus vào dòng chứa mã đã có",
+      "sourceRef": "https://digital-horus.atlassian.net/wiki/spaces/SD/pages/196994/Ch+c+n+ng+Th+m+m+c+phi+u"
+    },
+    {
+      "id": "REQ-012",
+      "key": "req:1a36e19f06e2cad21380",
+      "sourceId": "SRC-013",
+      "priority": "P1",
+      "rule": "Có thể xoá mã khỏi danh mục bằng cách bấm vào dấu ... của dòng tương ứng",
+      "sourceQuote": "Có thể xoá mã khỏi danh mục bằng cách bấm vào … của dòng tương ứng.",
+      "expectedResult": "Menu tùy chọn của dòng được mở",
+      "sourceRef": "https://digital-horus.atlassian.net/wiki/spaces/SD/pages/196994/Ch+c+n+ng+Th+m+m+c+phi+u"
+    },
+    {
+      "id": "REQ-013",
+      "key": "req:7447144b7e38088e1f2d",
+      "sourceId": "SRC-014",
       "priority": "P1",
       "rule": "Chọn Xoá khỏi danh mục",
       "sourceQuote": "Chọn Xoá khỏi danh mục",
@@ -117,46 +137,47 @@
       "sourceRef": "https://digital-horus.atlassian.net/wiki/spaces/SD/pages/196994/Ch+c+n+ng+Th+m+m+c+phi+u"
     },
     {
-      "id": "REQ-012",
+      "id": "REQ-014",
       "key": "req:d7c4807cb848a2f50ce6",
-      "sourceId": "SRC-013",
+      "sourceId": "SRC-015",
       "priority": "P1",
       "rule": "Sau khi xoá, mã bị xoá khỏi danh mục hiện tại, không ảnh hưởng tới các danh mục khác",
       "sourceQuote": "Sau khi xoá, mã bị xoá khỏi danh mục hiện tại, không ảnh hưởng tới các danh mục khác",
-      "expectedResult": "Mã không còn trong danh mục hiện tại, các danh mục khác không bị ảnh hưởng",
+      "expectedResult": "Mã không còn trong danh mục hiện tại; các danh mục khác giữ nguyên",
       "sourceRef": "https://digital-horus.atlassian.net/wiki/spaces/SD/pages/196994/Ch+c+n+ng+Th+m+m+c+phi+u"
     }
   ],
   "audit": {
-    "decision": "ready",
+    "decision": "repair",
     "mappings": [
       {
         "requirementId": "REQ-001",
         "requirementKey": "req:3ab143db58c93bf8a7c3",
         "status": "covered",
         "scenarios": [
-          "Thêm mã cổ phiếu mới vào danh mục trên Bảng giá"
+          "Thêm mã cổ phiếu mới vào danh mục trên Bảng giá cổ phiếu"
         ],
         "evidence": [
           "When I click \"Thêm mã\"",
-          "And I enter \"VIC\" into \"Ô tìm kiếm mã cổ phiếu\"",
-          "And I click \"Kết quả tìm kiếm đầu tiên\"",
+          "When I enter \"VIC\" into \"Ô tìm kiếm mã cổ phiếu\"",
+          "When I click \"Kết quả tìm kiếm đầu tiên\"",
+          "And I click \"Nút thêm mã trong popup\"",
           "Then first \"Dòng cổ phiếu trong danh mục\" shows \"VIC\""
         ],
-        "reason": "Scenario thêm mã VIC và assert mã xuất hiện trong danh mục."
+        "reason": "Scenario thực hiện đầy đủ luồng thêm mã và assert mã VIC xuất hiện trong danh mục."
       },
       {
         "requirementId": "REQ-002",
         "requirementKey": "req:acd90761218c36a4a016",
         "status": "covered",
         "scenarios": [
-          "Mở chức năng Thêm mã cổ phiếu từ nút dấu cộng"
+          "Mở chức năng Thêm mã cổ phiếu từ nút thêm"
         ],
         "evidence": [
           "When I click \"Thêm mã\"",
           "Then \"Ô tìm kiếm mã cổ phiếu\" is visible"
         ],
-        "reason": "Click nút Thêm mã và assert ô tìm kiếm hiển thị."
+        "reason": "Click nút thêm và assert ô tìm kiếm hiển thị, chứng minh chức năng được mở."
       },
       {
         "requirementId": "REQ-003",
@@ -166,10 +187,10 @@
           "Nhập số liệu để tìm kiếm mã cổ phiếu"
         ],
         "evidence": [
-          "And I enter \"ME\" into \"Ô tìm kiếm mã cổ phiếu\"",
+          "When I enter \"VIC\" into \"Ô tìm kiếm mã cổ phiếu\"",
           "Then \"Danh sách gợi ý mã cổ phiếu\" is visible"
         ],
-        "reason": "Nhập từ khóa và assert danh sách gợi ý hiển thị."
+        "reason": "Nhập dữ liệu tìm kiếm và assert danh sách gợi ý hiển thị."
       },
       {
         "requirementId": "REQ-004",
@@ -179,89 +200,117 @@
           "Kết quả khớp theo mã được ưu tiên hiển thị"
         ],
         "evidence": [
-          "And I enter \"VIC\" into \"Ô tìm kiếm mã cổ phiếu\"",
-          "Then first \"Danh sách gợi ý mã cổ phiếu\" shows \"VIC-HOSE\""
+          "When I enter \"VIC\" into \"Ô tìm kiếm mã cổ phiếu\"",
+          "Then first \"Danh sách gợi ý mã cổ phiếu\" shows \"VIC\""
         ],
-        "reason": "Assert kết quả đầu tiên khớp theo mã VIC."
+        "reason": "Assert kết quả đầu tiên khớp theo mã, chứng minh ưu tiên theo mã."
       },
       {
         "requirementId": "REQ-005",
+        "requirementKey": "req:bb1a760992867d6a0093",
+        "status": "covered",
+        "scenarios": [
+          "Hiển thị danh sách kết quả khi nhập đủ 3 ký tự",
+          "Cho phép chọn mã từ danh sách kết quả tìm kiếm"
+        ],
+        "evidence": [
+          "When I enter \"VIC\" into \"Ô tìm kiếm mã cổ phiếu\"",
+          "Then \"Danh sách gợi ý mã cổ phiếu\" is visible",
+          "And I click \"Kết quả tìm kiếm đầu tiên\"",
+          "Then \"Nút thêm mã trong popup\" is visible"
+        ],
+        "reason": "Có scenario cho cả hai vế: nhập đủ 3 ký tự hiển thị kết quả và chọn mã từ danh sách."
+      },
+      {
+        "requirementId": "REQ-006",
+        "requirementKey": "req:4ea572d4f7e435cca734",
+        "status": "covered",
+        "scenarios": [
+          "Thêm mã cổ phiếu mới vào danh mục trên Bảng giá cổ phiếu"
+        ],
+        "evidence": [
+          "And I click \"Nút thêm mã trong popup\"",
+          "Then first \"Dòng cổ phiếu trong danh mục\" shows \"VIC\""
+        ],
+        "reason": "Click nút thêm lần nữa và assert mã được thêm vào danh mục."
+      },
+      {
+        "requirementId": "REQ-007",
         "requirementKey": "req:76c332282062516dddcd",
         "status": "covered",
         "scenarios": [
           "Tìm kiếm mã cổ phiếu theo tên doanh nghiệp"
         ],
         "evidence": [
-          "And I enter \"Thép Mê Lin\" into \"Ô tìm kiếm mã cổ phiếu\"",
-          "Then \"Danh sách gợi ý mã cổ phiếu\" shows \"MEL-HNX\""
+          "Then \"Danh sách gợi ý mã cổ phiếu\" is visible"
         ],
-        "reason": "Tìm theo tên doanh nghiệp và assert kết quả MEL-HNX."
+        "reason": "Nhập tên doanh nghiệp và assert danh sách gợi ý hiển thị."
       },
       {
-        "requirementId": "REQ-006",
+        "requirementId": "REQ-008",
         "requirementKey": "req:a14b54e9364903b891e3",
         "status": "covered",
         "scenarios": [
-          "Chỉ hiển thị tối đa 5 kết quả tìm kiếm"
+          "Danh sách kết quả tìm kiếm hiển thị tối đa 5 mục"
         ],
         "evidence": [
-          "Then \"Danh sách gợi ý mã cổ phiếu\" count is at most \"5\""
+          "Then \"Danh sách gợi ý mã cổ phiếu\" count is at most 5"
         ],
-        "reason": "Assert số kết quả tối đa 5."
+        "reason": "Assert số lượng kết quả tối đa 5."
       },
       {
-        "requirementId": "REQ-007",
+        "requirementId": "REQ-009",
         "requirementKey": "req:8365484189f36d50c010",
         "status": "covered",
         "scenarios": [
-          "Tự động lọc trùng kết quả tìm kiếm theo mã và theo tên doanh nghiệp"
+          "Kết quả trùng lặp giữa tìm theo mã và theo tên doanh nghiệp bị loại bỏ"
         ],
         "evidence": [
           "Then \"Danh sách gợi ý mã cổ phiếu\" values are unique"
         ],
-        "reason": "Assert các giá trị trong danh sách gợi ý là duy nhất."
+        "reason": "Assert các giá trị trong danh sách là duy nhất, chứng minh lọc trùng."
       },
       {
-        "requirementId": "REQ-008",
+        "requirementId": "REQ-010",
         "requirementKey": "req:f64c31619d444352869e",
         "status": "covered",
         "scenarios": [
-          "Thêm mã cổ phiếu mới vào danh mục trên Bảng giá"
+          "Mã chưa có trong danh mục được thêm mới vào dòng đầu tiên"
         ],
         "evidence": [
-          "And I click \"Kết quả tìm kiếm đầu tiên\"",
+          "And I click \"Nút thêm mã trong popup\"",
           "Then first \"Dòng cổ phiếu trong danh mục\" shows \"VIC\""
         ],
-        "reason": "Mã mới VIC được thêm vào dòng đầu tiên của danh mục."
+        "reason": "Assert mã mới được thêm vào dòng đầu tiên của table."
       },
       {
-        "requirementId": "REQ-009",
+        "requirementId": "REQ-011",
         "requirementKey": "req:5d9c9f9f6405d8d976ef",
         "status": "covered",
         "scenarios": [
-          "Chọn mã đã có trong danh mục thì không thêm mới và focus vào dòng đó"
+          "Mã đã có trong danh mục không được thêm mới và được focus"
         ],
         "evidence": [
-          "Then \"Dòng cổ phiếu trong danh mục\" shows \"VIC\" exactly \"1\" times",
+          "Then \"Dòng cổ phiếu trong danh mục\" shows \"VIC\" exactly 1 times",
           "And \"Dòng cổ phiếu trong danh mục\" is focused"
         ],
         "reason": "Assert không thêm mới (chỉ 1 lần) và dòng được focus."
       },
       {
-        "requirementId": "REQ-010",
+        "requirementId": "REQ-012",
         "requirementKey": "req:1a36e19f06e2cad21380",
         "status": "covered",
         "scenarios": [
-          "Mở menu thao tác của dòng mã cổ phiếu"
+          "Mở menu tùy chọn của dòng cổ phiếu"
         ],
         "evidence": [
           "When I click \"Nút tùy chọn dòng\"",
           "Then \"Tùy chọn Xóa khỏi danh mục\" is visible"
         ],
-        "reason": "Click nút tùy chọn dòng và assert menu thao tác hiển thị."
+        "reason": "Click nút tùy chọn dòng và assert menu tùy chọn hiển thị."
       },
       {
-        "requirementId": "REQ-011",
+        "requirementId": "REQ-013",
         "requirementKey": "req:7447144b7e38088e1f2d",
         "status": "covered",
         "scenarios": [
@@ -271,27 +320,20 @@
           "And I click \"Tùy chọn Xóa khỏi danh mục\"",
           "Then \"Dòng cổ phiếu trong danh mục\" does not show \"VIC\""
         ],
-        "reason": "Chọn Xóa khỏi danh mục và assert mã không còn trong danh mục."
+        "reason": "Chọn xóa và assert mã không còn trong danh mục."
       },
       {
-        "requirementId": "REQ-012",
+        "requirementId": "REQ-014",
         "requirementKey": "req:d7c4807cb848a2f50ce6",
-        "status": "covered",
-        "scenarios": [
-          "Xoá mã khỏi danh mục hiện tại không ảnh hưởng tới các danh mục khác"
-        ],
-        "evidence": [
-          "And I click \"category not default\"",
-          "Then first \"Dòng cổ phiếu trong danh mục\" shows \"VIC\"",
-          "And I click \"Tùy chọn Xóa khỏi danh mục\"",
-          "Then \"Dòng cổ phiếu trong danh mục\" does not show \"VIC\"",
-          "And I click \"category default\"",
-          "Then first \"Dòng cổ phiếu trong danh mục\" shows \"VIC\""
-        ],
-        "reason": "Xóa VIC ở danh mục không mặc định và assert danh mục mặc định vẫn còn VIC."
+        "status": "missing",
+        "scenarios": [],
+        "evidence": [],
+        "reason": "Không có scenario kiểm tra việc xóa mã không ảnh hưởng tới các danh mục khác; feature chỉ assert mã bị xóa khỏi danh mục hiện tại."
       }
     ],
-    "missingRequirementIds": []
+    "missingRequirementIds": [
+      "REQ-014"
+    ]
   },
-  "auditedAt": "2026-09-15T08:26:43.696Z"
+  "auditedAt": "2026-09-16T08:33:47.109Z"
 }

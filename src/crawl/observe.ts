@@ -44,6 +44,15 @@ export interface Observed {
    * trap that made a button tap land in the middle of the page.
    */
   container: boolean;
+  /**
+   * Chỉ số của tổ tiên gần nhất cũng nằm trong cùng mảng quan sát này.
+   *
+   * Chỉ nguồn DOM điền được; cây native phẳng thì để trống. Các tầng sau chỉ
+   * dùng nó khi có, nên thiếu không gây lỗi — nó chỉ lặng lẽ tắt hai luật dựa
+   * vào quan hệ cha con (chấm điểm icon, và gộp các bản ghi trong cùng một
+   * control), đúng chuyện đã xảy ra với nguồn DOM trước đây.
+   */
+  parentIndex?: number;
 }
 
 /**

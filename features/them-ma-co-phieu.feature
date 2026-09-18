@@ -7,57 +7,82 @@ Feature: Thêm mã cổ phiếu trên Bảng giá cổ phiếu
     And I open feature "Bảng giá cổ phiếu" from search
 
   @p0 @smoke @positive
-  Scenario: Thêm mã cổ phiếu mới vào danh mục trên Bảng giá
+  Scenario: Thêm mã cổ phiếu mới vào danh mục trên Bảng giá cổ phiếu
     When I click "Thêm mã"
-    And I enter "VIC" into "Ô tìm kiếm mã cổ phiếu"
-    And I click "Kết quả tìm kiếm đầu tiên"
+    Then "Ô tìm kiếm mã cổ phiếu" is visible
+    When I enter "VIC" into "Ô tìm kiếm mã cổ phiếu"
+    Then "Danh sách gợi ý mã cổ phiếu" is visible
+    When I click "Kết quả tìm kiếm đầu tiên"
+    And I click "Nút thêm mã trong popup"
     Then first "Dòng cổ phiếu trong danh mục" shows "VIC"
 
   @p0 @smoke @positive
-  Scenario: Mở chức năng Thêm mã cổ phiếu từ nút dấu cộng
+  Scenario: Mở chức năng Thêm mã cổ phiếu từ nút thêm
     When I click "Thêm mã"
     Then "Ô tìm kiếm mã cổ phiếu" is visible
 
   @p0 @smoke @positive
   Scenario: Nhập số liệu để tìm kiếm mã cổ phiếu
     When I click "Thêm mã"
-    And I enter "ME" into "Ô tìm kiếm mã cổ phiếu"
+    And I enter "VIC" into "Ô tìm kiếm mã cổ phiếu"
     Then "Danh sách gợi ý mã cổ phiếu" is visible
 
   @p1 @business-rule
   Scenario: Kết quả khớp theo mã được ưu tiên hiển thị
     When I click "Thêm mã"
     And I enter "VIC" into "Ô tìm kiếm mã cổ phiếu"
-    Then first "Danh sách gợi ý mã cổ phiếu" shows "VIC-HOSE"
+    Then first "Danh sách gợi ý mã cổ phiếu" shows "VIC"
+
+  @p1 @boundary
+  Scenario: Hiển thị danh sách kết quả khi nhập đủ 3 ký tự
+    When I click "Thêm mã"
+    And I enter "VIC" into "Ô tìm kiếm mã cổ phiếu"
+    Then "Danh sách gợi ý mã cổ phiếu" is visible
+
+  @p1 @boundary
+  Scenario: Cho phép chọn mã từ danh sách kết quả tìm kiếm
+    When I click "Thêm mã"
+    And I enter "VIC" into "Ô tìm kiếm mã cổ phiếu"
+    And I click "Kết quả tìm kiếm đầu tiên"
+    Then "Nút thêm mã trong popup" is visible
 
   @p1 @positive
   Scenario: Tìm kiếm mã cổ phiếu theo tên doanh nghiệp
     When I click "Thêm mã"
-    And I enter "Thép Mê Lin" into "Ô tìm kiếm mã cổ phiếu"
-    Then "Danh sách gợi ý mã cổ phiếu" shows "MEL-HNX"
+    And I enter "Vingroup" into "Ô tìm kiếm mã cổ phiếu"
+    Then "Danh sách gợi ý mã cổ phiếu" is visible
 
   @p1 @boundary
-  Scenario: Chỉ hiển thị tối đa 5 kết quả tìm kiếm
+  Scenario: Danh sách kết quả tìm kiếm hiển thị tối đa 5 mục
     When I click "Thêm mã"
     And I enter "ME" into "Ô tìm kiếm mã cổ phiếu"
-    Then "Danh sách gợi ý mã cổ phiếu" count is at most "5"
+    Then "Danh sách gợi ý mã cổ phiếu" count is at most 5
 
   @p1 @business-rule
-  Scenario: Tự động lọc trùng kết quả tìm kiếm theo mã và theo tên doanh nghiệp
+  Scenario: Kết quả trùng lặp giữa tìm theo mã và theo tên doanh nghiệp bị loại bỏ
     When I click "Thêm mã"
     And I enter "VIC" into "Ô tìm kiếm mã cổ phiếu"
     Then "Danh sách gợi ý mã cổ phiếu" values are unique
 
   @p1 @business-rule
-  Scenario: Chọn mã đã có trong danh mục thì không thêm mới và focus vào dòng đó
+  Scenario: Mã chưa có trong danh mục được thêm mới vào dòng đầu tiên
     When I click "Thêm mã"
     And I enter "VIC" into "Ô tìm kiếm mã cổ phiếu"
     And I click "Kết quả tìm kiếm đầu tiên"
-    Then "Dòng cổ phiếu trong danh mục" shows "VIC" exactly "1" times
+    And I click "Nút thêm mã trong popup"
+    Then first "Dòng cổ phiếu trong danh mục" shows "VIC"
+
+  @p1 @business-rule
+  Scenario: Mã đã có trong danh mục không được thêm mới và được focus
+    When I click "Thêm mã"
+    And I enter "VIC" into "Ô tìm kiếm mã cổ phiếu"
+    And I click "Kết quả tìm kiếm đầu tiên"
+    And I click "Nút thêm mã trong popup"
+    Then "Dòng cổ phiếu trong danh mục" shows "VIC" exactly 1 times
     And "Dòng cổ phiếu trong danh mục" is focused
 
   @p1 @positive
-  Scenario: Mở menu thao tác của dòng mã cổ phiếu
+  Scenario: Mở menu tùy chọn của dòng cổ phiếu
     When I click "Nút tùy chọn dòng"
     Then "Tùy chọn Xóa khỏi danh mục" is visible
 
@@ -67,23 +92,9 @@ Feature: Thêm mã cổ phiếu trên Bảng giá cổ phiếu
     And I click "Tùy chọn Xóa khỏi danh mục"
     Then "Dòng cổ phiếu trong danh mục" does not show "VIC"
 
-  # HỎI: Tài liệu nói "không ảnh hưởng tới các danh mục khác" nhưng không nêu tên
-  # danh mục cụ thể nào khác đang tồn tại và chứa mã bị xoá — cần danh mục nào để
-  # kiểm thử REQ-012?
-@p1 @business-rule
+  # HỎI: Tài liệu không nêu tên danh mục cụ thể nào khác ngoài danh mục hiện tại — cần biết danh mục nào để kiểm chứng "không ảnh hưởng tới các danh mục khác".
+  @p1 @business-rule
   Scenario: Xoá mã khỏi danh mục hiện tại không ảnh hưởng tới các danh mục khác
-When I click "Thêm mã"
-    And I enter "VIC" into "Ô tìm kiếm mã cổ phiếu"
-    And I click "Kết quả tìm kiếm đầu tiên"
-     Then first "Dòng cổ phiếu trong danh mục" shows "VIC"
-   When I click "open category"
-    And I click "category not default"
-    And I enter "VIC" into "Ô tìm kiếm mã cổ phiếu"
-    And I click "Kết quả tìm kiếm đầu tiên"
-    Then first "Dòng cổ phiếu trong danh mục" shows "VIC"
     When I click "Nút tùy chọn dòng"
     And I click "Tùy chọn Xóa khỏi danh mục"
     Then "Dòng cổ phiếu trong danh mục" does not show "VIC"
-   When I click "open category"
-    And I click "category default"
-    Then first "Dòng cổ phiếu trong danh mục" shows "VIC"

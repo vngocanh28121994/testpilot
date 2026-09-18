@@ -169,10 +169,109 @@ export class Registry {
     return list;
   }
 
+  /**
+   * Giữ bất biến của `assertAliasesUnique` ngay lúc GHI, không đợi tới lúc đọc.
+   *
+   * Trước đây luật chỉ tồn tại ở đường đọc: `Registry.load()` ném khi thấy một
+   * alias trùng label của element khác. Không ai chặn ở đường ghi, nên một lượt
+   * sinh kịch bản ghi ra được đúng cái registry mà chính nó sau đó không đọc
+   * nổi — và vì `/api/state` nạp registry, cả UI tắt ngóm, không còn feature,
+   * kịch bản hay report nào.
+   *
+   * Đo ngày 2026-09-16: workflow sinh mới `addStockModal.addStockButton` với
+   * label "Nút thêm mã cổ phiếu", đúng cái tên đang là alias của
+   * `priceBoard.addStockButton` (386 lần resolve). Mọi endpoint nạp registry
+   * trả 500 cho tới khi xoá tay alias đó.
+   *
+   * Không ném, mà nhường tên: `upsertElement` còn được healing gọi giữa lúc
+   * chạy, và ném ở đó là giết một lượt chạy đang sống. Giữa "một cái tên phải
+   * đổi" và "registry không đọc được nữa", cái sau đắt hơn nhiều bậc.
+   *
+   * Ai giữ được tên thì do BẰNG CHỨNG quyết định, không do thứ bậc label/alias.
+   * Bản đầu của hàm này cho label thắng alias — nghe hợp lý, và sai ngay ở ca
+   * thật: alias "Nút thêm mã cổ phiếu" thuộc về một element đã resolve 398 lần
+   * với locator `tcbs-icon[name='Circle add']` đã thắng 299 lần, còn kẻ đòi tên
+   * là một element vừa sinh ra, 0 lần resolve, locator chỉ là phỏng đoán. Nhường
+   * tên cho nó nghĩa là ba bước Gherkin đang chạy tốt bị đẩy sang một element
+   * chưa từng tìm thấy — đo trên máy thật 2026-09-16, bước bấm "Thêm mã" chết
+   * hẳn sau khi alias bị gỡ.
+   *
+   * Nên: bên nào đã chứng minh được thì giữ tên; bên kia đổi label, kèm hậu tố
+   * màn hình để vẫn phân biệt được và vẫn nhìn ra nó từ đâu tới. Cả hai nhánh
+   * đều nói ra, vì đây là chuyện người viết registry cần biết.
+   *
+   * Không mâu thuẫn với luật "regeneration không được xoá tên do người dạy" ở
+   * dưới: luật ấy cấm xoá vì bản mới KHÔNG BIẾT tới cái tên.
+   */
+  private proven(el: ElementDef | undefined): number {
+    return el?.health?.resolutions ?? 0;
+  }
+
+  /**
+   * Giải quyết tranh chấp tên giữa label sắp ghi và alias của element khác.
+   *
+   * Trả về label mà element sắp ghi được phép mang.
+   */
+  private settleNameClash(el: ElementDef): string {
+    const key = el.label.trim().toLowerCase();
+    if (!key) return el.label;
+    const claimant = this.proven(this.data.elements[el.id]) || this.proven(el);
+    for (const other of Object.values(this.data.elements)) {
+      if (other.id === el.id || !other.aliases?.length) continue;
+      if (!other.aliases.some((alias) => alias.trim().toLowerCase() === key)) continue;
+
+      const holder = this.proven(other);
+      if (holder > claimant) {
+        // Bên giữ tên có lịch sử dày hơn: đổi tên kẻ đòi, đừng đụng vào thứ
+        // đang chạy được. Hậu tố là màn hình, nên tên mới vẫn đọc ra nghĩa.
+        const renamed = el.screen ? `${el.label} (${el.screen})` : `${el.label} (${el.id})`;
+        console.warn(
+          `[registry] "${el.id}" muốn lấy tên "${el.label}", nhưng "${other.id}" đang dùng nó `
+          + `làm alias và đã resolve ${holder} lần (kẻ đòi: ${claimant}). `
+          + `Đổi label thành "${renamed}" — sửa lại tên trong registry nếu đây thực sự là hai control khác nhau.`,
+        );
+        return renamed;
+      }
+
+      const kept = other.aliases.filter((alias) => alias.trim().toLowerCase() !== key);
+      console.warn(
+        `[registry] gỡ alias "${el.label}" khỏi "${other.id}" (đã resolve ${holder} lần) vì `
+        + `"${el.id}" dùng nó làm label (${claimant} lần). `
+        + 'Hai control khác nhau không được dùng chung tên; nếu đây thực sự là một control thì gộp hai element lại.',
+      );
+      if (kept.length > 0) other.aliases = kept;
+      else delete other.aliases;
+    }
+    return el.label;
+  }
+
+  /** Alias mới chỉ được nhận khi chưa ai giữ tên đó. */
+  private acceptableAliases(el: ElementDef): string[] {
+    return (el.aliases ?? []).filter((alias) => {
+      const key = alias.trim().toLowerCase();
+      if (!key) return false;
+      const clash = Object.values(this.data.elements).find(
+        (other) => other.id !== el.id
+          && (other.label.trim().toLowerCase() === key
+            || (other.aliases ?? []).some((a) => a.trim().toLowerCase() === key)),
+      );
+      if (!clash) return true;
+      console.warn(
+        `[registry] bỏ qua alias "${alias}" cho "${el.id}": "${clash.id}" đã giữ tên này. `
+        + 'Mỗi tên chỉ được thuộc về một control.',
+      );
+      return false;
+    });
+  }
+
   upsertElement(el: ElementDef): void {
     const existing = this.data.elements[el.id];
+    if (el.label) el = { ...el, label: this.settleNameClash(el) };
+    const aliases = this.acceptableAliases(el);
     if (!existing) {
-      this.data.elements[el.id] = el;
+      this.data.elements[el.id] = aliases.length > 0
+        ? { ...el, aliases }
+        : (() => { const { aliases: _dropped, ...rest } = el; return rest; })();
       return;
     }
     // Merge candidates rather than overwrite: a regenerated spec must never
@@ -191,8 +290,8 @@ export class Registry {
     existing.label = el.label || existing.label;
     // Aliases accumulate for the same reason candidates do: a regeneration that
     // does not know about a name a human taught the element must not delete it.
-    if (el.aliases?.length) {
-      const merged = new Set([...(existing.aliases ?? []), ...el.aliases]);
+    if (aliases.length > 0) {
+      const merged = new Set([...(existing.aliases ?? []), ...aliases]);
       merged.delete(existing.label);
       existing.aliases = [...merged];
     }

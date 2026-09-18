@@ -55,13 +55,13 @@
           "strategy": "css",
           "value": ".mat-autocomplete-panel mat-option[role='option']",
           "source": "runtime-observed",
-          "status": "healed",
+          "status": "rejected",
           "confidence": 0.6,
-          "verifiedAt": "2026-09-16T03:10:44.211Z",
+          "verifiedAt": "2026-09-16T07:47:57.812Z",
           "platform": "web"
         }
       ],
-      "lastUpdatedAt": "2026-09-16T03:10:44.211Z"
+      "lastUpdatedAt": "2026-09-16T08:11:22.723Z"
     },
     "priceBoard.addStockButton": {
       "element": "priceBoard.addStockButton",
@@ -72,7 +72,7 @@
           "source": "runtime-observed",
           "status": "healed",
           "confidence": 0.79,
-          "verifiedAt": "2026-09-16T03:10:45.319Z",
+          "verifiedAt": "2026-09-16T07:47:58.349Z",
           "platform": "web"
         },
         {
@@ -84,7 +84,7 @@
           "verifiedAt": "2026-09-11T18:45:44.869Z"
         }
       ],
-      "lastUpdatedAt": "2026-09-16T03:10:45.319Z"
+      "lastUpdatedAt": "2026-09-16T07:47:58.349Z"
     },
     "priceBoard.xoaKhoiDanhMuc": {
       "element": "priceBoard.xoaKhoiDanhMuc",
@@ -531,7 +531,7 @@
           "source": "runtime-observed",
           "status": "healed",
           "confidence": 1,
-          "verifiedAt": "2026-09-16T03:11:51.865Z",
+          "verifiedAt": "2026-09-16T08:43:19.778Z",
           "platform": "web"
         },
         {
@@ -544,7 +544,7 @@
           "platform": "web"
         }
       ],
-      "lastUpdatedAt": "2026-09-16T03:11:51.865Z"
+      "lastUpdatedAt": "2026-09-16T08:43:19.778Z"
     },
     "priceBoard.vicHose": {
       "element": "priceBoard.vicHose",
@@ -570,11 +570,11 @@
           "source": "runtime-observed",
           "status": "healed",
           "confidence": 0.6,
-          "verifiedAt": "2026-09-16T04:07:13.139Z",
+          "verifiedAt": "2026-09-16T05:50:49.602Z",
           "platform": "web"
         }
       ],
-      "lastUpdatedAt": "2026-09-16T04:07:13.144Z"
+      "lastUpdatedAt": "2026-09-16T05:50:49.602Z"
     },
     "transfer.soTien": {
       "element": "transfer.soTien",
@@ -585,11 +585,11 @@
           "source": "runtime-observed",
           "status": "healed",
           "confidence": 0.6,
-          "verifiedAt": "2026-09-16T04:07:16.733Z",
+          "verifiedAt": "2026-09-16T05:50:51.480Z",
           "platform": "web"
         }
       ],
-      "lastUpdatedAt": "2026-09-16T04:07:16.733Z"
+      "lastUpdatedAt": "2026-09-16T05:50:51.480Z"
     },
     "transfer.tienChuyenPhi0": {
       "element": "transfer.tienChuyenPhi0",
@@ -600,11 +600,11 @@
           "source": "runtime-observed",
           "status": "healed",
           "confidence": 0.6,
-          "verifiedAt": "2026-09-15T09:36:33.655Z",
+          "verifiedAt": "2026-09-16T05:50:35.490Z",
           "platform": "web"
         }
       ],
-      "lastUpdatedAt": "2026-09-15T09:36:33.655Z"
+      "lastUpdatedAt": "2026-09-16T05:50:35.490Z"
     },
     "login.usernameField": {
       "element": "login.usernameField",
@@ -639,9 +639,18 @@
           "status": "suggested",
           "confidence": 0.85,
           "verifiedAt": "2026-09-15T08:30:37.638Z"
+        },
+        {
+          "strategy": "xpath",
+          "value": "//*[not(*) and normalize-space(.)='Tổng tài sản']",
+          "source": "runtime-observed",
+          "status": "healed",
+          "confidence": 0.55,
+          "verifiedAt": "2026-09-16T08:15:07.354Z",
+          "platform": "web"
         }
       ],
-      "lastUpdatedAt": "2026-09-15T08:30:37.638Z"
+      "lastUpdatedAt": "2026-09-16T08:15:07.354Z"
     },
     "stockOptionsMenu.removeFromCategory": {
       "element": "stockOptionsMenu.removeFromCategory",
@@ -652,11 +661,11 @@
           "source": "runtime-observed",
           "status": "healed",
           "confidence": 0.6,
-          "verifiedAt": "2026-09-16T03:13:17.655Z",
+          "verifiedAt": "2026-09-16T08:45:00.841Z",
           "platform": "web"
         }
       ],
-      "lastUpdatedAt": "2026-09-16T03:13:17.655Z"
+      "lastUpdatedAt": "2026-09-16T08:45:00.841Z"
     },
     "myReports.addReportButton": {
       "element": "myReports.addReportButton",
@@ -667,11 +676,11 @@
           "source": "runtime-observed",
           "status": "healed",
           "confidence": 0.4,
-          "verifiedAt": "2026-09-15T20:41:58.418Z",
+          "verifiedAt": "2026-09-16T06:30:14.817Z",
           "platform": "web"
         }
       ],
-      "lastUpdatedAt": "2026-09-15T20:41:58.418Z"
+      "lastUpdatedAt": "2026-09-16T06:30:14.817Z"
     },
     "myReports.chonLoaiNoiDungHienThi": {
       "element": "myReports.chonLoaiNoiDungHienThi",
@@ -682,11 +691,11 @@
           "source": "runtime-observed",
           "status": "healed",
           "confidence": 0.6,
-          "verifiedAt": "2026-09-15T20:42:17.674Z",
+          "verifiedAt": "2026-09-16T06:30:28.672Z",
           "platform": "web"
         }
       ],
-      "lastUpdatedAt": "2026-09-15T20:42:17.674Z"
+      "lastUpdatedAt": "2026-09-16T06:30:28.672Z"
     },
     "reportTemplateEditor.addCardButton": {
       "element": "reportTemplateEditor.addCardButton",
@@ -697,11 +706,11 @@
           "source": "runtime-observed",
           "status": "healed",
           "confidence": 0.6,
-          "verifiedAt": "2026-09-15T20:42:55.914Z",
+          "verifiedAt": "2026-09-16T06:31:17.885Z",
           "platform": "web"
         }
       ],
-      "lastUpdatedAt": "2026-09-15T20:42:55.914Z"
+      "lastUpdatedAt": "2026-09-16T06:31:17.885Z"
     },
     "reportTypePicker.continueButton": {
       "element": "reportTypePicker.continueButton",
@@ -712,11 +721,11 @@
           "source": "runtime-observed",
           "status": "healed",
           "confidence": 0.59,
-          "verifiedAt": "2026-09-15T20:42:34.432Z",
+          "verifiedAt": "2026-09-16T06:30:58.816Z",
           "platform": "web"
         }
       ],
-      "lastUpdatedAt": "2026-09-15T20:42:34.432Z"
+      "lastUpdatedAt": "2026-09-16T06:30:58.816Z"
     },
     "addCardSheet.cardMonthlyProfit": {
       "element": "addCardSheet.cardMonthlyProfit",
@@ -725,13 +734,13 @@
           "strategy": "xpath",
           "value": "//*[not(*) and normalize-space(.)='Lợi nhuận theo tháng']",
           "source": "runtime-observed",
-          "status": "rejected",
+          "status": "healed",
           "confidence": 0.45,
-          "verifiedAt": "2026-09-15T20:42:55.913Z",
+          "verifiedAt": "2026-09-16T06:31:17.884Z",
           "platform": "web"
         }
       ],
-      "lastUpdatedAt": "2026-09-15T20:43:12.482Z"
+      "lastUpdatedAt": "2026-09-16T06:31:17.884Z"
     },
     "addCardSheet.cardTransactionStats": {
       "element": "addCardSheet.cardTransactionStats",
@@ -762,6 +771,21 @@
         }
       ],
       "lastUpdatedAt": "2026-09-15T20:35:25.725Z"
+    },
+    "transferConfirm.sourceAccount": {
+      "element": "transferConfirm.sourceAccount",
+      "locators": [
+        {
+          "strategy": "label",
+          "value": "Chuyển từ",
+          "source": "runtime-observed",
+          "status": "healed",
+          "confidence": 1,
+          "verifiedAt": "2026-09-16T05:50:30.706Z",
+          "platform": "web"
+        }
+      ],
+      "lastUpdatedAt": "2026-09-16T05:50:30.706Z"
     }
   }
 }

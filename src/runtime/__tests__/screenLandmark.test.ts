@@ -55,4 +55,45 @@ describe('bằng chứng màn hình đang mở', () => {
       'ngăn kéo còn mở thì dừng ngay, không đi tiếp xuống nhánh landmark',
     );
   });
+  /**
+   * Lối tắt "đã mở sẵn" phải hỏi "mình còn ở Trang chủ không" TRƯỚC.
+   *
+   * Câu trả lời cũ nằm trong `isHomeLikeRoute(currentUrl)`, mà NativeDriver
+   * không có `currentUrl` — không phải trả về rỗng, mà không có phương thức đó
+   * (`grep currentUrl src/drivers/native.ts` ra rỗng). Cả khối bị bỏ qua, nên
+   * trên app lối tắt chạy không chốt: 16-09, một hộp thoại trên Home đủ để kết
+   * luận "Chuyển tiền đã mở sẵn".
+   */
+  it('lối tắt bỏ qua điều hướng bị chặn bởi một chốt không cần URL', () => {
+    const block = executor.slice(executor.indexOf('private async openFeatureFromSearch'));
+    const body = block.slice(0, block.indexOf('\n  }'));
+    const gate = body.indexOf('onSourceSurface()');
+    const landmark = body.indexOf('featureScreenLandmark(');
+    assert.ok(gate > -1, 'chốt màn xuất phát phải có');
+    assert.ok(gate < landmark, 'phải hỏi chốt TRƯỚC khi đi tìm landmark');
+  });
+
+  it('chốt ấy hỏi thứ đang hiển thị, không hỏi đường dẫn', () => {
+    const block = executor.slice(executor.indexOf('private async onSourceSurface'));
+    const body = block.slice(0, block.indexOf('\n  }'));
+    assert.doesNotMatch(body, /currentUrl|isHomeLikeRoute/);
+    // Ba element này đã được ensureLoggedIn và returnToHomeForSearch dùng cho
+    // đúng câu hỏi ấy, và đều có locator native.
+    for (const id of ['home.searchInput', 'home.searchBox', 'home.totalAssets']) {
+      assert.ok(body.includes(id), `chốt phải thử ${id}`);
+    }
+  });
+
+  /**
+   * Chốt đặt ở CHỖ GỌI, không đặt trong featureScreenLandmark.
+   *
+   * Hàm đó còn một người gọi thứ hai — `featureNavigationSucceeded`, tức câu
+   * "bấm xong đã tới chưa" — đang nhận diện đúng cho các lượt web xanh. Nhét
+   * chốt vào trong hàm là đổi luôn cả vế ấy, đổi một thứ không hỏng.
+   */
+  it('chốt không được đặt trong featureScreenLandmark', () => {
+    const block = executor.slice(executor.indexOf('private async featureScreenLandmark'));
+    const body = block.slice(0, block.indexOf('\n  }'));
+    assert.doesNotMatch(body, /onSourceSurface/);
+  });
 });

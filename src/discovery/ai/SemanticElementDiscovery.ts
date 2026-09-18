@@ -224,8 +224,27 @@ import type { ObservedElement } from '../UiObservation.js';
  *
  * An element sharing no words at all is left alone: no overlap means the model
  * reasoned structurally, which is the whole reason to ask it.
+ *
+ * Luật 2 chỉ có nghĩa với phần tử LÁ, nơi chữ trên phần tử chính là danh tính
+ * của nó. Chữ của một container là chữ của cả cây con nối lại, nên nó chia sẻ
+ * chữ với gần như mọi nhãn nói về thứ nằm bên trong nó — và "chia sẻ chữ" lúc
+ * ấy là dấu hiệu model tìm TRÚNG VÙNG, không phải dấu hiệu nhầm.
+ *
+ * Đo trên máy thật 2026-09-16, android, popup "Thêm thẻ": hỏi "Nút đóng popup
+ * Thêm thẻ", model trả về mat-dialog-container của đúng popup ấy và nói rõ
+ * trong reasoning. Chữ của container gồm cả "Thêm thẻ" lẫn "Đóng", chia sẻ ba
+ * chữ `dong / them / the` với nhãn, nên luật 2 kết luận "nhầm lẫn" và từ chối
+ * ứng viên duy nhất có được. Sau đó tầng vision hết giờ, và bước ấy hỏng.
+ *
+ * `container` đã được thêm vào ObservedElement từ 2026-09-15 vì đúng lớp lỗi
+ * này; ConfidenceScorer và ElementMatcher đã đọc nó, riêng chỗ này thì chưa.
+ * Theo đúng quy ước của hai chỗ kia: chỉ `=== true` mới bỏ qua luật, còn thiếu
+ * thông tin thì im lặng và giữ nguyên hành vi cũ.
  */
-function aiAnswerObjection(intent: ElementIntent, el: ObservedElement): string | undefined {
+export function aiAnswerObjection(
+  intent: ElementIntent,
+  el: ObservedElement,
+): string | undefined {
   if (intent.action === 'input' || intent.action === 'select') {
     const role = (el.role ?? '').toLowerCase();
     const holdsValue = /input|textarea|textbox|combobox|searchbox|spinbutton|select/.test(role);
@@ -237,11 +256,20 @@ function aiAnswerObjection(intent: ElementIntent, el: ObservedElement): string |
   const wanted = intent.text ?? intent.label ?? '';
   if (!wanted.trim()) return undefined;
 
+  // Chữ của container là chữ của cả cây con, nên phép so chữ dưới đây không nói
+  // được gì về danh tính của chính nó.
+  if (el.container === true) return undefined;
+
   for (const value of [el.accessibilityLabel, el.placeholder, el.text]) {
     if (!value?.trim()) continue;
     if (textMatch(value, wanted) !== 'none') return undefined;  // khớp hợp lệ
     if (sharesAWord(value, wanted)) {
-      return `chữ trên phần tử ("${value.trim().slice(0, 40)}") trùng một phần nhưng trật ý của "${wanted}"`;
+      // Kèm `container` vào câu từ chối. Luật này bỏ qua container, nên khi một
+      // ứng viên vẫn bị từ chối thì câu hỏi đầu tiên luôn là "nó có được đánh
+      // dấu container không" — mà trước đây log không trả lời được, và phải
+      // đoán qua hai lượt chạy máy thật mới biết.
+      return `chữ trên phần tử ("${value.trim().slice(0, 40)}", container=${el.container ?? '?'}) `
+        + `trùng một phần nhưng trật ý của "${wanted}"`;
     }
   }
   return undefined;

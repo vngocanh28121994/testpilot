@@ -4,13 +4,13 @@ import { DEFAULT_LLM_MODEL } from '../config.js';
 import type { SourceDoc, SourceVisual } from '../ingest/types.js';
 import { confluenceFetch } from '../ingest/confluenceMedia.js';
 import { hasKey, providerOf } from '../llm/client.js';
+import { shouldTryNextModel, visionModelChain } from '../discovery/ai/geminiModels.js';
 
 const MAX_VISUALS = 48;
 const VISUALS_PER_CALL = 6;
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
 const FETCH_TIMEOUT_MS = 20_000;
 const GEMINI_TIMEOUT_MS = 90_000;
-const DEFAULT_GEMINI_VISION_MODEL = 'gemini-3.6-flash';
 const GEMINI_BASE_URL = 'https://generativelanguage.googleapis.com/v1beta';
 
 type SupportedMediaType = 'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp';
@@ -117,8 +117,12 @@ export async function enrichDocsWithVisualEvidence(
 
   const useGemini = !opts.client && Boolean(geminiKey);
   const configured = opts.model?.trim() || '';
+  // Cùng chuỗi fallback với tầng vision lúc chạy. Hai chỗ này gọi cùng một
+  // nhà cung cấp bằng cùng một key, nên một model bị khai tử hay cạn quota
+  // ảnh hưởng cả hai — để chúng khai model riêng thì sửa một nơi quên nơi kia.
+  const geminiChain = visionModelChain();
   const visionModel = useGemini
-    ? process.env.GEMINI_VISION_MODEL?.trim() || DEFAULT_GEMINI_VISION_MODEL
+    ? geminiChain[0]!
     : configured && providerOf(configured) === 'anthropic'
       ? configured
       : DEFAULT_LLM_MODEL;
@@ -137,10 +141,11 @@ export async function enrichDocsWithVisualEvidence(
     findings.push(...await (useGemini
       ? analyzeGeminiBatch(
           geminiKey!,
-          visionModel,
+          geminiChain,
           batch,
           docs,
           opts.geminiFetcher ?? fetch,
+          opts.log,
         )
       : analyzeAnthropicBatch(client!, visionModel, batch, docs)));
   }
@@ -206,7 +211,38 @@ async function analyzeAnthropicBatch(
   return parseFindings(raw);
 }
 
+/**
+ * Gọi model đầu chuỗi; model nào không gọi được thì sang model sau.
+ *
+ * Cùng luật với tầng vision lúc chạy — xem geminiModels.ts. Ở đây một lần hỏng
+ * còn đắt hơn: cả workflow sinh kịch bản dừng lại vì không đọc được ảnh, trong
+ * khi quota là của từng model chứ không phải của cả nhà cung cấp.
+ */
 async function analyzeGeminiBatch(
+  key: string,
+  chain: readonly string[],
+  batch: LoadedVisual[],
+  docs: SourceDoc[],
+  fetcher: typeof fetch,
+  log?: (line: string) => void,
+): Promise<VisualFinding[]> {
+  const failures: string[] = [];
+  for (const visionModel of chain) {
+    try {
+      return await askGeminiBatch(key, visionModel, batch, docs, fetcher);
+    } catch (err) {
+      const message = (err as Error).message;
+      failures.push(`${visionModel}: ${message.slice(0, 120)}`);
+      if (!shouldTryNextModel(message)) throw err;
+      if (visionModel !== chain[chain.length - 1]) {
+        log?.(`AI vision: ${visionModel} không gọi được — chuyển sang model dự phòng.`);
+      }
+    }
+  }
+  throw new Error(`Gemini Vision hỏng ở mọi model — ${failures.join(' | ')}`);
+}
+
+async function askGeminiBatch(
   key: string,
   visionModel: string,
   batch: LoadedVisual[],

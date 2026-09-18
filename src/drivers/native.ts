@@ -2234,6 +2234,7 @@ function domElementToObserved(el: RawEl, index: number): Observed {
     interactive: el.interactive,
     index,
     container: el.container,
+    ...(el.parentIndex !== undefined ? { parentIndex: el.parentIndex } : {}),
   };
 }
 

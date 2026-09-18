@@ -179,6 +179,8 @@ export class Executor {
   private lastUnverified = false;
   /** Exact causal gap behind `lastUnverified`, for reports and diagnostics. */
   private lastUnverifiedReason?: string;
+  /** Which of the three gaps it is — only `unchanged` may turn a scenario red. */
+  private lastUnverifiedKind?: StepResult['unverifiedKind'];
   /** Controls tapped so far in the scenario, for step healing. */
   private tappedSoFar: Array<{ elementId: string; label: string }> = [];
   /** Set when a scenario fails after an earlier step proved nothing. */
@@ -242,7 +244,44 @@ export class Executor {
       // taken from — the value is already captured, but keeping the order
       // explicit stops a later edit from moving the collection down here.
       const healingObservation = this.takeHealingObservation();
-      const failed = stepResults.some((s) => s.status === 'failed');
+      // Một bước "chưa chứng minh được" KHÔNG tự động là đỏ — chỉ một loại thôi.
+      //
+      // Cờ `unverified` gộp ba tình huống rất khác nhau, và chỉ một trong ba là
+      // tin xấu:
+      //
+      //  - `deferred`  — cố ý hoãn, chờ bước sau đo thay đổi nghiệp vụ.
+      //                  `confirmTapProvenByNumberDelta` / `...ByFocusedState`
+      //                  gỡ cờ khi bước ấy chứng minh xong. Bình thường.
+      //  - `no-postcondition` — bước sau không mô tả kết quả nào quan sát được.
+      //                  Đây là khoảng trống của KỊCH BẢN, không phải bằng chứng
+      //                  thao tác đã hỏng. Bắt đỏ ở đây là phạt người viết
+      //                  kịch bản vì một việc công cụ không đo được.
+      //  - `unchanged` — điều kiện đã đúng TỪ TRƯỚC thao tác và không gì đổi
+      //                  sau đó. Không có gì phân biệt "đã chạy đúng" với
+      //                  "không làm gì cả".
+      //
+      // Chỉ `unchanged` làm đỏ. Đo trên máy thật 2026-09-16, suite Chuyển tiền
+      // trên prod: cả CHUYỂN lẫn XÁC NHẬN đều là `unchanged` — hậu điều kiện của
+      // mỗi cú bấm đã thoả sẵn trước khi bấm — ảnh chụp lúc "pass" cho thấy ô
+      // nhận tiền còn trống viền đỏ, không đồng nào được chuyển, kịch bản vẫn
+      // xanh. Một suite chuyển tiền báo xanh khi không chuyển gì là kiểu sai đắt
+      // nhất công cụ này mắc được.
+      //
+      // Và lưu ý chiều ngược lại: nếu thông báo thành công thực sự HIỆN RA do cú
+      // bấm, thì `transitionCanBeProven` đúng và bước đó không bao giờ mang cờ
+      // `unchanged` ngay từ đầu. Loại này chỉ xuất hiện đúng lúc bằng chứng đã
+      // có sẵn từ trước — tức đúng lúc nó không chứng minh được gì.
+      const unproven = stepResults.filter(
+        (s) => s.status === 'unverified' && s.unverifiedKind === 'unchanged',
+      );
+      const hardFailed = stepResults.some((s) => s.status === 'failed');
+      const failed = hardFailed || unproven.length > 0;
+      for (const step of unproven) {
+        console.warn(
+          `[verdict] "${step.step.text}" không chứng minh được — kịch bản không thể xanh.`
+          + (step.unverifiedReason ? ` ${step.unverifiedReason}` : ''),
+        );
+      }
       // Prefer the latest assertion image: that is the state that made the
       // scenario green. Toasts and open dropdowns may be gone by scenario end.
       //
@@ -250,7 +289,12 @@ export class Executor {
       // Phải chụp TRƯỚC `endScenario` — hàm đó đóng trang, và ảnh chụp sau khi
       // trang đóng là ảnh của một màn hình không còn nữa. Ca đỏ đã có ảnh riêng
       // ở handler bước hỏng nên ở đây chỉ lo phần xanh.
-      const proof = failed
+      // `hardFailed`, không phải `failed`: một bước hỏng hẳn đã tự chụp ảnh ở
+      // handler của nó, nhưng một kịch bản chỉ đỏ vì `unverified` thì không đi
+      // qua handler ấy — và ảnh cuối cùng chính là bằng chứng đắt nhất ở đây.
+      // Đúng tấm ảnh này đã cho thấy ô nhận tiền còn trống trong khi kịch bản
+      // báo xanh; bỏ nó đi là bỏ mất thứ đã vạch ra lỗi.
+      const proof = hardFailed
         ? undefined
         : this.lastAssertionProof
           ?? await this.driver.screenshot?.(`${scenario.id}-a${attempt}-pass`).catch(() => undefined);
@@ -349,6 +393,7 @@ export class Executor {
       this.assertionShotStem = `${scenarioId}-a${attempt}-l${step.line}-pass`;
       this.lastUnverified = false;
       this.lastUnverifiedReason = undefined;
+      this.lastUnverifiedKind = undefined;
       // Xoá ở ĐẦU mỗi bước, không chỉ sau khi gắn: một bước hỏng giữa chừng mà
       // để sót bằng chứng của bước trước thì report gán nhầm chứng cứ cho bước
       // sai — tệ hơn hẳn việc không có chứng cứ.
@@ -399,6 +444,7 @@ export class Executor {
           ...(this.lastShot ? { screenshot: this.lastShot } : {}),
           ...(this.lastEvidence ? { evidence: this.lastEvidence } : {}),
           ...(this.lastUnverifiedReason ? { unverifiedReason: this.lastUnverifiedReason } : {}),
+          ...(this.lastUnverifiedKind ? { unverifiedKind: this.lastUnverifiedKind } : {}),
         });
         // A numerical delta can only be evaluated after the tap has returned.
         // When it passes, it is stronger proof of the preceding action than a
@@ -573,8 +619,17 @@ export class Executor {
    *
    *   - locator khớp NHIỀU phần tử. Một nút "Lưu" khớp đúng một cái thì chữ
    *     vừa gõ chẳng liên quan gì tới nó, và neo vào đó sẽ chặn oan.
+   *   - những phần tử ấy phải mang nội dung KHÁC nhau. Một panel kết quả thì
+   *     mỗi dòng một chữ; một locator mơ hồ thì khớp cùng một chữ vài lần.
    *   - chữ vừa gõ còn hiệu lực đúng một bước, nên "gõ rồi làm việc khác" cũng
    *     không bị neo.
+   *
+   * Điều kiện thứ hai được thêm sau khi luật này giết 4/8 kịch bản Chuyển tiền
+   * ngày 2026-09-16. `transfer.submitButton` chỉ có `label:CHUYỂN`, và trên màn
+   * đó có ba phần tử chữ "CHUYỂN", nên điều kiện đếm mở cổng — rồi chờ một nút
+   * submit "phản ánh 1000" cho tới hết giờ. Cùng feature ấy chạy xanh ngày
+   * 14-09, trước khi có luật này. Đếm thôi không phân biệt được "panel kết quả"
+   * với "locator trùng nhãn"; nội dung thì có.
    *
    * Không tìm được thì CHỜ, không bấm đại: panel chưa kịp đổi là trạng thái
    * tạm, và bấm trong lúc đó chính là lỗi đang sửa. Hết giờ thì hỏng có địa
@@ -587,6 +642,20 @@ export class Executor {
   ): Promise<UiHandle> {
     const query = this.pendingQuery;
     if (!query || !matches || matches.count <= 1) return resolution.handle;
+
+    // Cùng một chữ lặp lại thì đây là locator trùng nhãn, không phải danh sách
+    // kết quả — chữ vừa gõ không nói gì về việc phải bấm cái nào trong số đó.
+    // Nói ra thay vì im lặng bỏ qua: một locator khớp ba phần tử giống hệt nhau
+    // là thứ cần sửa ở registry, và dòng này là chỗ duy nhất nhìn thấy nó.
+    const distinct = new Set(matches.texts.map((text) => normalizeHumanText(text)));
+    if (matches.texts.length > 1 && distinct.size === 1) {
+      console.warn(
+        `[flow] "${actionLabel}" khớp ${matches.count} phần tử cùng nội dung `
+        + `${JSON.stringify(matches.texts[0]?.slice(0, 40) ?? '')} — locator trùng nhãn, `
+        + 'không phải danh sách kết quả; không neo theo chữ vừa gõ.',
+      );
+      return resolution.handle;
+    }
 
     const wanted = normalizeHumanText(query);
     const reflects = (texts: string[]) =>
@@ -1359,6 +1428,43 @@ export class Executor {
     console.log(`[flow] đã mở ứng dụng trước điều kiện đăng nhập (${after})`);
   }
 
+  /**
+   * Trang chủ còn hiển thị thì ta chưa đi đâu cả — hỏi bằng thứ đang thấy.
+   *
+   * Lối tắt "màn đích mở sẵn thì khỏi điều hướng" chỉ an toàn sau khi đã rời
+   * màn xuất phát: Home mount sẵn cả danh mục tính năng, nên đứng ở đó thì gần
+   * như thứ gì cũng tìm thấy được. Web có câu trả lời rồi — `isHomeLikeRoute`
+   * trên URL — nhưng nó nằm bên trong `if (this.driver.currentUrl)`, và
+   * NativeDriver KHÔNG có `currentUrl`: không phải trả về rỗng, mà không có
+   * phương thức đó. Cả khối bị bỏ qua, nên trên app lối tắt này chạy không một
+   * cái chốt nào. Đo ngày 2026-09-16: một hộp thoại thông báo bất kỳ trên Home
+   * đủ để kết luận "Chuyển tiền đã mở sẵn", và kịch bản chạy trên màn hình sai.
+   *
+   * Cùng một câu hỏi, hỏi bằng thứ có trên mọi nền tảng. Ba element dưới đây
+   * không phải chọn mới: `ensureLoggedIn` đã dùng `home.totalAssets` làm bằng
+   * chứng đang ở Home, và `returnToHomeForSearch` đã dùng cặp searchInput /
+   * searchBox cho đúng việc ấy — cả hai đều có locator native và đều định danh
+   * bằng text chính xác.
+   *
+   * Đoán sai thì chỉ mất một lượt điều hướng thừa: đường tìm kiếm là read-only
+   * và lặp lại được. Đoán sai theo chiều kia là cả loạt kịch bản chạy nhầm màn
+   * hình mà vẫn báo PASS. Chốt này cố tình lệch về phía tốn vài giây.
+   */
+  private async onSourceSurface(): Promise<boolean> {
+    const probes = [
+      ['home.searchInput', 'input'],
+      ['home.searchBox', 'tap'],
+      ['home.totalAssets', 'assert-visible'],
+    ] as const;
+    for (const [id, discoveryAction] of probes) {
+      if (await this.resolver.isVisibleNow(id, { discoveryAction }).catch(() => false)) {
+        console.log(`[flow] vẫn đang ở Trang chủ (thấy "${id}") — không bỏ qua điều hướng.`);
+        return true;
+      }
+    }
+    return false;
+  }
+
   /** Search by exact business name rather than blindly clicking row one. */
   private async openFeatureFromSearch(
     query: string,
@@ -1371,7 +1477,7 @@ export class Executor {
     // A fresh scenario may already be on the requested feature (the account
     // keeps route state between launches). Do not force it through Home search
     // merely because the first business assertion is not true yet.
-    if (expectation) {
+    if (expectation && !(await this.onSourceSurface())) {
       // Before searching, a same-route dialog title is not sufficient proof:
       // TCInvest keeps every toolbox item (including feature names) mounted in
       // an off-screen Home drawer. Only an actual next-step locator, URL, or a
@@ -1824,6 +1930,7 @@ export class Executor {
         // assertion cannot accidentally make the action green.
         if (this.executeDepth <= 1) {
           this.lastUnverified = true;
+          this.lastUnverifiedKind = 'deferred';
           this.lastUnverifiedReason =
             `Đang chờ bước "${expectation.source}" đo thay đổi nghiệp vụ sau hành động.`;
           console.log(
@@ -1859,6 +1966,7 @@ export class Executor {
         // a warning stops being read at all.
         if (this.executeDepth <= 1) {
           this.lastUnverified = true;
+          this.lastUnverifiedKind = expectation ? 'unchanged' : 'no-postcondition';
           this.lastUnverifiedReason = expectation
             ? `Điều kiện "${expectation.source}" đã đúng trước thao tác và trạng thái quan sát được không đổi.`
             : 'Bước tiếp theo không mô tả một kết quả có thể quan sát để đối chiếu trước và sau thao tác.';
@@ -1938,8 +2046,37 @@ export class Executor {
           );
         }
 
-        this.resolver.rejectResolution(elementId, r);
-        excluded.add(candidateKey(r.candidate));
+        // Hậu điều kiện chưa từng được nhìn thấy thì nó không buộc tội ai được.
+        //
+        // Cùng một bài học với nhánh `saidSince` ngay trên: healing chỉ biết
+        // "màn hình mong đợi không có", và nó mặc định suy ra "locator vừa bấm
+        // là thủ phạm". Suy luận ấy chỉ đúng khi hậu điều kiện CÓ THỂ được nhìn
+        // thấy. Nếu chính element hậu điều kiện chưa từng resolve trên nền tảng
+        // này và cũng không có locator nào, thì sự vắng mặt của nó không phân
+        // biệt được "bấm sai" với "chưa bao giờ biết tìm nó ở đâu".
+        //
+        // Đo trên máy thật 2026-09-16, feature Thêm mới template: bước bấm thẻ
+        // "Lợi nhuận theo tháng" tìm đúng và bấm đúng — discovery vừa học được
+        // locator và ghi `learn:new ... đã chứng minh bằng kết quả action`. Rồi
+        // bước SAU nó, "Nút đóng popup Thêm thẻ" (0 resolutions, không locator
+        // nền tảng nào), không resolve nổi. Healing quy ngược trách nhiệm lên
+        // bước trước: gỡ bỏ locator vừa học, rồi đi thử thẻ "Tài sản" — một thẻ
+        // hoàn toàn khác. Mỗi lượt chạy lặp lại đúng như vậy, nên lượt nào cũng
+        // vừa mất locator đúng vừa bấm nhầm thẻ.
+        //
+        // Đây KHÔNG phải cái cớ để tha cho mọi hậu điều kiện hụt: một element
+        // đã từng resolve, hoặc có locator cho nền tảng này, vẫn buộc tội được
+        // như cũ — vắng mặt lúc ấy là một tín hiệu thật.
+        if (this.expectationCanAccuse(expectation, lastOutcomeError)) {
+          this.resolver.rejectResolution(elementId, r);
+          excluded.add(candidateKey(r.candidate));
+        } else {
+          console.warn(
+            `[healing] "${actionLabel}": giữ nguyên locator — "${expectation.source}" `
+            + 'chưa từng resolve trên nền tảng này nên không kết luận được cú bấm sai.',
+          );
+          break;
+        }
         if (!retryable || attempt >= maxAttempts) break;
         console.warn(
           `[healing] "${actionLabel}": locator ${r.candidate.strategy} did not produce ` +
@@ -1957,6 +2094,28 @@ export class Executor {
       throw new TestPilotError(TestPilotErrorCode.HEALING_REJECTED, message, { elementId });
     }
     throw new Error(message);
+  }
+
+  /**
+   * Hậu điều kiện hụt này có đủ tư cách buộc tội locator của cú bấm không?
+   *
+   * Chỉ xét đúng một tình huống: lỗi là "không tìm thấy" và đối tượng không tìm
+   * thấy chính là element hậu điều kiện. Mọi lỗi khác — sai giá trị, sai trạng
+   * thái, app từ chối — vẫn nói được điều gì đó về cú bấm.
+   *
+   * Element đã từng resolve (dù ở nền tảng khác) hoặc có sẵn locator cho nền
+   * tảng này thì vẫn buộc tội được: discovery có căn cứ để tìm nó, nên vắng mặt
+   * là tín hiệu. Chưa từng resolve VÀ không có locator nào thì không: ta chưa
+   * từng nhìn thấy nó lần nào, nên không phân biệt được "không có ở đó" với
+   * "không biết tìm ở đâu".
+   */
+  private expectationCanAccuse(expectation: ActionExpectation, err: unknown): boolean {
+    if (!(err instanceof ElementNotFoundError)) return true;
+    if (err.elementId !== expectation.elementId) return true;
+    const def = this.resolver.registry.element(expectation.elementId);
+    const hasLocator = (def.candidates?.[this.driver.platform]?.length ?? 0) > 0;
+    const everResolved = (def.health?.resolutions ?? 0) > 0;
+    return hasLocator || everResolved;
   }
 
   private async verifyExpectation(
@@ -2426,6 +2585,9 @@ function confirmTapProvenByNumberDelta(results: StepResult[], proof: StepSpec): 
     if (candidate.status === 'unverified' && candidate.step.intent.kind === 'tap') {
       candidate.status = 'passed';
       delete candidate.unverifiedReason;
+      // Cả loại nữa, không chỉ lý do. Phán quyết kịch bản đọc `unverifiedKind`,
+      // nên bỏ sót dòng này là một bước ĐÃ ĐƯỢC chứng minh vẫn kéo kịch bản đỏ.
+      delete candidate.unverifiedKind;
       console.log(
         `[tap] ${candidate.step.text}: đã được bước sau chứng minh — ${proof.text}.`,
       );
@@ -2448,6 +2610,9 @@ function confirmTapProvenByFocusedState(results: StepResult[], proof: StepSpec):
     if (candidate.status === 'unverified' && candidate.step.intent.kind === 'tap') {
       candidate.status = 'passed';
       delete candidate.unverifiedReason;
+      // Cả loại nữa, không chỉ lý do. Phán quyết kịch bản đọc `unverifiedKind`,
+      // nên bỏ sót dòng này là một bước ĐÃ ĐƯỢC chứng minh vẫn kéo kịch bản đỏ.
+      delete candidate.unverifiedKind;
       console.log(`[tap] ${candidate.step.text}: đã được trạng thái focus/highlight chứng minh — ${proof.text}.`);
     }
     return;

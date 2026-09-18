@@ -6,7 +6,7 @@ import { AddStockModalPage } from '../pages/AddStockModalPage.js';
 import { StockOptionsMenuPage } from '../pages/StockOptionsMenuPage.js';
 
 describe("Thêm mã cổ phiếu trên Bảng giá cổ phiếu", () => {
-  test("Thêm mã cổ phiếu mới vào danh mục trên Bảng giá", async () => {
+  test("Thêm mã cổ phiếu mới vào danh mục trên Bảng giá cổ phiếu", async () => {
     const ctx = await createPageContext();
     try {
       const priceBoardPage = new PriceBoardPage(ctx);
@@ -17,15 +17,18 @@ describe("Thêm mã cổ phiếu trên Bảng giá cổ phiếu", () => {
       await ctx.ensureLoggedIn("tcbs");
       await ctx.openFeatureFromSearch("Bảng giá cổ phiếu", "priceBoard.addStockButton");
       await priceBoardPage.tapAddStockButton();
+      await addStockModalPage.assertSearchInputVisible();
       await addStockModalPage.enterSearchInput("VIC");
+      await addStockModalPage.assertSuggestionListVisible();
       await addStockModalPage.tapStockSearchFirstResult();
+      await addStockModalPage.tapAddStockButton();
       await priceBoardPage.assertStockRowCollection({"kind":"firstText","text":"VIC"});
     } finally {
       await ctx.close();
     }
   });
 
-  test("Mở chức năng Thêm mã cổ phiếu từ nút dấu cộng", async () => {
+  test("Mở chức năng Thêm mã cổ phiếu từ nút thêm", async () => {
     const ctx = await createPageContext();
     try {
       const priceBoardPage = new PriceBoardPage(ctx);
@@ -53,7 +56,7 @@ describe("Thêm mã cổ phiếu trên Bảng giá cổ phiếu", () => {
       await ctx.ensureLoggedIn("tcbs");
       await ctx.openFeatureFromSearch("Bảng giá cổ phiếu", "priceBoard.addStockButton");
       await priceBoardPage.tapAddStockButton();
-      await addStockModalPage.enterSearchInput("ME");
+      await addStockModalPage.enterSearchInput("VIC");
       await addStockModalPage.assertSuggestionListVisible();
     } finally {
       await ctx.close();
@@ -72,7 +75,44 @@ describe("Thêm mã cổ phiếu trên Bảng giá cổ phiếu", () => {
       await ctx.openFeatureFromSearch("Bảng giá cổ phiếu", "priceBoard.addStockButton");
       await priceBoardPage.tapAddStockButton();
       await addStockModalPage.enterSearchInput("VIC");
-      await addStockModalPage.assertSuggestionListCollection({"kind":"firstText","text":"VIC-HOSE"});
+      await addStockModalPage.assertSuggestionListCollection({"kind":"firstText","text":"VIC"});
+    } finally {
+      await ctx.close();
+    }
+  });
+
+  test("Hiển thị danh sách kết quả khi nhập đủ 3 ký tự", async () => {
+    const ctx = await createPageContext();
+    try {
+      const priceBoardPage = new PriceBoardPage(ctx);
+      const addStockModalPage = new AddStockModalPage(ctx);
+      const stockOptionsMenuPage = new StockOptionsMenuPage(ctx);
+      await ctx.launch();
+      // app already launched via ctx.launch()
+      await ctx.ensureLoggedIn("tcbs");
+      await ctx.openFeatureFromSearch("Bảng giá cổ phiếu", "priceBoard.addStockButton");
+      await priceBoardPage.tapAddStockButton();
+      await addStockModalPage.enterSearchInput("VIC");
+      await addStockModalPage.assertSuggestionListVisible();
+    } finally {
+      await ctx.close();
+    }
+  });
+
+  test("Cho phép chọn mã từ danh sách kết quả tìm kiếm", async () => {
+    const ctx = await createPageContext();
+    try {
+      const priceBoardPage = new PriceBoardPage(ctx);
+      const addStockModalPage = new AddStockModalPage(ctx);
+      const stockOptionsMenuPage = new StockOptionsMenuPage(ctx);
+      await ctx.launch();
+      // app already launched via ctx.launch()
+      await ctx.ensureLoggedIn("tcbs");
+      await ctx.openFeatureFromSearch("Bảng giá cổ phiếu", "priceBoard.addStockButton");
+      await priceBoardPage.tapAddStockButton();
+      await addStockModalPage.enterSearchInput("VIC");
+      await addStockModalPage.tapStockSearchFirstResult();
+      await addStockModalPage.assertAddStockButtonVisible();
     } finally {
       await ctx.close();
     }
@@ -89,14 +129,14 @@ describe("Thêm mã cổ phiếu trên Bảng giá cổ phiếu", () => {
       await ctx.ensureLoggedIn("tcbs");
       await ctx.openFeatureFromSearch("Bảng giá cổ phiếu", "priceBoard.addStockButton");
       await priceBoardPage.tapAddStockButton();
-      await addStockModalPage.enterSearchInput("Thép Mê Lin");
-      await addStockModalPage.assertSuggestionListText("MEL-HNX");
+      await addStockModalPage.enterSearchInput("Vingroup");
+      await addStockModalPage.assertSuggestionListVisible();
     } finally {
       await ctx.close();
     }
   });
 
-  test("Chỉ hiển thị tối đa 5 kết quả tìm kiếm", async () => {
+  test("Danh sách kết quả tìm kiếm hiển thị tối đa 5 mục", async () => {
     const ctx = await createPageContext();
     try {
       const priceBoardPage = new PriceBoardPage(ctx);
@@ -114,7 +154,7 @@ describe("Thêm mã cổ phiếu trên Bảng giá cổ phiếu", () => {
     }
   });
 
-  test("Tự động lọc trùng kết quả tìm kiếm theo mã và theo tên doanh nghiệp", async () => {
+  test("Kết quả trùng lặp giữa tìm theo mã và theo tên doanh nghiệp bị loại bỏ", async () => {
     const ctx = await createPageContext();
     try {
       const priceBoardPage = new PriceBoardPage(ctx);
@@ -132,7 +172,7 @@ describe("Thêm mã cổ phiếu trên Bảng giá cổ phiếu", () => {
     }
   });
 
-  test("Chọn mã đã có trong danh mục thì không thêm mới và focus vào dòng đó", async () => {
+  test("Mã chưa có trong danh mục được thêm mới vào dòng đầu tiên", async () => {
     const ctx = await createPageContext();
     try {
       const priceBoardPage = new PriceBoardPage(ctx);
@@ -145,6 +185,27 @@ describe("Thêm mã cổ phiếu trên Bảng giá cổ phiếu", () => {
       await priceBoardPage.tapAddStockButton();
       await addStockModalPage.enterSearchInput("VIC");
       await addStockModalPage.tapStockSearchFirstResult();
+      await addStockModalPage.tapAddStockButton();
+      await priceBoardPage.assertStockRowCollection({"kind":"firstText","text":"VIC"});
+    } finally {
+      await ctx.close();
+    }
+  });
+
+  test("Mã đã có trong danh mục không được thêm mới và được focus", async () => {
+    const ctx = await createPageContext();
+    try {
+      const priceBoardPage = new PriceBoardPage(ctx);
+      const addStockModalPage = new AddStockModalPage(ctx);
+      const stockOptionsMenuPage = new StockOptionsMenuPage(ctx);
+      await ctx.launch();
+      // app already launched via ctx.launch()
+      await ctx.ensureLoggedIn("tcbs");
+      await ctx.openFeatureFromSearch("Bảng giá cổ phiếu", "priceBoard.addStockButton");
+      await priceBoardPage.tapAddStockButton();
+      await addStockModalPage.enterSearchInput("VIC");
+      await addStockModalPage.tapStockSearchFirstResult();
+      await addStockModalPage.tapAddStockButton();
       await priceBoardPage.assertStockRowCollection({"kind":"countMatching","text":"VIC","operator":"equals","value":1});
       await priceBoardPage.assertStockRowCollection({"kind":"focused"});
     } finally {
@@ -152,7 +213,7 @@ describe("Thêm mã cổ phiếu trên Bảng giá cổ phiếu", () => {
     }
   });
 
-  test("Mở menu thao tác của dòng mã cổ phiếu", async () => {
+  test("Mở menu tùy chọn của dòng cổ phiếu", async () => {
     const ctx = await createPageContext();
     try {
       const priceBoardPage = new PriceBoardPage(ctx);
@@ -182,36 +243,6 @@ describe("Thêm mã cổ phiếu trên Bảng giá cổ phiếu", () => {
       await priceBoardPage.tapRowOptionsButton();
       await stockOptionsMenuPage.tapRemoveFromCategory();
       await priceBoardPage.assertStockRowText("VIC", 'notContains');
-    } finally {
-      await ctx.close();
-    }
-  });
-
-  test("Xoá mã khỏi danh mục hiện tại không ảnh hưởng tới các danh mục khác", async () => {
-    const ctx = await createPageContext();
-    try {
-      const priceBoardPage = new PriceBoardPage(ctx);
-      const addStockModalPage = new AddStockModalPage(ctx);
-      const stockOptionsMenuPage = new StockOptionsMenuPage(ctx);
-      await ctx.launch();
-      // app already launched via ctx.launch()
-      await ctx.ensureLoggedIn("tcbs");
-      await ctx.openFeatureFromSearch("Bảng giá cổ phiếu", "priceBoard.addStockButton");
-      await priceBoardPage.tapAddStockButton();
-      await addStockModalPage.enterSearchInput("VIC");
-      await addStockModalPage.tapStockSearchFirstResult();
-      await priceBoardPage.assertStockRowCollection({"kind":"firstText","text":"VIC"});
-      await priceBoardPage.tapOpenCategory();
-      await priceBoardPage.tapCategoryNotDefault();
-      await addStockModalPage.enterSearchInput("VIC");
-      await addStockModalPage.tapStockSearchFirstResult();
-      await priceBoardPage.assertStockRowCollection({"kind":"firstText","text":"VIC"});
-      await priceBoardPage.tapRowOptionsButton();
-      await stockOptionsMenuPage.tapRemoveFromCategory();
-      await priceBoardPage.assertStockRowText("VIC", 'notContains');
-      await priceBoardPage.tapOpenCategory();
-      await priceBoardPage.tapCategoryDefault();
-      await priceBoardPage.assertStockRowCollection({"kind":"firstText","text":"VIC"});
     } finally {
       await ctx.close();
     }

@@ -196,6 +196,21 @@ function convertMcpJson(raw: McpInspectionResult): UiObservation {
       focused: el.focused,
       parentId,
       childIds: childIds.length > 0 ? childIds : undefined,
+      // Suy thẳng từ cây vừa duyệt. `container` tồn tại song song với
+      // `childIds` là để phục vụ những nguồn KHÔNG đánh được id cho con; nguồn
+      // này đánh được, nên bỏ trống nó là vứt đi một thông tin đang nằm sẵn
+      // trong tay.
+      //
+      // Ba lớp đọc thuộc tính này — ConfidenceScorer trừ điểm container,
+      // ElementMatcher chỉ dựng locator theo chữ cho lá, và aiAnswerObjection
+      // bỏ qua luật so chữ — và cả ba đều im lặng khi nó thiếu. Nên thiếu ở đây
+      // không gây lỗi ồn ào, nó chỉ lặng lẽ làm ba lớp kia mất tác dụng trên
+      // toàn bộ đường appium-mcp.
+      //
+      // Đo trên máy thật 2026-09-16: hỏi "Nút đóng popup Thêm thẻ", model trả
+      // về đúng mat-dialog-container của popup ấy, nhưng vì `container` trống
+      // nên luật so chữ vẫn nổ và vứt đi ứng viên duy nhất có được.
+      container: childIds.length > 0,
       attributes: el.attributes,
     });
 

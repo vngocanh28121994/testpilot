@@ -1,0 +1,9 @@
+{
+  "version": 1,
+  "decisions": {
+    "transfer.sourceAccount::transferConfirm.sourceAccount": {
+      "decision": "merged",
+      "at": "2026-09-16T04:36:59.875Z"
+    }
+  }
+}

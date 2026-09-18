@@ -954,6 +954,7 @@
     },
     "chuyen-tien-noi-bo-tieu-khoan-a-chon-o-nguon-khong-xuat-hien-o-dropdown-ich::android::SM_S938B": {
       "outcomes": [
+        "s",
         "p",
         "p",
         "s",
@@ -972,11 +973,12 @@
         "f",
         "f"
       ],
-      "lastSeen": "2026-09-13T09:20:22.027Z",
+      "lastSeen": "2026-09-16T04:48:10.222Z",
       "quarantinedSince": "2026-08-27T06:59:01.687Z"
     },
     "chuyen-tien-noi-bo-tieu-khoan-a-chon-o-ich-khong-xuat-hien-o-dropdown-nguon::android::SM_S938B": {
       "outcomes": [
+        "s",
         "f",
         "f",
         "s",
@@ -993,7 +995,7 @@
         "f",
         "f"
       ],
-      "lastSeen": "2026-09-13T09:20:22.028Z",
+      "lastSeen": "2026-09-16T04:48:10.222Z",
       "quarantinedSince": "2026-08-27T06:59:01.687Z"
     },
     "chuyen-tien-noi-bo-so-tien-uoc-chuyen-thay-oi-theo-tieu-khoan-nguon::android::SM_S938B": {
@@ -1387,9 +1389,10 @@
     },
     "them-ma-co-phieu-tren-bang-gia-co-phieu-ket-qua-khop-theo-ma-uoc-uu-tien-hien-th::android::SM_S938B": {
       "outcomes": [
+        "p",
         "p"
       ],
-      "lastSeen": "2026-09-11T20:11:15.131Z"
+      "lastSeen": "2026-09-16T07:49:20.356Z"
     },
     "them-ma-co-phieu-tren-bang-gia-co-phieu-tim-kiem-theo-ten-doanh-nghiep-hien-thi-::android::SM_S938B": {
       "outcomes": [
@@ -1417,15 +1420,17 @@
     },
     "them-ma-co-phieu-tren-bang-gia-co-phieu-mo-menu-tuy-chon-cua-dong-ma-co-phieu::android::SM_S938B": {
       "outcomes": [
+        "p",
         "f"
       ],
-      "lastSeen": "2026-09-11T20:11:15.131Z"
+      "lastSeen": "2026-09-16T07:49:20.356Z"
     },
     "them-ma-co-phieu-tren-bang-gia-co-phieu-xoa-ma-khoi-danh-muc-hien-tai::android::SM_S938B": {
       "outcomes": [
+        "p",
         "f"
       ],
-      "lastSeen": "2026-09-11T20:11:15.131Z"
+      "lastSeen": "2026-09-16T07:49:20.356Z"
     },
     "them-ma-co-phieu-tren-bang-gia-co-phieu-xoa-ma-khong-anh-huong-toi-danh-muc-khac::android::SM_S938B": {
       "outcomes": [
@@ -1461,9 +1466,10 @@
         "p",
         "p",
         "p",
+        "p",
         "p"
       ],
-      "lastSeen": "2026-09-15T08:39:17.272Z"
+      "lastSeen": "2026-09-16T08:45:01.233Z"
     },
     "them-ma-co-phieu-tren-bang-gia-co-phieu-tim-kiem-theo-ten-doanh-nghiep-hien-thi-::web::Pixel 7": {
       "outcomes": [
@@ -1592,51 +1598,64 @@
     },
     "chuyen-tien-noi-bo-chuyen-tien-thanh-cong-tu-tieu-khoan-thuong-sang-ky-quy::android::SM_S938B": {
       "outcomes": [
+        "p",
+        "p",
         "p"
       ],
-      "lastSeen": "2026-09-13T09:20:22.027Z"
+      "lastSeen": "2026-09-16T05:50:58.539Z"
     },
     "chuyen-tien-noi-bo-chuyen-tien-thanh-cong-tu-tieu-khoan-ky-quy-sang-thuong::android::SM_S938B": {
       "outcomes": [
+        "p",
+        "p",
         "p"
       ],
-      "lastSeen": "2026-09-13T09:20:22.027Z"
+      "lastSeen": "2026-09-16T05:50:58.539Z"
     },
     "chuyen-tien-noi-bo-chon-tieu-khoan-nguon-va-tieu-khoan-ich-thanh-cong::android::SM_S938B": {
       "outcomes": [
+        "p",
+        "f",
         "p"
       ],
-      "lastSeen": "2026-09-13T09:20:22.027Z"
+      "lastSeen": "2026-09-16T05:50:58.539Z"
     },
     "chuyen-tien-noi-bo-so-tien-uoc-chuyen-thay-oi-theo-tieu-khoan-nguon-uoc-chon::android::SM_S938B": {
       "outcomes": [
+        "p",
         "p"
       ],
-      "lastSeen": "2026-09-13T09:20:22.028Z"
+      "lastSeen": "2026-09-16T04:48:10.222Z"
     },
     "chuyen-tien-noi-bo-nhap-so-tien-vuot-qua-so-tien-uoc-chuyen-thi-khong-cho-chuyen::android::SM_S938B": {
       "outcomes": [
+        "p",
         "p"
       ],
-      "lastSeen": "2026-09-13T09:20:22.028Z"
+      "lastSeen": "2026-09-16T04:48:10.222Z"
     },
     "chuyen-tien-noi-bo-so-tien-hop-le-thi-chuyen-sang-man-hinh-xac-nhan::android::SM_S938B": {
       "outcomes": [
+        "p",
+        "f",
         "p"
       ],
-      "lastSeen": "2026-09-13T09:20:22.028Z"
+      "lastSeen": "2026-09-16T05:50:58.539Z"
     },
     "chuyen-tien-noi-bo-bam-quay-lai-thi-tro-lai-man-hinh-chuyen-tien::android::SM_S938B": {
       "outcomes": [
+        "p",
+        "f",
         "p"
       ],
-      "lastSeen": "2026-09-13T09:20:22.028Z"
+      "lastSeen": "2026-09-16T05:50:58.539Z"
     },
     "chuyen-tien-noi-bo-sau-khi-chuyen-thanh-cong-so-tien-uoc-chuyen-cap-nhat-theo-so::android::SM_S938B": {
       "outcomes": [
+        "f",
         "p"
       ],
-      "lastSeen": "2026-09-13T09:20:22.028Z"
+      "lastSeen": "2026-09-16T04:48:10.222Z"
     },
     "chuyen-tien-noi-bo-chuyen-tien-thanh-cong-tu-tieu-khoan-thuong-sang-ky-quy::ios::Apple iPhone 12 (Android 26.6)": {
       "outcomes": [
@@ -1870,9 +1889,10 @@
         "p",
         "p",
         "p",
+        "p",
         "p"
       ],
-      "lastSeen": "2026-09-15T09:59:20.130Z"
+      "lastSeen": "2026-09-16T08:45:01.233Z"
     },
     "them-ma-co-phieu-tren-bang-gia-co-phieu-tim-kiem-theo-ten-doanh-nghiep::web::Pixel 7": {
       "outcomes": [
@@ -1937,10 +1957,11 @@
     },
     "them-ma-co-phieu-tren-bang-gia-co-phieu-them-ma-co-phieu-moi-vao-danh-muc-tren-b::web::Pixel 7": {
       "outcomes": [
+        "f",
         "p",
         "p"
       ],
-      "lastSeen": "2026-09-15T09:59:20.130Z"
+      "lastSeen": "2026-09-16T08:45:01.233Z"
     },
     "them-ma-co-phieu-tren-bang-gia-co-phieu-mo-chuc-nang-them-ma-co-phieu-tu-nut-dau::web::Pixel 7": {
       "outcomes": [
@@ -1952,9 +1973,10 @@
     "them-ma-co-phieu-tren-bang-gia-co-phieu-tim-kiem-ma-co-phieu-theo-ten-doanh-nghi::web::Pixel 7": {
       "outcomes": [
         "p",
+        "p",
         "p"
       ],
-      "lastSeen": "2026-09-15T09:59:20.130Z"
+      "lastSeen": "2026-09-16T08:45:01.234Z"
     },
     "them-ma-co-phieu-tren-bang-gia-co-phieu-tu-ong-loc-trung-ket-qua-tim-kiem-theo-m::web::Pixel 7": {
       "outcomes": [
@@ -1972,9 +1994,10 @@
     "them-ma-co-phieu-tren-bang-gia-co-phieu-xoa-ma-co-phieu-khoi-danh-muc-hien-tai::web::Pixel 7": {
       "outcomes": [
         "p",
+        "p",
         "f"
       ],
-      "lastSeen": "2026-09-15T09:59:20.130Z"
+      "lastSeen": "2026-09-16T08:45:01.234Z"
     },
     "them-moi-template-bao-cao-cua-toi-them-moi-template-bao-cao-thanh-cong::web::Pixel 7": {
       "outcomes": [
@@ -2086,9 +2109,10 @@
         "p",
         "p",
         "p",
+        "p",
         "p"
       ],
-      "lastSeen": "2026-09-16T03:13:19.029Z"
+      "lastSeen": "2026-09-16T07:49:20.356Z"
     },
     "them-ma-co-phieu-tren-bang-gia-co-phieu-xoa-ma-co-phieu-khoi-danh-muc-hien-tai::android::SM_S938B": {
       "outcomes": [
@@ -2134,9 +2158,10 @@
     },
     "them-ma-co-phieu-tren-bang-gia-co-phieu-them-ma-co-phieu-moi-vao-danh-muc-tren-b::android::SM_S938B": {
       "outcomes": [
+        "f",
         "k"
       ],
-      "lastSeen": "2026-09-16T03:13:19.029Z"
+      "lastSeen": "2026-09-16T07:49:20.356Z"
     },
     "them-ma-co-phieu-tren-bang-gia-co-phieu-mo-chuc-nang-them-ma-co-phieu-tu-nut-dau::android::SM_S938B": {
       "outcomes": [
@@ -2155,6 +2180,90 @@
         "p"
       ],
       "lastSeen": "2026-09-16T03:13:19.029Z"
+    },
+    "them-ma-co-phieu-tren-bang-gia-co-phieu-mo-chuc-nang-them-ma-co-phieu::android::SM_S938B": {
+      "outcomes": [
+        "p"
+      ],
+      "lastSeen": "2026-09-16T07:49:20.356Z"
+    },
+    "them-ma-co-phieu-tren-bang-gia-co-phieu-tim-kiem-ma-co-phieu-hien-thi-ket-qua::android::SM_S938B": {
+      "outcomes": [
+        "p"
+      ],
+      "lastSeen": "2026-09-16T07:49:20.356Z"
+    },
+    "them-ma-co-phieu-tren-bang-gia-co-phieu-danh-sach-ket-qua-tim-kiem-hien-thi-toi-::android::SM_S938B": {
+      "outcomes": [
+        "p"
+      ],
+      "lastSeen": "2026-09-16T07:49:20.356Z"
+    },
+    "them-ma-co-phieu-tren-bang-gia-co-phieu-ket-qua-trung-giua-tim-theo-ma-va-tim-th::android::SM_S938B": {
+      "outcomes": [
+        "f"
+      ],
+      "lastSeen": "2026-09-16T07:49:20.356Z"
+    },
+    "them-ma-co-phieu-tren-bang-gia-co-phieu-ma-chua-co-trong-danh-muc-uoc-them-moi-v::android::SM_S938B": {
+      "outcomes": [
+        "f"
+      ],
+      "lastSeen": "2026-09-16T07:49:20.356Z"
+    },
+    "them-ma-co-phieu-tren-bang-gia-co-phieu-ma-a-co-trong-danh-muc-khong-them-moi-va::android::SM_S938B": {
+      "outcomes": [
+        "f"
+      ],
+      "lastSeen": "2026-09-16T07:49:20.356Z"
+    },
+    "them-ma-co-phieu-tren-bang-gia-co-phieu-mo-chuc-nang-them-ma-co-phieu-tu-nut-the::web::Pixel 7": {
+      "outcomes": [
+        "f"
+      ],
+      "lastSeen": "2026-09-16T08:45:01.233Z"
+    },
+    "them-ma-co-phieu-tren-bang-gia-co-phieu-hien-thi-danh-sach-ket-qua-khi-nhap-u-3-::web::Pixel 7": {
+      "outcomes": [
+        "p"
+      ],
+      "lastSeen": "2026-09-16T08:45:01.234Z"
+    },
+    "them-ma-co-phieu-tren-bang-gia-co-phieu-cho-phep-chon-ma-tu-danh-sach-ket-qua-ti::web::Pixel 7": {
+      "outcomes": [
+        "f"
+      ],
+      "lastSeen": "2026-09-16T08:45:01.234Z"
+    },
+    "them-ma-co-phieu-tren-bang-gia-co-phieu-danh-sach-ket-qua-tim-kiem-hien-thi-toi-::web::Pixel 7": {
+      "outcomes": [
+        "p"
+      ],
+      "lastSeen": "2026-09-16T08:45:01.234Z"
+    },
+    "them-ma-co-phieu-tren-bang-gia-co-phieu-ket-qua-trung-lap-giua-tim-theo-ma-va-th::web::Pixel 7": {
+      "outcomes": [
+        "p"
+      ],
+      "lastSeen": "2026-09-16T08:45:01.234Z"
+    },
+    "them-ma-co-phieu-tren-bang-gia-co-phieu-ma-chua-co-trong-danh-muc-uoc-them-moi-v::web::Pixel 7": {
+      "outcomes": [
+        "f"
+      ],
+      "lastSeen": "2026-09-16T08:45:01.234Z"
+    },
+    "them-ma-co-phieu-tren-bang-gia-co-phieu-ma-a-co-trong-danh-muc-khong-uoc-them-mo::web::Pixel 7": {
+      "outcomes": [
+        "f"
+      ],
+      "lastSeen": "2026-09-16T08:45:01.234Z"
+    },
+    "them-ma-co-phieu-tren-bang-gia-co-phieu-mo-menu-tuy-chon-cua-dong-co-phieu::web::Pixel 7": {
+      "outcomes": [
+        "p"
+      ],
+      "lastSeen": "2026-09-16T08:45:01.234Z"
     }
   }
 }

@@ -391,6 +391,18 @@ export interface StepResult {
    * reducing all cases to the vague label "chưa chứng minh".
    */
   unverifiedReason?: string;
+  /**
+   * Loại khoảng trống nhân quả — ba loại, và chúng KHÔNG cùng mức nghiêm trọng.
+   *
+   *  - `deferred`: cố ý tạm hoãn, chờ một bước sau đo thay đổi nghiệp vụ. Có
+   *    đường gỡ cờ hẳn hoi (`confirmTapProvenBy*`), nên đây không phải tin xấu.
+   *  - `no-postcondition`: bước sau không mô tả kết quả nào quan sát được. Là
+   *    khoảng trống của KỊCH BẢN, không phải bằng chứng thao tác đã hỏng.
+   *  - `unchanged`: điều kiện đã đúng TỪ TRƯỚC thao tác và không gì đổi sau đó.
+   *    Chỉ loại này mới thực sự nguy hiểm: không có gì phân biệt "đã chạy đúng"
+   *    với "không làm gì cả", nên nó không được phép đi vào một kịch bản xanh.
+   */
+  unverifiedKind?: 'deferred' | 'no-postcondition' | 'unchanged';
   screenshot?: string;
   /**
    * Vì sao bước này xanh: locator nào thắng, và nó đọc ra cái gì.

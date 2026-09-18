@@ -32,3 +32,9 @@ ui/playwright-report/
 ui/test-results/
 playwright-report/
 test-results/
+
+# Bản sao lưu history và artifact tạm của các phiên làm việc.
+registry/history.json.bak-*
+.codex-artifacts/
+artifact_work/
+tmp_spreadsheet_preview/

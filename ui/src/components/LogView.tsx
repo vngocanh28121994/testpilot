@@ -29,6 +29,23 @@ const CASE_ROW_TONE: Record<string, string> = {
   abort: 'border-status-fail/35 bg-(--tint-fail)',
 };
 
+/**
+ * Tiền tố nền tảng mà workflow gói quanh từng dòng của run con.
+ *
+ * Workflow chạy nhiều nền tảng SONG SONG và trộn dòng của chúng vào một luồng,
+ * nên `server.ts` ghi `[android] …` để biết dòng nào của ai. Hữu ích — nhưng mọi
+ * luật ở file này đều neo `^`, nên tiền tố ấy đẩy chúng ra khỏi mỏ neo và cả bộ
+ * nhận diện chết một lượt: dòng ✓/✗ mất màu, `[run:dir]` lẽ ra bị ẩn thì hiện
+ * ra, cảnh báo mất nhấn mạnh, dòng tổng kết không dựng được thành bảng đếm.
+ * Trớ trêu nhất là WORKFLOW_MILESTONE — luật viết riêng cho workflow — cũng
+ * chết ngay trong màn workflow.
+ *
+ * Liệt kê đúng ba nền tảng thay vì `\[[^\]]+\]` tổng quát: `[run:dir]`,
+ * `[flow]`, `[cdp]` cũng là ngoặc vuông đầu dòng, và bóc nhầm chúng thì hỏng
+ * đúng những luật đang muốn cứu.
+ */
+const PLATFORM_PREFIX = /^\[(android|ios|web)\]\s+/;
+
 const NEEDS_ATTENTION = /^(?:❓|⚠️?|Còn thiếu testcase|Cảnh báo thiếu testcase)/iu;
 const WORKFLOW_MILESTONE = /^(?:Workflow\s|Bind OK\b|\d+\/\d+ testcase\b|Đã bao phủ đầy đủ\b)/iu;
 
@@ -37,6 +54,8 @@ interface Row {
   key: string;
   kind: string | null;
   text: string;
+  /** Nền tảng đã bóc khỏi đầu dòng, giữ lại để hiện thành nhãn. */
+  platform?: string;
 }
 
 /**
@@ -52,9 +71,15 @@ function toRows(logs: string[]): Row[] {
   const runningAt = new Map<string, number>();
 
   logs.forEach((line, i) => {
-    const verdict = VERDICT.exec(line);
+    // Bóc tiền tố MỘT LẦN, ngay đầu vào: từ đây trở xuống mọi luật lại được so
+    // với dòng gốc, đúng như khi Local Runner đưa vào.
+    const prefix = PLATFORM_PREFIX.exec(line);
+    const platform = prefix?.[1];
+    const body = prefix ? line.slice(prefix[0].length) : line;
+
+    const verdict = VERDICT.exec(body);
     if (!verdict) {
-      rows.push({ key: `l${i}`, kind: null, text: humanizeLogText(line) });
+      rows.push({ key: `l${i}`, kind: null, text: humanizeLogText(body), platform });
       return;
     }
     const [, kind, rawText] = verdict;
@@ -62,19 +87,23 @@ function toRows(logs: string[]): Row[] {
     // Icon nằm trong chính phần text và khác nhau giữa hai lần in, nên khoá
     // theo tên đã bỏ icon — nếu không thì không cặp nào khớp và mọi kịch bản
     // vẫn hiện hai lần.
-    const name = text!.replace(/^[…✓✗~⊘✎]\s*/, '');
+    //
+    // Khoá kèm nền tảng: workflow chạy song song, và hai nền tảng chạy CÙNG một
+    // kịch bản thì tên trùng nhau. Không tách ra thì dòng ✓ của android ghi đè
+    // lên dòng "đang chạy" của web, và web mất luôn kết quả của mình.
+    const name = `${platform ?? ''}\u0000${text!.replace(/^[…✓✗~⊘✎]\s*/, '')}`;
     if (kind === 'running') {
       runningAt.set(name, rows.length);
-      rows.push({ key: `l${i}`, kind, text: text! });
+      rows.push({ key: `l${i}`, kind, text: text!, platform });
       return;
     }
     const at = runningAt.get(name);
     if (at !== undefined) {
-      rows[at] = { key: rows[at]!.key, kind: kind!, text: text! };
+      rows[at] = { key: rows[at]!.key, kind: kind!, text: text!, platform };
       runningAt.delete(name);
       return;
     }
-    rows.push({ key: `l${i}`, kind: kind!, text: text! });
+    rows.push({ key: `l${i}`, kind: kind!, text: text!, platform });
   });
 
   return rows;
@@ -178,6 +207,7 @@ export function LogView({
             key={row.key}
             kind={row.kind}
             text={row.text}
+            platform={row.platform}
             animated={
               !error && (
                 row.kind === 'running'
@@ -192,7 +222,26 @@ export function LogView({
   );
 }
 
-function Line({ kind, text, animated }: { kind: string | null; text: string; animated: boolean }) {
+function Line({
+  kind,
+  text,
+  animated,
+  platform,
+}: {
+  kind: string | null;
+  text: string;
+  animated: boolean;
+  platform?: string;
+}) {
+  // Giữ lại chứ không vứt đi: workflow trộn dòng của nhiều nền tảng vào một
+  // luồng, nên "dòng này của ai" là thông tin thật. Chỉ là nó thuộc về một cái
+  // nhãn, không thuộc về đầu câu.
+  const tag = platform ? (
+    <span className="text-muted-foreground me-1.5 rounded bg-black/5 px-1 text-[0.85em] dark:bg-white/10">
+      {platform}
+    </span>
+  ) : null;
+
   if (kind) {
     return (
       <span
@@ -203,6 +252,7 @@ function Line({ kind, text, animated }: { kind: string | null; text: string; ani
           CASE_ROW_TONE[kind],
         )}
       >
+        {tag}
         {animated ? <ProgressText text={text} /> : text}
       </span>
     );
@@ -222,6 +272,7 @@ function Line({ kind, text, animated }: { kind: string | null; text: string; ani
         data-log-row="attention"
         className="border-status-flaky/40 bg-(--tint-warn) my-1 block rounded-md border-s-[3px] px-2.5 py-1.5 font-sans font-medium text-status-flaky"
       >
+        {tag}
         {animated ? <ProgressText text={text} /> : (linkify(text) ?? ' ')}
       </span>
     );
@@ -233,6 +284,7 @@ function Line({ kind, text, animated }: { kind: string | null; text: string; ani
         data-log-row="milestone"
         className="border-border bg-background/70 my-1 block rounded-md border px-2.5 py-1.5 font-sans font-medium"
       >
+        {tag}
         {animated ? <ProgressText text={text} /> : (linkify(text) ?? ' ')}
       </span>
     );
@@ -240,6 +292,7 @@ function Line({ kind, text, animated }: { kind: string | null; text: string; ani
 
   return (
     <span className="block">
+      {tag}
       {animated ? <ProgressText text={text} /> : (linkify(text) ?? ' ')}
     </span>
   );

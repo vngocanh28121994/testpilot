@@ -190,4 +190,11 @@ export class PriceBoardPage {
   async tapCategoryDefault(): Promise<void> {
     await this.page.tap('priceBoard.categoryDefault');
   }
+
+  /** Dòng cổ phiếu trong danh mục
+   * @testpilot-element priceBoard.stockRow action=assertVisible
+   */
+  async assertStockRowVisible(): Promise<void> {
+    await this.page.assertVisible('priceBoard.stockRow');
+  }
 }

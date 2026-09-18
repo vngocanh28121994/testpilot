@@ -49,6 +49,22 @@ export type RawEl = {
    * các tầng sau phải được nói cho biết thay vì phải tự đoán.
    */
   container: boolean;
+  /**
+   * Chỉ số của TỔ TIÊN GẦN NHẤT cũng nằm trong mảng trả về, hoặc `undefined`
+   * khi không có tổ tiên nào được thu.
+   *
+   * Bản quét này chỉ lấy một tập con của DOM, nên "cha" ở đây không phải
+   * `parentElement` mà là node được thu gần nhất phía trên. Đó mới là quan hệ
+   * mà các tầng sau hỏi tới.
+   *
+   * Thiếu nó thì hai luật im lặng chết theo, và cả hai đều không kêu:
+   * `hasInteractiveAncestor` thoát ngay ở dòng `if (!candidate.parentId)`, nên
+   * nhánh chấm điểm icon không bao giờ chạy — `mat-icon` cố ý mang
+   * `interactive: undefined`, nên nó chỉ ghi điểm được qua tổ tiên. Và
+   * `controlIdentity` cũng đi theo cùng dây, nên các bản ghi nằm trong CÙNG một
+   * nút lại bị đếm thành những lựa chọn cạnh tranh nhau.
+   */
+  parentIndex?: number;
   disabled: boolean;
   visible: boolean;
   rect: { x: number; y: number; width: number; height: number };
@@ -95,7 +111,7 @@ export function observeDomInPage(): RawEl[] {
         '[class*="-title"], [class*="__title"], [class*="-name"], [class*="__name"], ' +
         'div[class] > div:only-child',
     );
-    return Array.from(nodes).filter((node) => {
+    const kept = Array.from(nodes).filter((node) => {
       if (node.tagName.toLowerCase() !== 'div') return true;
       const el = node as HTMLElement;
       const rect = el.getBoundingClientRect();
@@ -104,7 +120,13 @@ export function observeDomInPage(): RawEl[] {
       // with children is useful only when it owns an interaction; otherwise it
       // contributes a huge concatenated duplicate of the entire subtree.
       return el.children.length === 0 || getComputedStyle(el).cursor === 'pointer';
-    }).map((node) => {
+    });
+    // Quan hệ cha con tính TRÊN TẬP ĐÃ THU, không phải trên DOM gốc: một
+    // `mat-icon` nằm cách `<button>` của nó vài lớp span mà không lớp nào được
+    // thu, nên `parentElement` trực tiếp là vô dụng ở đây.
+    const keptIndex = new Map<Element, number>();
+    kept.forEach((node, i) => keptIndex.set(node, i));
+    return kept.map((node, selfIndex) => {
       const el = node as HTMLElement & { disabled?: boolean; value?: string; placeholder?: string; type?: string };
       const rect = el.getBoundingClientRect();
 
@@ -191,6 +213,15 @@ export function observeDomInPage(): RawEl[] {
         customName,
         interactive,
         container: el.children.length > 0,
+        parentIndex: (() => {
+          let cursor: Element | null = el.parentElement;
+          while (cursor) {
+            const found = keptIndex.get(cursor);
+            if (found !== undefined && found !== selfIndex) return found;
+            cursor = cursor.parentElement;
+          }
+          return undefined;
+        })(),
         disabled: el.disabled === true,
         visible: rect.width > 0 && rect.height > 0,
         rect: { x: rect.x, y: rect.y, width: rect.width, height: rect.height },
