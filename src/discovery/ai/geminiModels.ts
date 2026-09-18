@@ -10,11 +10,32 @@
  * Quota là của từng model, nên một model cạn KHÔNG có nghĩa là hết đường.
  */
 
-/** Thứ tự mặc định: bản đang dùng trước, rồi tới hai bản dự phòng. */
+/**
+ * Thứ tự mặc định, xếp theo ĐỘ TIN CẬY ĐO ĐƯỢC, không theo số hiệu phiên bản.
+ *
+ * Đo ngày 2026-09-18, mỗi model ba lượt gọi thật bằng cùng một key:
+ *
+ *   gemini-3.6-flash   200/3.9s   200/2.3s   200/2.6s
+ *   gemini-3.5-flash   200/2.7s   200/2.8s   200/2.9s
+ *   gemini-3.8-flash   200/6.0s   503/5.9s   503/13.4s
+ *   gemini-3.7-flash   503/0.9s   TREO 40s   503/36.8s
+ *
+ * Chuỗi cũ xếp 3.6 → 3.7 → 3.8, tức là khi model chính hỏng thì rơi xuống đúng
+ * model tệ nhất. Trên prod ngày 2026-09-18 điều đó nghĩa là: 3.6 lỗi một nhịp,
+ * chuyển sang 3.7, và 3.7 treo cho tới khi hết ngân sách resolve 15 giây —
+ * locator không bao giờ về, kịch bản đỏ với log chỉ nói "chưa trả lời xong".
+ *
+ * Một bản dự phòng chỉ đáng gọi là dự phòng khi nó ỔN ĐỊNH HƠN thứ nó đỡ. Số
+ * hiệu phiên bản cao hơn không hứa điều đó, và bản mới thường là bản đang chịu
+ * tải nặng nhất. `gemini-3.5-flash` là bản GA, chậm hơn không đáng kể và chưa
+ * lần nào 503 trong phép đo.
+ *
+ * Con số này sẽ cũ đi. Đo lại bằng `scripts/bench-ai-discovery.ts` rồi sửa thứ
+ * tự ở đây, hoặc ghi đè bằng `GEMINI_VISION_MODEL` mà không cần phát hành.
+ */
 export const DEFAULT_VISION_MODEL_CHAIN = [
   'gemini-3.6-flash',
-  'gemini-3.7-flash',
-  'gemini-3.8-flash',
+  'gemini-3.5-flash',
 ] as const;
 
 /**
@@ -79,4 +100,29 @@ export class ExhaustedModels {
   has(model: string): boolean {
     return this.dead.has(model);
   }
+}
+
+/**
+ * Ngắn nhất còn đáng gọi một model.
+ *
+ * Đo trên prod ngày 2026-09-18: một lượt gọi vision thành công mất ~3–8 giây.
+ * Khởi động một model khi chỉ còn hai giây là chắc chắn bỏ tiền mua một câu trả
+ * lời về sau khi resolver đã bỏ cuộc — đúng cảnh lượt chạy ấy gặp: model đầu
+ * hỏng, model dự phòng được gọi, và không ai còn chờ nó nữa.
+ */
+export const MIN_MODEL_BUDGET_MS = 2_500;
+
+/**
+ * Bao nhiêu mili giây được phép dành cho lượt gọi model tiếp theo.
+ *
+ * `undefined` nghĩa là người gọi không nói hạn chót — giữ nguyên hành vi cũ và
+ * dùng trọn thời gian chờ mặc định. Số 0 hoặc âm nghĩa là hết giờ: đừng gọi.
+ */
+export function budgetForNextModel(
+  defaultTimeoutMs: number,
+  deadlineAt?: number,
+  now = Date.now(),
+): number {
+  if (deadlineAt == null) return defaultTimeoutMs;
+  return Math.min(defaultTimeoutMs, Math.max(0, deadlineAt - now));
 }

@@ -12,8 +12,10 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { GeminiVisionElementProvider } from '../ai/GeminiVisionElementProvider.js';
 import {
+  budgetForNextModel,
   DEFAULT_VISION_MODEL_CHAIN,
   ExhaustedModels,
+  MIN_MODEL_BUDGET_MS,
   shouldTryNextModel,
   visionModelChain,
 } from '../ai/geminiModels.js';
@@ -118,6 +120,70 @@ describe('chuỗi model Gemini', () => {
       () => provider.findElementInScreenshot(intent, 'AAA', observation),
       (err: Error) => /a: .*429/.test(err.message) && /b: .*429/.test(err.message),
     );
+  });
+
+  /**
+   * Đo trên prod ngày 2026-09-18: model đầu hỏng, model dự phòng được gọi ở
+   * giây thứ 14 của ngân sách 15 giây, và câu trả lời về khi resolver đã bỏ
+   * cuộc — trả tiền cho một lượt gọi không ai đọc. Chuỗi fallback chỉ có nghĩa
+   * khi model sau còn kịp trả lời.
+   */
+  it('hết ngân sách thì không gọi model dự phòng nữa', async () => {
+    const { calls, fetcher } = recorder((model) =>
+      model === 'a' ? new Response('quota exceeded', { status: 429 }) : answer(found));
+    const provider = new GeminiVisionElementProvider('key', ['a', 'b'], fetcher);
+
+    // Hạn chót đã ở quá khứ: model đầu cũng không được gọi.
+    await assert.rejects(
+      () => provider.findElementInScreenshot(intent, 'AAA', observation, {
+        deadlineAt: Date.now() - 1,
+      }),
+      /không đủ để gọi/,
+    );
+    assert.deepEqual(calls, []);
+  });
+
+  it('còn dư thời gian thì chuỗi vẫn chạy như cũ', async () => {
+    const { calls, fetcher } = recorder((model) =>
+      model === 'a' ? new Response('quota exceeded', { status: 429 }) : answer(found));
+    const provider = new GeminiVisionElementProvider('key', ['a', 'b'], fetcher);
+
+    const result = await provider.findElementInScreenshot(intent, 'AAA', observation, {
+      deadlineAt: Date.now() + 60_000,
+    });
+    assert.equal(result.modelId, 'b');
+    assert.deepEqual(calls, ['a', 'b']);
+  });
+
+  /** Không nói hạn chót thì giữ nguyên hành vi cũ, không tự bịa ra một cái. */
+  it('ngân sách: không có hạn chót thì dùng trọn thời gian chờ mặc định', () => {
+    assert.equal(budgetForNextModel(12_000, undefined), 12_000);
+    assert.equal(budgetForNextModel(12_000, 1_000, 0), 1_000);
+    assert.equal(budgetForNextModel(12_000, 99_000, 0), 12_000);
+    assert.equal(budgetForNextModel(12_000, 500, 1_000), 0, 'quá hạn thì không còn gì');
+    assert.ok(MIN_MODEL_BUDGET_MS > 0);
+  });
+
+  /**
+   * Đọc log prod mà chỉ thấy "không gọi được" thì không phân biệt được hết
+   * quota (đợi sang ngày), tên model sai (sửa cấu hình) hay dịch vụ lỗi (chạy
+   * lại là xong) — ba nguyên nhân với ba cách xử lý khác hẳn nhau.
+   */
+  it('log chuyển model nói ra nguyên nhân', async () => {
+    const { fetcher } = recorder((model) =>
+      model === 'a' ? new Response('quota exceeded', { status: 429 }) : answer(found));
+    const provider = new GeminiVisionElementProvider('key', ['a', 'b'], fetcher);
+    const lines: string[] = [];
+    const warn = console.warn;
+    console.warn = (line: string) => { lines.push(line); };
+    try {
+      await provider.findElementInScreenshot(intent, 'AAA', observation);
+    } finally {
+      console.warn = warn;
+    }
+    const line = lines.find((item) => item.includes('chuyển sang model dự phòng'));
+    assert.ok(line, 'không thấy dòng chuyển model');
+    assert.match(line, /429/);
   });
 
   it('đọc chuỗi từ biến môi trường, ngăn cách bằng dấu phẩy', () => {

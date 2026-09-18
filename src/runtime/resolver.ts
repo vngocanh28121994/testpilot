@@ -360,6 +360,9 @@ export class Resolver {
           o.allowAmbiguousDiscovery ?? isReadOnlyDiscovery(o.discoveryAction),
           excluded,
           o,
+          // Hạn chót thật của lần resolve này, để tầng vision không khởi động
+          // một model dự phòng mà nó không kịp đọc câu trả lời.
+          deadline,
         );
         discoveryTask = task;
         void task
@@ -504,6 +507,12 @@ export class Resolver {
     allowOutcomeValidation = false,
     resolveOptions: ResolveOptions = this.opts,
     forceVision = false,
+    /**
+     * Mốc resolver ngừng chờ (epoch ms). Tầng vision có chuỗi model dự phòng,
+     * và nếu không biết mốc này nó sẽ khởi động model sau ở những giây cuối rồi
+     * trả lời khi không ai còn đọc — đúng cảnh prod 2026-09-18.
+     */
+    deadlineAt?: number,
   ): Promise<LocatorCandidate[]> {
     if (!this.semanticDiscovery && !this.visionDiscovery) return [];
     // Chỉ dùng trạng thái màn hình mang nghĩa nghiệp vụ. Số node và sáu nhãn
@@ -573,6 +582,7 @@ export class Resolver {
           platform: this.driver.platform,
           persistSuggestedLocator: false,
           allowExactTextProxy: allowOutcomeValidation,
+          ...(deadlineAt != null ? { deadlineAt } : {}),
         });
         // VisionElementDiscovery intentionally converts provider exceptions to
         // evidence instead of rethrowing. Feed those failures into the same
@@ -687,6 +697,7 @@ export class Resolver {
     allowAmbiguousCandidates = false,
     excluded: ReadonlySet<string> = new Set(),
     resolveOptions: ResolveOptions = this.opts,
+    deadlineAt?: number,
   ): Promise<LocatorCandidate | null> {
     /** Lời hứa của tầng AI, khởi động ngay khi có ảnh chụp. */
     let aiTask: Promise<LocatorCandidate[]> | null = null;
@@ -725,6 +736,8 @@ export class Resolver {
             elementId,
             allowAmbiguousCandidates,
             resolveOptions,
+            false,
+            deadlineAt,
           ).catch(() => []);
         },
       });
@@ -745,6 +758,8 @@ export class Resolver {
                 elementId,
                 allowAmbiguousCandidates,
                 resolveOptions,
+                false,
+                deadlineAt,
               ).catch(() => [])
             : [];
         const proposed = proposals.find((candidate) => !excluded.has(candidateKey(candidate)));
@@ -760,6 +775,7 @@ export class Resolver {
             allowAmbiguousCandidates,
             resolveOptions,
             true,
+            deadlineAt,
           ).catch(() => []);
           const visualCandidate = visual.find(
             (candidate) => !excluded.has(candidateKey(candidate)),
