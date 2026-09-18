@@ -37,6 +37,11 @@ export const stateFixture: StateResponse = {
     // ra, và cái ép kiểu bên dưới là lý do tsc không hề kêu.
     sources: [],
     targetFeature: '',
+    // Màn Cấu hình đọc hai nhánh này để vẽ ô bật/tắt tầng thị giác. Chúng luôn
+    // có trong config thật (zod điền mặc định), nên thiếu ở đây chỉ tạo ra một
+    // kiểu hỏng không tồn tại ngoài đời — đúng cái bẫy mà ghi chú phía trên nói.
+    discovery: { ai: { enabled: true, vision: false, minConfidence: 45 } },
+    resolve: { timeoutMs: 10_000, pollMs: 250, verifyHealedMatch: true },
     workflow: { platforms: ['web'], devices: {}, env: '', headed: false },
   } as unknown as StateResponse['config'],
   configError: null,

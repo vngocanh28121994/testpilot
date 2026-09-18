@@ -109,6 +109,37 @@ describe('SettingsPanel', () => {
   });
 
   /**
+   * Tầng thị giác tắt từ 2026-09-18 để dành ngân sách model cho việc sinh
+   * testcase. Bật lại được từ đây thay vì phải sửa file JSON bằng tay — và cú
+   * Lưu phải mang theo cờ đó, nếu không ô tick chỉ là trang trí.
+   */
+  it('gửi cờ tầng thị giác khi bật ô tick rồi Lưu', async () => {
+    const user = userEvent.setup();
+    let sent: { discovery?: { ai?: { vision?: boolean; enabled?: boolean } } } | null = null;
+    server.use(
+      http.put(ROUTES.config, async ({ request }) => {
+        sent = (await request.json()) as typeof sent;
+        return HttpResponse.json({ ok: true, config: stateFixture.config });
+      }),
+    );
+
+    await renderWithRouter(<SettingsPanel />);
+    await ready();
+    const tick = screen.getByRole('checkbox', {
+      name: /Bật tầng thị giác khi chạy test/,
+    });
+    expect(tick).not.toBeChecked();
+    await user.click(tick);
+    await user.click(screen.getByRole('button', { name: 'Lưu cài đặt' }));
+
+    await waitFor(() => expect(sent).not.toBeNull());
+    expect(sent!.discovery?.ai?.vision).toBe(true);
+    // Tắt/bật tầng thị giác KHÔNG được đụng tới tầng semantic: hai mức chi phí
+    // khác hẳn nhau, và gộp chúng là lý do trước đây muốn tiết kiệm thì mất cả hai.
+    expect(sent!.discovery?.ai?.enabled).toBe(true);
+  });
+
+  /**
    * Lỗi validate của PUT /api/config đến dưới dạng mảng `issues` từ zod. Đây là
    * chỗ nhánh đó thực sự được dùng cho việc gì — mất nó thì màn hình này chỉ
    * còn "Config không hợp lệ".
