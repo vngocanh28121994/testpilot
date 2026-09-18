@@ -20,6 +20,7 @@ import {
   useSaveModelKey,
 } from './hooks/useSettings';
 import { mcpFromForm, mcpToForm, visionKeyStatus, type McpForm } from './mcp';
+import { CheckRow } from '@/components/CheckRow';
 import { Field } from '@/components/Field';
 import { GroupHeading } from '@/components/GroupHeading';
 import { ColorThemePicker } from '@/components/ColorThemePicker';
@@ -117,6 +118,7 @@ function SettingsForm({
     reports: config.paths.reports,
   }));
   const [geminiKey, setGeminiKey] = useState('');
+  const [visionTier, setVisionTier] = useState(() => config.discovery.ai.vision);
   const [emailEdit, setEmailEdit] = useState<string | null>(null);
   const [token, setToken] = useState('');
 
@@ -249,6 +251,30 @@ function SettingsForm({
                     </span>
                   )}
                 </div>
+              </CardContent>
+            </Card>
+
+            <Card aria-labelledby="vision-tier-title">
+              <CardHeader>
+                <CardTitle id="vision-tier-title">Tầng thị giác khi chạy test</CardTitle>
+                <CardDescription>
+                  Khác với key phía trên: key dùng để đọc ảnh lúc SINH testcase, còn tầng này gửi
+                  ảnh màn hình đi trong lúc CHẠY, khi không locator nào tìm được phần tử.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="flex flex-col gap-4">
+                <CheckRow
+                  label="Bật tầng thị giác khi chạy test (tốn ngân sách model)"
+                  checked={visionTier}
+                  onChange={setVisionTier}
+                />
+                <p className="text-muted-foreground text-xs">
+                  {visionTier
+                    ? `Đang bật. Nhớ để resolve.timeoutMs đủ lớn — hiện là ${config.resolve.timeoutMs}ms;`
+                      + ' dưới 15000ms thì tầng semantic tiêu hết ngân sách và tầng này không kịp trả lời.'
+                    : 'Đang tắt. Tầng semantic vẫn chạy bình thường; chỉ riêng phần gửi ảnh màn'
+                      + ' hình lúc chạy test là dừng. Việc sinh testcase không bị ảnh hưởng.'}
+                </p>
               </CardContent>
             </Card>
 
@@ -441,6 +467,10 @@ function SettingsForm({
               onClick={() => {
                 saveConfig.mutate({
                   ...config,
+                  discovery: {
+                    ...config.discovery,
+                    ai: { ...config.discovery.ai, vision: visionTier },
+                  },
                   mcp: mcpFromForm(mcp),
                   paths: {
                     ...config.paths,
@@ -457,7 +487,7 @@ function SettingsForm({
             </Button>
             <span className="text-muted-foreground flex items-center gap-1.5 text-xs">
               <FolderTree className="size-3.5" />
-              Áp cho cả MCP và Đường dẫn.
+              Áp cho MCP, Đường dẫn và tầng thị giác.
             </span>
           </div>
         </section>
