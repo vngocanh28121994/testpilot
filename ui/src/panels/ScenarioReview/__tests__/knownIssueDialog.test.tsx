@@ -17,7 +17,12 @@ describe('ScenarioReviewPanel — Known Issue', () => {
       }),
     );
 
-    const user = userEvent.setup();
+    // `delay: null` bỏ nhịp chờ giữa các phím. Lý do gõ 29 ký tự lại thành vấn
+    // đề: mỗi phím là một vòng chờ timer, và khi cả suite chạy song song thì
+    // riêng phần gõ đủ để vượt hạn 5 giây — ca này chạy 1,2 giây khi đứng một
+    // mình nhưng timeout trong suite đầy đủ. Ngữ nghĩa sự kiện giữ nguyên, vẫn
+    // là từng phím một, nên khẳng định "nút bật lên sau khi có chữ" không đổi.
+    const user = userEvent.setup({ delay: null });
     await renderWithRouter(<ScenarioReviewPanel search={{}} />, { path: '/scenarios' });
     const scenario = await screen.findByText('Đăng nhập thành công');
     const row = scenario.closest('tr');
