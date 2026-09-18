@@ -1261,6 +1261,11 @@ export class WebViewCdpDriver {
     return null;
   }
 
+  /** See `UiDriver.isHittable`: asked before a tap so an interception after it means something. */
+  async isHittable(handle: WebViewCdpHandle): Promise<boolean> {
+    return isHittable(handle.locator());
+  }
+
   /** Click/tap an element. */
   async tap(handle: WebViewCdpHandle): Promise<void> {
     if (!isScopedFeatureSearchResult(handle.candidate)) {

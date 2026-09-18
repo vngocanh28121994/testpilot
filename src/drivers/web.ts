@@ -694,6 +694,15 @@ export class WebUiDriver implements UiDriver {
     }
   }
 
+  /**
+   * Hit-test, not a visibility check: the executor needs to know whether an
+   * overlay was already in the way BEFORE a tap, so that an interception error
+   * after it can be attributed to the tap rather than to the page's prior state.
+   */
+  async isHittable(h: UiHandle): Promise<boolean> {
+    return isHittable((h as WebHandle).locator);
+  }
+
   async tap(h: UiHandle): Promise<void> {
     const handle = h as WebHandle;
     // The search drawer is the target, not an interruption. `find()` already

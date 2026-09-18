@@ -1861,6 +1861,20 @@ export class Executor {
 
       const anchored = await this.anchorToTypedQuery(actionLabel, r, matches);
 
+      // Được bấm tới trước khi bấm hay không — hỏi TRƯỚC, vì sau cú bấm thì
+      // không còn đo được nữa. Chỉ hỏi khi câu trả lời có thể đổi phán quyết:
+      // đúng lúc điều kiện đã thoả sẵn nên `transitionCanBeProven` là false, và
+      // một lỗi interception sắp tới là thứ duy nhất phân biệt "bấm trúng, bị
+      // chính kết quả che" với "bấm vào hư không". Mỗi lần hỏi là một `evaluate`
+      // nên không hỏi ở những cú bấm mà nó không nói thêm được gì.
+      const hittableBefore = expectation && !transitionCanBeProven
+        ? await this.driver.isHittable?.(anchored).catch(() => undefined)
+        : undefined;
+      /** Cú bấm ném lỗi vì chính kết quả của nó chắn con trỏ, đã đo được. */
+      let coveredByOwnResult = false;
+      /** Cùng tình huống, nhưng driver không hit-test được nên không dám chắc. */
+      let coveredUnmeasured = false;
+
       phaseStarted = Date.now();
       try {
         await this.driver.tap(anchored);
@@ -1918,6 +1932,18 @@ export class Executor {
           `[tap] "${actionLabel}": driver báo lỗi bấm nhưng "${expectation!.source}" đã xuất hiện `
           + '— cú bấm đã trúng, phần tử bị chính kết quả của nó che.',
         );
+        // Và GIỮ LẤY kết luận đó. Đoạn phân loại phía dưới chỉ nhìn "điều kiện
+        // đã thoả sẵn, nội dung không đổi" nên nó xếp ca này vào `unchanged` và
+        // bắt kịch bản đỏ — phủ định đúng cái vừa được chứng minh ở đây, trong
+        // cùng một bước, cách nhau vài chục dòng.
+        //
+        // Lỗi interception là một QUAN SÁT: có lớp phủ đang chắn con trỏ. Nó chỉ
+        // trở thành bằng chứng khi biết trước đó phần tử còn bấm được — bằng
+        // không thì một dialog mở sẵn từ bước trước cũng ném đúng lỗi này.
+        if (looksIntercepted(error)) {
+          if (hittableBefore === true) coveredByOwnResult = true;
+          else if (hittableBefore === undefined) coveredUnmeasured = true;
+        }
       }
       logSlowActionPhase(actionLabel, `click attempt ${attempt}`, phaseStarted);
       phaseStarted = Date.now();
@@ -1958,6 +1984,13 @@ export class Executor {
           confirm();
           return heal;
         }
+        // Bằng chứng nhân quả đã có từ cửa thoát phía trên: phần tử còn bấm được
+        // ngay trước cú bấm, sau cú bấm thì bị chắn, và thứ nó phải tạo ra đã
+        // thấy. Một cú bấm rơi vào hư không không dựng được lớp phủ ấy.
+        if (coveredByOwnResult) {
+          confirm();
+          return heal;
+        }
         // Nothing observable separates "it worked" from "it did nothing".
         // Confirm the locator — it did resolve and click — but do not let the
         // step claim it verified an outcome.
@@ -1966,16 +1999,24 @@ export class Executor {
         // a warning stops being read at all.
         if (this.executeDepth <= 1) {
           this.lastUnverified = true;
-          this.lastUnverifiedKind = expectation ? 'unchanged' : 'no-postcondition';
-          this.lastUnverifiedReason = expectation
-            ? `Điều kiện "${expectation.source}" đã đúng trước thao tác và trạng thái quan sát được không đổi.`
-            : 'Bước tiếp theo không mô tả một kết quả có thể quan sát để đối chiếu trước và sau thao tác.';
+          this.lastUnverifiedKind = coveredUnmeasured
+            ? 'covered'
+            : expectation ? 'unchanged' : 'no-postcondition';
+          this.lastUnverifiedReason = coveredUnmeasured
+            ? `Cú bấm báo lỗi vì có lớp phủ chắn con trỏ và "${expectation!.source}" đã thấy, `
+              + 'nhưng driver này không hit-test được nên không nói chắc lớp phủ do cú bấm tạo ra.'
+            : expectation
+              ? `Điều kiện "${expectation.source}" đã đúng trước thao tác và trạng thái quan sát được không đổi.`
+              : 'Bước tiếp theo không mô tả một kết quả có thể quan sát để đối chiếu trước và sau thao tác.';
           console.warn(
-            `[tap] "${actionLabel}": không có gì chứng minh cú bấm tạo ra thay đổi`
-            + (expectation
-              ? ` — "${expectation.source}" đã thoả sẵn từ trước khi bấm`
-                + (postSnapshot ? ' và nội dung không đổi.' : '.')
-              : ' — bước sau không dùng được làm hậu điều kiện.'),
+            coveredUnmeasured
+              ? `[tap] "${actionLabel}": lớp phủ chắn cú bấm và "${expectation!.source}" đã thấy, `
+                + 'nhưng driver không đo được trước đó có bấm được không — không kết luận theo chiều nào.'
+              : `[tap] "${actionLabel}": không có gì chứng minh cú bấm tạo ra thay đổi`
+                + (expectation
+                  ? ` — "${expectation.source}" đã thoả sẵn từ trước khi bấm`
+                    + (postSnapshot ? ' và nội dung không đổi.' : '.')
+                  : ' — bước sau không dùng được làm hậu điều kiện.'),
           );
         }
         confirm();
@@ -2753,6 +2794,23 @@ function verdictOf(runs: ScenarioResult['runs']): ScenarioResult['verdict'] {
  * Cắt ở dòng đầu và 160 ký tự: WebdriverIO đính kèm cả trang gợi ý và link tài
  * liệu, dán nguyên vào thì dòng log dài hơn màn hình và không ai đọc nữa.
  */
+/**
+ * Whether a click failure says "something was in the way" rather than "there
+ * was nothing to click".
+ *
+ * Only this shape of failure can be read as evidence that a tap landed: the
+ * pointer reached the page and another layer took the event. A detached node,
+ * a missing element or a navigation abort say nothing of the sort, and must not
+ * borrow the conclusion. Three engines phrase the same fact differently, hence
+ * three patterns rather than one.
+ */
+function looksIntercepted(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error);
+  return /intercepts pointer events/i.test(message)            // Playwright
+    || /is not clickable at point/i.test(message)              // ChromeDriver
+    || /other element would receive the click/i.test(message); // Selenium/Appium
+}
+
 function driverReason(error: unknown): string {
   const raw = error instanceof Error ? error.message : String(error);
   const first = raw.split('\n').map((l) => l.trim()).find(Boolean) ?? '';

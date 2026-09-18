@@ -401,8 +401,13 @@ export interface StepResult {
    *  - `unchanged`: điều kiện đã đúng TỪ TRƯỚC thao tác và không gì đổi sau đó.
    *    Chỉ loại này mới thực sự nguy hiểm: không có gì phân biệt "đã chạy đúng"
    *    với "không làm gì cả", nên nó không được phép đi vào một kịch bản xanh.
+   *  - `covered`: cú bấm ném lỗi vì có lớp phủ chắn con trỏ, và thứ nó đáng lẽ
+   *    tạo ra thì đã thấy — nhưng driver không đo được phần tử có bấm được hay
+   *    không TRƯỚC cú bấm, nên không nói chắc lớp phủ ấy do cú bấm tạo ra hay
+   *    đã nằm đó từ trước. Khoảng trống của công cụ đo, không phải bằng chứng
+   *    thao tác hỏng, nên nó cảnh báo mà không làm kịch bản đỏ.
    */
-  unverifiedKind?: 'deferred' | 'no-postcondition' | 'unchanged';
+  unverifiedKind?: 'deferred' | 'no-postcondition' | 'unchanged' | 'covered';
   screenshot?: string;
   /**
    * Vì sao bước này xanh: locator nào thắng, và nó đọc ra cái gì.
