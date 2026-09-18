@@ -456,6 +456,20 @@ export const ConfigSchema = z.object({
       ai: z
         .object({
           enabled: z.boolean().default(false),
+          /**
+           * Tầng thị giác runtime (Gemini + ảnh chụp) — TẮT mặc định, tách khỏi
+           * `enabled` vì nó là tầng ĐẮT nhất và là tầng duy nhất gửi ảnh đi.
+           *
+           * Tắt từ 2026-09-18: ngân sách model để dành cho việc sinh testcase.
+           * Đo cùng ngày cho thấy nó cũng gần như không tới lượt trên màn hình
+           * thật — tầng semantic tiêu hết 10 giây của `resolve.timeoutMs` và
+           * vision chỉ còn 94ms, nên cái mất khi tắt là nhỏ hơn vẻ ngoài.
+           *
+           * Bật lại: đặt `discovery.ai.vision = true`. Khi bật, nhớ nâng
+           * `resolve.timeoutMs` (10s là không đủ cho cả hai tầng) — nếu không
+           * nó vẫn nằm đó tiêu tiền mà không kịp trả lời.
+           */
+          vision: z.boolean().default(false),
           /** Below this the model's own confidence is not worth acting on. */
           minConfidence: z.number().min(0).max(100).default(45),
         })
