@@ -1928,9 +1928,19 @@ export class Executor {
           );
           throw error;
         }
+        // Nói đúng những gì đo được, không hơn. Dòng này từng khẳng định "cú bấm
+        // đã trúng" cho MỌI ca, kể cả ca mà vài dòng sau chính executor kết luận
+        // ngược lại — chạy thật trên một trang có dialog mở sẵn thì log tự cãi
+        // nhau, và người đọc report không biết tin dòng nào.
         console.warn(
           `[tap] "${actionLabel}": driver báo lỗi bấm nhưng "${expectation!.source}" đã xuất hiện `
-          + '— cú bấm đã trúng, phần tử bị chính kết quả của nó che.',
+          + (!looksIntercepted(error)
+            ? '— chấp nhận theo kết quả, dù lỗi không phải kiểu bị lớp phủ chắn.'
+            : hittableBefore === true
+              ? '— trước khi bấm phần tử còn bấm được, nên lớp phủ là thứ cú bấm tạo ra: cú bấm đã trúng.'
+              : hittableBefore === false
+                ? '— nhưng lớp phủ đã chắn phần tử TỪ TRƯỚC khi bấm, nên không kết luận được cú bấm đã trúng.'
+                : '— driver không hit-test được nên chưa biết lớp phủ có phải do cú bấm tạo ra.'),
         );
         // Và GIỮ LẤY kết luận đó. Đoạn phân loại phía dưới chỉ nhìn "điều kiện
         // đã thoả sẵn, nội dung không đổi" nên nó xếp ca này vào `unchanged` và
