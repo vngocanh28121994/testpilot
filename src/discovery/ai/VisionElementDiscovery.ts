@@ -36,6 +36,8 @@ export interface VisionDiscoveryOptions {
   persistSuggestedLocator?: boolean;
   /** Permit an exact visible-text proxy only when outcome validation follows. */
   allowExactTextProxy?: boolean;
+  /** Mốc người gọi ngừng chờ (epoch ms); chuỗi model dự phòng cần nó để không gọi thừa. */
+  deadlineAt?: number;
 }
 
 export class VisionElementDiscovery {
@@ -70,6 +72,7 @@ export class VisionElementDiscovery {
         intent,
         screenshotBase64,
         observation,
+        ...(opts.deadlineAt != null ? [{ deadlineAt: opts.deadlineAt }] : []),
       );
     } catch (err) {
       evidence.push(`[vision] LLM threw: ${(err as Error).message}`);

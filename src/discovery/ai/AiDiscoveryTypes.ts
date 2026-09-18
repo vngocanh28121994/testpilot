@@ -92,6 +92,12 @@ export interface VisionLlmProvider {
     intent: ElementIntent,
     screenshotBase64: string,
     observation?: UiObservation,
+    /**
+     * `deadlineAt` là mốc thời gian mà người gọi sẽ ngừng chờ (epoch ms). Một
+     * provider có chuỗi model dự phòng cần biết nó, nếu không sẽ khởi động model
+     * sau ở những giây cuối và trả lời khi không ai còn đọc.
+     */
+    opts?: { deadlineAt?: number },
   ): Promise<VisionDiscoveryResponse>;
 }
 

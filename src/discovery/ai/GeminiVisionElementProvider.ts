@@ -8,8 +8,10 @@ import type {
 } from './AiDiscoveryTypes.js';
 import { iconMeaningMatches } from '../ConfidenceScorer.js';
 import {
+  budgetForNextModel,
   DEFAULT_VISION_MODEL_CHAIN,
   ExhaustedModels,
+  MIN_MODEL_BUDGET_MS,
   shouldTryNextModel,
   visionModelChain,
 } from './geminiModels.js';
@@ -102,6 +104,7 @@ export class GeminiVisionElementProvider implements VisionLlmProvider {
     intent: ElementIntent,
     screenshotBase64: string,
     observation?: UiObservation,
+    opts: { deadlineAt?: number } = {},
   ): Promise<VisionDiscoveryResponse> {
     if (!this.key) throw new Error('Chưa có GEMINI_API_KEY cho runtime vision.');
     if (!observation?.elements.length) {
@@ -111,9 +114,19 @@ export class GeminiVisionElementProvider implements VisionLlmProvider {
     const chain = this.exhausted.usable(this.chain);
     const failures: string[] = [];
     for (const model of chain) {
+      // Còn bao nhiêu thời gian cho lượt gọi này. Chuỗi fallback chỉ có nghĩa
+      // khi model sau còn kịp trả lời: prod ngày 2026-09-18 gọi model dự phòng
+      // ở giây thứ 14 của một ngân sách 15 giây, và câu trả lời về khi resolver
+      // đã bỏ cuộc — trả tiền cho một lượt gọi mà không ai còn đọc.
+      const budgetMs = budgetForNextModel(RUNTIME_TIMEOUT_MS, opts.deadlineAt);
+      if (budgetMs < MIN_MODEL_BUDGET_MS) {
+        failures.push(`${model}: còn ${budgetMs}ms, không đủ để gọi`);
+        break;
+      }
       try {
         return await this.askOneModel(model, intent, screenshotBase64, observation, {
           hasFallback: model !== chain[chain.length - 1],
+          budgetMs,
         });
       } catch (err) {
         const message = (err as Error).message;
@@ -125,7 +138,14 @@ export class GeminiVisionElementProvider implements VisionLlmProvider {
         // giấu mất nguyên nhân thật sau hai lỗi giống nhau.
         if (!shouldTryNextModel(message)) throw err;
         if (model !== chain[chain.length - 1]) {
-          console.warn(`[discovery:vision] ${model} không gọi được — chuyển sang model dự phòng.`);
+          // Nói ra vì sao. Dòng cũ chỉ nói "không gọi được", nên đọc log prod
+          // không phân biệt được hết quota (đợi sang ngày), tên model sai (sửa
+          // cấu hình) hay dịch vụ lỗi (chạy lại là xong) — ba nguyên nhân với
+          // ba cách xử lý khác hẳn nhau.
+          console.warn(
+            `[discovery:vision] ${model} không gọi được (${message.split('\n')[0]!.slice(0, 120)}) `
+            + '— chuyển sang model dự phòng.',
+          );
         }
       }
     }
@@ -140,7 +160,7 @@ export class GeminiVisionElementProvider implements VisionLlmProvider {
     intent: ElementIntent,
     screenshotBase64: string,
     observation: UiObservation,
-    { hasFallback }: { hasFallback: boolean },
+    { hasFallback, budgetMs = RUNTIME_TIMEOUT_MS }: { hasFallback: boolean; budgetMs?: number },
   ): Promise<VisionDiscoveryResponse> {
     const elements = shortlist(observation.elements, intent);
     const endpoint = `${GEMINI_BASE_URL}/models/${encodeURIComponent(model)}:generateContent`;
@@ -176,7 +196,7 @@ export class GeminiVisionElementProvider implements VisionLlmProvider {
             responseJsonSchema: RESPONSE_JSON_SCHEMA,
           },
         }),
-        signal: AbortSignal.timeout(RUNTIME_TIMEOUT_MS),
+        signal: AbortSignal.timeout(budgetMs),
       });
       if (!response.ok) {
         const detail = (await response.text().catch(() => '')).slice(0, 300);
