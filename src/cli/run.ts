@@ -293,13 +293,20 @@ async function main(): Promise<void> {
   const semanticDiscovery = cfg.discovery.ai.enabled && LlmElementProvider.available()
     ? new SemanticElementDiscovery(new LlmElementProvider(), runtimeRegistry)
     : undefined;
-  const visionDiscovery = cfg.discovery.ai.enabled && GeminiVisionElementProvider.available()
+  // Tầng thị giác có công tắc RIÊNG: nó là tầng đắt nhất, và là tầng duy nhất
+  // gửi ảnh màn hình ra ngoài. Tắt nó không đụng gì tới tầng semantic.
+  const visionDiscovery = cfg.discovery.ai.enabled && cfg.discovery.ai.vision
+    && GeminiVisionElementProvider.available()
     ? new VisionElementDiscovery(new GeminiVisionElementProvider(), runtimeRegistry)
     : undefined;
   if (cfg.discovery.ai.enabled && !semanticDiscovery) {
     console.warn('[discovery:ai] đã bật trong config nhưng chưa có API key — bỏ qua tầng AI.');
   }
-  if (cfg.discovery.ai.enabled && !visionDiscovery) {
+  if (cfg.discovery.ai.enabled && !cfg.discovery.ai.vision) {
+    // Nói ra, mỗi lượt chạy một lần. Một tầng bị tắt mà im lặng là thứ khiến
+    // người ta ngồi đọc log tìm xem vì sao "không có ứng viên dùng được".
+    console.log('[discovery:vision] đang TẮT (discovery.ai.vision=false) — chỉ dùng tầng semantic.');
+  } else if (cfg.discovery.ai.enabled && !visionDiscovery) {
     console.warn('[discovery:vision] chưa có GEMINI_API_KEY — bỏ qua tầng vision runtime.');
   }
 
