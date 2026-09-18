@@ -102,6 +102,20 @@ export interface UiDriver {
   /** Inspect all visible matches for count/order/dedup/focus assertions. */
   inspectMatches?(candidate: LocatorCandidate): Promise<UiMatchSnapshot>;
 
+  /**
+   * Whether a click aimed at this element would actually reach it right now.
+   *
+   * Visibility is not the same question: an element can be visible and still
+   * have a dialog sitting over it. The executor asks this *before* a tap so
+   * that an interception error afterwards means something — covered before and
+   * covered after proves nothing, while clickable before and covered after is
+   * a state change only the tap can account for.
+   *
+   * Optional: engines that cannot hit-test leave it undefined, and the executor
+   * then declines to draw the stronger conclusion instead of inventing one.
+   */
+  isHittable?(handle: UiHandle): Promise<boolean>;
+
   tap(handle: UiHandle): Promise<void>;
   /** Optional because native-only engines cannot represent pointer hover. */
   hover?(handle: UiHandle): Promise<void>;

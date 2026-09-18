@@ -29,22 +29,28 @@ const verdict = (() => {
 })();
 
 describe('phán quyết kịch bản với bước chưa chứng minh được', () => {
-  it('ba loại khoảng trống được phân biệt trong kiểu dữ liệu', () => {
-    assert.match(types, /unverifiedKind\?: 'deferred' \| 'no-postcondition' \| 'unchanged'/);
+  it('bốn loại khoảng trống được phân biệt trong kiểu dữ liệu', () => {
+    assert.match(
+      types,
+      /unverifiedKind\?: 'deferred' \| 'no-postcondition' \| 'unchanged' \| 'covered'/,
+    );
   });
 
   /** Cả ba loại đều phải được gán, nếu không thì loại thiếu thành "không rõ". */
   it('mỗi loại được gán đúng một chỗ', () => {
-    for (const kind of ['deferred', 'no-postcondition', 'unchanged']) {
+    for (const kind of ['deferred', 'no-postcondition', 'unchanged', 'covered']) {
       assert.ok(
         executor.includes(`'${kind}'`),
         `không thấy chỗ gán ${kind}`,
       );
     }
     assert.match(executor, /this\.lastUnverifiedKind = 'deferred';/);
+    // `covered` đứng trước hai loại kia: một cú bấm bị lớp phủ chắn mà driver
+    // không hit-test được thì chưa kết luận được, và xếp nó vào `unchanged` là
+    // bắt đỏ một ca không có bằng chứng nào nói nó hỏng.
     assert.match(
       executor,
-      /this\.lastUnverifiedKind = expectation \? 'unchanged' : 'no-postcondition';/,
+      /this\.lastUnverifiedKind = coveredUnmeasured\s*\?\s*'covered'\s*:\s*expectation \? 'unchanged' : 'no-postcondition';/,
     );
   });
 
