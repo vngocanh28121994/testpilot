@@ -10,8 +10,8 @@
  */
 import type { IncomingMessage } from 'node:http';
 import type { ServerMode } from '../http.js';
-import { requiredRole } from './policy.js';
-import { allows, LOCAL_IDENTITY, type Identity } from './roles.js';
+import { PUBLIC_ROUTES, requiredRole } from './policy.js';
+import { allows, ANONYMOUS, LOCAL_IDENTITY, type Identity } from './roles.js';
 import { sessionIdFromCookie, type SessionStore } from './session.js';
 
 export type AuthDecision =
@@ -49,6 +49,11 @@ export async function authorize(
   }
 
   if (deps.mode === 'embedded') return { ok: true, identity: LOCAL_IDENTITY };
+
+  // Đăng nhập không thể đòi đăng nhập trước. Bốn route ấy tự lo phần an toàn
+  // của mình: `state` dùng một lần, `nonce` kiểm trong id_token, và `returnTo`
+  // chỉ nhận đường dẫn nội bộ.
+  if (PUBLIC_ROUTES.has(route)) return { ok: true, identity: ANONYMOUS };
 
   const sessionId = sessionIdFromCookie(req.headers.cookie);
   if (!sessionId || !deps.sessions) {

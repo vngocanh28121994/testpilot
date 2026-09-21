@@ -45,6 +45,20 @@ export interface Identity {
   role: Role;
 }
 
+/**
+ * Người chưa đăng nhập, ở bốn route công khai.
+ *
+ * Vai `viewer` nhưng `orgId` rỗng, và đó là điều quan trọng: mọi truy vấn dữ
+ * liệu đều lọc theo `orgId`, nên một danh tính vô danh lọt nhầm vào đường đọc
+ * dữ liệu sẽ trả về RỖNG, không trả về dữ liệu của tổ chức nào.
+ */
+export const ANONYMOUS: Identity = {
+  userId: '',
+  orgId: '',
+  email: '',
+  role: 'viewer',
+};
+
 export const LOCAL_IDENTITY: Identity = {
   userId: 'local',
   orgId: 'local',

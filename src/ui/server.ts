@@ -25,6 +25,10 @@ import { orphans, runChildren } from '../runner/execute.js';
 import { listen, PORT, serverMode } from '../server/http.js';
 import { mayAdoptIntoEnv } from '../server/auth/secrets.js';
 import { dispatch } from '../server/dispatch.js';
+// Cùng MỘT kho phiên mà route đăng nhập ghi vào. Hai bản riêng sẽ cho ra một
+// hệ thống đăng nhập xong vẫn báo chưa đăng nhập — và đó đúng là thứ đã xảy ra
+// khi `dispatch` được gọi mà quên truyền kho này vào.
+import { sessions } from '../server/auth/state.js';
 
 const CONFIG_PROFILE = await ensurePersonalConfig(personalConfigProfile());
 const CONFIG_FILE = CONFIG_PROFILE.file;
@@ -102,6 +106,7 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
   const url = new URL(req.url ?? '/', `http://localhost:${PORT}`);
   return dispatch(req, res, url, {
     mode: MODE,
+    sessions,
     configFile: CONFIG_FILE,
     configProfile: { owner: CONFIG_PROFILE.owner, source: CONFIG_PROFILE.source },
   });

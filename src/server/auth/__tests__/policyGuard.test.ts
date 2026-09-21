@@ -13,7 +13,7 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import type { IncomingMessage } from 'node:http';
 import { allRoutes } from '../../routes/index.js';
-import { ROUTE_POLICY, requiredRole } from '../policy.js';
+import { PUBLIC_ROUTES, ROUTE_POLICY, requiredRole } from '../policy.js';
 import { ROLES, allows, LOCAL_IDENTITY, type Role } from '../roles.js';
 import { authorize } from '../guard.js';
 import { MemorySessionStore, sessionCookie, sessionIdFromCookie, secretEquals } from '../session.js';
@@ -53,9 +53,51 @@ describe('mọi route đều khai báo quyền', () => {
    * đọc", và cả bảng phân vai mất ý nghĩa.
    */
   it('không route ghi nào chỉ cần viewer', () => {
-    const writes = routes.filter((route) => !route.startsWith('GET '));
+    // Trừ route công khai: chúng không được bảo vệ bằng vai mà bằng cơ chế
+    // riêng (`state` dùng một lần, `nonce`, thu hồi phiên phía server). Đặt vai
+    // cho chúng chỉ là điền vào bảng cho đủ.
+    const writes = routes.filter((route) => !route.startsWith('GET ') && !PUBLIC_ROUTES.has(route));
     const tooOpen = writes.filter((route) => requiredRole(route) === 'viewer');
     assert.deepEqual(tooOpen, [], `route ghi mà chỉ cần viewer: ${tooOpen.join(', ')}`);
+  });
+});
+
+describe('route công khai', () => {
+  /**
+   * Bốn cái, và không thêm nữa: mỗi route ở đây là một phần bề mặt mà người
+   * lạ chạm được. Danh sách dài ra là một quyết định bảo mật, nên nó phải làm
+   * test đỏ để có người đọc lại.
+   */
+  it('đúng bốn route gọi được khi chưa đăng nhập', () => {
+    assert.deepEqual([...PUBLIC_ROUTES].sort(), [
+      'GET /api/auth/callback',
+      'GET /api/auth/login',
+      'GET /api/auth/me',
+      'POST /api/auth/logout',
+    ]);
+  });
+
+  it('route công khai qua được cửa mà không cần phiên', async () => {
+    for (const route of PUBLIC_ROUTES) {
+      const decision = await authorize(reqWith(), route, {
+        mode: 'server',
+        sessions: new MemorySessionStore(),
+      });
+      assert.equal(decision.ok, true, `${route} bị chặn dù là route công khai`);
+      assert.equal(decision.ok && decision.identity.orgId, '', 'danh tính vô danh phải không thuộc tổ chức nào');
+    }
+  });
+
+  /** Mọi route khác vẫn phải đòi phiên — kể cả route đọc. */
+  it('route không công khai vẫn đòi đăng nhập', async () => {
+    const guarded = routes.filter((route) => !PUBLIC_ROUTES.has(route));
+    for (const route of guarded.slice(0, 10)) {
+      const decision = await authorize(reqWith(), route, {
+        mode: 'server',
+        sessions: new MemorySessionStore(),
+      });
+      assert.equal(decision.ok, false, `${route} qua được mà không cần đăng nhập`);
+    }
   });
 });
 

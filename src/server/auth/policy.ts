@@ -18,7 +18,27 @@
  */
 import type { Role } from './roles.js';
 
+/**
+ * Route gọi được khi CHƯA có phiên. Đúng bốn cái, và không thêm nữa.
+ *
+ * Mỗi route ở đây là một phần bề mặt mà người lạ chạm được, nên danh sách này
+ * phải ngắn tới mức đọc hết trong một giây: hai cái để đăng nhập, một cái để
+ * đăng xuất, một cái để giao diện biết nên vẽ màn đăng nhập hay vẽ ứng dụng.
+ */
+export const PUBLIC_ROUTES: ReadonlySet<string> = new Set([
+  'GET /api/auth/login',
+  'GET /api/auth/callback',
+  'POST /api/auth/logout',
+  'GET /api/auth/me',
+]);
+
 export const ROUTE_POLICY: Record<string, Role> = {
+  /* ── Công khai: xem PUBLIC_ROUTES ở trên ─────────────────────────────── */
+  'GET /api/auth/login': 'viewer',
+  'GET /api/auth/callback': 'viewer',
+  'POST /api/auth/logout': 'viewer',
+  'GET /api/auth/me': 'viewer',
+
   /* ── Đọc: ai trong tổ chức cũng xem được ─────────────────────────────── */
   'GET /api/state': 'viewer',
   'GET /api/history': 'viewer',
