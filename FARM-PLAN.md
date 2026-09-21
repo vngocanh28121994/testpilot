@@ -14,8 +14,9 @@ Tài liệu này là **việc phải làm, theo thứ tự, gắn với file th�
    trộn nó với việc thêm hàng đợi.
 4. **Không sửa tầng test.** `runtime/`, `drivers/`, `discovery/`, `healing/`, `genspec/` chỉ được
    sửa khi thật sự buộc phải. Phần giá trị nhất của project không nên bị lôi vào việc này.
-5. **Mỗi task có một bài test là điều kiện hoàn thành.** Repo đang chạy `node --test` với danh sách
-   file liệt kê tay trong `package.json` — test mới phải được thêm vào đó.
+5. **Mỗi task có một bài test là điều kiện hoàn thành.** `npm test` quét bằng glob
+   (`src/**/!(*.integration).test.ts`) từ 2026-09-21, nên thêm file test là đủ — không phải sửa
+   `package.json` nữa.
 
 ---
 
@@ -35,9 +36,20 @@ Tổng phần cốt lõi (P0–P4): khoảng **6–8 tuần** cho một người
 
 ---
 
-# P0 — Chốt hợp đồng và khung (3–5 ngày)
+# P0 — Chốt hợp đồng và khung (3–5 ngày) ✅ XONG 2026-09-21
 
 Không đổi một hành vi nào. Mục tiêu là sau P0, P1 chỉ còn là việc chuyển code.
+
+| Task | Kết quả |
+|---|---|
+| P0.1 | `src/protocol/` — `messages.ts`, `version.ts` |
+| P0.2 | `src/server/db/repo.ts` + `fileRepo.ts`, 10 test parity |
+| P0.2b | `src/core/stores.ts` — 13 store, 7 test |
+| P0.3 | `migrations/0001_init.sql`, `dialect.ts`, `migrate.ts`, 11 test trên SQLite thật |
+| P0.4 | [FARM-ROUTE-MAP.md](FARM-ROUTE-MAP.md) — 52 route |
+
+Nhân tiện trả nợ `scripts.test`: từ 149 đường dẫn chép tay sang glob, và phát hiện 29 file test
+chưa bao giờ được chạy. Số test mỗi lần chạy: 1281 → 1412.
 
 ### P0.1 `src/protocol/` — kiểu dữ liệu dùng chung
 - Tạo `src/protocol/messages.ts`: `RunnerHello`, `DeviceReport`, `Heartbeat`, `JobSpec`, `JobEvent`,
@@ -348,6 +360,7 @@ Cộng thêm một bài kiểm tra tay, ghi lại kết quả:
 | Nhà cung cấp SSO | Google Workspace / Azure AD / tự quản | Google Workspace nếu công ty đang dùng |
 | DB | Postgres tự host / RDS | Postgres trong Docker trước, RDS khi lên production |
 | Object storage | S3 / MinIO | MinIO khi tự host, S3 khi lên cloud |
+| Driver SQLite cho chế độ embedded | `node:sqlite` / `better-sqlite3` | **Chưa chốt.** `node:sqlite` có sẵn trong Node 22 nên không thêm dependency, và migration test đang chạy trên nó — nhưng nó còn là API thử nghiệm (`ExperimentalWarning`) và có thể đổi. Dùng cho test thì được; trước khi chế độ embedded ghi dữ liệu thật của người dùng lên nó thì phải quyết |
 | Queue | BullMQ+Redis / chỉ dùng bảng Postgres | Chỉ Postgres ở P3 (ít thành phần hơn), thêm Redis khi thật cần |
 | Máy lab | Mac mini / Linux + Mac | Linux cho Android và emulator, Mac riêng cho iOS |
 | Nơi bắt đầu | P0 → P1 | Đúng. Không được nhảy vào P3 trước khi tách xong runner |
@@ -356,8 +369,9 @@ Cộng thêm một bài kiểm tra tay, ghi lại kết quả:
 
 ## Nợ kỹ thuật nên trả nhân lúc làm
 
-- `package.json` liệt kê tay hơn 150 file test trong `scripts.test`. Chuyển sang glob
-  (`node --test 'src/**/*.test.ts'`) ngay ở P0, nếu không mỗi task sau lại phải sửa dòng đó.
+- ~~`package.json` liệt kê tay hơn 150 file test.~~ **Xong ở P0 (2026-09-21).** Hoá ra 29 file test
+  trên đĩa chưa bao giờ được chạy: 24 file xanh mà không ai biết còn xanh hay không, 5 file
+  `*.integration.test.ts` cần máy Android thật (giờ có `npm run test:integration` riêng).
 - `registry/*.json` đang nằm trong git và bị UI ghi vào. Sau P2.4 thì bỏ khỏi git, giữ DB làm nguồn
   sự thật và có đường export ra file cho CI.
 - `src/ui/server.ts` 5.200 dòng và `src/ui/contracts.ts` 26KB: P1 sẽ tự giải quyết `server.ts`;
