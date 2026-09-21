@@ -13,7 +13,12 @@ file nào. Kiến trúc: [FARM-ARCHITECTURE.md](FARM-ARCHITECTURE.md) · Kế ho
 | **R** | Runner. Chạm thiết bị hoặc tiến trình cục bộ; **không** được tồn tại trên control plane |
 | **LOCAL** | Chỉ còn ở chế độ `embedded`. Chế độ server phải trả 404 |
 
-Đếm: **CP 33 · JOB 8 · R 10 · LOCAL 1**.
+Đếm: **CP 34 · JOB 8 · R 9 · LOCAL 1**.
+
+> **Sửa ngày 2026-09-21 (P1.2 nhóm 5).** `POST /api/builds/source` từng bị xếp vào **R** vì cái tên
+> nghe như đi đọc thiết bị. Đọc kỹ thì nó chỉ ghi một cờ `useInstalledApp` vào config — thuần
+> control plane. Phân loại sai theo hướng ấy sẽ kéo cả `saveConfig` sang máy người dùng, nên sửa
+> bản đồ thay vì chuyển nhầm route.
 
 ---
 
@@ -93,6 +98,7 @@ file nào. Kiến trúc: [FARM-ARCHITECTURE.md](FARM-ARCHITECTURE.md) · Kế ho
 | Dòng | Route | Ghi chú |
 |---|---|---|
 | 853 | `POST /api/app/upload` | Nhận APK/IPA → **S3**, không ghi đĩa server. Runner tải về khi nhận job |
+| 992 | `POST /api/builds/source` | ✅ đã chuyển sang `routes/builds.ts`. Chỉ ghi cờ `useInstalledApp` vào config |
 | 982 | `GET /api/builds` | Danh mục build trong DB + S3, thay cho việc quét đĩa |
 
 ---
@@ -131,7 +137,6 @@ trên chính máy chạy chúng.
 | 1188 | `GET /api/prereq/ios-names` | `devices` |
 | 1206 | `POST /api/prereq/ios-trust` | job `prereq` — chỉ chủ runner được gọi |
 | 1209 | `POST /api/prereq/driver` | job `prereq`. Hôm nay là `spawn('appium', ['driver','install', …])` ([:4249](src/ui/server.ts)) — phải đi qua sandbox danh sách cho phép |
-| 992 | `POST /api/builds/source` | Đọc build từ thiết bị đang cắm → runner |
 
 ---
 

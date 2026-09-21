@@ -15,12 +15,21 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { describe, it } from 'node:test';
 
-const server = readFileSync('src/ui/server.ts', 'utf8');
-const handler = server.slice(server.indexOf('async function openTunnelTerminal'), server.indexOf('async function iosDeviceNames'));
+/**
+ * Hai file từ P1 (2026-09-21): hàm sang `src/runner/` vì nó `spawn` trên máy
+ * đang chạy, route ở lại phía server. Ràng buộc bên dưới không đổi — chỉ đổi
+ * chỗ đọc.
+ */
+const runner = readFileSync('src/runner/prereq.ts', 'utf8');
+const routes = readFileSync('src/server/routes/prereq.ts', 'utf8');
+const handler = runner.slice(
+  runner.indexOf('export async function openTunnelTerminal'),
+  runner.indexOf('export async function iosDeviceNames'),
+);
 
 describe('mở Terminal để dựng tunnel', () => {
   it('có endpoint riêng, không nằm trong nhóm SSE', () => {
-    assert.match(server, /case 'POST \/api\/prereq\/ios-tunnel':/);
+    assert.match(routes, /'POST \/api\/prereq\/ios-tunnel': async/);
   });
 
   it('chạy qua osascript và chỉ trên macOS', () => {
