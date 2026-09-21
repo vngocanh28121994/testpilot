@@ -9,6 +9,7 @@
 import { actionsRoutes } from './actions.js';
 import { catalogRoutes } from './catalog.js';
 import { configRoutes } from './config.js';
+import { featureRoutes } from './feature.js';
 import { healingRoutes } from './healing.js';
 import { historyRoutes } from './history.js';
 import { studioRoutes } from './studio.js';
@@ -18,6 +19,7 @@ export const allRoutes: RouteTable = mergeTables(
   actionsRoutes,
   catalogRoutes,
   configRoutes,
+  featureRoutes,
   healingRoutes,
   historyRoutes,
   studioRoutes,

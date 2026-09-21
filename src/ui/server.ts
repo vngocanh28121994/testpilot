@@ -107,6 +107,7 @@ import type { RouteContext } from '../server/routes/types.js';
 import { allRoutes } from '../server/routes/index.js';
 import { applyForm } from '../server/routes/studio.js';
 import { configRevision } from '../server/routes/config.js';
+import { featureRevision } from '../server/routes/feature.js';
 import { recentRuns } from '../server/routes/history.js';
 import {
   ActionRegistry,
@@ -207,6 +208,14 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
 
     case 'POST /api/mcp/tools':
       return json(res, 200, await mcpTools(await readJson(req)));
+
+    case 'POST /api/feature/normalize': {
+      const { content } = await readJson<{ content: string }>(req);
+      const cfg = await loadConfig(CONFIG_FILE);
+      const registry = await Registry.load(cfg.paths.registry);
+      const actions = await ActionRegistry.load(cfg.paths.actionsDb);
+      return json(res, 200, await normalizeFeatureDraft(content, registry, actions, pickModel(cfg.llm.model)));
+    }
 
     case 'POST /api/gen': {
       const form = await readJson<StudioForm>(req);
@@ -384,259 +393,6 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
     case 'POST /api/run/stop':
       return json(res, 200, await stopSuite());
 
-    case 'PUT /api/feature': {
-      const { filename, content, create, baseRevision } = await readJson<{
-        filename: string; content: string; create?: boolean; baseRevision?: string;
-      }>(req);
-      const cfg = await loadConfig(CONFIG_FILE);
-      const name = path.basename(filename);
-      if (!/^[\w.-]+\.feature$/.test(name)) return json(res, 400, { error: 'Tên file không hợp lệ' });
-      const file = path.resolve(cfg.paths.features, name);
-      if (!file.startsWith(path.resolve(cfg.paths.features) + path.sep)) return json(res, 403, { error: 'forbidden' });
-      // Saving an edit overwrites by design; creating must not. Without this the
-      // endpoint answers "new file called X" and "replace everything in X" the
-      // same way, and a name collision silently discards someone's scenarios.
-      if (create && existsSync(file)) {
-        return json(res, 409, { error: `features/${name} đã tồn tại.` });
-      }
-      if (!create && baseRevision && existsSync(file)) {
-        const current = await readFile(file, 'utf8');
-        const currentRevision = featureRevision(current);
-        if (currentRevision !== baseRevision) {
-          return json(res, 409, {
-            error:
-              `Kịch bản ${name} đã được workflow hoặc người dùng khác cập nhật. ` +
-              'Nội dung cũ không được ghi đè. Hãy đóng editor và mở lại bản mới nhất.',
-            revision: currentRevision,
-          });
-        }
-      }
-      const normalizedTags = normalizeFeatureTags(content);
-      const registry = await Registry.load(cfg.paths.registry);
-      // Nở action đã duyệt TRƯỚC khi biên dịch, y như đường "Chuẩn hoá".
-      //
-      // Thiếu bước này thì một action đã duyệt chỉ chạy được nếu người dùng
-      // nhớ bấm "Chuẩn hoá" trước: bấm thẳng "Lưu" thì câu macro không nở, bản
-      // nháp biên dịch hỏng, và vòng tự sửa của AI viết lại nó thành câu khác.
-      // Cùng một bản nháp, hai nút, hai kết quả — và không ai biết trước.
-      const expanded = expandApprovedActions(
-        normalizedTags.content,
-        await ActionRegistry.load(cfg.paths.actionsDb),
-      );
-      // Saving from the business editor is a compile operation, not a raw file
-      // write. Resolve natural wording and binding mistakes first so the user
-      // never has to understand the controlled vocabulary or registry ids.
-      const prepared = await prepareExecutableDraft(expanded.content, registry, {
-        model: pickModel(cfg.llm.model),
-        uri: file,
-        maxRepairs: 2,
-      });
-      const savedContent = prepared.content.trimEnd() + '\n';
-      await registry.save();
-      await writeFile(file, savedContent, 'utf8');
-      const revision = featureRevision(savedContent);
-      // Saving is not approval. New or changed content is pending until the
-      // user explicitly accepts that exact hash in Scenario Review.
-      const reviews = await ScenarioReviewStore.load(cfg.paths.scenarioReviewDb);
-      const review = reviews.syncFile(name, savedContent, {
-        defaultStatus: 'pending',
-        source: 'manual',
-      });
-      await reviews.save();
-
-      // Remove pending/rejected scenarios from managed specs immediately. Page
-      // methods already learned remain reusable, but no unapproved test may be
-      // projected into executable generated specs.
-      try {
-        const pom = await syncPomProject({
-          featuresDir: cfg.paths.features,
-          registryPath: cfg.paths.registry,
-          scenarioReviewPath: cfg.paths.scenarioReviewDb,
-        });
-        return json(res, 200, {
-          ok: true,
-          revision,
-          review,
-          pom: pom.changes,
-          ...(pom.warnings ? { pomWarnings: pom.warnings } : {}),
-          content: savedContent,
-          tagsNormalized: normalizedTags.changed,
-          autoRepaired: prepared.repaired,
-        });
-      } catch (err) {
-        return json(res, 200, {
-          ok: true,
-          revision,
-          review,
-          content: savedContent,
-          tagsNormalized: normalizedTags.changed,
-          autoRepaired: prepared.repaired,
-          pomWarning: `Đã lưu feature nhưng chưa đồng bộ POM: ${(err as Error).message}`,
-        });
-      }
-    }
-
-    case 'POST /api/feature/review': {
-      const body = await readJson<{
-        filename: string;
-        scenarioName: string;
-        decision: 'approve' | 'reject';
-      }>(req);
-      if (!body.filename || !body.scenarioName || !['approve', 'reject'].includes(body.decision)) {
-        return json(res, 400, { error: 'Quyết định duyệt kịch bản không hợp lệ.' });
-      }
-      const cfg = await loadConfig(CONFIG_FILE);
-      const name = path.basename(body.filename);
-      if (!/^[\w.-]+\.feature$/.test(name)) return json(res, 400, { error: 'Tên file không hợp lệ' });
-      const file = path.resolve(cfg.paths.features, name);
-      if (!file.startsWith(path.resolve(cfg.paths.features) + path.sep) || !existsSync(file)) {
-        return json(res, 404, { error: 'Không tìm thấy feature file.' });
-      }
-      const content = await readFile(file, 'utf8');
-      const registry = await Registry.load(cfg.paths.registry);
-      // Approval is a stronger gate than saving: the complete file must bind
-      // successfully before any one scenario is allowed into execution.
-      parseFeature(file, content, registry);
-      const reviews = await ScenarioReviewStore.load(cfg.paths.scenarioReviewDb);
-      reviews.syncFile(name, content, { defaultStatus: 'pending', source: 'manual' });
-      const review = reviews.review(name, body.scenarioName, content, body.decision);
-      await reviews.save();
-      try {
-        const pom = await syncPomProject({
-          featuresDir: cfg.paths.features,
-          registryPath: cfg.paths.registry,
-          scenarioReviewPath: cfg.paths.scenarioReviewDb,
-        });
-        return json(res, 200, {
-          ok: true, review, pom: pom.changes,
-          ...(pom.warnings ? { pomWarnings: pom.warnings } : {}),
-        });
-      } catch (err) {
-        // The review decision is already durable and the CLI gate reads it
-        // directly. Surface projection trouble as a warning instead of making
-        // the UI claim that approval itself failed after it was persisted.
-        return json(res, 200, {
-          ok: true,
-          review,
-          pomWarning: `Đã lưu quyết định duyệt nhưng chưa đồng bộ POM: ${(err as Error).message}`,
-        });
-      }
-    }
-
-    /**
-     * Gắn hoặc gỡ nhãn Known issue cho một kịch bản.
-     *
-     * Chỉ con người mới gắn được — không có đường nào cho máy tự gắn, và đó là
-     * chủ ý: một nhãn tự động sẽ biến thành cách để suite tự làm mình xanh.
-     */
-    /**
-     * Gắn hoặc gỡ nhãn Known issue cho một kịch bản.
-     *
-     * Khoá theo `scenarioId`, không theo tên file + tên kịch bản. Lý do rất
-     * thực tế: người ta biết một kịch bản là Known issue SAU KHI đọc report,
-     * mà report chỉ có id — nó không mang theo tên file. Khoá theo id thì cả
-     * bảng Kịch bản lẫn report đều gọi được cùng một endpoint.
-     *
-     * Chỉ con người mới gắn được — không có đường nào cho máy tự gắn, và đó là
-     * chủ ý: một nhãn tự động sẽ biến thành cách để suite tự làm mình xanh.
-     */
-    case 'POST /api/feature/known-issue': {
-      const body = await readJson<{ scenarioId: string; note?: string; remove?: boolean }>(req);
-      if (!body.scenarioId) return json(res, 400, { error: 'Thiếu scenarioId.' });
-
-      const cfg = await loadConfig(CONFIG_FILE);
-      const known = await KnownIssueStore.load(cfg.paths.knownIssuesDb);
-      if (body.remove) {
-        const removed = known.unmark(body.scenarioId);
-        await known.save();
-        return json(res, 200, { ok: true, removed });
-      }
-
-      const note = (body.note ?? '').trim();
-      if (!note) {
-        // Một nhãn không kèm lý do thì năm sau không ai giải thích được vì sao
-        // kịch bản này được miễn.
-        return json(res, 400, { error: 'Hãy ghi lý do vì sao sản phẩm chưa đáp ứng.' });
-      }
-
-      const found = await findScenarioById(cfg, body.scenarioId);
-      if (!found) return json(res, 404, { error: 'Không tìm thấy kịch bản nào mang id đó.' });
-      const issue = known.mark({
-        id: body.scenarioId,
-        filename: found.filename,
-        scenarioName: found.name,
-        contentHash: found.contentHash,
-        note,
-      });
-      await known.save();
-      return json(res, 200, { ok: true, issue });
-    }
-
-    case 'POST /api/feature/review-bulk': {
-      const body = await readJson<{
-        items: Array<{ filename: string; scenarioName: string }>;
-        decision: 'approve' | 'reject';
-      }>(req);
-      if (!Array.isArray(body.items) || body.items.length === 0 || body.items.length > 5_000
-          || !['approve', 'reject'].includes(body.decision)) {
-        return json(res, 400, { error: 'Danh sách kịch bản cần duyệt không hợp lệ.' });
-      }
-
-      const cfg = await loadConfig(CONFIG_FILE);
-      const registry = await Registry.load(cfg.paths.registry);
-      const reviews = await ScenarioReviewStore.load(cfg.paths.scenarioReviewDb);
-      const files = new Map<string, string>();
-      const unique = new Map<string, { filename: string; scenarioName: string }>();
-
-      for (const item of body.items) {
-        const name = path.basename(item.filename ?? '');
-        if (!/^[\w.-]+\.feature$/.test(name) || !item.scenarioName) {
-          return json(res, 400, { error: 'Có kịch bản hoặc feature file không hợp lệ.' });
-        }
-        const file = path.resolve(cfg.paths.features, name);
-        if (!file.startsWith(path.resolve(cfg.paths.features) + path.sep) || !existsSync(file)) {
-          return json(res, 404, { error: `Không tìm thấy feature file ${name}.` });
-        }
-        if (!files.has(name)) {
-          const content = await readFile(file, 'utf8');
-          parseFeature(file, content, registry);
-          files.set(name, content);
-          reviews.syncFile(name, content, { defaultStatus: 'pending', source: 'manual' });
-        }
-        unique.set(`${name}::${item.scenarioName}`, { filename: name, scenarioName: item.scenarioName });
-      }
-
-      const reviewed = [];
-      for (const item of unique.values()) {
-        reviewed.push(reviews.review(
-          item.filename,
-          item.scenarioName,
-          files.get(item.filename)!,
-          body.decision,
-        ));
-      }
-      await reviews.save();
-
-      try {
-        const pom = await syncPomProject({
-          featuresDir: cfg.paths.features,
-          registryPath: cfg.paths.registry,
-          scenarioReviewPath: cfg.paths.scenarioReviewDb,
-        });
-        return json(res, 200, {
-          ok: true, reviewed: reviewed.length, reviews: reviewed, pom: pom.changes,
-          ...(pom.warnings ? { pomWarnings: pom.warnings } : {}),
-        });
-      } catch (err) {
-        return json(res, 200, {
-          ok: true,
-          reviewed: reviewed.length,
-          reviews: reviewed,
-          pomWarning: `Đã duyệt ${reviewed.length} kịch bản nhưng chưa đồng bộ POM: ${(err as Error).message}`,
-        });
-      }
-    }
-
     // The cheat sheet shown beside the scenario editor. Generated from the
     // vocabulary and the action registry so it cannot describe a syntax the
     // runner does not accept.
@@ -717,14 +473,6 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
         size: written.size,
         ...version,
       });
-    }
-
-    case 'POST /api/feature/normalize': {
-      const { content } = await readJson<{ content: string }>(req);
-      const cfg = await loadConfig(CONFIG_FILE);
-      const registry = await Registry.load(cfg.paths.registry);
-      const actions = await ActionRegistry.load(cfg.paths.actionsDb);
-      return json(res, 200, await normalizeFeatureDraft(content, registry, actions, pickModel(cfg.llm.model)));
     }
 
     case 'GET /api/builds':
@@ -965,422 +713,6 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
   json(res, 404, { error: `No route for ${route}` });
 }
 
-/* ------------------------------------------------------------------ */
-/* Handlers                                                            */
-/* ------------------------------------------------------------------ */
-
-async function state(): Promise<StateResponse> {
-  let config: TestPilotConfig;
-  let configError: string | null = null;
-  try {
-    config = await loadConfig(CONFIG_FILE);
-  } catch (err) {
-    configError = (err as Error).message;
-    // An unconfigured install should still render the UI, with defaults filled in.
-    config = ConfigSchema.parse({ web: { baseUrl: 'https://example.com' } });
-  }
-
-  const features = await listFeatures(config);
-  const elements = await countElements(config);
-  const runs = await recentRuns();
-  // A history detail must be able to resolve every report it explicitly
-  // references. The general report list is capped for payload size, but a
-  // burst of newer local runs must not make an older farm detail lose its
-  // screenshots and videos while the files are still on disk.
-  const referencedReportIds = new Set(runs.flatMap((run) => run.runDirs ?? []));
-  const reports = await listReports(config, referencedReportIds);
-  const secrets = await Secrets.load();
-
-  return {
-    config,
-    configError,
-    configRevision: await configRevision(CONFIG_FILE),
-    configProfile: {
-      owner: CONFIG_PROFILE.owner,
-      source: CONFIG_PROFILE.source,
-    },
-    features,
-    elements,
-    reports,
-    runs,
-    // Passwords are never sent to the browser — only the fact that one exists,
-    // so the field can render a "đã lưu" placeholder instead of looking empty.
-    accounts: config.accounts.map((a) => ({ ...a, hasPassword: secrets.has(a.label) })),
-    hasApiKey: llmAvailable(),
-    modelKeys: {
-      deepseek: Boolean(secrets.apiKey('DEEPSEEK_API_KEY') || process.env.DEEPSEEK_API_KEY),
-      gemini: Boolean(
-        secrets.apiKey('GEMINI_API_KEY') ||
-        process.env.GEMINI_API_KEY ||
-        process.env.GOOGLE_API_KEY
-      ),
-      anthropic: Boolean(secrets.apiKey('ANTHROPIC_API_KEY') || process.env.ANTHROPIC_API_KEY),
-    },
-    appBuilds: {
-      android: await describeBuild(config.android.app),
-      ios: await describeBuild(config.ios.app),
-    },
-    // Keyed by udid. Lets the run card warn before a run that the handset is
-    // holding another environment's build, instead of after it fails at login.
-    deviceEnv: (await DeviceEnvLog.load(config.paths.deviceEnvDb)).all(),
-    // The build each environment resolves to, already merged. The run card
-    // reports on the selected environment's package rather than on the base
-    // config's, which is only ever the default environment's.
-    envBuilds: await envBuilds(config),
-    tagTaxonomy: tagTaxonomyView(),
-  };
-}
-
-/** Per environment, whether its android/ios package is actually on disk. */
-async function envBuilds(
-  cfg: TestPilotConfig,
-): Promise<Record<string, { android: Build; ios: Build }>> {
-  const out: Record<string, { android: Build; ios: Build }> = {};
-  for (const [name, override] of Object.entries(cfg.environments)) {
-    const { config: merged } = applyEnv(cfg, name);
-    // `own` separates "this environment has a build" from "this environment
-    // inherited the default one". On disk they look identical — the inherited
-    // file exists and reports its size — but the runner refuses to start on the
-    // second, so the card must not show it as ready.
-    out[name] = {
-      android: withOwn(await describeBuild(merged.android.app), Boolean(override.android?.app)),
-      ios: withOwn(await describeBuild(merged.ios.app), Boolean(override.ios?.app)),
-    };
-  }
-  return out;
-}
-
-/**
- * Whether a configured local build actually exists, and how big it is.
- *
- * Reported from the config rather than from a path the browser sends, so no
- * request can ask this server about an arbitrary file. A missing build is worth
- * saying out loud: Appium fails on it minutes into a run, long after the typo.
- */
-
-
-const withOwn = (build: Build, own: boolean): Build => (build ? { ...build, own } : build);
-
-async function describeBuild(rel: string | undefined): Promise<Build> {
-  if (!rel) return null;
-  try {
-    const info = await stat(path.resolve(rel));
-    return { path: rel, exists: true, sizeMb: Math.round(info.size / 1024 / 1024) };
-  } catch {
-    return { path: rel, exists: false };
-  }
-}
-
-interface FeatureCoverageRecord {
-  version: number;
-  featureFile: string;
-  generatedAt: string;
-  repaired?: boolean;
-  sourceUnits?: number;
-  classifiedSources?: number;
-  requirements: CoverageRequirement[];
-  audit: CoverageAudit;
-  auditedAt?: string;
-}
-
-function featureCoveragePath(cfg: TestPilotConfig, filename: string): string {
-  return path.join(path.dirname(cfg.paths.scenarioReviewDb), 'coverage', `${path.basename(filename)}.json`);
-}
-
-async function readFeatureCoverage(
-  cfg: TestPilotConfig,
-  filename: string,
-): Promise<FeatureCoverageRecord | null> {
-  const file = featureCoveragePath(cfg, filename);
-  if (!existsSync(file)) return null;
-  try {
-    const parsed = JSON.parse(await readFile(file, 'utf8')) as FeatureCoverageRecord;
-    if (!Array.isArray(parsed.requirements) || !parsed.audit?.mappings) return null;
-    return parsed;
-  } catch {
-    return null;
-  }
-}
-
-async function saveFeatureCoverageAudit(
-  cfg: TestPilotConfig,
-  record: FeatureCoverageRecord,
-  audit: CoverageAudit,
-): Promise<void> {
-  const file = featureCoveragePath(cfg, record.featureFile);
-  await mkdir(path.dirname(file), { recursive: true });
-  await writeFile(
-    file,
-    JSON.stringify({ ...record, audit, auditedAt: new Date().toISOString() }, null, 2) + '\n',
-    'utf8',
-  );
-}
-
-function coverageView(record: FeatureCoverageRecord | null) {
-  if (!record) return null;
-  const missingIds = new Set(record.audit.missingRequirementIds);
-  const missing = record.requirements
-    .filter((requirement) => missingIds.has(requirement.id))
-    .map((requirement) => ({
-      id: requirement.id,
-      priority: requirement.priority,
-      rule: requirement.rule,
-      sourceQuote: requirement.sourceQuote,
-    }));
-  return {
-    decision: record.audit.decision,
-    total: record.requirements.length,
-    covered: record.requirements.length - missing.length,
-    missing,
-    auditedAt: record.auditedAt ?? record.generatedAt,
-  };
-}
-
-/**
- * Tìm một kịch bản theo id, trả về kèm tên file và hash nội dung hiện tại.
- *
- * Id là khoá duy nhất đi xuyên toàn hệ thống — report, registry, POM đều dùng
- * nó — nên đây là chỗ duy nhất cần biết id nằm trong file nào.
- */
-async function findScenarioById(
-  cfg: TestPilotConfig,
-  scenarioId: string,
-): Promise<{ filename: string; name: string; contentHash: string } | null> {
-  if (!existsSync(cfg.paths.features)) return null;
-  const files = (await readdir(cfg.paths.features)).filter((f) => f.endsWith('.feature')).sort();
-  const registry = await Registry.load(cfg.paths.registry);
-  for (const filename of files) {
-    const uri = path.join(cfg.paths.features, filename);
-    const content = await readFile(uri, 'utf8');
-    try {
-      const spec = parseFeature(uri, content, registry);
-      const scenario = spec.scenarios.find((item) => item.id === scenarioId);
-      if (!scenario) continue;
-      const block = scenarioBlocks(content).find((b) => b.name === scenario.name);
-      if (!block) return null;
-      return { filename, name: scenario.name, contentHash: block.contentHash };
-    } catch {
-      // File không parse được thì bỏ qua: nó đã hiện lỗi ở chỗ khác rồi.
-    }
-  }
-  return null;
-}
-
-async function listFeatures(cfg: TestPilotConfig) {
-  if (!existsSync(cfg.paths.features)) return [];
-  const files = (await readdir(cfg.paths.features)).filter((f) => f.endsWith('.feature')).sort();
-  const registry = await Registry.load(cfg.paths.registry);
-  const reviews = await ScenarioReviewStore.load(cfg.paths.scenarioReviewDb);
-  const known = await KnownIssueStore.load(cfg.paths.knownIssuesDb);
-  const result = await Promise.all(
-    files.map(async (name) => {
-      const uri = path.join(cfg.paths.features, name);
-      const content = await readFile(uri, 'utf8');
-      const coverage = coverageView(await readFeatureCoverage(cfg, name));
-      try {
-        const spec = parseFeature(uri, content, registry);
-        // One-time backwards-compatible migration: scenarios that predate the
-        // review store stay approved. All subsequent edits change their hash
-        // and therefore become pending.
-        const review = reviews.syncFile(name, content, {
-          defaultStatus: 'approved',
-          source: 'legacy',
-        });
-        const byName = new Map(review.map((item) => [item.scenarioName, item]));
-        // Hash của từng khối, để biết nhãn Known issue còn hiệu lực hay đã cũ.
-        const hashes = new Map(scenarioBlocks(content).map((b) => [b.name, b.contentHash]));
-        return {
-          name,
-          content,
-          revision: featureRevision(content),
-          feature: spec.name,
-          background: spec.background.map((s) => `${s.keyword} ${s.text}`),
-          scenarios: spec.scenarios.map((s) => ({
-            id: s.id,
-            name: s.name,
-            tags: s.tags,
-            platforms: s.platforms,
-            steps: s.steps.length,
-            review: byName.get(s.name) ?? null,
-            // Nhãn chỉ được coi là còn hiệu lực khi nội dung chưa đổi; nếu đã
-            // đổi thì trả về `stale` để màn hình mời người ta xem lại thay vì
-            // lặng lẽ bỏ nhãn.
-            knownIssue: known.active(s.id, hashes.get(s.name) ?? '') ?? null,
-            knownIssueStale: Boolean(known.stale(s.id, hashes.get(s.name) ?? '')),
-          })),
-          coverage,
-          error: null as string | null,
-        };
-      } catch (err) {
-        // Show the file anyway — a binding error is exactly what needs fixing.
-        return {
-          name,
-          content,
-          revision: featureRevision(content),
-          feature: name,
-          scenarios: [],
-          coverage,
-          error: (err as Error).message,
-        };
-      }
-    }),
-  );
-  await reviews.save();
-  return result;
-}
-
-/**
- * Dấu vân của file config lúc này, để phát hiện ghi đè lên một bản đã cũ.
- *
- * Chuyện đã xảy ra và dựng lại được: mở màn Cấu hình → sang màn Bản build tải
- * một bản lên (server ghi vào config ngay) → quay lại bấm Lưu. Màn Cấu hình gửi
- * lại đúng bản nó chụp lúc mở, trong đó chưa có bản build kia, và server ghi đè
- * toàn bộ. HTTP 200, không một lời nào, và `build/sit/app-sit.ipa` nằm lại trên
- * đĩa như một file mồ côi không ai trỏ tới.
- *
- * Đọc thẳng file thay vì hash cấu hình đã parse: mặc định của schema có thể đổi
- * theo phiên bản, còn file thì là thứ hai bên thật sự tranh nhau ghi.
- */
-function featureRevision(content: string): string {
-  return createHash('sha256').update(content).digest('hex');
-}
-
-async function countElements(cfg: TestPilotConfig): Promise<number> {
-  const registry = await Registry.load(cfg.paths.registry);
-  return Object.keys(registry.raw.elements).length;
-}
-
-/**
- * Every run, newest first — not one report per platform.
- *
- * The old version listed `reports/<platform>/index.html`, which could only ever
- * describe the most recent run of each platform because that path is fixed.
- * With hundreds of runs the interesting question is "what happened on the run
- * that failed", so the list is the runs themselves.
- */
-/**
- * Số lượt chạy trả về cho màn hình.
- *
- * Bằng MAX_RUNS của lịch sử workflow, vì cùng một lý do: danh sách này chỉ dài
- * thêm chứ không bao giờ ngắn đi, và nó được gửi lại sau MỖI thao tác trên
- * trang. Ai cần xa hơn thì mở thư mục runs/.
- */
-const MAX_REPORTS = 50;
-
-async function listReports(cfg: TestPilotConfig, referencedIds: ReadonlySet<string> = new Set()) {
-  const runs = await listRuns(cfg.paths.runs);
-  const knownIssues = await KnownIssueStore.load(cfg.paths.knownIssuesDb);
-  const visibleRuns = runs.filter(
-    (run, index) => index < MAX_REPORTS || referencedIds.has(run.id),
-  );
-  return Promise.all(
-    visibleRuns
-      .filter((r) => existsSync(path.join(cfg.paths.runs, r.id, 'index.html')))
-      .map(async (r) => {
-        const runDir = path.join(cfg.paths.runs, r.id);
-
-        // `index.html` is a static snapshot. Without this versioned backfill,
-        // opening two history rows can show two generations of the report UI
-        // even though both are served by the same screen. Never touch an active
-        // run; completed reports are rebuilt once from their immutable JSON.
-        if (r.status !== 'running') {
-          await refreshHtmlReportIfStale(runDir, knownIssues).catch((err) => {
-            console.warn(`[report] không nâng được ${r.id}: ${(err as Error).message}`);
-          });
-        }
-
-        // Chỉ nói CÓ log hay không, không gửi kèm nội dung.
-        //
-        // Log của một lượt chạy farm dài hàng nghìn dòng, và trước đây mọi lượt
-        // chạy đều mang trọn log của mình trong mỗi lần gọi /api/state — tức là
-        // sau mỗi thao tác trên trang, cho một thứ mà người dùng chỉ mở ra xem
-        // khi có chuyện. Nội dung lấy riêng qua /api/run/log khi bung ra.
-        const hasLog = existsSync(path.join(runDir, 'log.txt'));
-
-        const videoDir = path.join(runDir, 'artifacts', 'video');
-        const videoFiles = existsSync(videoDir)
-          ? (await readdir(videoDir)).filter((f) => /\.(mp4|webm)$/i.test(f))
-          : [];
-        const videoUrls = videoFiles.map(
-          (f) => `/${cfg.paths.runs}/${r.id}/artifacts/video/${f}`,
-        );
-        // Every screenshot the run produced, whichever way it was produced.
-        // The rendered report only ever shows the one attached to a failed
-        // step, so a passing run's `take a screenshot` output existed on disk
-        // and appeared nowhere at all.
-        const shotDir = path.join(runDir, 'artifacts');
-        const shotContexts = await reportShotContexts(runDir, knownIssues);
-        const shotUrls = existsSync(shotDir)
-          ? (await readdir(shotDir))
-              .filter((f) => /\.png$/i.test(f))
-              .sort()
-              .map((f) => {
-                const name = f.replace(/\.png$/i, '');
-                const context = shotContexts.get(f);
-                return {
-                  name,
-                  url: `/${cfg.paths.runs}/${r.id}/artifacts/${f}`,
-                  // `tap-declined` is also a failure shot even though its name
-                  // cannot carry the scenario slug.
-                  onFailure: Boolean(context?.error)
-                    || /-a\d+-l\d+-fail$/.test(name)
-                    || name.startsWith('tap-declined-'),
-                  ...(context ?? {}),
-                };
-              })
-          : [];
-
-        // The same two numbers the generated report uses to open a recording at
-        // the moment the test starts and to list where each scenario sits in
-        // it. Sent alongside the urls so the UI's players behave like the
-        // report's instead of dropping the reader at second zero of an install.
-        // Only a whole-job recording has an install phase to skip and several
-        // scenarios to index; a per-scenario clip starts at its own beginning.
-        const wholeVideoUrls = videoUrls.filter(isWholeRunRecording);
-        const [chapters, testSeconds] = wholeVideoUrls.length > 0
-          ? await Promise.all([chaptersOf(runDir), testWindowSeconds(runDir)])
-          : [[], undefined];
-
-        // Served rather than inlined: a busy scenario writes hundreds of lines,
-        // and /api/state is fetched on every refresh by every open tab.
-        const networkLog = path.join(runDir, 'artifacts', 'network.log');
-        const networkLogUrl = existsSync(networkLog)
-          ? `/${cfg.paths.runs}/${r.id}/artifacts/network.log`
-          : null;
-
-        return {
-          id: r.id,
-          networkLogUrl,
-          ...(shotUrls.length > 0 ? { shotUrls } : {}),
-          platform: r.platform,
-          status: r.status,
-          kind: r.kind,
-          startedAt: r.startedAt,
-          ...(r.finishedAt ? { finishedAt: r.finishedAt } : {}),
-          ...(r.device ? { device: r.device } : {}),
-          ...(r.tag ? { tag: r.tag } : {}),
-          ...(r.counters ? { counters: r.counters } : {}),
-          url: `/${[cfg.paths.runs, r.id, 'index.html'].join('/')}`,
-          hasLog,
-          ...(videoUrls.length > 0 ? { videoUrls } : {}),
-          ...(wholeVideoUrls.length > 0 ? { wholeVideoUrls } : {}),
-          ...(chapters.length > 0 ? { chapters } : {}),
-          ...(testSeconds !== undefined ? { testSeconds } : {}),
-        };
-      }),
-  );
-}
-
-async function mcpTools(cfg: unknown) {
-  const bridge = await McpBridge.connect(cfg as Parameters<typeof McpBridge.connect>[0]);
-  try {
-    const tools = await bridge.listTools();
-    return { tools, guess: guessToolNames(tools) };
-  } finally {
-    await bridge.close().catch(() => {});
-  }
-}
-
 /**
  * Worked examples for the normalizer prompt.
  *
@@ -1490,14 +822,6 @@ const NORMALIZE_EXAMPLES: Array<{
     },
   },
 ];
-
-/**
- * Kết quả chuẩn hoá, đúng hình dạng mà trình duyệt nhận.
- *
- * Lấy thẳng từ contracts thay vì khai lại: hai bản khai song song là cách một
- * field bị đổi ở đây mà giao diện vẫn tưởng nó còn nguyên.
- */
-type DraftNormalization = FeatureNormalizeResponse & { scenarioPlan: ScenarioPlan }
 
 /**
  * Converts editor-friendly wording into the small executable language. The
@@ -1699,6 +1023,384 @@ async function normalizeFeatureDraft(
     scenarioPlan,
   };
 }
+
+/* ------------------------------------------------------------------ */
+/* Handlers                                                            */
+/* ------------------------------------------------------------------ */
+
+async function state(): Promise<StateResponse> {
+  let config: TestPilotConfig;
+  let configError: string | null = null;
+  try {
+    config = await loadConfig(CONFIG_FILE);
+  } catch (err) {
+    configError = (err as Error).message;
+    // An unconfigured install should still render the UI, with defaults filled in.
+    config = ConfigSchema.parse({ web: { baseUrl: 'https://example.com' } });
+  }
+
+  const features = await listFeatures(config);
+  const elements = await countElements(config);
+  const runs = await recentRuns();
+  // A history detail must be able to resolve every report it explicitly
+  // references. The general report list is capped for payload size, but a
+  // burst of newer local runs must not make an older farm detail lose its
+  // screenshots and videos while the files are still on disk.
+  const referencedReportIds = new Set(runs.flatMap((run) => run.runDirs ?? []));
+  const reports = await listReports(config, referencedReportIds);
+  const secrets = await Secrets.load();
+
+  return {
+    config,
+    configError,
+    configRevision: await configRevision(CONFIG_FILE),
+    configProfile: {
+      owner: CONFIG_PROFILE.owner,
+      source: CONFIG_PROFILE.source,
+    },
+    features,
+    elements,
+    reports,
+    runs,
+    // Passwords are never sent to the browser — only the fact that one exists,
+    // so the field can render a "đã lưu" placeholder instead of looking empty.
+    accounts: config.accounts.map((a) => ({ ...a, hasPassword: secrets.has(a.label) })),
+    hasApiKey: llmAvailable(),
+    modelKeys: {
+      deepseek: Boolean(secrets.apiKey('DEEPSEEK_API_KEY') || process.env.DEEPSEEK_API_KEY),
+      gemini: Boolean(
+        secrets.apiKey('GEMINI_API_KEY') ||
+        process.env.GEMINI_API_KEY ||
+        process.env.GOOGLE_API_KEY
+      ),
+      anthropic: Boolean(secrets.apiKey('ANTHROPIC_API_KEY') || process.env.ANTHROPIC_API_KEY),
+    },
+    appBuilds: {
+      android: await describeBuild(config.android.app),
+      ios: await describeBuild(config.ios.app),
+    },
+    // Keyed by udid. Lets the run card warn before a run that the handset is
+    // holding another environment's build, instead of after it fails at login.
+    deviceEnv: (await DeviceEnvLog.load(config.paths.deviceEnvDb)).all(),
+    // The build each environment resolves to, already merged. The run card
+    // reports on the selected environment's package rather than on the base
+    // config's, which is only ever the default environment's.
+    envBuilds: await envBuilds(config),
+    tagTaxonomy: tagTaxonomyView(),
+  };
+}
+
+/** Per environment, whether its android/ios package is actually on disk. */
+async function envBuilds(
+  cfg: TestPilotConfig,
+): Promise<Record<string, { android: Build; ios: Build }>> {
+  const out: Record<string, { android: Build; ios: Build }> = {};
+  for (const [name, override] of Object.entries(cfg.environments)) {
+    const { config: merged } = applyEnv(cfg, name);
+    // `own` separates "this environment has a build" from "this environment
+    // inherited the default one". On disk they look identical — the inherited
+    // file exists and reports its size — but the runner refuses to start on the
+    // second, so the card must not show it as ready.
+    out[name] = {
+      android: withOwn(await describeBuild(merged.android.app), Boolean(override.android?.app)),
+      ios: withOwn(await describeBuild(merged.ios.app), Boolean(override.ios?.app)),
+    };
+  }
+  return out;
+}
+
+/**
+ * Whether a configured local build actually exists, and how big it is.
+ *
+ * Reported from the config rather than from a path the browser sends, so no
+ * request can ask this server about an arbitrary file. A missing build is worth
+ * saying out loud: Appium fails on it minutes into a run, long after the typo.
+ */
+
+
+const withOwn = (build: Build, own: boolean): Build => (build ? { ...build, own } : build);
+
+async function describeBuild(rel: string | undefined): Promise<Build> {
+  if (!rel) return null;
+  try {
+    const info = await stat(path.resolve(rel));
+    return { path: rel, exists: true, sizeMb: Math.round(info.size / 1024 / 1024) };
+  } catch {
+    return { path: rel, exists: false };
+  }
+}
+
+interface FeatureCoverageRecord {
+  version: number;
+  featureFile: string;
+  generatedAt: string;
+  repaired?: boolean;
+  sourceUnits?: number;
+  classifiedSources?: number;
+  requirements: CoverageRequirement[];
+  audit: CoverageAudit;
+  auditedAt?: string;
+}
+
+function featureCoveragePath(cfg: TestPilotConfig, filename: string): string {
+  return path.join(path.dirname(cfg.paths.scenarioReviewDb), 'coverage', `${path.basename(filename)}.json`);
+}
+
+async function readFeatureCoverage(
+  cfg: TestPilotConfig,
+  filename: string,
+): Promise<FeatureCoverageRecord | null> {
+  const file = featureCoveragePath(cfg, filename);
+  if (!existsSync(file)) return null;
+  try {
+    const parsed = JSON.parse(await readFile(file, 'utf8')) as FeatureCoverageRecord;
+    if (!Array.isArray(parsed.requirements) || !parsed.audit?.mappings) return null;
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+async function saveFeatureCoverageAudit(
+  cfg: TestPilotConfig,
+  record: FeatureCoverageRecord,
+  audit: CoverageAudit,
+): Promise<void> {
+  const file = featureCoveragePath(cfg, record.featureFile);
+  await mkdir(path.dirname(file), { recursive: true });
+  await writeFile(
+    file,
+    JSON.stringify({ ...record, audit, auditedAt: new Date().toISOString() }, null, 2) + '\n',
+    'utf8',
+  );
+}
+
+function coverageView(record: FeatureCoverageRecord | null) {
+  if (!record) return null;
+  const missingIds = new Set(record.audit.missingRequirementIds);
+  const missing = record.requirements
+    .filter((requirement) => missingIds.has(requirement.id))
+    .map((requirement) => ({
+      id: requirement.id,
+      priority: requirement.priority,
+      rule: requirement.rule,
+      sourceQuote: requirement.sourceQuote,
+    }));
+  return {
+    decision: record.audit.decision,
+    total: record.requirements.length,
+    covered: record.requirements.length - missing.length,
+    missing,
+    auditedAt: record.auditedAt ?? record.generatedAt,
+  };
+}
+
+async function listFeatures(cfg: TestPilotConfig) {
+  if (!existsSync(cfg.paths.features)) return [];
+  const files = (await readdir(cfg.paths.features)).filter((f) => f.endsWith('.feature')).sort();
+  const registry = await Registry.load(cfg.paths.registry);
+  const reviews = await ScenarioReviewStore.load(cfg.paths.scenarioReviewDb);
+  const known = await KnownIssueStore.load(cfg.paths.knownIssuesDb);
+  const result = await Promise.all(
+    files.map(async (name) => {
+      const uri = path.join(cfg.paths.features, name);
+      const content = await readFile(uri, 'utf8');
+      const coverage = coverageView(await readFeatureCoverage(cfg, name));
+      try {
+        const spec = parseFeature(uri, content, registry);
+        // One-time backwards-compatible migration: scenarios that predate the
+        // review store stay approved. All subsequent edits change their hash
+        // and therefore become pending.
+        const review = reviews.syncFile(name, content, {
+          defaultStatus: 'approved',
+          source: 'legacy',
+        });
+        const byName = new Map(review.map((item) => [item.scenarioName, item]));
+        // Hash của từng khối, để biết nhãn Known issue còn hiệu lực hay đã cũ.
+        const hashes = new Map(scenarioBlocks(content).map((b) => [b.name, b.contentHash]));
+        return {
+          name,
+          content,
+          revision: featureRevision(content),
+          feature: spec.name,
+          background: spec.background.map((s) => `${s.keyword} ${s.text}`),
+          scenarios: spec.scenarios.map((s) => ({
+            id: s.id,
+            name: s.name,
+            tags: s.tags,
+            platforms: s.platforms,
+            steps: s.steps.length,
+            review: byName.get(s.name) ?? null,
+            // Nhãn chỉ được coi là còn hiệu lực khi nội dung chưa đổi; nếu đã
+            // đổi thì trả về `stale` để màn hình mời người ta xem lại thay vì
+            // lặng lẽ bỏ nhãn.
+            knownIssue: known.active(s.id, hashes.get(s.name) ?? '') ?? null,
+            knownIssueStale: Boolean(known.stale(s.id, hashes.get(s.name) ?? '')),
+          })),
+          coverage,
+          error: null as string | null,
+        };
+      } catch (err) {
+        // Show the file anyway — a binding error is exactly what needs fixing.
+        return {
+          name,
+          content,
+          revision: featureRevision(content),
+          feature: name,
+          scenarios: [],
+          coverage,
+          error: (err as Error).message,
+        };
+      }
+    }),
+  );
+  await reviews.save();
+  return result;
+}
+
+async function countElements(cfg: TestPilotConfig): Promise<number> {
+  const registry = await Registry.load(cfg.paths.registry);
+  return Object.keys(registry.raw.elements).length;
+}
+
+/**
+ * Every run, newest first — not one report per platform.
+ *
+ * The old version listed `reports/<platform>/index.html`, which could only ever
+ * describe the most recent run of each platform because that path is fixed.
+ * With hundreds of runs the interesting question is "what happened on the run
+ * that failed", so the list is the runs themselves.
+ */
+/**
+ * Số lượt chạy trả về cho màn hình.
+ *
+ * Bằng MAX_RUNS của lịch sử workflow, vì cùng một lý do: danh sách này chỉ dài
+ * thêm chứ không bao giờ ngắn đi, và nó được gửi lại sau MỖI thao tác trên
+ * trang. Ai cần xa hơn thì mở thư mục runs/.
+ */
+const MAX_REPORTS = 50;
+
+async function listReports(cfg: TestPilotConfig, referencedIds: ReadonlySet<string> = new Set()) {
+  const runs = await listRuns(cfg.paths.runs);
+  const knownIssues = await KnownIssueStore.load(cfg.paths.knownIssuesDb);
+  const visibleRuns = runs.filter(
+    (run, index) => index < MAX_REPORTS || referencedIds.has(run.id),
+  );
+  return Promise.all(
+    visibleRuns
+      .filter((r) => existsSync(path.join(cfg.paths.runs, r.id, 'index.html')))
+      .map(async (r) => {
+        const runDir = path.join(cfg.paths.runs, r.id);
+
+        // `index.html` is a static snapshot. Without this versioned backfill,
+        // opening two history rows can show two generations of the report UI
+        // even though both are served by the same screen. Never touch an active
+        // run; completed reports are rebuilt once from their immutable JSON.
+        if (r.status !== 'running') {
+          await refreshHtmlReportIfStale(runDir, knownIssues).catch((err) => {
+            console.warn(`[report] không nâng được ${r.id}: ${(err as Error).message}`);
+          });
+        }
+
+        // Chỉ nói CÓ log hay không, không gửi kèm nội dung.
+        //
+        // Log của một lượt chạy farm dài hàng nghìn dòng, và trước đây mọi lượt
+        // chạy đều mang trọn log của mình trong mỗi lần gọi /api/state — tức là
+        // sau mỗi thao tác trên trang, cho một thứ mà người dùng chỉ mở ra xem
+        // khi có chuyện. Nội dung lấy riêng qua /api/run/log khi bung ra.
+        const hasLog = existsSync(path.join(runDir, 'log.txt'));
+
+        const videoDir = path.join(runDir, 'artifacts', 'video');
+        const videoFiles = existsSync(videoDir)
+          ? (await readdir(videoDir)).filter((f) => /\.(mp4|webm)$/i.test(f))
+          : [];
+        const videoUrls = videoFiles.map(
+          (f) => `/${cfg.paths.runs}/${r.id}/artifacts/video/${f}`,
+        );
+        // Every screenshot the run produced, whichever way it was produced.
+        // The rendered report only ever shows the one attached to a failed
+        // step, so a passing run's `take a screenshot` output existed on disk
+        // and appeared nowhere at all.
+        const shotDir = path.join(runDir, 'artifacts');
+        const shotContexts = await reportShotContexts(runDir, knownIssues);
+        const shotUrls = existsSync(shotDir)
+          ? (await readdir(shotDir))
+              .filter((f) => /\.png$/i.test(f))
+              .sort()
+              .map((f) => {
+                const name = f.replace(/\.png$/i, '');
+                const context = shotContexts.get(f);
+                return {
+                  name,
+                  url: `/${cfg.paths.runs}/${r.id}/artifacts/${f}`,
+                  // `tap-declined` is also a failure shot even though its name
+                  // cannot carry the scenario slug.
+                  onFailure: Boolean(context?.error)
+                    || /-a\d+-l\d+-fail$/.test(name)
+                    || name.startsWith('tap-declined-'),
+                  ...(context ?? {}),
+                };
+              })
+          : [];
+
+        // The same two numbers the generated report uses to open a recording at
+        // the moment the test starts and to list where each scenario sits in
+        // it. Sent alongside the urls so the UI's players behave like the
+        // report's instead of dropping the reader at second zero of an install.
+        // Only a whole-job recording has an install phase to skip and several
+        // scenarios to index; a per-scenario clip starts at its own beginning.
+        const wholeVideoUrls = videoUrls.filter(isWholeRunRecording);
+        const [chapters, testSeconds] = wholeVideoUrls.length > 0
+          ? await Promise.all([chaptersOf(runDir), testWindowSeconds(runDir)])
+          : [[], undefined];
+
+        // Served rather than inlined: a busy scenario writes hundreds of lines,
+        // and /api/state is fetched on every refresh by every open tab.
+        const networkLog = path.join(runDir, 'artifacts', 'network.log');
+        const networkLogUrl = existsSync(networkLog)
+          ? `/${cfg.paths.runs}/${r.id}/artifacts/network.log`
+          : null;
+
+        return {
+          id: r.id,
+          networkLogUrl,
+          ...(shotUrls.length > 0 ? { shotUrls } : {}),
+          platform: r.platform,
+          status: r.status,
+          kind: r.kind,
+          startedAt: r.startedAt,
+          ...(r.finishedAt ? { finishedAt: r.finishedAt } : {}),
+          ...(r.device ? { device: r.device } : {}),
+          ...(r.tag ? { tag: r.tag } : {}),
+          ...(r.counters ? { counters: r.counters } : {}),
+          url: `/${[cfg.paths.runs, r.id, 'index.html'].join('/')}`,
+          hasLog,
+          ...(videoUrls.length > 0 ? { videoUrls } : {}),
+          ...(wholeVideoUrls.length > 0 ? { wholeVideoUrls } : {}),
+          ...(chapters.length > 0 ? { chapters } : {}),
+          ...(testSeconds !== undefined ? { testSeconds } : {}),
+        };
+      }),
+  );
+}
+
+async function mcpTools(cfg: unknown) {
+  const bridge = await McpBridge.connect(cfg as Parameters<typeof McpBridge.connect>[0]);
+  try {
+    const tools = await bridge.listTools();
+    return { tools, guess: guessToolNames(tools) };
+  } finally {
+    await bridge.close().catch(() => {});
+  }
+}
+
+/**
+ * Kết quả chuẩn hoá, đúng hình dạng mà trình duyệt nhận.
+ *
+ * Lấy thẳng từ contracts thay vì khai lại: hai bản khai song song là cách một
+ * field bị đổi ở đây mà giao diện vẫn tưởng nó còn nguyên.
+ */
+type DraftNormalization = FeatureNormalizeResponse & { scenarioPlan: ScenarioPlan }
 
 function collapseDuplicateFocusRegions(content: string): string {
   const output: string[] = [];
