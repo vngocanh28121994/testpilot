@@ -1,4 +1,4 @@
-import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
+import type { IncomingMessage, ServerResponse } from 'node:http';
 import { OrphanTracker } from '../core/orphans.js';
 import { activeRuns, beginActiveRun, endActiveRun, findActiveRun } from './activeRuns.js';
 import { closeInterruptedRuns, reindex } from '../core/runstore.js';
@@ -14,7 +14,6 @@ import { mkdir, readdir, readFile, rename, rm, stat, writeFile } from 'node:fs/p
 import path from 'node:path';
 import { Transform } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
-import { fileURLToPath } from 'node:url';
 import { createHash } from 'node:crypto';
 import { completeJson, listModels, llmAvailable, missingKeyHint, pickModel } from '../llm/client.js';
 import { ConfigSchema, applyEnv, devicesOf, loadConfig, resolveModel, saveConfig, type TestPilotConfig } from '../config.js';
@@ -97,6 +96,14 @@ import { HealingStore } from '../healing/HealingStore.js';
 import { assessLocatorQuality } from '../core/locatorQuality.js';
 import { ensurePersonalConfig, personalConfigProfile } from '../core/personalConfig.js';
 import {
+  json,
+  listen,
+  PORT,
+  readJson,
+  serveStaticRequest,
+  stream,
+} from '../server/http.js';
+import {
   ActionRegistry,
   validateExecutableAction,
   type LearnedActionDef,
@@ -110,18 +117,7 @@ import {
  * rather than a second source of truth.
  */
 
-/** Vite bundle duy nhất sau cutover. `/api` và artifact paths vẫn do server này sở hữu. */
-const PUBLIC_DIR = path.resolve(
-  path.dirname(fileURLToPath(import.meta.url)),
-  '..',
-  '..',
-  'dist',
-  'ui',
-  'app',
-);
 const execFileAsync = promisify(execFile);
-
-const PORT = Number(process.env.TESTPILOT_UI_PORT ?? 4300);
 const CONFIG_PROFILE = await ensurePersonalConfig(personalConfigProfile());
 const CONFIG_FILE = CONFIG_PROFILE.file;
 // Every CLI child spawned by the UI must read the same user's profile.
@@ -143,19 +139,6 @@ const FALLBACK_MODELS = [
   { id: 'claude-opus-4-8', display_name: 'Claude Opus 4.8' },
   { id: 'claude-haiku-4-5', display_name: 'Claude Haiku 4.5' },
 ];
-
-const MIME: Record<string, string> = {
-  '.html': 'text/html; charset=utf-8',
-  '.js': 'text/javascript; charset=utf-8',
-  '.css': 'text/css; charset=utf-8',
-  '.json': 'application/json; charset=utf-8',
-  '.png': 'image/png',
-  '.jpg': 'image/jpeg',
-  // Without the right type the browser downloads the recording instead of
-  // playing it inline, which defeats the point of embedding it.
-  '.webm': 'video/webm',
-  '.mp4': 'video/mp4',
-};
 
 await adoptStoredApiKeys();
 
@@ -211,14 +194,7 @@ for (const signal of ['SIGINT', 'SIGTERM'] as const) {
   });
 }
 
-createServer((req, res) => {
-  handle(req, res).catch((err: Error) => {
-    if (!res.headersSent) json(res, 500, { error: err.message });
-    else res.end();
-  });
-}).listen(PORT, () => {
-  console.log(`TestPilot UI  →  http://localhost:${PORT}`);
-});
+listen(handle);
 
 async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> {
   const url = new URL(req.url ?? '/', `http://localhost:${PORT}`);
@@ -1212,33 +1188,8 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
     }
   }
 
-  // A run directory holds its own screenshots and videos, so serving `runs`
-  // is enough for a current report. `reports` and `artifacts` stay reachable
-  // for runs recorded under the old per-platform layout.
-  for (const dir of ['runs', 'reports', 'artifacts'] as const) {
-    if (req.method === 'GET' && url.pathname.startsWith(`/${dir}/`)) {
-      const root = path.resolve(dir);
-      const file = path.resolve(root, url.pathname.replace(new RegExp(`^/${dir}/+`), ''));
-      if (!file.startsWith(root + path.sep)) return json(res, 403, { error: 'forbidden' });
-      return serveFile(res, file, req.headers.range);
-    }
-  }
+  if (await serveStaticRequest(req, res, url)) return;
 
-  if (req.method === 'GET') {
-    if (!existsSync(PUBLIC_DIR)) {
-      return json(res, 503, { error: 'Chưa build UI. Chạy `npm run ui:build`.' });
-    }
-    const rel = url.pathname.replace(/^\/+/, '');
-    const file = path.resolve(PUBLIC_DIR, rel || 'index.html');
-    if (file !== PUBLIC_DIR && !file.startsWith(PUBLIC_DIR + path.sep)) {
-      return json(res, 403, { error: 'forbidden' });
-    }
-    if (rel && existsSync(file) && statSync(file).isFile()) return serveFile(res, file, req.headers.range);
-    // SPA fallback cho route React. Asset thiếu vẫn trả 404 JSON để browser
-    // không cố parse index.html thành JavaScript.
-    if (path.extname(rel)) return json(res, 404, { error: `Not found: ${rel}` });
-    return serveFile(res, path.join(PUBLIC_DIR, 'index.html'));
-  }
   json(res, 404, { error: `No route for ${route}` });
 }
 
@@ -3474,90 +3425,6 @@ async function stopSuite(): Promise<{ stopped: boolean; wda: boolean }> {
  * Two channels: `log` for console lines, `run` for the stage tracker that draws
  * the progress list and the "3/7" cell.
  */
-async function stream(
-  res: ServerResponse,
-  job: (log: (l: string) => void, stage: (run: WorkflowRun) => void) => Promise<void>,
-  onError?: (err: unknown) => Promise<WorkflowRun | undefined>,
-) {
-  res.writeHead(200, {
-    'content-type': 'text/event-stream; charset=utf-8',
-    'cache-control': 'no-cache',
-    connection: 'keep-alive',
-  });
-  const send = (event: string, data: unknown) =>
-    res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
-
-  try {
-    await job(
-      (line) => send('log', line),
-      // The log array would double every frame; the client already has the lines.
-      (run) => send('run', { ...run, log: undefined, stagesDone: stagesDone(run) }),
-    );
-    send('done', { ok: true });
-  } catch (err) {
-    try {
-      const failedRun = await onError?.(err);
-      if (failedRun) {
-        send('run', { ...failedRun, log: undefined, stagesDone: stagesDone(failedRun) });
-      }
-    } catch {
-      // Keep the original failure visible even when persisting its history fails.
-    }
-    send('error', (err as Error).message);
-    send('done', { ok: false });
-  }
-  res.end();
-}
-
-/**
- * Serves a file, honouring HTTP Range.
- *
- * Range is what makes a video seekable. Without it the browser gets one opaque
- * 200 and the scrubber does nothing — which is how a two-minute recording of a
- * test run became something you had to watch from the beginning, every time,
- * including the ten seconds of Appium starting up.
- */
-async function serveFile(res: ServerResponse, file: string, range?: string): Promise<void> {
-  if (!existsSync(file)) return json(res, 404, { error: `Not found: ${file}` });
-  const body = await readFile(file);
-  const headers: Record<string, string> = {
-    'content-type': MIME[path.extname(file)] ?? 'application/octet-stream',
-    'accept-ranges': 'bytes',
-    // Vite hash tên asset. Cache dài cho asset là an toàn; index.html luôn
-    // no-store để lần mở sau nhận được manifest asset mới nhất.
-    'cache-control': path.basename(file) === 'index.html'
-      ? 'no-store'
-      : file.includes(`${path.sep}assets${path.sep}`)
-        ? 'public, max-age=31536000, immutable'
-        : 'no-store',
-  };
-
-  const match = /^bytes=(\d*)-(\d*)$/.exec(range ?? '');
-  if (match) {
-    const [, rawStart, rawEnd] = match;
-    const start = rawStart ? Number(rawStart) : undefined;
-    const end = rawEnd ? Number(rawEnd) : undefined;
-    // `bytes=-500` means the last 500 bytes, not "from 0 to 500".
-    const from = start !== undefined ? start : Math.max(0, body.length - (end ?? 0));
-    const to = start !== undefined ? Math.min(end ?? body.length - 1, body.length - 1) : body.length - 1;
-    if (from > to || from >= body.length) {
-      res.writeHead(416, { 'content-range': `bytes */${body.length}` });
-      res.end();
-      return;
-    }
-    const slice = body.subarray(from, to + 1);
-    res.writeHead(206, {
-      ...headers,
-      'content-range': `bytes ${from}-${to}/${body.length}`,
-      'content-length': String(slice.length),
-    });
-    res.end(slice);
-    return;
-  }
-
-  res.writeHead(200, { ...headers, 'content-length': String(body.length) });
-  res.end(body);
-}
 
 /* ------------------------------------------------------------------ */
 /* Prereq helpers                                                      */
@@ -4274,15 +4141,3 @@ async function prereqInstallDriver(driver: string, log: (l: string) => void): Pr
   });
 }
 
-function json(res: ServerResponse, status: number, body: unknown): void {
-  const payload = JSON.stringify(body);
-  res.writeHead(status, { 'content-type': 'application/json; charset=utf-8' });
-  res.end(payload);
-}
-
-async function readJson<T>(req: IncomingMessage): Promise<T> {
-  const chunks: Buffer[] = [];
-  for await (const c of req) chunks.push(c as Buffer);
-  const raw = Buffer.concat(chunks).toString('utf8');
-  return (raw ? JSON.parse(raw) : {}) as T;
-}
