@@ -15,6 +15,7 @@ import { readFileSync } from 'node:fs';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { dispatch } from '../dispatch.js';
 import { MemorySessionStore } from '../auth/session.js';
+import { fileRepos } from '../db/fileRepo.js';
 
 const bootstrap = readFileSync('src/ui/server.ts', 'utf8');
 
@@ -30,6 +31,7 @@ function fakeRes(): { res: ServerResponse; out: { status?: number; body: string 
 const ctx = {
   configFile: 'testpilot.config.json',
   configProfile: { owner: 'test', source: 'personal' as const },
+  repos: () => fileRepos({ registry: 'registry/elements.json', runs: 'runs' }),
 };
 
 describe('dispatch nối đúng kho phiên', () => {

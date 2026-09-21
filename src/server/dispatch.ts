@@ -10,12 +10,23 @@ import type { IncomingMessage, ServerResponse } from 'node:http';
 import { json, serveStaticRequest, type ServerMode } from './http.js';
 import { authorize, type GuardDeps } from './auth/guard.js';
 import { allRoutes } from './routes/index.js';
+import type { Repos } from './db/repo.js';
+import type { Identity } from './auth/roles.js';
 import type { RouteContext } from './routes/types.js';
 
 export interface DispatchDeps extends GuardDeps {
   mode: ServerMode;
   configFile: string;
   configProfile: RouteContext['configProfile'];
+  /**
+   * Chọn kho dữ liệu cho người gọi này.
+   *
+   * Nhận `Identity` chứ không phải không nhận gì: ở chế độ server, kho phải bị
+   * giới hạn theo `orgId` NGAY TỪ LÚC DỰNG, chứ không phải nhờ mỗi truy vấn
+   * nhớ thêm điều kiện. Một truy vấn quên `WHERE org_id` thì không ai thấy, và
+   * thứ nó trả về là dữ liệu của người khác.
+   */
+  repos: (identity: Identity) => Repos | Promise<Repos>;
 }
 
 export async function dispatch(
@@ -34,6 +45,7 @@ export async function dispatch(
       configFile: deps.configFile,
       configProfile: deps.configProfile,
       identity: decision.identity,
+      repos: await deps.repos(decision.identity),
     };
     return handler(req, res, url, ctx);
   }

@@ -13,6 +13,7 @@
  */
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import type { Identity } from '../auth/roles.js';
+import type { Repos } from '../db/repo.js';
 
 /**
  * Thứ một handler cần mà nó không tự dựng được.
@@ -39,6 +40,15 @@ export interface RouteContext {
    * `updated_by` và audit log). Ở chế độ embedded đây là `LOCAL_IDENTITY`.
    */
   identity: Identity;
+  /**
+   * Kho dữ liệu dùng chung, đã chọn sẵn theo chế độ và theo tổ chức.
+   *
+   * Handler không tự dựng lấy, và đó là điểm chính: ở chế độ embedded đây là
+   * các file JSON, ở chế độ server là Postgres của ĐÚNG tổ chức người gọi. Một
+   * handler tự `Registry.load()` sẽ đọc file trên đĩa server kể cả khi đang
+   * phục vụ một tổ chức khác — và nó sẽ chạy, chỉ là trả nhầm dữ liệu.
+   */
+  repos: Repos;
 }
 
 export type RouteHandler = (

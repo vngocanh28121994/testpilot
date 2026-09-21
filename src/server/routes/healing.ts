@@ -14,14 +14,17 @@ import { HealingStore } from '../../healing/HealingStore.js';
 import { loadConfig, type TestPilotConfig } from '../../config.js';
 import type { ElementDef, LocatorCandidate, Platform } from '../../core/types.js';
 import type { DuplicateElementView, DuplicateReviewRequest, HealingResponse } from '../../ui/contracts.js';
+import { RevisionConflictError, type Repos } from '../db/repo.js';
 import { json, readJson } from '../http.js';
 import type { RouteTable } from './types.js';
 
-async function healingState(cfg: TestPilotConfig): Promise<HealingResponse> {
+async function healingState(cfg: TestPilotConfig, repos: Repos): Promise<HealingResponse> {
   const healing = await HealingStore.load(cfg.paths.healingDb);
   const imported = await healing.backfill(cfg.paths.runs);
   if (imported > 0) await healing.save();
-  const registry = await Registry.load(cfg.paths.registry);
+  // Registry qua repo, không qua đĩa: ở chế độ server nó nằm trong Postgres
+  // của đúng tổ chức người gọi, và handler này không cần biết điều đó.
+  const registry = Registry.fromData((await repos.registry.read()).data);
   const records = healing.records().map((record) => ({
     ...record,
     // `current` in healing telemetry is a historical snapshot: the candidate
@@ -112,7 +115,7 @@ function totalWins(element: ElementDef): number {
 export const healingRoutes: RouteTable = {
   'GET /api/healing': async (req, res, url, ctx) => {
     const cfg = await loadConfig(ctx.configFile);
-    return json(res, 200, await healingState(cfg));
+    return json(res, 200, await healingState(cfg, ctx.repos));
   },
 
   'POST /api/healing/review': async (req, res, url, ctx) => {
@@ -121,20 +124,31 @@ export const healingRoutes: RouteTable = {
       return json(res, 400, { error: 'Healing action không hợp lệ.' });
     }
     const cfg = await loadConfig(ctx.configFile);
-    const registry = await Registry.load(cfg.paths.registry);
     const healing = await HealingStore.load(cfg.paths.healingDb);
     const record = healing.records().find((item) => item.id === body.id);
     if (!record) return json(res, 404, { error: 'Không tìm thấy đề xuất healing.' });
 
     if (body.action === 'apply') {
+      // Đọc kèm phiên bản, ghi kèm phiên bản. Duyệt healing là một lệnh ghi
+      // vào dữ liệu dùng chung, nên nó phải biết mình đang ghi đè ai — hai
+      // người cùng mở màn Healing Center là chuyện bình thường.
+      const { data, revision } = await ctx.repos.registry.read();
+      const registry = Registry.fromData(data);
       registry.promoteCandidate(record.elementId, record.platform, record.proposed);
-      await registry.save();
+      try {
+        await ctx.repos.registry.write(registry.raw, revision);
+      } catch (err) {
+        if (err instanceof RevisionConflictError) {
+          return json(res, 409, { error: err.message });
+        }
+        throw err;
+      }
       healing.review(body.id, 'applied');
     } else {
       healing.review(body.id, 'rejected');
     }
     await healing.save();
-    return json(res, 200, await healingState(cfg));
+    return json(res, 200, await healingState(cfg, ctx.repos));
   },
 
   /**
@@ -156,7 +170,8 @@ export const healingRoutes: RouteTable = {
       return json(res, 400, { error: 'Quyết định trùng vai không hợp lệ.' });
     }
     const cfg = await loadConfig(ctx.configFile);
-    const registry = await Registry.load(cfg.paths.registry);
+    const { data: registryData, revision } = await ctx.repos.registry.read();
+    const registry = Registry.fromData(registryData);
     // Khớp theo CẶP, không theo thứ tự client gửi. Hướng mạnh/yếu do bằng
     // chứng quyết định và đổi được giữa hai lần tải trang — một lượt chạy
     // thêm vài lần thắng cho bên kia là đủ. Nhận theo thứ tự client thì một
@@ -183,12 +198,21 @@ export const healingRoutes: RouteTable = {
       } catch (err) {
         return json(res, 400, { error: (err as Error).message });
       }
-      await registry.save();
+      try {
+        // Ghi kèm phiên bản đã đọc ở đầu handler. Quyết định "gộp" dựa trên
+        // danh sách cặp nghi vấn tính từ CHÍNH bản đó — nếu registry đã đổi
+        // giữa chừng thì danh sách ấy cũng đã khác, và ghi tiếp là quyết định
+        // dựa trên một màn hình đã cũ.
+        await ctx.repos.registry.write(registry.raw, revision);
+      } catch (err) {
+        if (err instanceof RevisionConflictError) return json(res, 409, { error: err.message });
+        throw err;
+      }
     }
 
     const review = await DuplicateReviewStore.load(cfg.paths.duplicateReviewDb);
     review.decide(pair.strong, pair.weak, body.action === 'merge' ? 'merged' : 'distinct');
     await review.save();
-    return json(res, 200, await healingState(cfg));
+    return json(res, 200, await healingState(cfg, ctx.repos));
   },
 };
