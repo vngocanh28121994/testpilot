@@ -23,6 +23,13 @@ import type { IncomingMessage, ServerResponse } from 'node:http';
 export interface RouteContext {
   /** Cấu hình của user đang chạy; xem `personalConfig.ts`. */
   configFile: string;
+  /**
+   * Danh tính của hồ sơ cấu hình — ai đang chạy, và cấu hình đến từ đâu.
+   *
+   * Đường dẫn tuyệt đối KHÔNG nằm ở đây, và đó là chủ ý cũ: nó không bao giờ
+   * rời khỏi server.
+   */
+  configProfile: { owner: string; source: 'personal' | 'environment' };
 }
 
 export type RouteHandler = (

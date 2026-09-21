@@ -22,6 +22,8 @@ const server = readFileSync('src/ui/server.ts', 'utf8');
  * `--app-source` vẫn phải đi hết đường từ giao diện xuống CLI — chỉ đổi chỗ đọc.
  */
 const execute = readFileSync('src/runner/execute.ts', 'utf8');
+/** Cụm workflow sang `src/server/routes/workflow.ts` ở chặng cuối P1.2. */
+const workflow = readFileSync('src/server/routes/workflow.ts', 'utf8');
 const runner = readFileSync('ui/src/panels/Runner/index.tsx', 'utf8');
 const studio = readFileSync('ui/src/panels/Studio/index.tsx', 'utf8');
 
@@ -60,19 +62,19 @@ describe('nguồn app của một lượt chạy', () => {
 
   it('workflow chạy đồng thời các nền tảng local', () => {
     assert.match(studio, /const PLATFORMS = \['web', 'android', 'ios'\] as const/);
-    assert.match(server, /Promise\.all\(execution\.platforms\.map\(async \(platform\)/);
+    assert.match(workflow, /Promise\.all\(execution\.platforms\.map\(async \(platform\)/);
   });
 
   it('workflow song song cô lập shared writes rồi chỉ gộp một lần', () => {
-    assert.match(server, /const deferSharedWrites = execution\.platforms\.length > 1/);
+    assert.match(workflow, /const deferSharedWrites = execution\.platforms\.length > 1/);
     assert.match(execute, /deferSharedWrites \? \['--defer-shared-writes'\] : \[\]/);
-    assert.match(server, /localOutcomes\.flatMap\(\(outcome\) => outcome\.runDirs\)/);
-    assert.match(server, /await mergeRunLearnings\(\{/);
+    assert.match(workflow, /localOutcomes\.flatMap\(\(outcome\) => outcome\.runDirs\)/);
+    assert.match(workflow, /await mergeRunLearnings\(\{/);
   });
 
   it('lượt chạy riêng lẻ giữ nguyên cơ chế ghi dữ liệu hiện tại', () => {
     assert.match(execute, /deferSharedWrites = false/);
-    assert.match(server, /execution\.platforms\.length > 1/);
+    assert.match(workflow, /execution\.platforms\.length > 1/);
   });
 
   it('hai màn chạy đều hỏi, và mặc định là bản có sẵn trên thiết bị', () => {

@@ -11,7 +11,12 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { describe, it } from 'node:test';
 
-const server = readFileSync('src/ui/server.ts', 'utf8');
+/**
+ * Payload sang `src/server/routes/state.ts` ở P1 (2026-09-21). Điều bài test
+ * này canh không đổi: state được gọi lại sau mỗi thao tác, nên mọi trường thêm
+ * vào đều bị trả giá liên tục.
+ */
+const server = readFileSync('src/server/routes/state.ts', 'utf8');
 const contracts = readFileSync('src/ui/contracts.ts', 'utf8');
 
 describe('/api/state không mang theo thứ không ai đọc', () => {

@@ -27,7 +27,13 @@ const server = readFileSync('src/ui/server.ts', 'utf8');
  */
 const moved = allRoutes;
 
-/** Các route còn nằm trong `switch`. */
+/**
+ * Các route còn nằm trong `switch` cũ.
+ *
+ * Từ 2026-09-21 danh sách này RỖNG và phải luôn rỗng: `switch` đã bị gỡ khỏi
+ * `server.ts` khi route cuối cùng chuyển đi. Giữ lại phép đo thay vì xoá nó,
+ * vì thứ cần canh bây giờ là "không ai thêm route thẳng vào đó nữa".
+ */
 function switchRoutes(): string[] {
   return [...server.matchAll(/^ {4}case '([^']+)':/gm)].map((m) => m[1]!);
 }
@@ -64,10 +70,11 @@ describe('bảng route và switch không chồng nhau', () => {
     );
   });
 
-  it('handle() tra bảng trước khi vào switch', () => {
-    const at = server.indexOf('const moved = ROUTES[route];');
-    assert.ok(at > 0, 'không thấy chỗ tra bảng route');
-    assert.ok(at < server.indexOf('switch (route) {'), 'phải tra bảng TRƯỚC switch');
+  /** Điều kiện hoàn thành P1.2: bảng là chỗ duy nhất, không còn switch. */
+  it('server.ts không còn switch route nào', () => {
+    assert.deepEqual(switchRoutes(), [], 'route mới phải vào bảng, không vào switch');
+    assert.doesNotMatch(server, /switch \(route\) \{/);
+    assert.match(server, /const handler = ROUTES\[route\];/);
   });
 });
 

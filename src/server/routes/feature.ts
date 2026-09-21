@@ -18,6 +18,7 @@ import { normalizeFeatureTags } from '../../core/tagTaxonomy.js';
 import { KnownIssueStore } from '../../core/knownIssues.js';
 import { ScenarioReviewStore, scenarioBlocks } from '../../core/scenarioReview.js';
 import { prepareExecutableDraft } from '../../genspec/draft.js';
+import { normalizeFeatureDraft } from '../../genspec/normalizeDraft.js';
 import { pickModel } from '../../llm/client.js';
 import { syncPomProject } from '../../pom/sync.js';
 import { parseFeature } from '../../steps/binding.js';
@@ -322,5 +323,13 @@ export const featureRoutes: RouteTable = {
         pomWarning: `Đã duyệt ${reviewed.length} kịch bản nhưng chưa đồng bộ POM: ${(err as Error).message}`,
       });
     }
+  },
+
+  'POST /api/feature/normalize': async (req, res, _url, ctx) => {
+    const { content } = await readJson<{ content: string }>(req);
+    const cfg = await loadConfig(ctx.configFile);
+    const registry = await Registry.load(cfg.paths.registry);
+    const actions = await ActionRegistry.load(cfg.paths.actionsDb);
+    return json(res, 200, await normalizeFeatureDraft(content, registry, actions, pickModel(cfg.llm.model)));
   },
 };
