@@ -103,10 +103,11 @@ import {
   serveStaticRequest,
   stream,
 } from '../server/http.js';
-import { mergeTables, type RouteContext } from '../server/routes/types.js';
-import { catalogRoutes } from '../server/routes/catalog.js';
-import { configRevision, configRoutes } from '../server/routes/config.js';
-import { historyRoutes, recentRuns } from '../server/routes/history.js';
+import type { RouteContext } from '../server/routes/types.js';
+import { allRoutes } from '../server/routes/index.js';
+import { applyForm } from '../server/routes/studio.js';
+import { configRevision } from '../server/routes/config.js';
+import { recentRuns } from '../server/routes/history.js';
 import {
   ActionRegistry,
   validateExecutableAction,
@@ -190,7 +191,7 @@ listen(handle);
  * route mỗi commit mà bản đang chạy không gián đoạn. Khi `switch` rỗng thì bảng
  * là chỗ duy nhất — đó là điều kiện hoàn thành P1.2.
  */
-const ROUTES = mergeTables(catalogRoutes, configRoutes, historyRoutes);
+const ROUTES = allRoutes;
 
 async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> {
   const url = new URL(req.url ?? '/', `http://localhost:${PORT}`);
@@ -207,106 +208,11 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
     case 'POST /api/mcp/tools':
       return json(res, 200, await mcpTools(await readJson(req)));
 
-    case 'GET /api/healing': {
-      const cfg = await loadConfig(CONFIG_FILE);
-      return json(res, 200, await healingState(cfg));
-    }
-
-    case 'POST /api/healing/review': {
-      const body = await readJson<{ id: string; action: 'apply' | 'reject' }>(req);
-      if (!body.id || !['apply', 'reject'].includes(body.action)) {
-        return json(res, 400, { error: 'Healing action không hợp lệ.' });
-      }
-      const cfg = await loadConfig(CONFIG_FILE);
-      const registry = await Registry.load(cfg.paths.registry);
-      const healing = await HealingStore.load(cfg.paths.healingDb);
-      const record = healing.records().find((item) => item.id === body.id);
-      if (!record) return json(res, 404, { error: 'Không tìm thấy đề xuất healing.' });
-
-      if (body.action === 'apply') {
-        registry.promoteCandidate(record.elementId, record.platform, record.proposed);
-        await registry.save();
-        healing.review(body.id, 'applied');
-      } else {
-        healing.review(body.id, 'rejected');
-      }
-      await healing.save();
-      return json(res, 200, await healingState(cfg));
-    }
-
-    /**
-     * Quyết định về một cặp element bị nghi trùng vai.
-     *
-     * `merge` cố ý KHÔNG xoá bản ghi nào và KHÔNG đụng tới alias. Step bind vào
-     * element theo id, nên xoá một bản ghi là làm hỏng mọi bước trỏ vào nó; và
-     * registry còn từ chối load khi một alias trùng label của element khác, nên
-     * "gộp tên" bằng một nút bấm là cách nhanh nhất để hỏng cả registry.
-     *
-     * Thứ thực sự chữa được lượt chạy nhỏ hơn thế nhiều: mang locator mà cả hai
-     * bên đều đã chứng minh sang bên yếu, đặt làm primary đã duyệt. Bước đang
-     * hỏng chạy lại được ngay, hai bản ghi vẫn nguyên, và việc gộp thật — nếu
-     * có — vẫn là quyết định của con người trong code review.
-     */
-    case 'POST /api/healing/duplicate': {
-      const body = await readJson<DuplicateReviewRequest>(req);
-      if (!body.strong || !body.weak || !['merge', 'distinct'].includes(body.action)) {
-        return json(res, 400, { error: 'Quyết định trùng vai không hợp lệ.' });
-      }
-      const cfg = await loadConfig(CONFIG_FILE);
-      const registry = await Registry.load(cfg.paths.registry);
-      // Khớp theo CẶP, không theo thứ tự client gửi. Hướng mạnh/yếu do bằng
-      // chứng quyết định và đổi được giữa hai lần tải trang — một lượt chạy
-      // thêm vài lần thắng cho bên kia là đủ. Nhận theo thứ tự client thì một
-      // màn hình mở hơi lâu sẽ báo "cặp không còn trong danh sách", còn tệ hơn
-      // là nó mở đường cho việc gộp ngược hướng.
-      const wanted = [body.strong, body.weak].sort().join('::');
-      const pair = findDuplicateElements(registry.raw.elements)
-        .find((item) => [item.strong, item.weak].sort().join('::') === wanted);
-      if (!pair) return json(res, 404, { error: 'Cặp này không còn trong danh sách nghi vấn.' });
-
-      if (body.action === 'merge') {
-        const approved = parseWinnerKey(pair.strongKey);
-        if (!approved) return json(res, 400, { error: `Không dựng được locator từ "${pair.strongKey}".` });
-        const weak = registry.raw.elements[pair.weak]!;
-        // Chỉ những nền tảng element ấy đã có candidate. Thêm locator cho một
-        // nền tảng nó chưa từng chạy là bịa ra một khẳng định chưa ai kiểm.
-        const platforms = (Object.keys(weak.candidates) as Platform[])
-          .filter((platform) => (weak.candidates[platform]?.length ?? 0) > 0);
-        if (platforms.length === 0) {
-          return json(res, 400, { error: `"${pair.weak}" chưa có candidate ở nền tảng nào để thăng hạng.` });
-        }
-        try {
-          for (const platform of platforms) registry.promoteCandidate(pair.weak, platform, approved);
-        } catch (err) {
-          return json(res, 400, { error: (err as Error).message });
-        }
-        await registry.save();
-      }
-
-      const review = await DuplicateReviewStore.load(cfg.paths.duplicateReviewDb);
-      review.decide(pair.strong, pair.weak, body.action === 'merge' ? 'merged' : 'distinct');
-      await review.save();
-      return json(res, 200, await healingState(cfg));
-    }
-
-    // Saving and running are separate on purpose. Generation needs an API key,
-    // so without this the only way to persist a test account was to run the
-    // whole pipeline — and anyone without a key typed their credentials into a
-    // form that silently discarded them.
-    case 'POST /api/studio/save': {
-      const saved = await applyForm(await readJson<StudioForm>(req));
-      const secrets = await Secrets.load();
-      return json(res, 200, {
-        ok: true,
-        accounts: saved.accounts.map((a) => ({ ...a, hasPassword: secrets.has(a.label) })),
-      });
-    }
-
     case 'POST /api/gen': {
       const form = await readJson<StudioForm>(req);
       // Persist before streaming: the form is the config, and a run whose inputs
       // were never saved could not be reproduced from a terminal.
-      const cfg = await applyForm(form);
+      const cfg = await applyForm(form, CONFIG_FILE);
       return stream(res, (log, stage) => runWorkflow(cfg, log, stage));
     }
 
@@ -821,18 +727,6 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
       return json(res, 200, await normalizeFeatureDraft(content, registry, actions, pickModel(cfg.llm.model)));
     }
 
-    case 'POST /api/actions/review': {
-      const body = await readJson<{ id: string; decision: 'approve' | 'reject' }>(req);
-      if (!body.id || !['approve', 'reject'].includes(body.decision)) {
-        return json(res, 400, { error: 'Quyết định action không hợp lệ.' });
-      }
-      const cfg = await loadConfig(CONFIG_FILE);
-      const actions = await ActionRegistry.load(cfg.paths.actionsDb);
-      const action = actions.review(body.id, body.decision);
-      await actions.save();
-      return json(res, 200, { action, actions: actions.list() });
-    }
-
     case 'GET /api/builds':
       return json(res, 200, await buildInventory(await loadConfig(CONFIG_FILE)));
 
@@ -1175,98 +1069,6 @@ async function describeBuild(rel: string | undefined): Promise<Build> {
   } catch {
     return { path: rel, exists: false };
   }
-}
-
-async function healingState(cfg: TestPilotConfig): Promise<HealingResponse> {
-  const healing = await HealingStore.load(cfg.paths.healingDb);
-  const imported = await healing.backfill(cfg.paths.runs);
-  if (imported > 0) await healing.save();
-  const registry = await Registry.load(cfg.paths.registry);
-  const records = healing.records().map((record) => ({
-    ...record,
-    // `current` in healing telemetry is a historical snapshot: the candidate
-    // that failed when this event happened. Expose today's actual primary
-    // separately so the review table never presents the snapshot as live state.
-    primary: registry.raw.elements[record.elementId]?.candidates[record.platform]?.[0] ?? null,
-    quality: assessLocatorQuality(record.proposed),
-  }));
-  return {
-    policy: { minSuccesses: 3, minRuns: 2 },
-    records,
-    duplicates: await pendingDuplicates(cfg, registry),
-    summary: {
-      total: records.length,
-      proposed: records.filter((item) => item.status === 'proposed').length,
-      watching: records.filter((item) => item.status === 'watching').length,
-      applied: records.filter((item) => item.status === 'applied').length,
-      rejected: records.filter((item) => item.status === 'rejected').length,
-    },
-  };
-}
-
-/**
- * Cặp element bị nghi trùng vai, còn chờ người duyệt.
- *
- * Danh sách nghi vấn tính lại từ registry mỗi lần hỏi; chỉ quyết định là được
- * lưu. Nên một cặp hết nghi sẽ tự biến mất, và một cặp đã bị bấm "không phải
- * trùng" thì không bao giờ quay lại — điều kiện để danh sách này về được 0 và
- * vì thế còn được đọc.
- */
-async function pendingDuplicates(
-  cfg: TestPilotConfig,
-  registry: Registry,
-): Promise<DuplicateElementView[]> {
-  const review = await DuplicateReviewStore.load(cfg.paths.duplicateReviewDb);
-  const pairs = review.pending(findDuplicateElements(registry.raw.elements));
-  return pairs.map((pair) => {
-    const strong = registry.raw.elements[pair.strong]!;
-    const weak = registry.raw.elements[pair.weak]!;
-    const approved = parseWinnerKey(pair.strongKey);
-    return {
-      strong: { id: pair.strong, label: strong.label, wins: totalWins(strong) },
-      weak: { id: pair.weak, label: weak.label, wins: totalWins(weak) },
-      sharedLocator: pair.strongKey,
-      share: pair.share,
-      weakAlreadyHasIt: approved !== undefined
-        && Object.values(weak.candidates).some((list) => (list ?? []).some((candidate) =>
-          candidate.strategy === approved.strategy
-          && candidate.value === approved.value
-          && candidate.approved === true)),
-    };
-  });
-}
-
-function totalWins(element: ElementDef): number {
-  return Object.values(element.health?.winners ?? {})
-    .reduce<number>((sum, n) => sum + n, 0);
-}
-
-/**
- * `strategy:value[:name]` ngược lại thành một candidate.
- *
- * `value` được phép chứa dấu hai chấm — một selector CSS đầy rẫy — nên chỉ cắt
- * ở dấu ĐẦU TIÊN, và phần `name` chỉ tồn tại với strategy `role`, nơi tên là
- * một phần của danh tính. Cắt tham lam ở đây sẽ lặng lẽ dựng ra một locator
- * khác với cái đã thắng.
- */
-function parseWinnerKey(key: string): LocatorCandidate | undefined {
-  const first = key.indexOf(':');
-  if (first <= 0) return undefined;
-  const strategy = key.slice(0, first) as LocatorCandidate['strategy'];
-  const rest = key.slice(first + 1);
-  if (strategy === 'role') {
-    const split = rest.lastIndexOf(':');
-    if (split > 0) {
-      return {
-        strategy,
-        value: rest.slice(0, split),
-        name: rest.slice(split + 1),
-        weight: 1,
-        origin: 'healed',
-      };
-    }
-  }
-  return { strategy, value: rest, weight: 1, origin: 'healed' };
 }
 
 interface FeatureCoverageRecord {
@@ -2088,98 +1890,6 @@ interface StudioForm {
    * found more than one attached, since that is the only time there is a choice.
    */
   workflowDevices?: { android?: string; ios?: string } | null;
-}
-
-/**
- * Folds the form into testpilot.config.json, and the passwords into the
- * separate secrets file. A password submitted as an empty string means "leave
- * the stored one alone" — the UI never receives the value back, so it cannot
- * echo it, and a plain save must not therefore wipe it.
- */
-async function applyForm(form: StudioForm): Promise<TestPilotConfig> {
-  const current = await loadConfig(CONFIG_FILE).catch(() =>
-    ConfigSchema.parse({ web: { baseUrl: 'https://example.com' } }),
-  );
-
-  const accounts = (form.accounts ?? [])
-    .filter((a) => a.label?.trim())
-    .map((a) => ({ label: a.label.trim(), username: a.username ?? '' }));
-
-  const draft = {
-    ...current,
-    sources: (form.sources ?? current.sources).filter((s) => s.trim()),
-    targetFeature: form.targetFeature?.trim() ?? current.targetFeature,
-    accounts,
-    ...(form.defaultEnv?.trim() ? { defaultEnv: form.defaultEnv.trim() } : {}),
-    // Empty objects are dropped so an environment that overrides nothing does
-    // not write `"ios": {}` into the config on every save.
-    ...(form.environments
-      ? {
-          environments: Object.fromEntries(
-            Object.entries(form.environments).map(([name, e]) => [
-              name,
-              {
-                accounts: e.accounts ?? {},
-                ...(e.ios?.app?.trim() ? { ios: { app: e.ios.app.trim() } } : {}),
-                ...(e.android?.app?.trim() ? { android: { app: e.android.app.trim() } } : {}),
-                ...(e.web?.baseUrl?.trim() ? { web: { baseUrl: e.web.baseUrl.trim() } } : {}),
-              },
-            ]),
-          ),
-        }
-      : {}),
-    web: { ...current.web, baseUrl: form.baseUrl?.trim() || current.web.baseUrl },
-    llm: {
-      ...current.llm,
-      model: form.model ?? current.llm.model,
-      note: form.note ?? current.llm.note,
-    },
-    workflow: {
-      ...current.workflow,
-      // Taken verbatim when the form carried it: an empty list is now a real
-      // answer ("run on the farm only"), not a form that forgot to say.
-      platforms: form.workflowPlatforms ?? current.workflow.platforms,
-      env: form.workflowEnv?.trim() || current.workflow.env || current.defaultEnv,
-      appSource: form.workflowAppSource ?? current.workflow.appSource,
-      headed: form.workflowHeaded ?? current.workflow.headed,
-      ...(form.workflowDeviceFarm !== undefined
-        ? { deviceFarm: form.workflowDeviceFarm ?? undefined }
-        : {}),
-      ...(form.workflowDevices !== undefined
-        ? { devices: form.workflowDevices ?? undefined }
-        : {}),
-    },
-  };
-
-  const parsed = ConfigSchema.safeParse(draft);
-  if (!parsed.success) {
-    throw new Error(parsed.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('; '));
-  }
-  await saveConfig(parsed.data, CONFIG_FILE);
-
-  const secrets = await Secrets.load();
-  for (const a of form.accounts ?? []) {
-    const label = a.label?.trim();
-    if (!label) continue;
-
-    if (a.password) {
-      secrets.set(label, a.password);
-      continue;
-    }
-    // An empty password field means "leave it alone" — the value was never
-    // sent to the browser, so it cannot be echoed back. When the label also
-    // changed, "alone" has to follow the rename or the password is dropped on
-    // the floor and the account silently stops working.
-    const from = a.previousLabel?.trim();
-    if (from && from !== label) {
-      const carried = secrets.get(from);
-      if (carried !== undefined) secrets.set(label, carried);
-    }
-  }
-  secrets.keepOnly(accounts.map((a) => a.label));
-  await secrets.save();
-
-  return parsed.data;
 }
 
 /** The generation pipeline, streamed to the browser and recorded in history. */

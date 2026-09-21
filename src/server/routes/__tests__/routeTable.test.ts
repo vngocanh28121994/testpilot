@@ -14,13 +14,18 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { catalogRoutes } from '../catalog.js';
-import { configRoutes } from '../config.js';
-import { historyRoutes } from '../history.js';
+import { allRoutes } from '../index.js';
 import { mergeTables } from '../types.js';
 
 const server = readFileSync('src/ui/server.ts', 'utf8');
-const moved = mergeTables(catalogRoutes, configRoutes, historyRoutes);
+/**
+ * Đọc từ `index.ts`, không tự gộp lại danh sách.
+ *
+ * Bản đầu của test này tự gộp ba bảng nó biết, và khi ba nhóm route nữa được
+ * chuyển thì nó báo "tổng route hụt 5" — đỏ vì một lý do không có thật. Một
+ * danh sách chép ở hai nơi thì sớm muộn cũng lệch.
+ */
+const moved = allRoutes;
 
 /** Các route còn nằm trong `switch`. */
 function switchRoutes(): string[] {

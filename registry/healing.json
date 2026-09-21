@@ -451,7 +451,9 @@
     "2026-09-16T06-35-53Z-android-feature-them-moi-template-bao-cao-cua-toi-sm-s938b": "2026-09-16T06:46:49.005Z",
     "2026-09-16T07-44-58Z-android-sm-s938b": "2026-09-16T07:49:20.356Z",
     "2026-09-16T08-09-49Z-web": "2026-09-16T08:22:58.076Z",
-    "2026-09-16T08-33-47Z-web": "2026-09-16T08:45:01.235Z"
+    "2026-09-16T08-33-47Z-web": "2026-09-16T08:45:01.235Z",
+    "2026-09-18T10-23-45Z-web-feature-them-ma-co-phieu-tren-bang-gia-co-phieu-smoke-feature-them-ma-co-phieu-tren-bang-gia-co-phieu-p1-positive": "2026-09-18T10:28:37.519Z",
+    "2026-09-18T10-38-18Z-web-feature-them-ma-co-phieu-tren-bang-gia-co-phieu-smoke": "2026-09-18T10:40:47.693Z"
   },
   "entries": {
     "home.totalAssets::android::6dbfe0a6bf0ea4c4": {
@@ -1176,16 +1178,17 @@
         "origin": "llm",
         "approved": false
       },
-      "successes": 8,
+      "successes": 10,
       "runIds": [
         "2026-09-12T04-54-52Z-web-feature-them-ma-co-phieu-tren-bang-gia-co-phieu",
         "2026-09-15T09-54-54Z-web-feature-them-ma-co-phieu-tren-bang-gia-co-phieu-positive",
-        "2026-09-16T08-33-47Z-web"
+        "2026-09-16T08-33-47Z-web",
+        "2026-09-18T10-23-45Z-web-feature-them-ma-co-phieu-tren-bang-gia-co-phieu-smoke-feature-them-ma-co-phieu-tren-bang-gia-co-phieu-p1-positive"
       ],
       "firstSeen": "2026-09-12T05:03:28.228Z",
-      "lastSeen": "2026-09-16T08:45:01.235Z",
+      "lastSeen": "2026-09-18T10:28:37.519Z",
       "devices": {
-        "Pixel 7": 8
+        "Pixel 7": 10
       }
     },
     "login.usernameField::ios::dd2010f765da12cb": {
@@ -1256,15 +1259,16 @@
         "origin": "healed",
         "approved": false
       },
-      "successes": 4,
+      "successes": 6,
       "runIds": [
         "2026-09-15T09-54-54Z-web-feature-them-ma-co-phieu-tren-bang-gia-co-phieu-positive",
-        "2026-09-16T08-33-47Z-web"
+        "2026-09-16T08-33-47Z-web",
+        "2026-09-18T10-23-45Z-web-feature-them-ma-co-phieu-tren-bang-gia-co-phieu-smoke-feature-them-ma-co-phieu-tren-bang-gia-co-phieu-p1-positive"
       ],
       "firstSeen": "2026-09-15T09:59:20.132Z",
-      "lastSeen": "2026-09-16T08:45:01.235Z",
+      "lastSeen": "2026-09-18T10:28:37.519Z",
       "devices": {
-        "Pixel 7": 4
+        "Pixel 7": 6
       }
     },
     "addStockModal.searchInput::android::6ae23d4591484610": {
@@ -1377,6 +1381,32 @@
       "lastSeen": "2026-09-16T07:49:20.356Z",
       "devices": {
         "SM_S938B": 4
+      }
+    },
+    "home.totalAssets::web::eb61fe86aa79e435": {
+      "elementId": "home.totalAssets",
+      "platform": "web",
+      "from": {
+        "strategy": "label",
+        "value": "Tổng tài sản",
+        "weight": 0.85,
+        "origin": "authored"
+      },
+      "to": {
+        "strategy": "xpath",
+        "value": "//*[not(*) and normalize-space(.)='Tổng tài sản']",
+        "weight": 0.55,
+        "origin": "healed",
+        "approved": false
+      },
+      "successes": 1,
+      "runIds": [
+        "2026-09-18T10-23-45Z-web-feature-them-ma-co-phieu-tren-bang-gia-co-phieu-smoke-feature-them-ma-co-phieu-tren-bang-gia-co-phieu-p1-positive"
+      ],
+      "firstSeen": "2026-09-18T10:28:37.519Z",
+      "lastSeen": "2026-09-18T10:28:37.519Z",
+      "devices": {
+        "Pixel 7": 1
       }
     }
   }
