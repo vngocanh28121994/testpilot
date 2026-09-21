@@ -15,29 +15,40 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 
 /** File đã chuyển xong — thêm dần khi chuyển tiếp, không bao giờ bớt đi. */
-const CONVERTED = ['healing.ts'];
+const CONVERTED = ['healing.ts', 'state.ts', 'catalog.ts'];
 
 describe('route dùng kho dữ liệu qua ctx.repos', () => {
   for (const file of CONVERTED) {
     it(`${file} không còn tự đọc registry từ đĩa`, () => {
       const source = readFileSync(`src/server/routes/${file}`, 'utf8');
+      // `(?<!Action)` là phần quan trọng: `ActionRegistry` là một store KHÁC
+      // (macro hành động, `actions.json`), và nó chưa có repo riêng. Thiếu chỗ
+      // loại trừ ấy thì bài test báo đỏ một file đã chuyển xong — một phép đo
+      // sai theo hướng ồn ào, kiểu làm người ta học cách bỏ qua nó.
       assert.doesNotMatch(
         source,
-        /Registry\.load\(/,
+        /(?<!Action)Registry\.load\(/,
         `${file} vẫn gọi Registry.load() — ở chế độ server nó đọc đĩa của server, `
           + 'không đọc dữ liệu của tổ chức người gọi.',
       );
-      assert.match(source, /ctx\.repos\.registry/, `${file} phải đọc qua ctx.repos.registry`);
+      // `repos.registry` chứ không `ctx.repos.registry`: một số file nhận
+      // `repos` làm tham số của hàm rồi truyền xuống (như `state()`), và cách
+      // luồn dây ấy không đổi điều đang được canh — dữ liệu đi qua kho, không
+      // đi qua đĩa.
+      assert.match(source, /repos\.registry/, `${file} phải đọc qua repos.registry`);
     });
 
     /**
      * Ghi mà không kèm phiên bản là ghi đè người khác trong im lặng — đúng thứ
      * `RevisionConflictError` sinh ra để chấm dứt.
+     *
+     * File chỉ đọc thì không có gì để kiểm ở đây, và điều đó tự nó là một tính
+     * chất đáng giữ: `state.ts` và `catalog.ts` KHÔNG được ghi registry.
      */
     it(`${file} ghi registry kèm phiên bản và trả 409 khi lệch`, () => {
       const source = readFileSync(`src/server/routes/${file}`, 'utf8');
       const writes = [...source.matchAll(/repos\.registry\.write\(([^)]*)\)/g)];
-      assert.ok(writes.length > 0, `${file} không có lệnh ghi nào để kiểm`);
+      if (writes.length === 0) return;
       for (const write of writes) {
         assert.match(
           write[1] ?? '',

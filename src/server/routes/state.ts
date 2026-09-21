@@ -35,6 +35,7 @@ import type { CoverageAudit, CoverageRequirement } from '../../genspec/coverage.
 import { configRevision } from './config.js';
 import { featureRevision } from './feature.js';
 import { recentRuns } from './history.js';
+import type { Repos } from '../db/repo.js';
 import { json, readJson } from '../http.js';
 import type { RouteTable } from './types.js';
 
@@ -61,7 +62,11 @@ const MAX_REPORTS = 50;
 
 const withOwn = (build: Build, own: boolean): Build => (build ? { ...build, own } : build);
 
-export async function state(configFile: string, profile: StateResponse['configProfile']): Promise<StateResponse> {
+export async function state(
+  configFile: string,
+  profile: StateResponse['configProfile'],
+  repos: Repos,
+): Promise<StateResponse> {
   let config: TestPilotConfig;
   let configError: string | null = null;
   try {
@@ -72,8 +77,12 @@ export async function state(configFile: string, profile: StateResponse['configPr
     config = ConfigSchema.parse({ web: { baseUrl: 'https://example.com' } });
   }
 
-  const features = await listFeatures(config);
-  const elements = await countElements(config);
+  // Registry đọc MỘT LẦN cho cả hai việc bên dưới. Trước đây `listFeatures` và
+  // `countElements` mỗi bên tự đọc — hai lần đọc cùng một thứ trong cùng một
+  // request, và với Postgres thì đó là hai lượt đi mạng thay vì một.
+  const registry = Registry.fromData((await repos.registry.read()).data);
+  const features = await listFeatures(config, registry);
+  const elements = Object.keys(registry.raw.elements).length;
   const runs = await recentRuns();
   // A history detail must be able to resolve every report it explicitly
   // references. The general report list is capped for payload size, but a
@@ -201,10 +210,9 @@ function coverageView(record: FeatureCoverageRecord | null) {
   };
 }
 
-export async function listFeatures(cfg: TestPilotConfig) {
+export async function listFeatures(cfg: TestPilotConfig, registry: Registry) {
   if (!existsSync(cfg.paths.features)) return [];
   const files = (await readdir(cfg.paths.features)).filter((f) => f.endsWith('.feature')).sort();
-  const registry = await Registry.load(cfg.paths.registry);
   const reviews = await ScenarioReviewStore.load(cfg.paths.scenarioReviewDb);
   const known = await KnownIssueStore.load(cfg.paths.knownIssuesDb);
   const result = await Promise.all(
@@ -262,11 +270,6 @@ export async function listFeatures(cfg: TestPilotConfig) {
   );
   await reviews.save();
   return result;
-}
-
-async function countElements(cfg: TestPilotConfig): Promise<number> {
-  const registry = await Registry.load(cfg.paths.registry);
-  return Object.keys(registry.raw.elements).length;
 }
 
 async function listReports(cfg: TestPilotConfig, referencedIds: ReadonlySet<string> = new Set()) {
@@ -385,7 +388,7 @@ async function mcpTools(cfg: unknown) {
 
 export const stateRoutes: RouteTable = {
   'GET /api/state': async (_req, res, _url, ctx) =>
-    json(res, 200, await state(ctx.configFile, ctx.configProfile)),
+    json(res, 200, await state(ctx.configFile, ctx.configProfile, ctx.repos)),
 
   'POST /api/mcp/tools': async (req, res) =>
     json(res, 200, await mcpTools(await readJson(req))),

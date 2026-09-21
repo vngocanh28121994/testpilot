@@ -45,10 +45,11 @@ export async function models() {
 export const catalogRoutes: RouteTable = {
   'GET /api/vocabulary': async (_req, res, _url, ctx) => {
     const cfg = await loadConfig(ctx.configFile);
-    const [registry, actions] = await Promise.all([
-      Registry.load(cfg.paths.registry),
+    const [registryData, actions] = await Promise.all([
+      ctx.repos.registry.read(),
       ActionRegistry.load(cfg.paths.actionsDb),
     ]);
+    const registry = Registry.fromData(registryData.data);
     return json(res, 200, {
       forms: STEP_RULES.map((rule) => ({
         id: rule.id,
