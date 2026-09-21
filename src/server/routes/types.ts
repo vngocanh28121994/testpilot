@@ -12,6 +12,7 @@
  * đoạn. Xem [FARM-ROUTE-MAP.md](../../../FARM-ROUTE-MAP.md).
  */
 import type { IncomingMessage, ServerResponse } from 'node:http';
+import type { Identity } from '../auth/roles.js';
 
 /**
  * Thứ một handler cần mà nó không tự dựng được.
@@ -30,6 +31,14 @@ export interface RouteContext {
    * rời khỏi server.
    */
   configProfile: { owner: string; source: 'personal' | 'environment' };
+  /**
+   * Ai đang gọi, sau khi đã qua cửa quyền.
+   *
+   * Handler không phải kiểm tra lại vai — `dispatch` đã làm. Cái nó cần là
+   * `orgId` (để đọc đúng dữ liệu của tổ chức, từ P5) và `userId` (để ghi
+   * `updated_by` và audit log). Ở chế độ embedded đây là `LOCAL_IDENTITY`.
+   */
+  identity: Identity;
 }
 
 export type RouteHandler = (

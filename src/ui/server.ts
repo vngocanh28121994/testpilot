@@ -22,9 +22,8 @@ import { ensurePersonalConfig, personalConfigProfile } from '../core/personalCon
 import { closeInterruptedRuns, reindex } from '../core/runstore.js';
 import { adoptStoredApiKeys } from '../core/secrets.js';
 import { orphans, runChildren } from '../runner/execute.js';
-import { json, listen, PORT, serveStaticRequest } from '../server/http.js';
-import { allRoutes } from '../server/routes/index.js';
-import type { RouteContext } from '../server/routes/types.js';
+import { listen, PORT, serverMode } from '../server/http.js';
+import { dispatch } from '../server/dispatch.js';
 
 const CONFIG_PROFILE = await ensurePersonalConfig(personalConfigProfile());
 const CONFIG_FILE = CONFIG_PROFILE.file;
@@ -83,28 +82,21 @@ for (const signal of ['SIGINT', 'SIGTERM'] as const) {
 }
 
 /**
- * Toàn bộ route của control plane, và giờ là chỗ DUY NHẤT.
+ * Chế độ chạy của tiến trình này.
  *
- * `switch` khổng lồ trong file này đã rỗng và bị gỡ ngày 2026-09-21 — đó là
- * điều kiện hoàn thành P1.2. Suốt quá trình chuyển, hai chỗ so khớp cùng tồn
- * tại để mỗi commit chuyển được vài route mà bản đang chạy không gián đoạn.
+ * `embedded` là mặc định và là thứ `npm run ui` dùng: một người, một máy,
+ * không đăng nhập. Chỉ khi `TESTPILOT_MODE=server` thì cửa quyền mới đòi phiên
+ * — xem `src/server/auth/guard.ts` để biết vì sao bản local không dựng hàng rào.
  */
-const ROUTES = allRoutes;
+const MODE = serverMode();
 
 async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> {
   const url = new URL(req.url ?? '/', `http://localhost:${PORT}`);
-  const route = `${req.method} ${url.pathname}`;
-
-  const ctx: RouteContext = {
+  return dispatch(req, res, url, {
+    mode: MODE,
     configFile: CONFIG_FILE,
     configProfile: { owner: CONFIG_PROFILE.owner, source: CONFIG_PROFILE.source },
-  };
-  const handler = ROUTES[route];
-  if (handler) return handler(req, res, url, ctx);
-
-  if (await serveStaticRequest(req, res, url)) return;
-
-  json(res, 404, { error: `No route for ${route}` });
+  });
 }
 
 listen(handle);

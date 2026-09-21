@@ -17,7 +17,13 @@ import { readFileSync, readdirSync } from 'node:fs';
 import { allRoutes } from '../index.js';
 import { mergeTables } from '../types.js';
 
+/**
+ * Từ P2.1, việc tra bảng route nằm ở `src/server/dispatch.ts` — cùng một đường
+ * cho cả hai chế độ, vì bước dễ quên nhất khi mỗi host tự ghép lấy chính là
+ * bước kiểm tra quyền (nó không làm gì khi mọi thứ bình thường).
+ */
 const server = readFileSync('src/ui/server.ts', 'utf8');
+const dispatcher = readFileSync('src/server/dispatch.ts', 'utf8');
 /**
  * Đọc từ `index.ts`, không tự gộp lại danh sách.
  *
@@ -74,7 +80,19 @@ describe('bảng route và switch không chồng nhau', () => {
   it('server.ts không còn switch route nào', () => {
     assert.deepEqual(switchRoutes(), [], 'route mới phải vào bảng, không vào switch');
     assert.doesNotMatch(server, /switch \(route\) \{/);
-    assert.match(server, /const handler = ROUTES\[route\];/);
+    assert.match(dispatcher, /const handler = allRoutes\[route\];/);
+  });
+
+  /**
+   * Và handler chỉ được gọi SAU cửa quyền. Thứ tự hai dòng này là toàn bộ nội
+   * dung của P2.1: đảo lại thì route vẫn chạy đúng, chỉ là chạy cho người lẽ
+   * ra không được gọi — không lỗi, không log.
+   */
+  it('dispatch kiểm tra quyền trước khi gọi handler', () => {
+    const guard = dispatcher.indexOf('await authorize(');
+    const call = dispatcher.indexOf('return handler(req, res, url, ctx)');
+    assert.ok(guard > 0 && call > 0, 'không thấy cửa quyền hoặc chỗ gọi handler');
+    assert.ok(guard < call, 'phải kiểm tra quyền TRƯỚC khi gọi handler');
   });
 });
 
