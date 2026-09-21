@@ -17,10 +17,16 @@ import { readFileSync } from 'node:fs';
 import type { JobSpec, RunSuiteParams } from '../messages.js';
 import { PROTOCOL_VERSION, isCompatible, parseVersion } from '../version.js';
 
-/** Các trường trong `readJson<{…}>` của `case 'POST /api/run'`. */
+/**
+ * Các trường trong `readJson<{…}>` của handler `POST /api/run`.
+ *
+ * Route rời `server.ts` sang `src/server/routes/run.ts` ở P1 (2026-09-21).
+ * Điều bài test này canh không đổi: hợp đồng `JobSpec` phải phủ đúng những gì
+ * endpoint đang nhận.
+ */
 function runApiFields(): string[] {
-  const source = readFileSync('src/ui/server.ts', 'utf8');
-  const at = source.indexOf("case 'POST /api/run': {");
+  const source = readFileSync('src/server/routes/run.ts', 'utf8');
+  const at = source.indexOf("'POST /api/run': async");
   assert.ok(at > 0, 'không còn thấy route POST /api/run — bản đồ route đã đổi, đọc lại test này');
   const block = source.slice(at, source.indexOf('>(req);', at));
   const body = block.slice(block.indexOf('readJson<{') + 'readJson<{'.length);

@@ -17,6 +17,14 @@
  * phải nơi gọi.
  */
 import type { TestPilotConfig } from '../config.js';
+import {
+  isNamedDevice,
+  parseDeviceToken,
+  runSuite,
+  runSuiteParallel,
+  stopSuite,
+  type PickedDevice,
+} from './execute.js';
 import type { PrereqAndroidDevice } from './prereq.js';
 import {
   iosDeviceNames,
@@ -64,8 +72,26 @@ export interface RunnerPrereqApi {
   installDriver(driver: string, log: LogSink): Promise<void>;
 }
 
+/**
+ * Chạy và dừng một lượt test. Ở chế độ `server` đây là chỗ job đi qua mạng.
+ *
+ * `parseDeviceToken` nằm chung ở đây dù nó chỉ là phân tích chuỗi: cách đọc
+ * `platform:id` là một phần của hợp đồng giữa hai bên, và để hai bên tự đoán
+ * cách đọc là cách cũ để một chiếc điện thoại bị hiểu nhầm thành chiếc khác.
+ */
+export interface RunnerRunApi {
+  startSuite(...args: Parameters<typeof runSuite>): ReturnType<typeof runSuite>;
+  startParallel(...args: Parameters<typeof runSuiteParallel>): ReturnType<typeof runSuiteParallel>;
+  /** Dừng mọi lượt đang chạy, và hạ WebDriverAgent nếu nó còn sống. */
+  stop(): ReturnType<typeof stopSuite>;
+  /** Thiết bị này có tên trong config không — quyết định thư mục lượt chạy. */
+  isNamedDevice(picked: PickedDevice, configFile: string): Promise<boolean>;
+  parseDeviceToken(token: string): PickedDevice | null;
+}
+
 export interface Runner {
   prereq: RunnerPrereqApi;
+  run: RunnerRunApi;
 }
 
 /**
@@ -88,6 +114,13 @@ export const localRunner: Runner = {
     openIosSettings: (cfg) => openIosSettings(cfg),
     installDriver: (driver, log) => prereqInstallDriver(driver, log),
   },
+  run: {
+    startSuite: (...args) => runSuite(...args),
+    startParallel: (...args) => runSuiteParallel(...args),
+    stop: () => stopSuite(),
+    isNamedDevice: (picked, configFile) => isNamedDevice(picked, configFile),
+    parseDeviceToken: (token) => parseDeviceToken(token),
+  },
 };
 
-export type { PrereqAndroidDevice };
+export type { PickedDevice, PrereqAndroidDevice };

@@ -1,5 +1,4 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
-import { OrphanTracker } from '../core/orphans.js';
 import { activeRuns, beginActiveRun, endActiveRun, findActiveRun } from './activeRuns.js';
 import { closeInterruptedRuns, reindex } from '../core/runstore.js';
 import { mergeRunLearnings } from '../core/learned.js';
@@ -108,7 +107,11 @@ import { allRoutes } from '../server/routes/index.js';
 // Hai thứ còn lại của phần prereq mà `POST /api/run` và `POST /api/run/stop`
 // vẫn dùng. Chúng đi theo hai route ấy sang runner ở nhóm 6; tới lúc đó import
 // này biến mất.
-import { cleanLog, stopWebDriverAgent } from '../runner/prereq.js';
+import { cleanLog } from '../runner/prereq.js';
+// `runWorkflow` còn ở đây (nhóm 8) và nó chạy suite ở chặng cuối; `runChildren`
+// để đường thoát SIGINT dừng được tiến trình con. Cả hai đi theo workflow sang
+// runner ở nhóm 8 — tới lúc đó import này biến mất.
+import { orphans, runChildren, runSuite, type RunSuiteOutcome } from '../runner/execute.js';
 import { applyForm } from '../server/routes/studio.js';
 import { configRevision } from '../server/routes/config.js';
 import { featureRevision } from '../server/routes/feature.js';
@@ -135,8 +138,6 @@ process.env.TESTPILOT_CONFIG = CONFIG_FILE;
 
 await adoptStoredApiKeys();
 
-const runChildren = new Set<ReturnType<typeof spawn>>();
-const orphans = OrphanTracker.load();
 
 /**
  * Dọn dẹp lúc khởi động, trước khi nhận request nào.
@@ -310,93 +311,6 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
       return json(res, 200, { ok: true });
     }
 
-    /**
-     * Lượt chạy nào đang sống.
-     *
-     * Trang hỏi câu này lúc mở lên. Không có nó thì một lượt chạy vẫn đang bấm
-     * vào thiết bị thật trở nên vô hình sau mỗi lần reload — và nút Dừng, thứ
-     * vốn vẫn hoạt động, không được hiện ra vì giao diện tưởng chẳng có gì.
-     */
-    case 'GET /api/run/active':
-      return json(res, 200, { runs: activeRuns() });
-
-    /**
-     * Nối lại một lượt đang chạy: trả toàn bộ log đã có, rồi stream tiếp.
-     *
-     * Cùng khuôn sự kiện với lúc bấm nút chạy, nên giao diện dùng lại đúng một
-     * đường xử lý thay vì có hai kiểu log.
-     */
-    case 'GET /api/run/attach': {
-      const id = url.searchParams.get('id') ?? '';
-      const live = findActiveRun(id);
-      if (!live) return json(res, 404, { error: 'Lượt chạy này không còn chạy nữa.' });
-      res.writeHead(200, {
-        'content-type': 'text/event-stream; charset=utf-8',
-        'cache-control': 'no-cache',
-        connection: 'keep-alive',
-      });
-      const send = (event: string, data: unknown) =>
-        res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
-      const { history, dropped, off } = live.subscribe((line) => send('log', line));
-      if (dropped > 0) send('dropped', dropped);
-      for (const line of history) send('log', line);
-      // Con chết thì đường dây này cũng phải đóng, nếu không trang treo mãi ở
-      // trạng thái "đang chạy" — đúng cái bệnh đang chữa, chỉ đổi chỗ.
-      const finish = () => { off(); send('done', { ok: true }); res.end(); };
-      const timer = setInterval(() => { if (!findActiveRun(id)) { clearInterval(timer); finish(); } }, 1_000);
-      req.on('close', () => { clearInterval(timer); off(); });
-      return;
-    }
-
-    case 'POST /api/run': {
-      const body = await readJson<{
-        platform: string; tag?: string; headed?: boolean;
-        includeQuarantined?: boolean; devices?: string[]; env?: string;
-        appSource?: 'device' | 'upload';
-      }>(req);
-      // Ticked devices arrive qualified as `platform:id`, because an id alone
-      // cannot say which phone it means once both platforms are on offer.
-      const picked = (body.devices ?? []).map(parseDeviceToken).filter(Boolean) as PickedDevice[];
-
-      // One device is the single-device path, unchanged — not a parallel run of
-      // size one, which would suffix its directory and defer its writes for no
-      // reason. Only a genuine second device changes how this runs.
-      if (picked.length > 1) {
-        // The platforms to run are the ones actually ticked, not whatever the
-        // Platform select happens to show: the select is only the default for
-        // when nothing is ticked at all.
-        const platforms = [...new Set(picked.map((d) => d.platform))].join(',');
-        const tokens = picked.map((d) => `${d.platform}:${d.id}`);
-        return stream(res, (log) =>
-          runSuiteParallel(
-            platforms, tokens, body.tag, Boolean(body.includeQuarantined), log, body.env, body.appSource,
-          ));
-      }
-
-      const one = picked[0];
-      // A platform with no `devices` list has a single synthesised entry whose
-      // id is the platform's own name. Passing `--device` for it would suffix
-      // the run directory and gain nothing, so the plain path is used instead.
-      const named = one ? await isNamedDevice(one) : false;
-      return stream(res, async (log) => {
-        await runSuite(
-          one?.platform ?? body.platform,
-          body.tag,
-          Boolean(body.headed),
-          Boolean(body.includeQuarantined),
-          log,
-          named ? one!.id : undefined,
-          body.env,
-          undefined,
-          undefined,
-          body.appSource,
-        );
-      });
-    }
-
-    case 'POST /api/run/stop':
-      return json(res, 200, await stopSuite());
-
     // The cheat sheet shown beside the scenario editor. Generated from the
     // vocabulary and the action registry so it cannot describe a syntax the
     // runner does not accept.
@@ -481,27 +395,6 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
 
     case 'GET /api/builds':
       return json(res, 200, await buildInventory(await loadConfig(CONFIG_FILE)));
-
-    /**
-     * Nội dung log của một lượt chạy, lấy riêng khi người dùng bung nó ra.
-     *
-     * Tách khỏi /api/state vì log là thứ dài nhất mà lại ít được xem nhất: gửi
-     * kèm nghĩa là trả giá cho nó sau mỗi thao tác trên trang, cho mọi lượt chạy.
-     */
-    case 'GET /api/run/log': {
-      const id = url.searchParams.get('id') ?? '';
-      const cfg = await loadConfig(CONFIG_FILE);
-      // Id đi thẳng vào đường dẫn file, nên phải chặn ../ trước khi chạm đĩa.
-      const dir = path.resolve(cfg.paths.runs, id);
-      if (!id || !dir.startsWith(path.resolve(cfg.paths.runs) + path.sep)) {
-        return json(res, 400, { error: 'Run id không hợp lệ.' });
-      }
-      const file = path.join(dir, 'log.txt');
-      if (!existsSync(file)) return json(res, 404, { error: 'Lượt chạy này không có log.' });
-      res.writeHead(200, { 'content-type': 'text/plain; charset=utf-8' });
-      res.end(await readFile(file, 'utf8'));
-      return;
-    }
 
     /* ---- AWS Device Farm ---- */
 
@@ -2367,223 +2260,11 @@ function spawnStep(bin: string, args: string[], log: (l: string) => void): Promi
  * nobody able to stop it. A set reaches all of them.
  */
 
-/**
- * Theo dõi một tiến trình con cho tới lúc nó chết.
- *
- * Set trong RAM đủ để nút Dừng làm việc khi server còn sống. Tệp PID là cho
- * trường hợp server KHÔNG còn sống — lúc đó Set biến mất còn tiến trình con
- * thì không, vì giết cha không giết con.
- */
-function track(child: ReturnType<typeof spawn>, signature: string, label: string): void {
-  runChildren.add(child);
-  if (child.pid !== undefined) orphans.add(child.pid, signature, label);
-  const forget = () => {
-    runChildren.delete(child);
-    if (child.pid !== undefined) orphans.remove(child.pid);
-  };
-  child.on('close', forget);
-  child.on('error', forget);
-}
-
 /** Delegates to the CLI so the UI and a terminal run exactly the same code. */
-interface RunSuiteOutcome {
-  code: number | null;
-  stopped: boolean;
-  reportPaths: string[];
-  runDirs: string[];
-}
-
-function runSuite(
-  platform: string,
-  tag: string | undefined,
-  headed: boolean,
-  includeQuarantined: boolean,
-  log: (l: string) => void,
-  /** One named device, when the picker chose exactly one. Otherwise the default. */
-  device?: string,
-  /**
-   * SIT / UAT / prod. Local runs only — Device Farm has no route to those
-   * servers, so the farm card deliberately offers no such choice.
-   */
-  env?: string,
-  /** Limit a Studio workflow to the feature generated by that workflow. */
-  feature?: string,
-  /** Extra scenario attempts, used only after a locator-classified failure. */
-  locatorRetries?: number,
-  /**
-   * Lấy app ở đâu cho lượt này: bản đã cài sẵn trên máy, hay bản đã tải lên.
-   *
-   * Hỏi ở màn chạy chứ không phải ở cấu hình, vì câu trả lời đổi theo từng lượt:
-   * sáng chạy trên bản vừa cắm máy cài tay, chiều chạy lại trên bản build mới.
-   */
-  appSource?: 'device' | 'upload',
-  /** Park shared-store changes in each run directory for one coordinator to merge. */
-  deferSharedWrites = false,
-): Promise<RunSuiteOutcome> {
-  return new Promise<RunSuiteOutcome>((resolve, reject) => {
-    const bin = path.resolve('node_modules/.bin/tsx');
-    const args = [
-      'src/cli/run.ts',
-      '--platform',
-      platform,
-      ...(device ? ['--device', device] : []),
-      ...(env ? ['--env', env] : []),
-      ...(feature ? ['--feature', feature] : []),
-      ...(locatorRetries !== undefined ? ['--locator-retries', String(locatorRetries)] : []),
-      ...(appSource ? ['--app-source', appSource] : []),
-      ...(appSource === 'upload' && platform !== 'web' ? ['--reinstall'] : []),
-      ...(deferSharedWrites ? ['--defer-shared-writes'] : []),
-      ...(tag ? ['--tag', tag] : []),
-      ...(headed ? ['--headed'] : []),
-      ...(includeQuarantined ? ['--include-quarantined'] : []),
-    ];
-    log(`$ tsx ${args.join(' ')}`);
-
-    const child = spawn(bin, args, { env: process.env });
-    // Tag từ UI đã mang sẵn dấu @; thêm một cái nữa thành "@@feature-dang-nhap"
-    // trong danh sách lượt chạy đang sống.
-    const label = `${platform}${device ? ` · ${device}` : ''}${tag ? ` · ${tag.startsWith('@') ? tag : `@${tag}`}` : ''}`;
-    track(child, 'src/cli/run.ts', `run ${label}`);
-    // Mọi dòng đi qua sổ lượt chạy đang sống, không chỉ qua đường dây SSE của
-    // tab đã bấm nút. Đó là thứ cho phép một trang khác nối lại sau khi reload.
-    const live = beginActiveRun(label, 'run');
-    const reportPaths: string[] = [];
-    const runDirs: string[] = [];
-    const pipe = (chunk: Buffer) => chunk.toString().split('\n').filter(Boolean).map(cleanLog).forEach((line) => {
-      const report = /^\[run\] report -> (.+)$/.exec(line)?.[1]?.trim();
-      if (report && !reportPaths.includes(report)) reportPaths.push(report);
-      // Con báo thư mục của nó ở dòng này; từ đây log ghi được xuống đĩa, và
-      // những dòng đã trôi qua được ghi bù.
-      const dir = /^\[run:dir\] (.+)$/.exec(line)?.[1]?.trim();
-      if (dir) {
-        const absoluteDir = path.resolve(dir);
-        if (!runDirs.includes(absoluteDir)) runDirs.push(absoluteDir);
-        live.attachDir(absoluteDir);
-      }
-      live.push(line);
-      log(line);
-    });
-    child.stdout.on('data', pipe);
-    child.stderr.on('data', pipe);
-    child.on('error', (err) => { runChildren.delete(child); endActiveRun(live); reject(err); });
-    child.on('close', (code) => {
-      runChildren.delete(child);
-      const stopped = code === null || code === 130 || code === 143;
-      log(
-        code === 0
-          ? '\n✓ Tất cả test đã pass.'
-          // Exit 2 means nothing failed but not everything ran. Saying "tất cả
-          // test đã pass" here would be false: the scenarios that were skipped
-          // are precisely the ones somebody just edited.
-          : code === 2
-            ? '\n✎ Test đã chạy không có lỗi, nhưng có kịch bản chưa duyệt nên chưa được chạy — xem danh sách bên trên.'
-            : stopped
-              ? '\n⊘ Test đã bị dừng.'
-              : `\n✗ Test kết thúc với lỗi (mã ${code}) — xem log bên trên để biết chi tiết.`,
-      );
-      endActiveRun(live);
-      resolve({ code, stopped, reportPaths, runDirs });
-    });
-  });
-}
-
-interface PickedDevice { platform: 'android' | 'ios'; id: string; }
 
 /** `android:pixel` -> {platform, id}. Anything malformed is dropped, not guessed at. */
-function parseDeviceToken(token: string): PickedDevice | null {
-  const [platform, ...rest] = token.split(':');
-  const id = rest.join(':');
-  if (!id || (platform !== 'android' && platform !== 'ios')) return null;
-  return { platform, id };
-}
 
 /** Whether the config lists this device, as opposed to synthesising it. */
-async function isNamedDevice(picked: PickedDevice): Promise<boolean> {
-  try {
-    const cfg = await loadConfig(CONFIG_FILE);
-    const listed = picked.platform === 'android' ? cfg.android.devices : cfg.ios.devices;
-    return Boolean(listed?.some((d) => d.id === picked.id));
-  } catch {
-    return false;
-  }
-}
-
-/**
- * Runs the suite on several devices, by handing the job to the parallel CLI.
- *
- * Deliberately not reimplemented here. Port validation, per-device log
- * prefixes, and the single sequential merge that keeps three devices from
- * erasing each other's learnings all live in run-parallel.ts; a second copy
- * inside the server is a second copy to get wrong.
- */
-function runSuiteParallel(
-  platform: string,
-  devices: string[],
-  tag: string | undefined,
-  includeQuarantined: boolean,
-  log: (l: string) => void,
-  env?: string,
-  appSource?: 'device' | 'upload',
-) {
-  return new Promise<void>((resolve, reject) => {
-    const bin = path.resolve('node_modules/.bin/tsx');
-    const args = [
-      'src/cli/run-parallel.ts',
-      '--platform', platform,
-      '--devices', devices.join(','),
-      ...(env ? ['--env', env] : []),
-      ...(appSource ? ['--app-source', appSource] : []),
-      ...(appSource === 'upload' ? ['--reinstall'] : []),
-      ...(tag ? ['--tag', tag] : []),
-      ...(includeQuarantined ? ['--include-quarantined'] : []),
-    ];
-    log(`$ tsx ${args.join(' ')}`);
-
-    const child = spawn(bin, args, { env: process.env });
-    track(child, 'src/cli/run-parallel.ts', `run song song ${platform}`);
-    const pipe = (chunk: Buffer) =>
-      chunk.toString().split('\n').filter(Boolean).map(cleanLog).forEach(log);
-    child.stdout.on('data', pipe);
-    child.stderr.on('data', pipe);
-    child.on('error', (err) => { runChildren.delete(child); reject(err); });
-    child.on('close', (code) => {
-      runChildren.delete(child);
-      const stopped = code === null || code === 130 || code === 143;
-      log(
-        code === 0
-          ? `\n✓ Tất cả ${devices.length} thiết bị đã pass.`
-          : stopped
-            ? '\n⊘ Test đã bị dừng.'
-            : `\n✗ Có thiết bị fail (mã ${code}) — xem log theo tiền tố [tên máy] ở trên.`,
-      );
-      resolve();
-    });
-  });
-}
-
-/**
- * Kills every test suite this server started, and the WebDriverAgent runner
- * with it.
- *
- * Killing only the suite leaves the `xcodebuild` running WDA orphaned to init,
- * which keeps the XCUITest alive on the phone: iOS goes on showing its
- * "Automation running — hold both volume buttons to stop" banner, and the next
- * iOS session inherits a runner nobody is talking to. Stopping the run has to
- * mean stopping what the run left on the device.
- */
-async function stopSuite(): Promise<{ stopped: boolean; wda: boolean }> {
-  let stopped = 0;
-  for (const child of runChildren) {
-    if (child.exitCode !== null) continue;
-    // SIGTERM first; the tsx/node process should clean up and exit. A parallel
-    // run passes it on to its own per-device children before merging what they
-    // managed to learn, so stopping is not the same as discarding.
-    child.kill('SIGTERM');
-    stopped += 1;
-  }
-  const wda = await stopWebDriverAgent();
-  return { stopped: stopped > 0, wda };
-}
 
 /* ------------------------------------------------------------------ */
 /* Plumbing                                                            */
