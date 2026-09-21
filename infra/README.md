@@ -51,6 +51,21 @@ npm run ui
 Không đặt `TESTPILOT_MODE=server` thì bản local chạy y như cũ: một người, một
 máy, không đăng nhập, dữ liệu là file trên đĩa.
 
+## Đưa dữ liệu hiện có vào Postgres
+
+```bash
+npx tsx scripts/migrate-json-to-db.ts            # chỉ xem, không ghi
+npx tsx scripts/migrate-json-to-db.ts --apply    # ghi thật
+```
+
+Mặc định **không ghi gì**: một script di trú chạy nhầm trên đúng cơ sở dữ liệu
+thật là loại nhầm không hoàn tác được bằng Ctrl-Z. Chạy lại nhiều lần an toàn —
+registry ghi theo `(org, kind, key)`, job ghi theo id.
+
+Lượt chạy local (`runs/`) **không** được di trú, có chủ ý: chúng mô tả thư mục
+trên đĩa máy chạy test, và ở chế độ server thư mục ấy không nằm trên server.
+Chúng đi lên cùng artifact khi runner đẩy kết quả.
+
 ## Dọn
 
 ```bash
