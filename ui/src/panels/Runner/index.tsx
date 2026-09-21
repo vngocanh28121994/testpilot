@@ -139,7 +139,9 @@ export default function RunnerPanel() {
     // Chặn vòng lặp: một cú nối hỏng ngay sẽ lập tức kéo effect chạy lại.
     if (Date.now() - lastAttachAt.current < 3_000) return;
     lastAttachAt.current = Date.now();
-    job.attach(`${ROUTES.runAttach}?id=${encodeURIComponent(liveRun.id)}`);
+    // `since` nói ra tab này đang có tới dòng nào. Rớt mạng vài giây thì nhận
+    // đúng phần thiếu; tab vừa tải lại có lastSeq = 0 và nhận trọn lịch sử.
+    job.attach(`${ROUTES.runAttach}?id=${encodeURIComponent(liveRun.id)}&since=${job.lastSeq}`);
   }, [liveRun, job]);
   const preflight = useQuery({
     // Máy đang chọn nằm trong khoá cache: chọn máy khác là một câu hỏi khác,

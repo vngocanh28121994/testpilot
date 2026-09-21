@@ -71,6 +71,7 @@ describe('PreflightChecks', () => {
           status: 'error',
           error: 'Cổng 4723 đang bị chiếm.',
           dropped: 0,
+          lastSeq: 0,
           controller: null,
         },
       },

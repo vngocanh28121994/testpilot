@@ -67,6 +67,9 @@ export async function streamJob(
 
         if (event === 'log') {
           onFrame({ type: 'log', line: String(data) });
+        } else if (event === 'attached') {
+          const at = data as { lastSeq?: number; dropped?: number };
+          onFrame({ type: 'attached', lastSeq: at.lastSeq ?? 0, dropped: at.dropped ?? 0 });
         } else if (event === 'run') {
           lastRun = data as WorkflowRun;
           onFrame({ type: 'run', run: lastRun });

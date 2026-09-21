@@ -24,6 +24,7 @@ describe('Runner — lượt local vừa hoàn tất', () => {
           status: 'done',
           error: null,
           dropped: 0,
+          lastSeq: 0,
           controller: null,
         },
       },

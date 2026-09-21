@@ -37,6 +37,14 @@ export interface Job {
   error: string | null;
   /** Số dòng đã bị cắt khỏi đầu buffer, để UI nói được "đã ẩn N dòng đầu". */
   dropped: number;
+  /**
+   * Dòng log cuối cùng tab này đã nhận, theo cách đánh số của server.
+   *
+   * Gửi lại làm `since` khi nối lại: một lần rớt mạng vài giây không nên kéo
+   * theo việc vẽ lại toàn bộ log. Bắt đầu từ 0 nghĩa là "tôi chưa có gì", và
+   * đó đúng là tình trạng của một tab vừa tải lại.
+   */
+  lastSeq: number;
   controller: AbortController | null;
 }
 
@@ -46,6 +54,7 @@ const EMPTY: Job = {
   status: 'idle',
   error: null,
   dropped: 0,
+  lastSeq: 0,
   controller: null,
 };
 
@@ -60,9 +69,13 @@ function applyFrame(job: Job, frame: JobFrame): Job {
         ...job,
         logs: overflow ? logs.slice(overflow) : logs,
         dropped: job.dropped + overflow,
-        ...(frame.type === 'error' ? { error: frame.message } : {}),
+        // Dòng lỗi là do client tự thêm, không phải dòng của server — đếm nó
+        // vào `lastSeq` sẽ làm lần nối lại sau bỏ qua một dòng thật.
+        ...(frame.type === 'log' ? { lastSeq: job.lastSeq + 1 } : { error: frame.message }),
       };
     }
+    case 'attached':
+      return { ...job, lastSeq: frame.lastSeq };
     case 'run':
       return { ...job, run: frame.run };
     case 'done':

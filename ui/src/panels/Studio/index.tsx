@@ -142,7 +142,9 @@ function StudioFormPanel({ state }: { state: StateResponse }) {
     if (job.status !== 'idle' || job.logs.length > 0) return;
     attached.current = true;
     reviewHandoffArmed.current = true;
-    job.attach(`${ROUTES.runAttach}?id=${encodeURIComponent(liveWorkflow.id)}`);
+    // `since` nói ra tab này đang có tới dòng nào. Rớt mạng vài giây thì nhận
+    // đúng phần thiếu; tab vừa tải lại có lastSeq = 0 và nhận trọn lịch sử.
+    job.attach(`${ROUTES.runAttach}?id=${encodeURIComponent(liveWorkflow.id)}&since=${job.lastSeq}`);
   }, [liveWorkflow, job]);
   const completion = useWorkflowCompletion();
   const runs = useRecentRuns();

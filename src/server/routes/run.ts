@@ -44,7 +44,18 @@ export const runRoutes: RouteTable = {
     });
     const send = (event: string, data: unknown) =>
       res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
-    const { history, dropped, off } = live.subscribe((line) => send('log', line));
+    // `since` = dòng cuối cùng tab này ĐÃ CÓ. Một tab vừa tải lại không có gì,
+    // nên nó không gửi tham số và nhận trọn lịch sử — hành vi cũ. Một tab chỉ
+    // rớt kết nối vài giây thì nói ra nó đang ở đâu và nhận đúng phần thiếu,
+    // thay vì vẽ lại tám nghìn dòng nó đang có sẵn.
+    const since = Number(url.searchParams.get('since') ?? 0);
+    const { history, dropped, lastSeq, off } = live.subscribe(
+      (line) => send('log', line),
+      Number.isFinite(since) && since > 0 ? since : 0,
+    );
+    // Nói ra chỗ đang đứng TRƯỚC khi gửi log, để tab biết lấy `since` cho lần
+    // nối lại sau ngay cả khi lượt chạy kết thúc ngay sau đó.
+    send('attached', { lastSeq, dropped });
     if (dropped > 0) send('dropped', dropped);
     for (const line of history) send('log', line);
     // Con chết thì đường dây này cũng phải đóng, nếu không trang treo mãi ở

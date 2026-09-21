@@ -25,6 +25,15 @@ export interface ActiveRunView {
   lines: number;
   /** Số dòng đã bị cắt khỏi đầu đệm. Giao diện nói ra thay vì im lặng. */
   dropped: number;
+  /**
+   * Số thứ tự của dòng cuối cùng đã phát.
+   *
+   * Đây là thứ cho phép một tab nối lại mà KHÔNG nhận lại từ đầu: nó nói "tôi
+   * đã có tới dòng N", server gửi tiếp từ N+1. Cùng ý nghĩa với `JobEvent.seq`
+   * trong `src/protocol/messages.ts`, và ở P2 nó chính là khoá của bảng
+   * `job_event`.
+   */
+  lastSeq: number;
   /** Thư mục lượt chạy, khi con đã báo. */
   runDir?: string;
 }
@@ -35,8 +44,10 @@ interface Listener {
 
 class ActiveRun {
   readonly startedAt = new Date().toISOString();
-  private buffer: string[] = [];
+  /** Dòng log kèm số thứ tự; `seq` không bao giờ lùi, kể cả khi đệm bị cắt. */
+  private buffer: Array<{ seq: number; line: string }> = [];
   private dropped = 0;
+  private lastSeq = 0;
   private listeners = new Set<Listener>();
   private logFile?: string;
 
@@ -56,7 +67,8 @@ class ActiveRun {
     try {
       if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
       this.logFile = path.join(dir, 'log.txt');
-      writeFileSync(this.logFile, this.buffer.join('\n') + (this.buffer.length ? '\n' : ''), 'utf8');
+      const text = this.buffer.map((entry) => entry.line).join('\n');
+      writeFileSync(this.logFile, text + (this.buffer.length ? '\n' : ''), 'utf8');
     } catch {
       // Không ghi được thì vẫn phải chạy tiếp; đệm trong RAM vẫn dùng được.
       this.logFile = undefined;
@@ -68,7 +80,8 @@ class ActiveRun {
   }
 
   push(line: string): void {
-    this.buffer.push(line);
+    this.lastSeq += 1;
+    this.buffer.push({ seq: this.lastSeq, line });
     if (this.buffer.length > MAX_LINES) {
       this.dropped += this.buffer.length - MAX_LINES;
       this.buffer = this.buffer.slice(-MAX_LINES);
@@ -81,12 +94,30 @@ class ActiveRun {
     for (const listener of this.listeners) listener(line);
   }
 
-  /** Trả về log đã có, rồi nối tiếp. Đây là toàn bộ điểm của việc nối lại. */
-  subscribe(listener: Listener): { history: string[]; dropped: number; off: () => void } {
+  /**
+   * Trả về log đã có, rồi nối tiếp. Đây là toàn bộ điểm của việc nối lại.
+   *
+   * `since` là số thứ tự dòng cuối cùng mà người gọi ĐÃ CÓ. Không truyền thì
+   * nhận tất cả — đúng hành vi cũ, và đúng thứ một tab vừa tải lại cần.
+   *
+   * Nếu phần người gọi thiếu đã bị cắt khỏi đệm thì họ nhận trọn phần còn lại
+   * kèm `dropped`. Im lặng gửi tiếp từ chỗ còn sót sẽ để lại một lỗ hổng giữa
+   * những gì họ có và những gì họ nhận — một lỗ hổng không ai nhìn thấy.
+   */
+  subscribe(
+    listener: Listener,
+    since = 0,
+  ): { history: string[]; dropped: number; lastSeq: number; off: () => void } {
     this.listeners.add(listener);
+    const firstAvailable = this.buffer[0]?.seq ?? this.lastSeq + 1;
+    const gap = since > 0 && since + 1 < firstAvailable;
+    const history = since > 0 && !gap
+      ? this.buffer.filter((entry) => entry.seq > since)
+      : this.buffer;
     return {
-      history: [...this.buffer],
-      dropped: this.dropped,
+      history: history.map((entry) => entry.line),
+      dropped: gap || since === 0 ? this.dropped : 0,
+      lastSeq: this.lastSeq,
       off: () => this.listeners.delete(listener),
     };
   }
@@ -99,6 +130,7 @@ class ActiveRun {
       startedAt: this.startedAt,
       lines: this.buffer.length,
       dropped: this.dropped,
+      lastSeq: this.lastSeq,
       ...(this.dir ? { runDir: path.basename(this.dir) } : {}),
     };
   }

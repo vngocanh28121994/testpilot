@@ -709,6 +709,12 @@ export interface UploadBuildResponse {
  */
 export type JobFrame =
   | { type: 'log'; line: string }
+  /**
+   * Khung đầu tiên của `GET /api/run/attach`: tab này đang đứng ở đâu trong
+   * dòng log. Dùng làm `since` cho lần nối lại sau, để không phải nhận lại
+   * tám nghìn dòng nó đang có sẵn.
+   */
+  | { type: 'attached'; lastSeq: number; dropped: number }
   | { type: 'run'; run: WorkflowRun }
   | { type: 'error'; message: string }
   | { type: 'done'; ok: boolean };
