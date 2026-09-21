@@ -103,6 +103,10 @@ import {
   serveStaticRequest,
   stream,
 } from '../server/http.js';
+import { mergeTables, type RouteContext } from '../server/routes/types.js';
+import { catalogRoutes } from '../server/routes/catalog.js';
+import { configRevision, configRoutes } from '../server/routes/config.js';
+import { historyRoutes, recentRuns } from '../server/routes/history.js';
 import {
   ActionRegistry,
   validateExecutableAction,
@@ -122,23 +126,6 @@ const CONFIG_PROFILE = await ensurePersonalConfig(personalConfigProfile());
 const CONFIG_FILE = CONFIG_PROFILE.file;
 // Every CLI child spawned by the UI must read the same user's profile.
 process.env.TESTPILOT_CONFIG = CONFIG_FILE;
-
-/**
- * Shown when the Anthropic Models API cannot be reached despite a key being
- * present — offline, a restricted org, a transient 5xx.
- *
- * Deliberately NOT shown when there is no key at all. A server with no key can
- * run none of these, and offering them tells someone whose config pins a
- * DeepSeek model that their model has disappeared and four Anthropic ones have
- * arrived — a list that is wrong in both directions. Silence plus the reason is
- * the honest answer there.
- */
-const FALLBACK_MODELS = [
-  { id: 'claude-opus-5', display_name: 'Claude Opus 5' },
-  { id: 'claude-sonnet-5', display_name: 'Claude Sonnet 5' },
-  { id: 'claude-opus-4-8', display_name: 'Claude Opus 4.8' },
-  { id: 'claude-haiku-4-5', display_name: 'Claude Haiku 4.5' },
-];
 
 await adoptStoredApiKeys();
 
@@ -196,104 +183,29 @@ for (const signal of ['SIGINT', 'SIGTERM'] as const) {
 
 listen(handle);
 
+/**
+ * Route đã tách khỏi `switch`. Tra bảng trước, không thấy thì rơi xuống dưới.
+ *
+ * Hai chỗ so khớp cùng một lúc là tạm thời và có chủ ý: nó cho phép chuyển vài
+ * route mỗi commit mà bản đang chạy không gián đoạn. Khi `switch` rỗng thì bảng
+ * là chỗ duy nhất — đó là điều kiện hoàn thành P1.2.
+ */
+const ROUTES = mergeTables(catalogRoutes, configRoutes, historyRoutes);
+
 async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> {
   const url = new URL(req.url ?? '/', `http://localhost:${PORT}`);
   const route = `${req.method} ${url.pathname}`;
+
+  const ctx: RouteContext = { configFile: CONFIG_FILE };
+  const moved = ROUTES[route];
+  if (moved) return moved(req, res, url, ctx);
 
   switch (route) {
     case 'GET /api/state':
       return json(res, 200, await state());
 
-    case 'PUT /api/config': {
-      const body = await readJson<TestPilotConfig>(req);
-      // Bản mà trình duyệt dựa vào khi mở màn Cấu hình. Thiếu nó thì vẫn ghi —
-      // CLI và script cũ không biết gửi, và chặn chúng lại là phá việc đang chạy.
-      const baseRevision = url.searchParams.get('baseRevision');
-      if (baseRevision) {
-        const current = await configRevision();
-        if (current && current !== baseRevision) {
-          return json(res, 409, {
-            error:
-              'Cấu hình đã thay đổi ở nơi khác kể từ lúc bạn mở màn này — '
-              + 'ví dụ vừa tải một bản build lên ở màn Bản build. '
-              + 'Tải lại trang rồi sửa tiếp, để thay đổi kia không bị ghi đè.',
-            revision: current,
-          });
-        }
-      }
-      const parsed = ConfigSchema.safeParse(body);
-      if (!parsed.success) {
-        return json(res, 400, {
-          error: 'Config không hợp lệ',
-          issues: parsed.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`),
-        });
-      }
-      await saveConfig(parsed.data, CONFIG_FILE);
-      return json(res, 200, { ok: true, config: parsed.data });
-    }
-
-    case 'POST /api/model-key': {
-      const body = await readJson<{
-        provider: 'anthropic' | 'deepseek' | 'gemini';
-        key: string;
-      }>(req);
-      const keyNames = {
-        anthropic: 'ANTHROPIC_API_KEY',
-        deepseek: 'DEEPSEEK_API_KEY',
-        gemini: 'GEMINI_API_KEY',
-      } as const;
-      const name = keyNames[body.provider];
-      if (!name) return json(res, 400, { error: 'AI provider không hợp lệ.' });
-      const key = body.key?.trim();
-      if (!key) return json(res, 400, { error: 'API key không được để trống.' });
-      const secrets = await Secrets.load();
-      secrets.setApiKey(name, key);
-      await secrets.save();
-      process.env[name] = key;
-      return json(res, 200, { ok: true });
-    }
-
-    /**
-     * The Confluence credential, stored the same way model keys are: written to
-     * the local secrets file, adopted into this process, and never read back.
-     * The GET reports only whether one is set, so a screen-share of the settings
-     * page cannot leak it.
-     */
-    case 'GET /api/confluence-auth': {
-      const secrets = await Secrets.load();
-      const email = secrets.apiKey('CONFLUENCE_EMAIL') || process.env.CONFLUENCE_EMAIL || '';
-      const hasToken = Boolean(
-        secrets.apiKey('CONFLUENCE_API_TOKEN') || process.env.CONFLUENCE_API_TOKEN,
-      );
-      return json(res, 200, { email, hasToken });
-    }
-
-    case 'POST /api/confluence-auth': {
-      const body = await readJson<{ email?: string; token?: string }>(req);
-      const email = body.email?.trim();
-      const token = body.token?.trim();
-      if (!email || !token) {
-        return json(res, 400, { error: 'Cần cả email Atlassian và API token.' });
-      }
-      const secrets = await Secrets.load();
-      secrets.setApiKey('CONFLUENCE_EMAIL', email);
-      secrets.setApiKey('CONFLUENCE_API_TOKEN', token);
-      await secrets.save();
-      process.env.CONFLUENCE_EMAIL = email;
-      process.env.CONFLUENCE_API_TOKEN = token;
-      return json(res, 200, { ok: true });
-    }
-
     case 'POST /api/mcp/tools':
       return json(res, 200, await mcpTools(await readJson(req)));
-
-    case 'GET /api/models':
-      return json(res, 200, await models());
-
-    case 'GET /api/history': {
-      const body: HistoryResponse = { runs: await recentRuns() };
-      return json(res, 200, body);
-    }
 
     case 'GET /api/healing': {
       const cfg = await loadConfig(CONFIG_FILE);
@@ -901,46 +813,12 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
       });
     }
 
-    case 'GET /api/vocabulary': {
-      const cfg = await loadConfig(CONFIG_FILE);
-      const [registry, actions] = await Promise.all([
-        Registry.load(cfg.paths.registry),
-        ActionRegistry.load(cfg.paths.actionsDb),
-      ]);
-      return json(res, 200, {
-        forms: STEP_RULES.map((rule) => ({
-          id: rule.id,
-          group: rule.group,
-          doc: rule.doc,
-          hint: rule.hint,
-        })),
-        actions: actions
-          .list()
-          .filter((action) => action.status === 'approved')
-          .map((action) => ({
-            id: action.id,
-            label: action.label,
-            phraseTemplate: action.phraseTemplate,
-            parameters: action.parameters,
-          })),
-        elements: Object.values(registry.raw.elements)
-          .map((el) => ({ id: el.id, label: el.label, screen: el.screen }))
-          .sort((a, b) => a.screen.localeCompare(b.screen) || a.label.localeCompare(b.label)),
-      });
-    }
-
     case 'POST /api/feature/normalize': {
       const { content } = await readJson<{ content: string }>(req);
       const cfg = await loadConfig(CONFIG_FILE);
       const registry = await Registry.load(cfg.paths.registry);
       const actions = await ActionRegistry.load(cfg.paths.actionsDb);
       return json(res, 200, await normalizeFeatureDraft(content, registry, actions, pickModel(cfg.llm.model)));
-    }
-
-    case 'GET /api/actions': {
-      const cfg = await loadConfig(CONFIG_FILE);
-      const actions = await ActionRegistry.load(cfg.paths.actionsDb);
-      return json(res, 200, { actions: actions.list() });
     }
 
     case 'POST /api/actions/review': {
@@ -1222,7 +1100,7 @@ async function state(): Promise<StateResponse> {
   return {
     config,
     configError,
-    configRevision: await configRevision(),
+    configRevision: await configRevision(CONFIG_FILE),
     configProfile: {
       owner: CONFIG_PROFILE.owner,
       source: CONFIG_PROFILE.source,
@@ -1561,14 +1439,6 @@ async function listFeatures(cfg: TestPilotConfig) {
  * Đọc thẳng file thay vì hash cấu hình đã parse: mặc định của schema có thể đổi
  * theo phiên bản, còn file thì là thứ hai bên thật sự tranh nhau ghi.
  */
-async function configRevision(): Promise<string | undefined> {
-  try {
-    return createHash('sha256').update(await readFile(CONFIG_FILE, 'utf8')).digest('hex');
-  } catch {
-    return undefined;
-  }
-}
-
 function featureRevision(content: string): string {
   return createHash('sha256').update(content).digest('hex');
 }
@@ -1707,18 +1577,6 @@ async function mcpTools(cfg: unknown) {
   } finally {
     await bridge.close().catch(() => {});
   }
-}
-
-async function models() {
-  const result = await listModels();
-  // The browser shows what "auto" resolves to, which depends on the keys this
-  // server has, not on a constant the page could hardcode.
-  const auto = pickModel('auto');
-  if (result.models.length > 0) return { ...result, auto };
-  // A key exists but the list did not arrive: guessing is better than nothing,
-  // because those models are the ones the key can actually run.
-  if (llmAvailable()) return { ...result, auto, models: FALLBACK_MODELS };
-  return { ...result, auto, reason: result.reason ?? missingKeyHint() };
 }
 
 /**
@@ -2832,11 +2690,6 @@ async function summarizeWorkflowRecovery(reportPaths: string[]): Promise<Workflo
  * accounts were sent — never the values — so the exposure is at least visible
  * in the run's own record.
  */
-
-async function recentRuns(): Promise<RunHistoryEntry[]> {
-  const history = await History.load();
-  return history.list().map((r) => ({ ...r, stagesDone: stagesDone(r) }));
-}
 
 /* ------------------------------------------------------------------ */
 /* AWS Device Farm                                                     */

@@ -1,0 +1,53 @@
+/**
+ * Hình dạng của một route sau khi tách khỏi `switch` khổng lồ trong
+ * `src/ui/server.ts`.
+ *
+ * Bảng `Record<"METHOD /path", handler>` chứ không phải một router có regex:
+ * hôm nay `handle()` so khớp chuỗi `"GET /api/state"` y như thế, nên giữ đúng
+ * cách so khớp ấy là giữ đúng hành vi. Thêm một router mới vào giữa lúc đang
+ * chuyển route là thay hai thứ cùng lúc rồi không biết cái nào làm hỏng.
+ *
+ * Route chuyển dần: `handle()` tra bảng trước, không thấy thì rơi vào `switch`
+ * cũ. Nhờ vậy mỗi commit chuyển được vài route mà bản đang chạy không gián
+ * đoạn. Xem [FARM-ROUTE-MAP.md](../../../FARM-ROUTE-MAP.md).
+ */
+import type { IncomingMessage, ServerResponse } from 'node:http';
+
+/**
+ * Thứ một handler cần mà nó không tự dựng được.
+ *
+ * Cố tình nhỏ. Mỗi trường thêm vào đây là một sợi dây buộc route với phần còn
+ * lại của server, và mục đích của P1 là cắt bớt những sợi dây ấy — không phải
+ * đổi chỗ chúng.
+ */
+export interface RouteContext {
+  /** Cấu hình của user đang chạy; xem `personalConfig.ts`. */
+  configFile: string;
+}
+
+export type RouteHandler = (
+  req: IncomingMessage,
+  res: ServerResponse,
+  url: URL,
+  ctx: RouteContext,
+) => Promise<void> | void;
+
+/** Khoá là `"METHOD /path"`, đúng chuỗi mà `handle()` dựng ra. */
+export type RouteTable = Record<string, RouteHandler>;
+
+/**
+ * Gộp các bảng, và ném khi có route trùng.
+ *
+ * Trùng khoá trong object literal là lỗi im lặng: bản sau thắng, và một route
+ * biến mất mà không ai biết cho tới khi ai đó gọi nó.
+ */
+export function mergeTables(...tables: RouteTable[]): RouteTable {
+  const merged: RouteTable = {};
+  for (const table of tables) {
+    for (const [route, handler] of Object.entries(table)) {
+      if (merged[route]) throw new Error(`Route khai báo hai lần: ${route}`);
+      merged[route] = handler;
+    }
+  }
+  return merged;
+}
