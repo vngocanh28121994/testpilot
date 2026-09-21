@@ -69,4 +69,15 @@ describe('ranh giới control plane', () => {
       'xcode',
     ]);
   });
+
+  /**
+   * Cả bốn nhóm việc, không chỉ prereq. Bài test này từng chỉ canh `prereq` và
+   * đã bỏ lọt `readAppVersion` (chạy `aapt`) vào `src/server/routes/builds.ts`
+   * ở nhóm 4 — chỗ đó bắt control plane phải có Android SDK để trả lời một câu
+   * hỏi về file.
+   */
+  it('facade có đúng bốn nhóm việc', async () => {
+    const { localRunner } = await import('../../runner/index.js');
+    assert.deepEqual(Object.keys(localRunner).sort(), ['builds', 'farm', 'prereq', 'run']);
+  });
 });

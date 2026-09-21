@@ -13,7 +13,7 @@
  */
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
 import { allRoutes } from '../index.js';
 import { mergeTables } from '../types.js';
 
@@ -68,6 +68,46 @@ describe('bảng route và switch không chồng nhau', () => {
     const at = server.indexOf('const moved = ROUTES[route];');
     assert.ok(at > 0, 'không thấy chỗ tra bảng route');
     assert.ok(at < server.indexOf('switch (route) {'), 'phải tra bảng TRƯỚC switch');
+  });
+});
+
+/**
+ * Một handler rỗng là route CHẾT: request treo cho tới khi client bỏ cuộc.
+ *
+ * Xảy ra thật ngày 2026-09-21 khi tách nhóm 4/7. Kịch bản `case 'X':` một dòng
+ * bị cắt sai: dòng `return json(...)` ở lại chỗ cũ rồi bị dọn cùng đám mồ côi,
+ * và handler mới ra đời với thân rỗng. `npm test` xanh, `typecheck` xanh —
+ * TypeScript không có gì để phàn nàn về một hàm async không trả lời — và
+ * `GET /api/builds` treo 120 giây khi gọi thật.
+ *
+ * Kiểu hỏng này im lặng theo đúng nghĩa xấu nhất: không lỗi, không log, không
+ * 500. Chỉ một cái quay vòng mãi trên giao diện.
+ */
+describe('không handler nào rỗng', () => {
+  it('mọi handler trong routes/ đều có thân', () => {
+    const files = readdirSync('src/server/routes').filter((f) => f.endsWith('.ts'));
+    const empty: string[] = [];
+    for (const file of files) {
+      const text = readFileSync(`src/server/routes/${file}`, 'utf8');
+      for (const m of text.matchAll(/^ {2}'([A-Z]+ [^']+)': [^\n]*=> \{\s*\n\s*\},/gm)) {
+        empty.push(`${file} → ${m[1]}`);
+      }
+    }
+    assert.deepEqual(empty, [], `handler rỗng: ${empty.join(', ')}`);
+  });
+
+  /** Và mỗi handler phải thực sự trả lời: `json`, `stream`, hoặc tự ghi vào res. */
+  it('mọi handler đều gọi một đường trả lời', () => {
+    const files = readdirSync('src/server/routes').filter((f) => f.endsWith('.ts'));
+    const silent: string[] = [];
+    for (const file of files) {
+      const text = readFileSync(`src/server/routes/${file}`, 'utf8');
+      for (const m of text.matchAll(/^ {2}'([A-Z]+ [^']+)': [^\n]*=> \{\n([\s\S]*?)^ {2}\},/gm)) {
+        const body = m[2]!;
+        if (!/\bjson\(|\bstream\(|res\.(end|writeHead)/.test(body)) silent.push(`${file} → ${m[1]}`);
+      }
+    }
+    assert.deepEqual(silent, [], `handler không trả lời gì: ${silent.join(', ')}`);
   });
 });
 

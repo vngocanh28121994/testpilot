@@ -17,6 +17,8 @@
  * phải nơi gọi.
  */
 import type { TestPilotConfig } from '../config.js';
+import { readAppVersion } from './appInfo.js';
+import { runOnFarm } from './farm.js';
 import {
   isNamedDevice,
   parseDeviceToken,
@@ -89,9 +91,21 @@ export interface RunnerRunApi {
   parseDeviceToken(token: string): PickedDevice | null;
 }
 
+/** Device Farm: chỉ phần phải sinh tiến trình trên máy này (đóng gói bundle). */
+export interface RunnerFarmApi {
+  run(...args: Parameters<typeof runOnFarm>): ReturnType<typeof runOnFarm>;
+}
+
+/** Đọc thông tin từ file build trên máy — cần `aapt`, nên thuộc runner. */
+export interface RunnerBuildsApi {
+  readAppVersion(file: string): ReturnType<typeof readAppVersion>;
+}
+
 export interface Runner {
   prereq: RunnerPrereqApi;
   run: RunnerRunApi;
+  farm: RunnerFarmApi;
+  builds: RunnerBuildsApi;
 }
 
 /**
@@ -120,6 +134,12 @@ export const localRunner: Runner = {
     stop: () => stopSuite(),
     isNamedDevice: (picked, configFile) => isNamedDevice(picked, configFile),
     parseDeviceToken: (token) => parseDeviceToken(token),
+  },
+  farm: {
+    run: (...args) => runOnFarm(...args),
+  },
+  builds: {
+    readAppVersion: (file) => readAppVersion(file),
   },
 };
 
