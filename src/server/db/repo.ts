@@ -13,9 +13,25 @@
  *
  * Xem [FARM-PLAN.md](../../../FARM-PLAN.md) P0.2 và [FARM-ARCHITECTURE.md](../../../FARM-ARCHITECTURE.md) mục 4.
  */
+import { createHash } from 'node:crypto';
 import type { ElementRegistry } from '../../core/types.js';
 import type { WorkflowRun } from '../../core/history.js';
 import type { RunMeta } from '../../core/runstore.js';
+
+/**
+ * Phiên bản của một bản ghi: hash của NỘI DUNG, tính giống nhau ở mọi hiện thực.
+ *
+ * Phải dùng chung một hàm, không phải "cùng một ý tưởng". Bản đầu để mỗi bên
+ * tự tính: bản file hash chuỗi JSON đã định dạng (thụt lề hai dấu cách, có
+ * xuống dòng cuối), bản Postgres hash chuỗi JSON gọn. Cùng dữ liệu, hai phiên
+ * bản khác nhau — nên một `baseRevision` lấy từ bên này không bao giờ khớp ở
+ * bên kia, và mọi lệnh ghi có đối chiếu sẽ trả 409 mãi mãi sau khi chuyển kho.
+ *
+ * Test parity bắt được chuyện đó. Nó là lý do bộ test ấy tồn tại.
+ */
+export function revisionOf(body: unknown): string {
+  return createHash('sha256').update(JSON.stringify(body)).digest('hex');
+}
 
 /**
  * Ghi một bản có phiên bản mà không biết mình đang ghi đè ai.

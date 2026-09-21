@@ -11,7 +11,6 @@
  * server.ts đang làm cho config. Nhờ vậy ghi có đối chiếu chạy được ngay trên
  * file, trước khi có DB, và P1 không phải chờ P2.
  */
-import { createHash } from 'node:crypto';
 import { existsSync } from 'node:fs';
 import { readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
@@ -22,6 +21,7 @@ import { listRuns } from '../../core/runstore.js';
 import type { RunMeta } from '../../core/runstore.js';
 import type { ElementRegistry } from '../../core/types.js';
 import {
+  revisionOf,
   RevisionConflictError,
   type JobRepo,
   type RegistryRepo,
@@ -30,13 +30,21 @@ import {
   type Versioned,
 } from './repo.js';
 
-function hash(content: string): string {
-  return createHash('sha256').update(content).digest('hex');
-}
-
+/**
+ * Phiên bản tính từ NỘI DUNG đã parse, không từ byte của file.
+ *
+ * Khác nhau ở một chỗ quan trọng: `prettier` chạy qua, một dấu xuống dòng đổi,
+ * hay `JSON.stringify` đổi cách thụt lề — byte đổi, nội dung thì không. Tính
+ * theo byte nghĩa là mọi người đang mở màn hình sẽ nhận 409 sau một lần định
+ * dạng lại file, dù chẳng ai sửa gì.
+ */
 async function fileRevision(file: string): Promise<string | undefined> {
   if (!existsSync(file)) return undefined;
-  return hash(await readFile(file, 'utf8'));
+  try {
+    return revisionOf(JSON.parse(await readFile(file, 'utf8')));
+  } catch {
+    return undefined;
+  }
 }
 
 export class FileRegistryRepo implements RegistryRepo {
@@ -49,9 +57,8 @@ export class FileRegistryRepo implements RegistryRepo {
 
   async write(next: ElementRegistry, baseRevision?: string): Promise<Versioned<ElementRegistry>> {
     await this.assertUnchanged(baseRevision);
-    const body = JSON.stringify(next, null, 2) + '\n';
-    await writeFile(this.file, body, 'utf8');
-    return { data: next, revision: hash(body) };
+    await writeFile(this.file, JSON.stringify(next, null, 2) + '\n', 'utf8');
+    return { data: next, revision: revisionOf(next) };
   }
 
   /**

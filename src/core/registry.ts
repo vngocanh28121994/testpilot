@@ -107,6 +107,18 @@ export class Registry {
     this.baseline = structuredClone(data);
   }
 
+  /**
+   * Dựng từ dữ liệu đã có trong RAM, không qua đĩa.
+   *
+   * Cần khi registry đến từ một nguồn khác file: một dòng trong Postgres
+   * (`PgRegistryRepo.merge`), hay snapshot trong `JobSpec` gửi cho runner.
+   * `path` rỗng vì bản này không có chỗ nào để `save()` — ai gọi `save()` trên
+   * nó là đang nhầm, và một đường dẫn rỗng làm cho cái nhầm ấy ồn ào ngay.
+   */
+  static fromData(data: ElementRegistry): Registry {
+    return new Registry('', structuredClone(data));
+  }
+
   static async load(path: string): Promise<Registry> {
     if (!existsSync(path)) {
       return new Registry(path, { version: 1, screens: {}, elements: {} });
