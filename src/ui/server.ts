@@ -23,6 +23,7 @@ import { closeInterruptedRuns, reindex } from '../core/runstore.js';
 import { adoptStoredApiKeys } from '../core/secrets.js';
 import { orphans, runChildren } from '../runner/execute.js';
 import { listen, PORT, serverMode } from '../server/http.js';
+import { mayAdoptIntoEnv } from '../server/auth/secrets.js';
 import { dispatch } from '../server/dispatch.js';
 
 const CONFIG_PROFILE = await ensurePersonalConfig(personalConfigProfile());
@@ -30,7 +31,14 @@ const CONFIG_FILE = CONFIG_PROFILE.file;
 // Every CLI child spawned by the UI must read the same user's profile.
 process.env.TESTPILOT_CONFIG = CONFIG_FILE;
 
-await adoptStoredApiKeys();
+/**
+ * Nạp khoá đã lưu vào `process.env` — chỉ ở chế độ embedded.
+ *
+ * Ở chế độ server, khoá đi tới job qua `secret.grant` theo từng tổ chức; nạp
+ * vào môi trường của tiến trình ở đây sẽ làm mọi tiến trình con thừa hưởng
+ * khoá của tổ chức khác. Xem `src/server/auth/secrets.ts`.
+ */
+if (mayAdoptIntoEnv(serverMode())) await adoptStoredApiKeys();
 
 /**
  * Dọn dẹp lúc khởi động, trước khi nhận request nào.

@@ -10,7 +10,8 @@
 import { createHash } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import { ConfigSchema, saveConfig, type TestPilotConfig } from '../../config.js';
-import { Secrets } from '../../core/secrets.js';
+import { FileSecretStore, mayAdoptIntoEnv, type SecretStore } from '../auth/secrets.js';
+import { serverMode } from '../http.js';
 import { json, readJson } from '../http.js';
 import type { RouteTable } from './types.js';
 
@@ -21,6 +22,40 @@ export async function configRevision(configFile: string): Promise<string | undef
   } catch {
     return undefined;
   }
+}
+
+/**
+ * Kho khoá của tiến trình này.
+ *
+ * Chế độ `embedded` dùng `.testpilot.secrets.json` như cũ. Chế độ `server` sẽ
+ * thay bằng secret manager ở P2.6 — nơi gọi không đổi, vì đó là điểm của
+ * interface `SecretStore`.
+ */
+const store: SecretStore = new FileSecretStore();
+
+/**
+ * Nạp khoá vừa lưu vào `process.env` — CHỈ ở chế độ embedded.
+ *
+ * Ở đó nó tiện và vô hại: một người, một máy, và mọi thư viện đọc
+ * `process.env`. Ở chế độ server thì không: `process.env` là không gian phẳng
+ * dùng chung, nên khoá của một người sẽ phục vụ request của mọi tổ chức, và
+ * mọi tiến trình con thừa hưởng nó. Khoá đi tới job qua `secret.grant`, theo
+ * đúng những tên job ấy cần — xem `src/server/auth/secrets.ts`.
+ */
+function adoptLocally(name: string, value: string): void {
+  if (mayAdoptIntoEnv(serverMode())) process.env[name] = value;
+}
+
+/**
+ * Khoá cấu hình sẵn bằng biến môi trường — cũng CHỈ tính ở chế độ embedded.
+ *
+ * Một biến môi trường là một giá trị cho cả tiến trình. Ở chế độ server, để nó
+ * trả lời thay cho kho theo tổ chức nghĩa là tổ chức nào chưa cấu hình gì cũng
+ * lặng lẽ dùng khoá của người dựng server — đúng kiểu rò rỉ mà cả P2.3 sinh ra
+ * để chặn, chỉ khác đường vào.
+ */
+function envFallback(name: string): string | undefined {
+  return mayAdoptIntoEnv(serverMode()) ? process.env[name] : undefined;
 }
 
 const MODEL_KEY_NAMES = {
@@ -58,7 +93,7 @@ export const configRoutes: RouteTable = {
     return json(res, 200, { ok: true, config: parsed.data });
   },
 
-  'POST /api/model-key': async (req, res) => {
+  'POST /api/model-key': async (req, res, _url, ctx) => {
     const body = await readJson<{
       provider: 'anthropic' | 'deepseek' | 'gemini';
       key: string;
@@ -67,44 +102,39 @@ export const configRoutes: RouteTable = {
     if (!name) return json(res, 400, { error: 'AI provider không hợp lệ.' });
     const key = body.key?.trim();
     if (!key) return json(res, 400, { error: 'API key không được để trống.' });
-    const secrets = await Secrets.load();
-    secrets.setApiKey(name, key);
-    await secrets.save();
-    process.env[name] = key;
+    await store.set(ctx.identity.orgId, name, key);
+    adoptLocally(name, key);
     return json(res, 200, { ok: true });
   },
 
   /**
    * The Confluence credential, stored the same way model keys are: written to
-   * the local secrets file, adopted into this process, and never read back.
-   * The GET reports only whether one is set, so a screen-share of the settings
-   * page cannot leak it.
+   * the secret store and never read back.
+   *
+   * Trả về email và một BOOLEAN, không bao giờ trả token. Email là thứ người
+   * dùng cần thấy để biết mình đã cấu hình tài khoản nào; token thì không có
+   * lý do nào để rời khỏi server, kể cả với chính chủ.
    */
-  'GET /api/confluence-auth': async (_req, res) => {
-    const secrets = await Secrets.load();
-    const email = secrets.apiKey('CONFLUENCE_EMAIL') || process.env.CONFLUENCE_EMAIL || '';
-    const hasToken = Boolean(
-      secrets.apiKey('CONFLUENCE_API_TOKEN') || process.env.CONFLUENCE_API_TOKEN,
-    );
+  'GET /api/confluence-auth': async (_req, res, _url, ctx) => {
+    const org = ctx.identity.orgId;
+    const email = (await store.get(org, 'CONFLUENCE_EMAIL')) || envFallback('CONFLUENCE_EMAIL') || '';
+    const hasToken = (await store.has(org, 'CONFLUENCE_API_TOKEN'))
+      || Boolean(envFallback('CONFLUENCE_API_TOKEN'));
     return json(res, 200, { email, hasToken });
   },
 
-  'POST /api/confluence-auth': async (req, res) => {
+  'POST /api/confluence-auth': async (req, res, _url, ctx) => {
     const body = await readJson<{ email?: string; token?: string }>(req);
     const email = body.email?.trim();
     const token = body.token?.trim();
     if (!email || !token) {
       return json(res, 400, { error: 'Cần cả email Atlassian và API token.' });
     }
-    const secrets = await Secrets.load();
-    secrets.setApiKey('CONFLUENCE_EMAIL', email);
-    secrets.setApiKey('CONFLUENCE_API_TOKEN', token);
-    await secrets.save();
-    process.env.CONFLUENCE_EMAIL = email;
-    // TODO(P2.3): ghi vào `process.env` của cả tiến trình là biến token của
-    // MỘT người thành token của cả server. Chấp nhận được ở chế độ embedded
-    // (một người, một máy); phải bỏ trước khi mở ra domain.
-    process.env.CONFLUENCE_API_TOKEN = token;
+    const org = ctx.identity.orgId;
+    await store.set(org, 'CONFLUENCE_EMAIL', email);
+    await store.set(org, 'CONFLUENCE_API_TOKEN', token);
+    adoptLocally('CONFLUENCE_EMAIL', email);
+    adoptLocally('CONFLUENCE_API_TOKEN', token);
     return json(res, 200, { ok: true });
   },
 };
