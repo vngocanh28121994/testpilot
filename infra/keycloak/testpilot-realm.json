@@ -1,0 +1,141 @@
+{
+  "realm": "testpilot",
+  "enabled": true,
+  "displayName": "TestPilot (dev)",
+  "accessTokenLifespan": 300,
+  "ssoSessionIdleTimeout": 1800,
+  "registrationAllowed": false,
+  "roles": {
+    "realm": [
+      {
+        "name": "viewer",
+        "description": "Chỉ đọc: report, kịch bản, trạng thái máy"
+      },
+      {
+        "name": "runner_user",
+        "description": "Chạy test, đăng ký máy của mình"
+      },
+      {
+        "name": "maintainer",
+        "description": "Sửa dữ liệu dùng chung, duyệt kịch bản"
+      },
+      {
+        "name": "admin",
+        "description": "Tổ chức, thành viên, khoá API, runner"
+      }
+    ]
+  },
+  "clients": [
+    {
+      "clientId": "testpilot",
+      "name": "TestPilot control plane",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "secret": "testpilot-dev-secret",
+      "standardFlowEnabled": true,
+      "directAccessGrantsEnabled": true,
+      "serviceAccountsEnabled": false,
+      "redirectUris": [
+        "http://localhost:4300/api/auth/callback",
+        "http://127.0.0.1:4300/api/auth/callback",
+        "http://localhost:4399/api/auth/callback"
+      ],
+      "webOrigins": [
+        "http://localhost:4300",
+        "http://localhost:4399"
+      ],
+      "attributes": {
+        "pkce.code.challenge.method": "S256"
+      },
+      "protocolMappers": [
+        {
+          "name": "realm roles",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-realm-role-mapper",
+          "config": {
+            "claim.name": "roles",
+            "jsonType.label": "String",
+            "multivalued": "true",
+            "access.token.claim": "true",
+            "id.token.claim": "true"
+          }
+        }
+      ]
+    }
+  ],
+  "users": [
+    {
+      "username": "viewer",
+      "enabled": true,
+      "emailVerified": true,
+      "firstName": "Vy",
+      "lastName": "TestPilot",
+      "email": "viewer@testpilot.dev",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "viewer",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "viewer"
+      ]
+    },
+    {
+      "username": "runner",
+      "enabled": true,
+      "emailVerified": true,
+      "firstName": "Rô",
+      "lastName": "TestPilot",
+      "email": "runner@testpilot.dev",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "runner",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "runner_user"
+      ]
+    },
+    {
+      "username": "maintainer",
+      "enabled": true,
+      "emailVerified": true,
+      "firstName": "Mai",
+      "lastName": "TestPilot",
+      "email": "maintainer@testpilot.dev",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "maintainer",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "maintainer"
+      ]
+    },
+    {
+      "username": "admin",
+      "enabled": true,
+      "emailVerified": true,
+      "firstName": "An",
+      "lastName": "TestPilot",
+      "email": "admin@testpilot.dev",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "admin",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "admin"
+      ]
+    }
+  ]
+}

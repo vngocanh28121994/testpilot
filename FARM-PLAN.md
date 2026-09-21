@@ -207,12 +207,16 @@ Sau giai đoạn này mới được phép mở ra domain.
 - **Xong khi:** `src/server/storage/__tests__/pathTraversal.test.ts` xanh, và report mở được qua
   link có chữ ký hết hạn được.
 
-### P2.6 Hạ tầng
-- `Dockerfile` cho control plane, `docker-compose.yml` cho Postgres + MinIO + server.
-- Cấu hình nginx/Caddy mẫu: HTTPS, `proxy_buffering off` cho đường SSE, timeout dài.
-- `GET /api/health` cho load balancer.
-- **Xong khi:** `docker compose up` cho ra một control plane truy cập được, chạy job qua runner
-  embedded trong cùng container.
+### P2.6 Hạ tầng — ✅ phần môi trường thử xong 2026-09-21
+- `docker-compose.yml`: Keycloak + Postgres + MinIO, một lệnh là có đủ. Realm nhập tự động từ
+  `infra/keycloak/testpilot-realm.json` (client, bốn người dùng, bốn vai) nên hai máy giống nhau
+  và không ai phải bấm tay trên giao diện Keycloak.
+- `.env.server.example` + [infra/README.md](infra/README.md).
+- **Đóng luôn một khoảng trống của P0.3:** migration giờ đã chạy THẬT trên Postgres 16, không chỉ
+  trên SQLite. 16 bảng dựng đúng, `UNIQUE (device_id)` của `lease` từ chối lease thứ hai, `CHECK`
+  chặn `state` sai chính tả, cột `payload` đúng kiểu `jsonb`.
+- Còn lại: `Dockerfile` cho control plane, cấu hình nginx/Caddy (HTTPS, `proxy_buffering off` cho
+  SSE), `GET /api/health`.
 
 ---
 
@@ -357,9 +361,9 @@ Cộng thêm một bài kiểm tra tay, ghi lại kết quả:
 
 | Việc | Lựa chọn | Đề xuất |
 |---|---|---|
-| Nhà cung cấp SSO | Google Workspace / Azure AD / tự quản | Google Workspace nếu công ty đang dùng |
+| Nhà cung cấp SSO | Google Workspace / Azure AD / tự quản | **Chốt 2026-09-21: Keycloak để phát triển.** Code đọc issuer/clientId/secret từ biến môi trường nên đổi sang SSO công ty chỉ là đổi cấu hình. Vai lưu trong bảng `membership` của TestPilot, KHÔNG lấy từ group của SSO: xin IT tạo group mới mất vài tuần, thêm một dòng vào `membership` mất một giây |
 | DB | Postgres tự host / RDS | Postgres trong Docker trước, RDS khi lên production |
-| Object storage | S3 / MinIO | MinIO khi tự host, S3 khi lên cloud |
+| Object storage | S3 / MinIO | **Chốt 2026-09-21: MinIO.** Nói đúng API S3 nên lên AWS chỉ là đổi endpoint và khoá |
 | Driver SQLite cho chế độ embedded | `node:sqlite` / `better-sqlite3` | **Chưa chốt.** `node:sqlite` có sẵn trong Node 22 nên không thêm dependency, và migration test đang chạy trên nó — nhưng nó còn là API thử nghiệm (`ExperimentalWarning`) và có thể đổi. Dùng cho test thì được; trước khi chế độ embedded ghi dữ liệu thật của người dùng lên nó thì phải quyết |
 | Queue | BullMQ+Redis / chỉ dùng bảng Postgres | Chỉ Postgres ở P3 (ít thành phần hơn), thêm Redis khi thật cần |
 | Máy lab | Mac mini / Linux + Mac | Linux cho Android và emulator, Mac riêng cho iOS |

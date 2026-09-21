@@ -1,0 +1,91 @@
+# Môi trường chạy TestPilot ở chế độ `server`, trên máy của bạn.
+#
+# Ba thứ, đúng ba thứ mà chế độ ấy cần và chế độ `embedded` không cần:
+#   - Keycloak: đăng nhập. Nói OIDC chuẩn, nên khi đổi sang SSO của công ty thì
+#     chỉ đổi biến môi trường, không sửa code.
+#   - Postgres: dữ liệu dùng chung, thay cho các file JSON trong registry/.
+#   - MinIO: artifact (report, ảnh, video). Nói đúng API của S3, nên chuyển
+#     sang S3 thật cũng chỉ là đổi endpoint và khoá.
+#
+# Cả ba đều CHỈ dùng cho phát triển và thử. Mật khẩu trong file này là mật khẩu
+# công khai, cố tình — để không ai nhầm nó với một bản triển khai thật.
+#
+#   docker compose up -d      dựng
+#   docker compose down -v    xoá sạch, kể cả dữ liệu
+#
+# Xem infra/README.md để biết mở gì ở đâu.
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: testpilot
+      POSTGRES_PASSWORD: testpilot-dev
+      POSTGRES_DB: testpilot
+    ports: ['5432:5432']
+    volumes: ['pgdata:/var/lib/postgresql/data']
+    healthcheck:
+      # Server chờ healthcheck này trước khi chạy migration. Thiếu nó thì lần
+      # khởi động đầu sẽ hỏng một cách khó hiểu: Postgres đã mở cổng nhưng chưa
+      # sẵn sàng nhận truy vấn.
+      test: ['CMD-SHELL', 'pg_isready -U testpilot -d testpilot']
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.0
+    command: ['start-dev', '--import-realm']
+    environment:
+      # Tên biến admin đổi theo bản Keycloak (bản cũ dùng KEYCLOAK_ADMIN).
+      # Đặt cả hai để file này không hỏng khi đổi tag image.
+      KC_BOOTSTRAP_ADMIN_USERNAME: admin
+      KC_BOOTSTRAP_ADMIN_PASSWORD: admin
+      KEYCLOAK_ADMIN: admin
+      KEYCLOAK_ADMIN_PASSWORD: admin
+      KC_HEALTH_ENABLED: 'true'
+    ports: ['8080:8080']
+    volumes:
+      # Realm nhập lúc khởi động: client, bốn người dùng, bốn vai. Sửa file đó
+      # rồi `docker compose down -v && up -d` là có lại đúng trạng thái ấy —
+      # không ai phải bấm lại hai mươi ô trên giao diện Keycloak.
+      - ./infra/keycloak:/opt/keycloak/data/import:ro
+
+  minio:
+    # quay.io chứ không phải Docker Hub: `docker pull minio/minio` trả "access
+    # denied" (đo ngày 2026-09-21), trong khi bản trên quay.io tải được không
+    # cần đăng nhập. Ghi lại vì thông báo lỗi của Docker nói "repository does
+    # not exist or may require login" — câu đó dẫn người đọc đi đăng nhập
+    # Docker Hub, một việc không giải quyết được gì ở đây.
+    image: quay.io/minio/minio
+    command: ['server', '/data', '--console-address', ':9001']
+    environment:
+      MINIO_ROOT_USER: testpilot
+      MINIO_ROOT_PASSWORD: testpilot-dev
+    ports:
+      - '9000:9000'   # API, giống S3
+      - '9001:9001'   # giao diện quản lý
+    volumes: ['miniodata:/data']
+    healthcheck:
+      test: ['CMD', 'mc', 'ready', 'local']
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  # Tạo sẵn bucket rồi tự thoát. Không để việc này cho code ứng dụng: một
+  # server phải giả định bucket đã có, nếu không thì mỗi lần ghi artifact đều
+  # kéo theo một lần kiểm tra hạ tầng.
+  minio-init:
+    image: quay.io/minio/mc
+    depends_on:
+      minio: { condition: service_healthy }
+    entrypoint: >
+      /bin/sh -c "
+      mc alias set local http://minio:9000 testpilot testpilot-dev &&
+      mc mb --ignore-existing local/testpilot-artifacts &&
+      echo 'bucket testpilot-artifacts đã sẵn sàng'
+      "
+
+volumes:
+  pgdata:
+  miniodata:
