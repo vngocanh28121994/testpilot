@@ -693,7 +693,7 @@ server chung.
   biến mất. (2) `review` khi DUYỆT vẫn đối chiếu `baseRevision` lần nữa — giữa lúc đẩy và lúc duyệt
   có thể là ba ngày, và trong ba ngày ấy runner đã `merge` thêm nhiều thứ.
 
-### P4.5 Preflight của máy cá nhân — ✅ phần từ chối xong 2026-09-23
+### P4.5 Preflight của máy cá nhân — ✅ xong 2026-09-23
 - **Vì sao máy cá nhân cần cái này mà máy lab thì không:** máy lab do người quản trị dựng một lần
   rồi để yên; laptop của một người thì hôm nay có Xcode, tuần sau nâng cấp macOS và Appium mất
   driver, tháng sau cài lại máy. Runner cứ nhận job rồi hỏng ở phút thứ ba thì người đặt job nhận
@@ -709,9 +709,25 @@ server chung.
 - **Xong khi:** 8 bài cho phép đo và 2 bài ở worker — Appium tắt thì job Android hỏng ngay kèm câu
   "mở màn Local Runner rồi bấm khởi động Appium", và không một lượt chạy nào được bắt đầu; job web
   trên chính máy ấy vẫn chạy.
-- **Chưa làm:** hiện trạng thái môi trường của từng máy LÊN WEB. Phép đo và đường báo cáo đã có
-  (`POST /api/runner/devices` gửi kèm được), còn màn hiển thị thì đi cùng P4.4 để không phải sửa
-  cùng một màn hai lần.
+- **Nửa sau, xong 2026-09-23:** trạng thái môi trường của từng máy hiện trên màn Thiết bị (bảng
+  "Máy chạy test"). Nửa đầu chỉ nói với người ĐẶT job, sau khi họ đã đặt; còn chủ chiếc máy —
+  người duy nhất sửa được — thì không thấy gì cả.
+- **MỘT phép đo, hai nơi đọc:** `WorkerHandle.environment()` lộ đúng phép đo mà worker dùng để từ
+  chối job, và `main.ts` gửi nó lên. Đo lần thứ hai ở `main.ts` thì hai phép đo sẽ lệch, và lúc ấy
+  màn hình nói "Appium đang chạy" trong khi worker vừa từ chối một job vì Appium không chạy.
+- **Ba trạng thái chứ không hai:** CHƯA ĐO khác HỎNG. Runner farm không đo gì cả (máy nằm ở AWS),
+  và một máy vừa khởi động thì chưa kịp — vẽ chúng giống nhau nghĩa là ai đó đi sửa một chiếc máy
+  hoàn toàn tốt. Lý do hỏng nằm ngay trong ô, không nấp sau tooltip: người đọc bảng ấy đang đi tìm
+  việc cần làm.
+- **Đi cùng chuyến với danh sách máy**, không có nhịp riêng: hai nhịp nghĩa là hai thời điểm, và
+  màn hình sẽ ghép "máy này đang cắm" với "Appium chạy hồi nãy" thành một câu không đúng lúc nào.
+  Cất trong `runner_capability` — bảng đã có, không cần migration.
+- **Đo thật:** runner cá nhân nối vào server đang sống báo `web/android/ios` đều sẵn sàng; một máy
+  đăng ký mà chưa chạy hiện "đang tắt" + "chưa đo" ở cả ba cột.
+- **Thấy một chỗ chưa đúng, chưa sửa:** hai runner trên CÙNG một máy báo cùng một udid thì thiết bị
+  ấy hiện hai dòng, và `devices.find(udid)` lấy dòng đầu. Lease khoá theo udid nên không có hai job
+  chạy đè, nhưng danh tính thiết bị thì vẫn nhập nhằng. Chỉ xảy ra khi một máy chạy hai runner —
+  đúng cảnh dựng để thử ở đây, không phải hình dạng thật của một phòng máy.
 
 ### P4.6 Nói thật về máy có thể tắt — ✅ xong 2026-09-23
 - **Máy cá nhân tắt lúc nào cũng được — đó là sự thật của P4, không phải lỗi.** Laptop đóng nắp lúc

@@ -10,6 +10,7 @@
  * và bỏ nó đi sẽ làm hỏng mọi cấu hình đang chạy.
  */
 import { randomUUID } from 'node:crypto';
+import type { PrereqByPlatform } from '../../runner/prereqReport.js';
 import {
   hashToken,
   mintToken,
@@ -99,6 +100,12 @@ export class MemoryRunnerRegistry implements RunnerRegistry {
     const record = this.runners.get(id);
     if (!record) return;
     this.runners.set(id, { ...record, state: 'online', lastSeenAt: at.toISOString() });
+  }
+
+  async reportPrereq(id: string, prereq: PrereqByPlatform): Promise<void> {
+    const record = this.runners.get(id);
+    if (!record) return;
+    this.runners.set(id, { ...record, prereq });
   }
 
   async reapSilent(olderThanMs: number, now = new Date()): Promise<number> {

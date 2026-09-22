@@ -4,6 +4,7 @@ import { configHandlers } from './config';
 import { modelsHandlers } from './models';
 import { preflightHandlers } from './preflight';
 import { prereqHandlers } from './prereq';
+import { runnerHandlers } from './runners';
 import { settingsHandlers } from './settings';
 import { vocabularyHandlers } from './vocabulary';
 
@@ -23,6 +24,7 @@ export const handlers = [
   ...modelsHandlers,
   ...preflightHandlers,
   ...prereqHandlers,
+  ...runnerHandlers,
   ...settingsHandlers,
   ...vocabularyHandlers,
 ];

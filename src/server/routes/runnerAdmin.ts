@@ -29,6 +29,10 @@ function view(runner: RunnerRecord) {
     state: runner.state,
     lastSeenAt: runner.lastSeenAt,
     createdAt: runner.createdAt,
+    // Tình trạng môi trường do chính máy ấy đo và báo lên. Vắng mặt nghĩa là
+    // CHƯA ĐO — một runner farm không đo gì cả, và một máy vừa khởi động thì
+    // chưa kịp. Màn hình phải nói được hai chuyện ấy khác nhau.
+    ...(runner.prereq ? { prereq: runner.prereq } : {}),
   };
 }
 

@@ -12,6 +12,7 @@
  * để câu "server bị đọc trộm CSDL" không kéo theo "mọi máy cá nhân bị chiếm".
  */
 import { createHash, randomBytes } from 'node:crypto';
+import type { PrereqByPlatform } from '../../runner/prereqReport.js';
 
 export type RunnerMode = 'embedded' | 'lab' | 'personal' | 'farm';
 export type RunnerVisibility = 'shared' | 'private';
@@ -28,6 +29,17 @@ export interface RunnerRecord {
   state: RunnerState;
   lastSeenAt?: string;
   createdAt: string;
+  /**
+   * Máy này chạy được nền tảng nào, và vì sao không.
+   *
+   * Do chính runner ĐO và báo lên, không phải server suy ra: server không cắm
+   * thiết bị nào và không có Appium. Cùng phép đo mà worker dùng để từ chối
+   * job, nên màn hình và lời từ chối không thể nói hai chuyện khác nhau.
+   *
+   * Vắng mặt nghĩa là CHƯA ĐO, không phải "hỏng" — một runner farm không đo gì
+   * cả, và một runner vừa khởi động thì chưa kịp.
+   */
+  prereq?: PrereqByPlatform;
 }
 
 export interface NewRunner {
@@ -71,6 +83,8 @@ export interface RunnerRegistry {
   revoke(id: string): Promise<boolean>;
   /** Runner vừa nói chuyện. Dùng để biết máy nào còn sống. */
   touch(id: string, at?: Date): Promise<void>;
+  /** Runner báo tình trạng môi trường của máy nó. Xem `RunnerRecord.prereq`. */
+  reportPrereq(id: string, prereq: PrereqByPlatform): Promise<void>;
   /** Đánh dấu `offline` những runner im lặng quá lâu. Trả về số đã đổi. */
   reapSilent(olderThanMs: number, now?: Date): Promise<number>;
 }

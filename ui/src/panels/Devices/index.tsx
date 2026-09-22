@@ -9,6 +9,7 @@
  */
 import { useState } from 'react';
 import { navTitle } from '@/lib/nav';
+import { RunnerHealth } from './RunnerHealth';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { api } from '@/api/client';
@@ -108,6 +109,11 @@ export default function DevicesPanel() {
       description="Máy nào đang bận vì ai, và việc gì đang xếp hàng."
     >
       <div className="flex flex-col gap-6">
+        {/* Máy chạy đứng TRƯỚC thiết bị: một chiếc điện thoại chỉ dùng được
+            khi chiếc máy tính nó cắm vào còn sống và còn đủ Appium. Xếp ngược
+            lại thì người đọc thấy "máy rảnh" rồi mới biết nó không chạy được. */}
+        <RunnerHealth />
+
         <Card aria-labelledby="devices-title">
           <CardHeader className="flex flex-row items-center justify-between gap-3">
             <div className="flex flex-col gap-1">

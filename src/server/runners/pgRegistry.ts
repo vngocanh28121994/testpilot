@@ -6,6 +6,7 @@
  * nhiều control plane cùng đọc một sổ.
  */
 import type { Pool } from 'pg';
+import type { PrereqByPlatform } from '../../runner/prereqReport.js';
 import { randomUUID } from 'node:crypto';
 import {
   hashToken,
@@ -54,6 +55,18 @@ function toRecord(row: RunnerRow): RunnerRecord {
  */
 const REVOKED = 'revoked';
 
+const PREREQ_KEY = 'prereq';
+
+/** JSON hỏng thì coi như CHƯA ĐO, không coi như hỏng: xem `RunnerRecord.prereq`. */
+function withPrereq(record: RunnerRecord, raw: string | null): RunnerRecord {
+  if (!raw) return record;
+  try {
+    return { ...record, prereq: JSON.parse(raw) as PrereqByPlatform };
+  } catch {
+    return record;
+  }
+}
+
 export class PgRunnerRegistry implements RunnerRegistry {
   constructor(
     private readonly pool: Pool,
@@ -89,19 +102,39 @@ export class PgRunnerRegistry implements RunnerRegistry {
   }
 
   async find(id: string): Promise<RunnerRecord | undefined> {
-    const { rows } = await this.pool.query<RunnerRow>(
-      'SELECT * FROM runner WHERE org_id = $1 AND id = $2',
-      [this.orgId, id],
+    const { rows } = await this.pool.query<RunnerRow & { prereq: string | null }>(
+      `SELECT runner.*, cap.value AS prereq FROM runner
+       LEFT JOIN runner_capability cap ON cap.runner_id = runner.id AND cap.key = $3
+       WHERE runner.org_id = $1 AND runner.id = $2`,
+      [this.orgId, id, PREREQ_KEY],
     );
-    return rows[0] ? toRecord(rows[0]) : undefined;
+    return rows[0] ? withPrereq(toRecord(rows[0]), rows[0].prereq) : undefined;
   }
 
   async list(): Promise<RunnerRecord[]> {
-    const { rows } = await this.pool.query<RunnerRow>(
-      'SELECT * FROM runner WHERE org_id = $1 ORDER BY created_at DESC',
-      [this.orgId],
+    const { rows } = await this.pool.query<RunnerRow & { prereq: string | null }>(
+      `SELECT runner.*, cap.value AS prereq FROM runner
+       LEFT JOIN runner_capability cap ON cap.runner_id = runner.id AND cap.key = $2
+       WHERE runner.org_id = $1 ORDER BY runner.created_at DESC`,
+      [this.orgId, PREREQ_KEY],
     );
-    return rows.map(toRecord);
+    return rows.map((row) => withPrereq(toRecord(row), row.prereq));
+  }
+
+  /**
+   * Tình trạng môi trường của máy, cất trong `runner_capability`.
+   *
+   * Dùng bảng đã có thay vì thêm cột: bảng ấy sinh ra đúng để mang "runner này
+   * có gì", và một cột mới là một migration trên một bảng mà mọi request đều
+   * đọc. Giá trị là JSON trong một cột TEXT — không cần truy vấn theo nội dung
+   * của nó, chỉ cần đọc nguyên khối theo `runner_id`.
+   */
+  async reportPrereq(id: string, prereq: PrereqByPlatform): Promise<void> {
+    await this.pool.query(
+      `INSERT INTO runner_capability (runner_id, key, value) VALUES ($1, $2, $3)
+       ON CONFLICT (runner_id, key) DO UPDATE SET value = EXCLUDED.value`,
+      [id, PREREQ_KEY, JSON.stringify(prereq)],
+    );
   }
 
   async rotate(id: string): Promise<string | undefined> {

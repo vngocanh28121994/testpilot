@@ -92,6 +92,14 @@ export interface WorkerHandle {
   stop(): void;
   /** Job đang chạy, để test và để `/api/jobs` nói được ai đang làm gì. */
   current(): string | undefined;
+  /**
+   * Phép đo môi trường gần nhất — thứ worker vẫn dùng để TỪ CHỐI job.
+   *
+   * Lộ ra đây thay vì để `main.ts` tự đo lần nữa: hai phép đo song song sẽ
+   * lệch nhau, và lúc ấy màn hình nói "Appium đang chạy" trong khi worker vừa
+   * từ chối một job vì Appium không chạy. Một phép đo, hai nơi đọc.
+   */
+  environment(): PrereqByPlatform;
 }
 
 export function startWorker(deps: WorkerDeps): WorkerHandle {
@@ -117,6 +125,13 @@ export function startWorker(deps: WorkerDeps): WorkerHandle {
    * bắt được lúc ai đó vừa bật Appium lên.
    */
   let prereq: { at: number; report: PrereqByPlatform } = { at: 0, report: {} };
+  // Đo NGAY lúc dựng worker, không đợi job đầu tiên: màn hình phải nói được
+  // tình trạng của máy trước khi ai đó đặt job, chứ không phải sau.
+  if (!deps.skipPrereq) {
+    void measurePrereq(runner)
+      .then((report) => { prereq = { at: Date.now(), report }; })
+      .catch(() => undefined);
+  }
   const environment = async (): Promise<PrereqByPlatform> => {
     if (deps.skipPrereq) return {};
     if (Date.now() - prereq.at < 30_000) return prereq.report;
@@ -180,6 +195,7 @@ export function startWorker(deps: WorkerDeps): WorkerHandle {
   return {
     stop: () => { stopped = true; clearInterval(timer); },
     current: () => current,
+    environment: () => prereq.report,
   };
 }
 

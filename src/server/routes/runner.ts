@@ -24,6 +24,7 @@ import { split } from '../proposals/policy.js';
 import { summarise } from '../proposals/store.js';
 import type { ElementRegistry } from '../../core/types.js';
 import type { RouteContext } from './types.js';
+import type { PrereqByPlatform } from '../../runner/prereqReport.js';
 import type { JobResult } from '../../protocol/messages.js';
 import { json, readJson } from '../http.js';
 import type { RouteTable } from './types.js';
@@ -169,6 +170,7 @@ export const runnerRoutes: RouteTable = {
   'POST /api/runner/devices': async (req, res, _url, ctx) => {
     const body = await readJson<{
       devices?: Array<{ platform?: string; udid?: string; label?: string }>;
+      prereq?: Record<string, { ok?: boolean; reason?: string; at?: string }>;
     }>(req);
 
     const runner = await ctx.runners.find(ctx.identity.userId);
@@ -191,6 +193,10 @@ export const runnerRoutes: RouteTable = {
       visibility: runner.visibility,
     }, devices);
     await ctx.runners.touch(runner.id);
+    // Tình trạng môi trường đi CÙNG chuyến với danh sách máy, không có nhịp
+    // riêng: hai nhịp nghĩa là hai thời điểm, và màn hình sẽ ghép "máy này
+    // đang cắm" với "Appium chạy hồi nãy" thành một câu không đúng lúc nào cả.
+    if (body.prereq) await ctx.runners.reportPrereq(runner.id, sanePrereq(body.prereq));
 
     return json(res, 200, { accepted: devices.length });
   },
@@ -222,6 +228,28 @@ export const runnerRoutes: RouteTable = {
     return json(res, 200, { state: closed?.state, ...(learned ? { learned } : {}) });
   },
 };
+
+/**
+ * Lọc báo cáo môi trường về đúng hình dạng đã khai.
+ *
+ * Runner tự khai phần này, nên nó là dữ liệu từ ngoài như mọi thứ khác đến qua
+ * HTTP — kể cả khi nó đến kèm một token hợp lệ. Ba nền tảng, và chỉ ba.
+ */
+function sanePrereq(
+  raw: Record<string, { ok?: boolean; reason?: string; at?: string }>,
+): PrereqByPlatform {
+  const clean: PrereqByPlatform = {};
+  for (const platform of ['web', 'android', 'ios'] as const) {
+    const report = raw[platform];
+    if (!report || typeof report.ok !== 'boolean') continue;
+    clean[platform] = {
+      ok: report.ok,
+      ...(typeof report.reason === 'string' ? { reason: report.reason.slice(0, 500) } : {}),
+      at: typeof report.at === 'string' ? report.at : new Date().toISOString(),
+    };
+  }
+  return clean;
+}
 
 /**
  * Nhận phần một lượt chạy học được: gộp thứ an toàn, treo thứ còn lại.

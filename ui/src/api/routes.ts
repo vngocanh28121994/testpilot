@@ -18,6 +18,7 @@ export const ROUTES = {
   healingDuplicate: '/api/healing/duplicate',
   registry: '/api/registry',
   registryPush: '/api/registry/push',
+  runners: '/api/runners',
   proposals: '/api/proposals',
   proposalReview: '/api/proposals/review',
   runLog: '/api/run/log',

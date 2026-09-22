@@ -164,6 +164,10 @@ async function main(): Promise<void> {
       seen
         .filter((device) => device.platform === 'android' || device.platform === 'ios')
         .map((device) => ({ platform: device.platform, udid: device.udid, label: device.label })),
+      // Phép đo của WORKER, không phải một phép đo thứ hai: hai phép đo song
+      // song sẽ lệch nhau, và lúc ấy màn hình nói "Appium đang chạy" trong khi
+      // worker vừa từ chối một job vì Appium không chạy.
+      worker.environment(),
     ).catch(() => undefined);
   };
   void report();

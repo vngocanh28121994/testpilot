@@ -859,3 +859,31 @@ export interface ProposalReviewRequest {
   id: string;
   decision: 'accept' | 'reject';
 }
+
+/**
+ * Một máy chạy test, như màn Thiết bị nhìn thấy nó.
+ *
+ * `prereq` vắng mặt nghĩa là CHƯA ĐO, không phải "hỏng": một runner farm không
+ * đo gì cả (máy nằm ở AWS), và một máy vừa khởi động thì chưa kịp. Màn hình
+ * phải nói hai chuyện ấy khác nhau, nếu không người ta sẽ đi sửa một chiếc máy
+ * hoàn toàn tốt.
+ */
+export interface RunnerView {
+  id: string;
+  name: string;
+  mode: 'lab' | 'personal' | 'farm';
+  ownerUserId?: string;
+  visibility: 'shared' | 'private';
+  state: 'online' | 'offline' | 'revoked';
+  lastSeenAt?: string;
+  createdAt: string;
+  prereq?: Partial<Record<'web' | 'android' | 'ios', {
+    ok: boolean;
+    reason?: string;
+    at: string;
+  }>>;
+}
+
+export interface RunnersResponse {
+  runners: RunnerView[];
+}

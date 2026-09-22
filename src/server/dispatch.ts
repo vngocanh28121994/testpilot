@@ -40,6 +40,7 @@ const emptyRunners: RunnerRegistry = {
   rotate: async () => undefined,
   revoke: async () => false,
   touch: async () => {},
+  reportPrereq: async () => {},
   reapSilent: async () => 0,
 };
 

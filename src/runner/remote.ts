@@ -114,8 +114,14 @@ export class RemoteJobQueue implements JobQueue {
    * kiện nào để gửi — gửi cả danh sách làm "biến mất" thành một trạng thái
    * quan sát được ở phía server.
    */
-  async reportDevices(devices: Array<{ platform: string; udid: string; label: string }>): Promise<void> {
-    await this.post('/api/runner/devices', { devices });
+  async reportDevices(
+    devices: Array<{ platform: string; udid: string; label: string }>,
+    prereq?: unknown,
+  ): Promise<void> {
+    // Tình trạng môi trường đi CÙNG chuyến, không có nhịp riêng: hai nhịp
+    // nghĩa là hai thời điểm, và màn hình sẽ ghép "máy này đang cắm" với
+    // "Appium chạy hồi nãy" thành một câu không đúng lúc nào cả.
+    await this.post('/api/runner/devices', { devices, ...(prereq ? { prereq } : {}) });
   }
 
   async claim(by: ClaimBy): Promise<JobRecord | undefined> {
