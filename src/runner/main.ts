@@ -21,6 +21,7 @@ import { localLeases } from '../server/db/leaseRepo.js';
 import { runnerPlatforms } from '../server/scheduler/match.js';
 import { farmReadiness, farmRunner } from './farmRunner.js';
 import { localRunner } from './index.js';
+import { readToken } from './credentials.js';
 import { ProtocolMismatchError, RemoteJobQueue } from './remote.js';
 import { applyUpdate, EXIT_UPDATED, planUpdate } from './update.js';
 import { startWorker } from './worker.js';
@@ -76,7 +77,17 @@ function required(name: string): string {
 
 async function main(): Promise<void> {
   const serverUrl = required('TESTPILOT_SERVER').replace(/\/+$/, '');
-  const token = required('TESTPILOT_RUNNER_TOKEN');
+  // Biến môi trường trước, keychain sau — xem `credentials.ts`. Thứ tự ấy
+  // không phải chuyện cái nào an toàn hơn mà là chuyện cái nào TỒN TẠI: một
+  // container chạy runner không có phiên đăng nhập để mở keychain.
+  const token = await readToken(serverUrl);
+  if (!token) {
+    console.error(
+      'Chưa có token cho ' + serverUrl + '. Chạy `npx testpilot-runner login --server '
+      + serverUrl + ' --token …` một lần, hoặc đặt TESTPILOT_RUNNER_TOKEN.',
+    );
+    process.exit(2);
+  }
   const name = process.env.TESTPILOT_RUNNER_NAME?.trim() || os.hostname();
   const configFile = process.env.TESTPILOT_CONFIG?.trim() || 'testpilot.config.json';
 

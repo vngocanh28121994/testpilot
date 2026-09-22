@@ -48,6 +48,7 @@
     "locators:import": "tsx src/cli/locators-import.ts",
     "locators:verify": "tsx src/cli/locators-verify.ts",
     "runner": "tsx src/runner/main.ts",
+    "runner:login": "tsx src/cli/runner-login.ts",
     "build:runner": "bash packaging/build-runner.sh"
   },
   "dependencies": {

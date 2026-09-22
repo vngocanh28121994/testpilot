@@ -591,9 +591,16 @@ server chung.
 - **Đo được:** 13 bài cho sổ (bộ khẳng định dùng chung cho cả hai hiện thực), 9 bài cho route, 4 bài
   mới ở cửa quyền. Chạy thật: thêm máy → token hiện một lần → token ấy đòi job được (200) → thu hồi
   → chính token ấy nhận 401.
-- **Chưa làm:** `npx testpilot-runner login --token …` lưu token vào keychain của OS. Hôm nay runner
-  đọc token từ biến môi trường, nên nó nằm trong file dịch vụ nền (systemd đọc từ
-  `EnvironmentFile` chmod 600). Keychain là bước tiếp theo, và nó cần một lệnh CLI riêng.
+- **Xong nốt 2026-09-23:** `npm run runner:login -- --server … --token …` cất token vào keychain
+  macOS, một mục cho MỖI server (một người nối máy mình vào cả staging lẫn production, và hai bản
+  cấp hai token khác nhau; một mục dùng chung nghĩa là đăng nhập cái thứ hai làm chết cái thứ
+  nhất). `--show` nói đã đăng nhập chưa mà KHÔNG in token — in ra để trả lời câu ấy là đặt nó vào
+  lịch sử shell, đúng chỗ ta vừa lôi nó ra khỏi.
+- **Biến môi trường vẫn THẮNG keychain**, và thứ tự ấy không phải chuyện cái nào an toàn hơn mà là
+  chuyện cái nào TỒN TẠI: một container chạy runner không có phiên đăng nhập, và `security` ở đó
+  hoặc không có hoặc treo chờ mật khẩu. Cùng một bản mã chạy được ở cả hai chỗ.
+- **Đo thật:** đăng nhập một lần, rồi chạy runner với `env -u TESTPILOT_RUNNER_TOKEN` — nó vẫn nối
+  được server và đo ra `web, android`. Mục keychain đã xoá sau khi thử.
 
 ### P4.2 Quyền nhìn thấy thiết bị — ✅ xong 2026-09-22
 - **Sổ thiết bị ở phía server**, nguồn là BÁO CÁO TỪ RUNNER chứ không phải server tự hỏi `adb`: ở

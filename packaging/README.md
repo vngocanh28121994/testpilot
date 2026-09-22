@@ -41,12 +41,31 @@ runner chạy từ mã nguồn mà tự `npm install -g` lên chính nó sẽ c�
 phát triển bằng bản đã phát hành, và người ngồi đó mất một buổi để hiểu vì sao
 sửa mã không có tác dụng.
 
+## Đăng nhập một lần, không dán token vào `~/.zshrc`
+
+```sh
+npx testpilot-runner login --server https://testpilot.example.com --token <token>
+npx testpilot-runner login --server https://testpilot.example.com --show    # đã đăng nhập chưa
+npx testpilot-runner login --server https://testpilot.example.com --forget  # quên đi
+```
+
+Token vào **keychain của macOS**, một mục cho mỗi server — một người có thể nối
+máy mình vào cả staging lẫn production, và hai bản ấy cấp hai token khác nhau.
+
+`--show` KHÔNG in token ra: câu hỏi thật là "máy này đã đăng nhập chưa", và in
+token ra để trả lời câu ấy là đặt nó vào lịch sử shell — đúng chỗ ta vừa lôi nó
+ra khỏi.
+
+Trên máy chủ (Linux, container) thì vẫn dùng biến môi trường: ở đó không có
+phiên đăng nhập nào để mở keychain. **Biến môi trường luôn thắng keychain**, nên
+cùng một bản runner chạy được ở cả hai chỗ.
+
 ## Biến môi trường
 
 | Biến | Bắt buộc | Nghĩa |
 |---|---|---|
 | `TESTPILOT_SERVER` | ✓ | URL control plane |
-| `TESTPILOT_RUNNER_TOKEN` | ✓ | Token riêng của máy này; server chỉ giữ hash |
+| `TESTPILOT_RUNNER_TOKEN` | ✓* | Token riêng của máy này; server chỉ giữ hash. *Không bắt buộc nếu đã `login` vào keychain |
 | `TESTPILOT_RUNNER_NAME` | | Tên hiện trong danh sách máy. Mặc định là hostname |
 | `TESTPILOT_RUNNER_MODE` | | `lab` (mặc định) hoặc `farm` |
 | `TESTPILOT_RUNNER_PACKAGE` | | Gói npm để tự cập nhật. Bỏ trống là tắt tự cập nhật |

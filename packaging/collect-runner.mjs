@@ -28,7 +28,9 @@ const EXTRA = [];
  * đúng phần chạy test — và nó cài được, khởi động được, nhận job được, rồi
  * hỏng ở lượt chạy đầu tiên bằng ENOENT.
  */
-const ROOTS = ['runner/main.js', 'cli/run.js', 'cli/run-parallel.js'];
+const ROOTS = [
+  'runner/main.js', 'cli/runner-login.js', 'cli/run.js', 'cli/run-parallel.js',
+];
 
 const out = process.argv[2] ?? 'dist-runner';
 const root = process.cwd();
@@ -127,7 +129,10 @@ fs.writeFileSync(
     version: manifest.version,
     description: 'Runner TestPilot: nhận job từ control plane và chạy test trên máy này.',
     type: 'module',
-    bin: { 'testpilot-runner': 'dist/runner/main.js' },
+    bin: {
+      'testpilot-runner': 'dist/runner/main.js',
+      'testpilot-runner-login': 'dist/cli/runner-login.js',
+    },
     files: ['dist'],
     engines: manifest.engines,
     dependencies,
