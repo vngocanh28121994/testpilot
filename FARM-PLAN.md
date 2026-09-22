@@ -373,8 +373,25 @@ lược đồ mà scheduler sẽ đọc.
   cũ → 409; lease hết hạn sau 60 giây không gia hạn → 409. 13 test tích hợp trên máy thật
   ([control.integration.test.ts](src/runner/__tests__/control.integration.test.ts)) và 14 test đơn
   cho cửa lease ([controlGate.test.ts](src/server/routes/__tests__/controlGate.test.ts)).
-- **Còn lại của bước 2:** màn điều khiển trên giao diện web (vẽ khung bằng WebCodecs, chạm bằng
-  chuột, tự gia hạn lease mỗi 30 giây, nhả khi rời trang).
+- **Màn điều khiển trên web — ✅ xong 2026-09-22.** `/control` trong menu "Chạy và sửa". Chọn máy →
+  Giữ máy → xem và chạm. Khung H.264 giải mã bằng `VideoDecoder` (WebCodecs) và vẽ lên `<canvas>`;
+  chuỗi codec đọc từ chính SPS chứ không đặt cứng, vì một chuỗi đặt cứng đúng cho phần lớn máy và
+  sai lặng lẽ cho máy mã hoá ở profile khác.
+- Hai phần thuần được tách ra để đo được mà không cần trình duyệt:
+  [h264.ts](ui/src/lib/h264.ts) ghép byte SSE thành đơn vị truy cập trọn vẹn — SSE mang về từng
+  mảnh theo bộ đệm của ống `adb`, không theo ranh giới khung, và đưa nửa khung vào `VideoDecoder`
+  thì nó không ném, nó vẽ hình vỡ; và [deviceScale.ts](ui/src/lib/deviceScale.ts) quy đổi toạ độ
+  canvas → màn hình, chỗ mà nhầm giữa "khung 720" và "màn 1080" làm mọi cú chạm lệch đều 1,5 lần
+  nên người ta đi tìm lỗi trong ứng dụng đang test.
+- **Đo trong trình duyệt thật** (emulator API 36, server ở cổng 4399): chọn máy →
+  "sdk_gphone64_arm64 · Android 16 · emulator"; bấm Giữ máy → video chảy, header hiện
+  "1080×2400 · lease tự gia hạn mỗi 30 giây"; bấm Home → launcher; **bấm vào biểu tượng Chrome
+  TRÊN CANVAS → Chrome mở trên máy**, tức là phép quy đổi toạ độ đúng; `/api/device/leases` cho
+  thấy `renewedAt` đúng 30 giây sau `acquiredAt`; bấm Nhả máy → lease rỗng và số tiến trình
+  `screenrecord` về 0. Không một lỗi nào trong console.
+- **Lần thứ tư một phép đo mã nguồn đỏ vì chính chú thích của nó** (`effectBody.test.ts` đọc dòng
+  giải thích có ví dụ `useEffect(() => () => …)`). Lần này sửa PHÉP ĐO chứ không sửa chú thích:
+  `codeOnly()` lọc chú thích trước, áp cho cả ba khẳng định trong file.
 
 **Bước 3 — iOS (≈2–3 ngày)**
 - Video: MJPEG server của WebDriverAgent. Input: Appium/WDA theo W3C, qua webdriverio.

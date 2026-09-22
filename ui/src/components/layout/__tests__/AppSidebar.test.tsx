@@ -51,17 +51,17 @@ describe('AppSidebar', () => {
    * hiện khi mở ra. Test đếm cả hai phần để việc gom nhóm không thể âm thầm
    * trở thành việc xoá mục.
    */
-  it('render đủ 14 mục: 8 mục ngoài, 6 mục trong Inprogress', async () => {
+  it('render đủ 15 mục: 9 mục ngoài, 6 mục trong Inprogress', async () => {
     await renderSidebar();
 
     const topLevel = NAV_GROUPS.flatMap((g) => g.items);
-    expect(topLevel).toHaveLength(8);
-    expect(screen.getAllByRole('link')).toHaveLength(8);
+    expect(topLevel).toHaveLength(9);
+    expect(screen.getAllByRole('link')).toHaveLength(9);
 
     await expandInProgress();
 
     const links = screen.getAllByRole('link');
-    expect(links).toHaveLength(14);
+    expect(links).toHaveLength(15);
     expect(new Set(links.map((a) => a.textContent?.trim()))).toEqual(
       new Set(NAV.map((n) => n.label)),
     );

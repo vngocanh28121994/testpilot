@@ -41,9 +41,21 @@ describe('useEffect không được dùng thân rút gọn', () => {
       return /\.tsx?$/.test(name) ? [full] : [];
     });
 
+  /**
+   * Chú thích bị lọc TRƯỚC khi đo.
+   *
+   * Đây là lần thứ tư trong dự án này một phép đo mã nguồn đỏ vì chính chú
+   * thích của mình: một dòng giải thích luật, viết `useEffect(() => () => …)`
+   * làm ví dụ, và phép đo đọc nó như một vi phạm. Ba lần trước ở repoWiring,
+   * registryRevision và deployConfig. Bài học lặp lại đủ bốn lần thì nó không
+   * còn là chuyện xui: khi đo mã nguồn, lọc chú thích trước, luôn luôn.
+   */
+  const codeOnly = (source: string): string =>
+    source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+
   it('mọi effect đều mở bằng {', () => {
     const offenders = walk(root).flatMap((file) => {
-      const source = readFileSync(file, 'utf8');
+      const source = codeOnly(readFileSync(file, 'utf8'));
       return [...source.matchAll(/use(?:Layout)?Effect\(\s*(?:async\s*)?\(\s*\)\s*=>\s*(.)/g)]
         .filter((match) => match[1] !== '{')
         .map((match) => `${path.relative(root, file)}: ${source.slice(match.index, (match.index ?? 0) + 70)}`);
@@ -54,7 +66,7 @@ describe('useEffect không được dùng thân rút gọn', () => {
   /** `useEffect(async …)` trả Promise theo đúng nghĩa đen — cùng một cái bẫy. */
   it('không có effect async', () => {
     const offenders = walk(root)
-      .filter((file) => /use(?:Layout)?Effect\(\s*async/.test(readFileSync(file, 'utf8')))
+      .filter((file) => /use(?:Layout)?Effect\(\s*async/.test(codeOnly(readFileSync(file, 'utf8'))))
       .map((file) => path.relative(root, file));
     expect(offenders).toEqual([]);
   });
@@ -65,7 +77,7 @@ describe('useEffect không được dùng thân rút gọn', () => {
    */
   it('không truyền thẳng hàm có sẵn làm effect', () => {
     const offenders = walk(root).flatMap((file) => {
-      const source = readFileSync(file, 'utf8');
+      const source = codeOnly(readFileSync(file, 'utf8'));
       return [...source.matchAll(/use(?:Layout)?Effect\(\s*([A-Za-z_$][\w$]*)\s*,/g)]
         .map((match) => `${path.relative(root, file)}: useEffect(${match[1]}, …)`);
     });

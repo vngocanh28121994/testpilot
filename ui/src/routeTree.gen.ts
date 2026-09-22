@@ -11,6 +11,7 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as BuildsRouteImport } from './routes/builds'
+import { Route as ControlRouteImport } from './routes/control'
 import { Route as FarmRouteImport } from './routes/farm'
 import { Route as HealingRouteImport } from './routes/healing'
 import { Route as RunnerRouteImport } from './routes/runner'
@@ -31,6 +32,11 @@ const IndexRoute = IndexRouteImport.update({
 const BuildsRoute = BuildsRouteImport.update({
   id: '/builds',
   path: '/builds',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ControlRoute = ControlRouteImport.update({
+  id: '/control',
+  path: '/control',
   getParentRoute: () => rootRouteImport,
 } as any)
 const FarmRoute = FarmRouteImport.update({
@@ -92,6 +98,7 @@ const TodoSlugRoute = TodoSlugRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/builds': typeof BuildsRoute
+  '/control': typeof ControlRoute
   '/farm': typeof FarmRoute
   '/healing': typeof HealingRoute
   '/runner': typeof RunnerRoute
@@ -107,6 +114,7 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/builds': typeof BuildsRoute
+  '/control': typeof ControlRoute
   '/farm': typeof FarmRoute
   '/healing': typeof HealingRoute
   '/runner': typeof RunnerRoute
@@ -123,6 +131,7 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/builds': typeof BuildsRoute
+  '/control': typeof ControlRoute
   '/farm': typeof FarmRoute
   '/healing': typeof HealingRoute
   '/runner': typeof RunnerRoute
@@ -140,6 +149,7 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/builds'
+    | '/control'
     | '/farm'
     | '/healing'
     | '/runner'
@@ -155,6 +165,7 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/builds'
+    | '/control'
     | '/farm'
     | '/healing'
     | '/runner'
@@ -170,6 +181,7 @@ export interface FileRouteTypes {
     | '__root__'
     | '/'
     | '/builds'
+    | '/control'
     | '/farm'
     | '/healing'
     | '/runner'
@@ -186,6 +198,7 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   BuildsRoute: typeof BuildsRoute
+  ControlRoute: typeof ControlRoute
   FarmRoute: typeof FarmRoute
   HealingRoute: typeof HealingRoute
   RunnerRoute: typeof RunnerRoute
@@ -213,6 +226,13 @@ declare module '@tanstack/react-router' {
       path: '/builds'
       fullPath: '/builds'
       preLoaderRoute: typeof BuildsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/control': {
+      id: '/control'
+      path: '/control'
+      fullPath: '/control'
+      preLoaderRoute: typeof ControlRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/farm': {
@@ -298,6 +318,7 @@ declare module '@tanstack/react-router' {
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   BuildsRoute: BuildsRoute,
+  ControlRoute: ControlRoute,
   FarmRoute: FarmRoute,
   HealingRoute: HealingRoute,
   RunnerRoute: RunnerRoute,

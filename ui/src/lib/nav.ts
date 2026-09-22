@@ -5,6 +5,7 @@ import {
   FolderGit2,
   LayoutDashboard,
   ListChecks,
+  MonitorSmartphone,
   Package,
   Settings,
   Smartphone,
@@ -79,6 +80,7 @@ export const NAV: NavItem[] = [
   { id: 'builds', label: 'Bản build', to: '/builds', icon: Package },
   { id: 'e2e-runner', label: 'Local Runner', to: '/runner', icon: Activity },
   { id: 'device-farm', label: 'Device Farm', to: '/farm', icon: Smartphone },
+  { id: 'device-control', label: 'Điều khiển thiết bị', to: '/control', icon: MonitorSmartphone },
   {
     id: 'job-management',
     label: 'Job Management',
@@ -126,7 +128,10 @@ export const NAV_GROUPS: NavGroup[] = [
   },
   {
     title: 'Chạy và sửa',
-    items: [byId('builds'), byId('e2e-runner'), byId('device-farm'), byId('healing-center')],
+    items: [
+      byId('builds'), byId('e2e-runner'), byId('device-farm'), byId('device-control'),
+      byId('healing-center'),
+    ],
   },
   {
     title: 'Cấu hình',

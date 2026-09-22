@@ -52,6 +52,15 @@ export const ROUTES = {
   prereqAppiumStatus: '/api/prereq/appium/status',
   prereqIosTunnel: '/api/prereq/ios-tunnel',
   prereqIosTrust: '/api/prereq/ios-trust',
+  deviceLeases: '/api/device/leases',
+  deviceLease: '/api/device/lease',
+  deviceLeaseRenew: '/api/device/lease/renew',
+  deviceLeaseRelease: '/api/device/lease/release',
+  deviceLeaseForceRelease: '/api/device/lease/force-release',
+  // SSE nhưng đi bằng GET, nên KHÔNG thuộc `STREAM_ROUTES` (những route ấy là
+  // SSE-over-POST qua `streamJob`). Màn điều khiển mở nó bằng `EventSource`.
+  controlStream: '/api/device/control/stream',
+  controlInput: '/api/device/control/input',
 } as const;
 
 /** 10 route SSE-over-POST. Đi qua streamJob(), không qua api.post(). */
