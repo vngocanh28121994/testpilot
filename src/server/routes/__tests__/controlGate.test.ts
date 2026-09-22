@@ -88,7 +88,7 @@ async function input(identity: Identity, leases: MemoryLeaseRepo, body: unknown)
 
 describe('cửa lease của màn điều khiển', () => {
   it('chưa giữ máy thì không xem được', async () => {
-    const out = await stream(person('u1'), new MemoryLeaseRepo(), `?deviceId=${DEV}&leaseId=x`);
+    const out = await stream(person('u1'), new MemoryLeaseRepo(), `?platform=android&deviceId=${DEV}&leaseId=x`);
     assert.equal(out.status, 409);
     assert.match(String(out.body.error), /Chưa giữ chỗ/);
   });
@@ -99,6 +99,29 @@ describe('cửa lease của màn điều khiển', () => {
   });
 
   /**
+   * Nền tảng do người gọi nói, và phải nói ĐÚNG một trong hai giá trị.
+   *
+   * Không đoán từ hình dạng `udid`: udid của simulator là một UUID, của máy
+   * iOS thật là 25 hoặc 40 ký tự, Android thì tuỳ nhà sản xuất. Đoán sai nghĩa
+   * là gửi lệnh `adb` cho một chiếc iPhone, và câu lỗi sẽ nói về `adb` chứ
+   * không nói về chuyện đoán.
+   */
+  it('thiếu platform, hay platform lạ, đều là 400', async () => {
+    const leases = new MemoryLeaseRepo();
+    const lease = await leases.acquire(DEV, { kind: 'human', userId: 'u1' }, NOW());
+
+    for (const query of [
+      `?deviceId=${DEV}&leaseId=${lease.id}`,
+      `?platform=&deviceId=${DEV}&leaseId=${lease.id}`,
+      `?platform=windows&deviceId=${DEV}&leaseId=${lease.id}`,
+      `?platform=ANDROID&deviceId=${DEV}&leaseId=${lease.id}`,
+    ]) {
+      const out = await stream(person('u1'), leases, query);
+      assert.equal(out.status, 400, query);
+    }
+  });
+
+  /**
    * Người khác đang giữ máy. Đây là đường mà VAI không chặn được: cả hai đều
    * là `runner_user`, và cả hai đều có quyền gọi route này.
    */
@@ -106,7 +129,7 @@ describe('cửa lease của màn điều khiển', () => {
     const leases = new MemoryLeaseRepo();
     const lease = await leases.acquire(DEV, { kind: 'human', userId: 'u1' }, NOW());
 
-    const out = await stream(person('u2'), leases, `?deviceId=${DEV}&leaseId=${lease.id}`);
+    const out = await stream(person('u2'), leases, `?platform=android&deviceId=${DEV}&leaseId=${lease.id}`);
     assert.equal(out.status, 403);
     assert.match(String(out.body.error), /u1/);
   });
@@ -117,7 +140,7 @@ describe('cửa lease của màn điều khiển', () => {
     const lease = await leases.acquire(DEV, { kind: 'human', userId: 'u1' }, NOW());
 
     const out = await stream(person('u9', 'maintainer'), leases,
-      `?deviceId=${DEV}&leaseId=${lease.id}`);
+      `?platform=android&deviceId=${DEV}&leaseId=${lease.id}`);
     assert.equal(out.status, 403);
   });
 
@@ -127,7 +150,8 @@ describe('cửa lease của màn điều khiển', () => {
     const lease = await leases.acquire(DEV, { kind: 'job', jobId: 'job-7' }, NOW());
 
     const out = await input(person('u1'), leases, {
-      deviceId: DEV, leaseId: lease.id, action: { kind: 'tap', x: 1, y: 1 },
+      deviceId: DEV, leaseId: lease.id, platform: 'android',
+      action: { kind: 'tap', x: 1, y: 1 },
     });
     assert.equal(out.status, 403);
     assert.match(String(out.body.error), /job-7/);
@@ -147,7 +171,7 @@ describe('cửa lease của màn điều khiển', () => {
     const second = await leases.acquire(DEV, me, NOW());
     assert.notEqual(first.id, second.id);
 
-    const out = await stream(person('u1'), leases, `?deviceId=${DEV}&leaseId=${first.id}`);
+    const out = await stream(person('u1'), leases, `?platform=android&deviceId=${DEV}&leaseId=${first.id}`);
     assert.equal(out.status, 409);
     assert.match(String(out.body.error), /đã đổi/);
   });
@@ -166,7 +190,7 @@ describe('cửa lease của màn điều khiển', () => {
     const long_ago = new Date('2020-01-01T00:00:00.000Z');
     const lease = await leases.acquire(DEV, { kind: 'human', userId: 'u1' }, long_ago);
 
-    const out = await stream(person('u1'), leases, `?deviceId=${DEV}&leaseId=${lease.id}`);
+    const out = await stream(person('u1'), leases, `?platform=android&deviceId=${DEV}&leaseId=${lease.id}`);
     assert.equal(out.status, 409);
     assert.match(String(out.body.error), /Chưa giữ chỗ/);
   });
@@ -220,6 +244,26 @@ describe('checkAction', () => {
     assert.equal(checkAction({ kind: 'key', key: 'back' }, screen).ok, true);
     assert.equal(checkAction({ kind: 'key', key: 'power' }, screen).ok, false);
     assert.equal(checkAction({ kind: 'key', key: 'KEYCODE_POWER' }, screen).ok, false);
+  });
+
+  /**
+   * iOS có ít phím hơn, và đó là sự thật của nền tảng: iPhone không có nút
+   * Quay lại. Câu từ chối phải nói ra điều đó thay vì chỉ "sai".
+   */
+  it('phím của Android không tự nhiên dùng được trên iOS', () => {
+    assert.equal(checkAction({ kind: 'key', key: 'back' }, screen, 'android').ok, true);
+    assert.equal(checkAction({ kind: 'key', key: 'recents' }, screen, 'android').ok, true);
+
+    const denied = checkAction({ kind: 'key', key: 'back' }, screen, 'ios');
+    assert.equal(denied.ok, false);
+    assert.match(denied.ok === false ? denied.error : '', /ios/);
+    // Câu lỗi liệt kê phím CÓ dùng được, vì người đọc cần biết bấm gì thay thế.
+    assert.match(denied.ok === false ? denied.error : '', /home/);
+
+    for (const key of ['home', 'enter', 'delete']) {
+      assert.equal(checkAction({ kind: 'key', key }, screen, 'ios').ok, true, key);
+    }
+    assert.equal(checkAction({ kind: 'key', key: 'power' }, screen, 'ios').ok, false);
   });
 
   it('động tác lạ thì từ chối, không rơi vào nhánh mặc định nào', () => {

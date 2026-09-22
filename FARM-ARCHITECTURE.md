@@ -339,9 +339,29 @@ kiểm cho SSE ở P2.6. Khi đổi sang scrcpy thì kênh ấy là nhị phân 
 header `Upgrade`/`Connection` đã có sẵn trong [infra/nginx/testpilot.conf](infra/nginx/testpilot.conf)
 để lúc đó không phải đi tìm vì sao nginx trả 400.
 
-iOS thì dùng MJPEG server của WebDriverAgent — thứ mà `prereq.ts` vốn đã dựng — và đầu vào đi qua
-Appium/WDA theo W3C, tức là qua webdriverio đã có. Xem [FARM-PLAN.md](FARM-PLAN.md) P3.7 về lý do
-không lấy GADS làm hub.
+**Phần thực thi iOS** đi đường khác hẳn, và đó là sự thật của nền tảng chứ không phải một thiếu
+sót cần gộp lại: iOS không có `adb`, và không lệnh nào trên máy chủ chạm được vào màn hình một
+chiếc iPhone. Đường duy nhất là WebDriverAgent — một ứng dụng chạy TRÊN máy ấy, do Appium dựng và
+cài. Video là MJPEG ở cổng 9100; đầu vào là W3C actions và `mobile:` script qua `execute/sync`.
+
+Ba con số định hình thiết kế ấy (simulator iPhone 17 Pro, iOS 26.5, 22/09/2026):
+
+| Đo | Giá trị | Hệ quả |
+|---|---|---|
+| Dựng phiên lần đầu | 184 giây | Phiên được GIỮ LẠI giữa các lần xem; giao diện nói "đang dựng WebDriverAgent" |
+| Dựng phiên lần sau | 4 giây | Người thứ hai không phải chờ |
+| MJPEG | 900–1200 KB/s | Gấp trăm lần H.264 — MJPEG không nén liên khung |
+| Màn hình đứng yên | **47 khung giống hệt nhau** | Bỏ khung trùng: 900 KB/s thành gần như không tốn gì |
+
+Toạ độ iOS là **điểm** (402x874) chứ không phải pixel (1206x2622); W3C actions đi theo điểm, nên đó
+là hệ mà control plane công bố. Nhầm sang pixel làm mọi cú chạm lệch đúng ba lần — lệch đều đặn thì
+trông như "ứng dụng hỏng" chứ không như "toạ độ sai".
+
+Và phím thì khác nhau theo nền tảng: iPhone không có nút Quay lại, nên `CONTROL_KEYS_BY_PLATFORM`
+cho iOS chỉ có `home`, `enter`, `delete`. Giao diện không vẽ nút không tồn tại, thay vì vẽ rồi để
+nó báo lỗi khi bấm.
+
+Xem [FARM-PLAN.md](FARM-PLAN.md) P3.7 về lý do không lấy GADS làm hub.
 
 ---
 

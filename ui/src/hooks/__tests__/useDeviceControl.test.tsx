@@ -43,6 +43,9 @@ function setup() {
   return renderHook(() => useDeviceControl(canvas), { wrapper: createQueryWrapper() });
 }
 
+const ANDROID = { platform: 'android' as const, udid: 'emulator-5554', label: 'Pixel' };
+const IPHONE = { platform: 'ios' as const, udid: 'C9139335', label: 'iPhone 17 Pro' };
+
 describe('useDeviceControl', () => {
   it('giữ máy xong thì mở luồng kèm đúng leaseId', async () => {
     server.use(http.post(ROUTES.deviceLease, () => HttpResponse.json({
@@ -50,11 +53,12 @@ describe('useDeviceControl', () => {
     })));
 
     const { result } = setup();
-    await act(() => result.current.hold('emulator-5554'));
+    await act(() => result.current.hold(ANDROID));
 
     expect(result.current.state.phase).toBe('holding');
     expect(FakeEventSource.last?.url).toContain('leaseId=lease-1');
     expect(FakeEventSource.last?.url).toContain('deviceId=emulator-5554');
+    expect(FakeEventSource.last?.url).toContain('platform=android');
   });
 
   /**
@@ -63,17 +67,35 @@ describe('useDeviceControl', () => {
    * Giữ máy rồi mới phát hiện không xem được nghĩa là chiếc máy bị khoá 60
    * giây cho một người không dùng được nó.
    */
-  it('trình duyệt không giải mã được thì nói ra, và không giữ máy', async () => {
+  it('Android cần WebCodecs: thiếu thì nói ra, và không giữ máy', async () => {
     vi.stubGlobal('VideoDecoder', undefined);
     let asked = 0;
     server.use(http.post(ROUTES.deviceLease, () => { asked += 1; return HttpResponse.json({}); }));
 
     const { result } = setup();
-    await act(() => result.current.hold('emulator-5554'));
+    await act(() => result.current.hold(ANDROID));
 
     expect(result.current.state).toMatchObject({ phase: 'error' });
     expect((result.current.state as { message: string }).message).toMatch(/WebCodecs/);
     expect(asked).toBe(0);
+  });
+
+  /**
+   * Nhưng iOS thì KHÔNG cần: luồng của nó là JPEG từng khung, mà mọi trình
+   * duyệt đều vẽ được. Chặn cả hai nền tảng vì một yêu cầu chỉ của một bên là
+   * từ chối một thứ đang chạy được.
+   */
+  it('iOS không cần WebCodecs', async () => {
+    vi.stubGlobal('VideoDecoder', undefined);
+    server.use(http.post(ROUTES.deviceLease, () => HttpResponse.json({
+      lease: { id: 'lease-ios', deviceId: IPHONE.udid, expiresAt: '2026-09-22T10:01:00.000Z' },
+    })));
+
+    const { result } = setup();
+    await act(() => result.current.hold(IPHONE));
+
+    expect(result.current.state.phase).toBe('holding');
+    expect(FakeEventSource.last?.url).toContain('platform=ios');
   });
 
   it('máy đang có người giữ thì hiện đúng câu của server', async () => {
@@ -83,7 +105,7 @@ describe('useDeviceControl', () => {
     )));
 
     const { result } = setup();
-    await act(() => result.current.hold('emulator-5554'));
+    await act(() => result.current.hold(ANDROID));
 
     await waitFor(() => expect(result.current.state.phase).toBe('error'));
     expect((result.current.state as { message: string }).message).toMatch(/an@example.com/);
@@ -102,7 +124,7 @@ describe('useDeviceControl', () => {
     );
 
     const { result } = setup();
-    await act(() => result.current.hold('emulator-5554'));
+    await act(() => result.current.hold(ANDROID));
     await act(() => result.current.release());
 
     expect(result.current.state.phase).toBe('idle');
@@ -121,7 +143,7 @@ describe('useDeviceControl', () => {
     );
 
     const { result, unmount } = setup();
-    await act(() => result.current.hold('emulator-5554'));
+    await act(() => result.current.hold(ANDROID));
     unmount();
 
     await waitFor(() => expect(released).toBe(true));

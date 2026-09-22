@@ -13,25 +13,30 @@ import { ROUTES } from '@/api/routes';
 import { AppShell } from '@/components/layout/AppShell';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { useDeviceControl } from '@/hooks/useDeviceControl';
+import { useDeviceControl, type ControlDevice } from '@/hooks/useDeviceControl';
 import { DRAG_THRESHOLD_PX, isDrag, toScreenPoint } from '@/lib/deviceScale';
-import type { PrereqAdbResponse, PrereqAndroidDevice } from '@core/ui/contracts.js';
 
-const KEYS: Array<{ key: string; label: string }> = [
-  { key: 'back', label: 'Quay lại' },
-  { key: 'home', label: 'Home' },
-  { key: 'recents', label: 'Gần đây' },
-  { key: 'enter', label: 'Enter' },
-  { key: 'delete', label: 'Xoá' },
-];
-
-function deviceLabel(device: PrereqAndroidDevice): string {
-  return [
-    device.marketName ?? device.model ?? device.id,
-    device.androidVersion && `Android ${device.androidVersion}`,
-    device.kind === 'emulator' ? 'emulator' : undefined,
-  ].filter(Boolean).join(' · ');
-}
+/**
+ * Phím hiện ra theo nền tảng.
+ *
+ * iPhone không có nút Quay lại, và không có "ứng dụng gần đây" bấm được từ
+ * WebDriverAgent. Vẽ những nút ấy rồi để chúng báo lỗi khi bấm là đẩy một sự
+ * thật của nền tảng thành một lỗi của người dùng.
+ */
+const KEYS: Record<'android' | 'ios', Array<{ key: string; label: string }>> = {
+  android: [
+    { key: 'back', label: 'Quay lại' },
+    { key: 'home', label: 'Home' },
+    { key: 'recents', label: 'Gần đây' },
+    { key: 'enter', label: 'Enter' },
+    { key: 'delete', label: 'Xoá' },
+  ],
+  ios: [
+    { key: 'home', label: 'Home' },
+    { key: 'enter', label: 'Enter' },
+    { key: 'delete', label: 'Xoá' },
+  ],
+};
 
 export default function DeviceControlPanel() {
   const canvas = useRef<HTMLCanvasElement>(null);
@@ -42,8 +47,10 @@ export default function DeviceControlPanel() {
 
   const devices = useQuery({
     queryKey: ['control-devices'],
-    queryFn: async () => (await api.get<PrereqAdbResponse>(ROUTES.prereqAdb)).devices,
+    queryFn: async () =>
+      (await api.get<{ devices: ControlDevice[] }>(ROUTES.deviceTargets)).devices,
   });
+  const picked = (devices.data ?? []).find((device) => device.udid === chosen);
 
   const screen = state.phase === 'holding' ? state.screen : undefined;
 
@@ -92,8 +99,8 @@ export default function DeviceControlPanel() {
             onChange={(event) => setChosen(event.target.value)}
           >
             <option value="">— chọn máy —</option>
-            {(devices.data ?? []).filter((device) => device.state === 'device').map((device) => (
-              <option key={device.id} value={device.id}>{deviceLabel(device)}</option>
+            {(devices.data ?? []).map((device) => (
+              <option key={device.udid} value={device.udid}>{device.label}</option>
             ))}
           </select>
 
@@ -109,12 +116,22 @@ export default function DeviceControlPanel() {
           {state.phase === 'holding' ? (
             <Button size="sm" variant="destructive" onClick={() => void release()}>Nhả máy</Button>
           ) : (
-            <Button size="sm" disabled={!chosen} onClick={() => void hold(chosen)}>Giữ máy</Button>
+            <Button size="sm" disabled={!picked} onClick={() => picked && void hold(picked)}>
+              Giữ máy
+            </Button>
           )}
 
-          {state.phase === 'holding' && screen && (
+          {state.phase === 'holding' && (
             <span className="text-muted-foreground text-xs">
-              {screen.width}×{screen.height} · lease tự gia hạn mỗi 30 giây
+              {screen
+                ? `${screen.width}×${screen.height} · ${state.codec === 'mjpeg' ? 'JPEG' : 'H.264'}`
+                  + ' · lease tự gia hạn mỗi 30 giây'
+                // iOS lần đầu phải build WebDriverAgent — đo được 184 giây.
+                // Im lặng ba phút thì người dùng bấm lại, và lần bấm ấy không
+                // giúp gì cả.
+                : state.platform === 'ios'
+                  ? 'Đang dựng WebDriverAgent trên máy… lần đầu có thể mất vài phút.'
+                  : 'Đang mở luồng màn hình…'}
             </span>
           )}
         </div>
@@ -146,7 +163,7 @@ export default function DeviceControlPanel() {
 
             <div className="flex min-w-56 flex-1 flex-col gap-2">
               <div className="flex flex-wrap gap-2">
-                {KEYS.map((item) => (
+                {KEYS[state.platform].map((item) => (
                   <Button
                     key={item.key}
                     size="sm"

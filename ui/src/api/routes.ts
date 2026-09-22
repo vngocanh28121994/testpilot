@@ -52,6 +52,7 @@ export const ROUTES = {
   prereqAppiumStatus: '/api/prereq/appium/status',
   prereqIosTunnel: '/api/prereq/ios-tunnel',
   prereqIosTrust: '/api/prereq/ios-trust',
+  deviceTargets: '/api/device/targets',
   deviceLeases: '/api/device/leases',
   deviceLease: '/api/device/lease',
   deviceLeaseRenew: '/api/device/lease/renew',

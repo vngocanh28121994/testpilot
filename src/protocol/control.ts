@@ -1,5 +1,22 @@
+/** Hai nền tảng điều khiển được. Web thì không có màn hình để chạm. */
+export type ControlPlatform = 'android' | 'ios';
+
 /**
- * Những phím mà màn điều khiển được phép bấm.
+ * Một chiếc máy, nói rõ nền tảng.
+ *
+ * Nền tảng đi kèm chứ không đoán từ hình dạng `udid`: udid của simulator là
+ * một UUID, của máy iOS thật là 25 hoặc 40 ký tự, của Android là bất cứ thứ gì
+ * nhà sản xuất muốn — và `emulator-5554` chỉ tình cờ nhận ra được. Đoán sai
+ * nghĩa là gửi lệnh `adb` cho một chiếc iPhone, và câu lỗi sẽ nói về `adb`
+ * chứ không nói về chuyện đoán.
+ */
+export interface ControlTarget {
+  platform: ControlPlatform;
+  udid: string;
+}
+
+/**
+ * Những phím mà màn điều khiển được phép bấm, theo từng nền tảng.
  *
  * Danh sách nằm ở tầng giao thức, không ở runner, vì nó là HỢP ĐỒNG: control
  * plane kiểm nó để từ chối sớm, runner kiểm lại để không tin phía bên kia, và
@@ -9,13 +26,28 @@
  *
  * Không có POWER, không có SLEEP: một cái nút trên web khoá màn hình chiếc máy
  * đang cắm ở phòng khác là thứ không ai gỡ được từ xa.
+ *
+ * iOS có ÍT phím hơn, và đó là sự thật của nền tảng chứ không phải thiếu sót:
+ * iPhone không có nút Quay lại, và WebDriverAgent chỉ bấm được những nút cứng
+ * mà máy thật có. Trả lời "iOS không có phím ấy" rõ ràng hơn nhiều so với gửi
+ * đi một lệnh rồi báo lỗi từ tầng dưới.
  */
+export const CONTROL_KEYS_BY_PLATFORM: Record<ControlPlatform, readonly string[]> = {
+  android: ['back', 'home', 'enter', 'delete', 'tab', 'recents'],
+  ios: ['home', 'enter', 'delete'],
+};
+
+/** Hợp của cả hai nền tảng — dùng cho kiểu, không dùng để cho phép. */
 export const CONTROL_KEYS = ['back', 'home', 'enter', 'delete', 'tab', 'recents'] as const;
 
 export type ControlKey = (typeof CONTROL_KEYS)[number];
 
-export function isControlKey(value: unknown): value is ControlKey {
-  return typeof value === 'string' && (CONTROL_KEYS as readonly string[]).includes(value);
+export function isControlKey(value: unknown, platform?: ControlPlatform): value is ControlKey {
+  if (typeof value !== 'string') return false;
+  const allowed = platform
+    ? CONTROL_KEYS_BY_PLATFORM[platform]
+    : (CONTROL_KEYS as readonly string[]);
+  return allowed.includes(value);
 }
 
 /** Bốn động tác, và không hơn. Xem `RunnerControlApi`. */
@@ -40,6 +72,7 @@ export type ControlAction =
 export function checkAction(
   raw: unknown,
   screen: { width: number; height: number },
+  platform?: ControlPlatform,
 ): { ok: true; action: ControlAction } | { ok: false; error: string } {
   const action = (raw ?? {}) as Record<string, unknown>;
   const num = (value: unknown): number | undefined =>
@@ -89,8 +122,17 @@ export function checkAction(
       return { ok: true, action: { kind: 'text', text: action.text } };
     }
     case 'key': {
-      if (!isControlKey(action.key)) {
-        return { ok: false, error: `Phím "${String(action.key)}" không có trong danh sách cho phép.` };
+      if (!isControlKey(action.key, platform)) {
+        // Nói rõ phím nào CÓ, vì với iOS câu trả lời không phải "sai" mà là
+        // "nền tảng này không có nút ấy".
+        const allowed = platform
+          ? CONTROL_KEYS_BY_PLATFORM[platform].join(', ')
+          : CONTROL_KEYS.join(', ');
+        return {
+          ok: false,
+          error: `Phím "${String(action.key)}" không dùng được`
+            + `${platform ? ` trên ${platform}` : ''}. Chỉ có: ${allowed}.`,
+        };
       }
       return { ok: true, action: { kind: 'key', key: action.key } };
     }

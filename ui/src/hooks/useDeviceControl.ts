@@ -23,6 +23,17 @@ export interface ControlScreen {
   height: number;
 }
 
+export type ControlPlatform = 'android' | 'ios';
+
+/**
+ * Kiểu ảnh đang chảy về.
+ *
+ * Android cho ra H.264 — một luồng liên tục cần bộ giải mã dựng sẵn từ SPS.
+ * iOS cho ra JPEG từng khung, vẽ thẳng được. Hai đường vẽ khác nhau hoàn toàn,
+ * nên `meta` phải nói kiểu nào TRƯỚC khung đầu tiên.
+ */
+export type StreamCodec = 'h264' | 'mjpeg';
+
 export interface ControlAction {
   kind: 'tap' | 'swipe' | 'text' | 'key';
   x?: number;
@@ -40,9 +51,22 @@ interface Lease {
   expiresAt: string;
 }
 
+export interface ControlDevice {
+  platform: ControlPlatform;
+  udid: string;
+  label: string;
+}
+
 export type ControlState =
   | { phase: 'idle' }
-  | { phase: 'holding'; lease: Lease; screen?: ControlScreen; frames: number }
+  | {
+      phase: 'holding';
+      lease: Lease;
+      platform: ControlPlatform;
+      screen?: ControlScreen;
+      codec?: StreamCodec;
+      frames: number;
+    }
   | { phase: 'error'; message: string };
 
 /** Gia hạn mỗi 30 giây; lease sống 60. Một nhịp lỡ vẫn còn một nhịp dự phòng. */
@@ -51,10 +75,12 @@ const RENEW_MS = 30_000;
 export function useDeviceControl(canvas: React.RefObject<HTMLCanvasElement | null>) {
   const [state, setState] = useState<ControlState>({ phase: 'idle' });
   const leaseRef = useRef<Lease | undefined>(undefined);
+  const platformRef = useRef<ControlPlatform>('android');
   const sourceRef = useRef<EventSource | undefined>(undefined);
   const decoderRef = useRef<VideoDecoder | undefined>(undefined);
   const assemblerRef = useRef(new AnnexBAssembler());
   const framesRef = useRef(0);
+  const codecRef = useRef<StreamCodec>('h264');
 
   const teardown = useCallback(() => {
     sourceRef.current?.close();
@@ -84,9 +110,36 @@ export function useDeviceControl(canvas: React.RefObject<HTMLCanvasElement | nul
     framesRef.current += 1;
   }, [canvas]);
 
-  const open = useCallback((lease: Lease) => {
+  /**
+   * Vẽ một khung JPEG (iOS).
+   *
+   * `createImageBitmap` giải mã NGOÀI luồng chính, nên một khung 63 KB không
+   * làm giao diện khựng. Và khung được đóng lại sau khi vẽ, vì bitmap giữ bộ
+   * nhớ ngoài vùng thu gom rác của JS — cùng cái bẫy với `VideoFrame`.
+   */
+  const drawJpeg = useCallback(async (bytes: Uint8Array) => {
+    const node = canvas.current;
+    if (!node) return;
+    let bitmap: ImageBitmap | undefined;
+    try {
+      bitmap = await createImageBitmap(new Blob([bytes as BlobPart], { type: 'image/jpeg' }));
+    } catch {
+      // Một khung hỏng không đáng làm đứt cả phiên: khung sau sẽ vẽ lại.
+      return;
+    }
+    if (node.width !== bitmap.width || node.height !== bitmap.height) {
+      node.width = bitmap.width;
+      node.height = bitmap.height;
+    }
+    node.getContext('2d')?.drawImage(bitmap, 0, 0);
+    bitmap.close();
+    framesRef.current += 1;
+  }, [canvas]);
+
+  const open = useCallback((lease: Lease, platform: ControlPlatform) => {
     const source = new EventSource(
-      `${ROUTES.controlStream}?deviceId=${encodeURIComponent(lease.deviceId)}`
+      `${ROUTES.controlStream}?platform=${platform}`
+        + `&deviceId=${encodeURIComponent(lease.deviceId)}`
         + `&leaseId=${encodeURIComponent(lease.id)}`,
     );
     sourceRef.current = source;
@@ -94,12 +147,22 @@ export function useDeviceControl(canvas: React.RefObject<HTMLCanvasElement | nul
     source.addEventListener('meta', (event) => {
       const meta = JSON.parse((event as MessageEvent<string>).data) as {
         screen: ControlScreen;
+        codec: StreamCodec;
       };
-      setState((prev) => (prev.phase === 'holding' ? { ...prev, screen: meta.screen } : prev));
+      codecRef.current = meta.codec;
+      setState((prev) => (
+        prev.phase === 'holding' ? { ...prev, screen: meta.screen, codec: meta.codec } : prev
+      ));
     });
 
     source.addEventListener('video', (event) => {
       const bytes = decodeBase64(JSON.parse((event as MessageEvent<string>).data) as string);
+      // iOS: mỗi sự kiện là MỘT ảnh JPEG trọn vẹn. Không có bộ giải mã nào để
+      // dựng, không có khung khoá để chờ — vẽ thẳng.
+      if (codecRef.current === 'mjpeg') {
+        void drawJpeg(bytes);
+        return;
+      }
       for (const unit of assemblerRef.current.push(bytes)) {
         // Bộ giải mã dựng ở khung KHOÁ đầu tiên, vì chuỗi codec đọc từ SPS đi
         // kèm nó. Dựng sẵn bằng một chuỗi đặt cứng sẽ đúng cho phần lớn máy và
@@ -130,6 +193,8 @@ export function useDeviceControl(canvas: React.RefObject<HTMLCanvasElement | nul
     });
 
     source.addEventListener('restart', () => {
+      // Chỉ Android mới khởi động lại luồng; với MJPEG thì không có trạng thái
+      // nào để dựng lại, nên các dòng dưới đây là vô hại ở cả hai đường.
       // `screenrecord` vừa chạy lại ở mốc 180 giây: chuỗi mới không nối tiếp
       // chuỗi cũ, nên bộ giải mã phải dựng lại từ khung khoá kế tiếp.
       assemblerRef.current.reset();
@@ -150,10 +215,12 @@ export function useDeviceControl(canvas: React.RefObject<HTMLCanvasElement | nul
       teardown();
       setState({ phase: 'error', message: 'Mất kết nối tới luồng màn hình.' });
     };
-  }, [draw, teardown]);
+  }, [canvas, draw, drawJpeg, teardown]);
 
-  const hold = useCallback(async (deviceId: string) => {
-    if (typeof VideoDecoder === 'undefined') {
+  const hold = useCallback(async (device: ControlDevice) => {
+    // WebCodecs chỉ cần cho Android (H.264). iOS gửi JPEG, mà mọi trình duyệt
+    // đều vẽ được — nên chặn cả hai ở đây là từ chối một thứ chạy được.
+    if (device.platform === 'android' && typeof VideoDecoder === 'undefined') {
       setState({
         phase: 'error',
         message: 'Trình duyệt này chưa giải mã được H.264 trong trang (cần WebCodecs). '
@@ -162,10 +229,13 @@ export function useDeviceControl(canvas: React.RefObject<HTMLCanvasElement | nul
       return;
     }
     try {
-      const { lease } = await api.post<{ lease: Lease }>(ROUTES.deviceLease, { deviceId });
+      const { lease } = await api.post<{ lease: Lease }>(
+        ROUTES.deviceLease, { deviceId: device.udid },
+      );
       leaseRef.current = lease;
-      setState({ phase: 'holding', lease, frames: 0 });
-      open(lease);
+      platformRef.current = device.platform;
+      setState({ phase: 'holding', lease, platform: device.platform, frames: 0 });
+      open(lease, device.platform);
     } catch (err) {
       setState({ phase: 'error', message: (err as Error).message });
     }
@@ -185,7 +255,12 @@ export function useDeviceControl(canvas: React.RefObject<HTMLCanvasElement | nul
     const lease = leaseRef.current;
     if (!lease) return;
     try {
-      await api.post(ROUTES.controlInput, { deviceId: lease.deviceId, leaseId: lease.id, action });
+      await api.post(ROUTES.controlInput, {
+        deviceId: lease.deviceId,
+        leaseId: lease.id,
+        platform: platformRef.current,
+        action,
+      });
     } catch (err) {
       setState({ phase: 'error', message: (err as Error).message });
     }

@@ -1,303 +1,101 @@
 /**
- * Xem và chạm một chiếc máy Android — phần phải sinh tiến trình, nên nó ở đây.
+ * Chọn đường điều khiển theo nền tảng, và không làm gì khác.
  *
- * Vì sao `screenrecord` chứ không phải `screencap` theo nhịp: đã đo trên
- * emulator API 36. Một khung `screencap -p` mất **1,9-2,6 giây** và nặng
- * **1,39 MB**; năm giây `screenrecord --output-format=h264` ở 720x1600 nặng
- * **37 KB** và đúng tốc độ khung của máy. Tức là chụp ảnh liên tục cho ra 0,5
- * khung/giây với băng thông gấp hai mươi lần video — không phải chậm hơn một
- * chút, mà là một thứ khác hẳn.
+ * Android đi qua `adb` với luồng H.264 ([androidControl.ts](./androidControl.ts));
+ * iOS đi qua WebDriverAgent với luồng MJPEG ([iosControl.ts](./iosControl.ts)).
+ * Hai đường không có một dòng chung nào, và đó là sự thật của hai nền tảng chứ
+ * không phải một thiếu sót cần gộp lại.
  *
- * Vì sao không phải scrcpy: scrcpy cần đẩy `scrcpy-server.jar` lên máy rồi nói
- * giao thức socket riêng của nó. Nó cho độ trễ thấp hơn, và sẽ là bước sau nếu
- * độ trễ thành vấn đề. `screenrecord` là lệnh CÓ SẴN trong Android, đi qua đúng
- * `adb` mà runner vốn đã cần — không thêm nhị phân nào lên máy người dùng, và
- * đó là điều đáng giữ khi runner chạy trên máy cá nhân của người khác.
- *
- * Giới hạn đã biết, nói ra chứ không giấu: `screenrecord` tự dừng ở mốc
- * `--time-limit` (tối đa 180 giây) nên stream tự khởi động lại, và mỗi lần khởi
- * động lại có một khoảng hở khoảng một giây. Nó cũng không chụp được surface
- * bảo mật (màn nhập mật khẩu, DRM) — vùng ấy ra khung đen, đúng như khi quay
- * phim bằng tay.
+ * File này tồn tại để phần còn lại của hệ thống — mặt tiền runner, control
+ * plane, giao diện — chỉ biết MỘT bộ việc. Nền tảng đi kèm trong `ControlTarget`
+ * chứ không đoán từ hình dạng `udid`: udid của simulator là một UUID, của máy
+ * iOS thật là 25 hoặc 40 ký tự, còn Android thì tuỳ nhà sản xuất. Đoán sai
+ * nghĩa là gửi lệnh `adb` cho một chiếc iPhone, và câu lỗi sẽ nói về `adb`.
  */
-import { spawn, type ChildProcess } from 'node:child_process';
-import { CONTROL_KEYS, isControlKey, type ControlKey } from '../protocol/control.js';
+import type { ControlTarget } from '../protocol/control.js';
+import * as android from './androidControl.js';
+import * as ios from './iosControl.js';
+import type { ScreenSize, ScreenStreamHandle, ScreenStreamSink } from './androidControl.js';
 
-/** Mỗi lần khởi động lại `screenrecord` là một khoảng hở, nên lấy mốc cao nhất. */
-const TIME_LIMIT_SECONDS = 180;
+/** Kiểu ảnh mà người xem sẽ nhận. Giao diện chọn bộ vẽ theo đúng giá trị này. */
+export type StreamCodec = 'h264' | 'mjpeg';
 
-/** Chiều rộng đích. Cao hơn nữa thì băng thông tăng mà chữ trên máy không rõ thêm. */
-const TARGET_WIDTH = 720;
-
-export interface ScreenSize {
-  width: number;
-  height: number;
-  /**
-   * Toạ độ mà `input tap` dùng có phải toạ độ vật lý không.
-   *
-   * `wm size` in ra "Override size" khi màn hình đang bị đặt lại độ phân giải,
-   * và `input tap` đi theo con số ĐÓ. Lấy nhầm số vật lý nghĩa là mọi cú chạm
-   * lệch đi theo tỉ lệ — và lệch một cách đều đặn, nên nó trông như "app hỏng"
-   * chứ không như "toạ độ sai".
-   */
-  overridden: boolean;
+export function codecFor(platform: ControlTarget['platform']): StreamCodec {
+  return platform === 'ios' ? 'mjpeg' : 'h264';
 }
 
-export interface ScreenStreamHandle {
-  /** Kích thước khung video đang gửi — KHÁC kích thước màn hình khi có `--size`. */
-  readonly frame: { width: number; height: number };
-  stop(): void;
+export function screenSize(target: ControlTarget): Promise<ScreenSize> {
+  return target.platform === 'ios'
+    ? ios.screenSize(target.udid)
+    : android.screenSize(target.udid);
 }
 
-export interface ScreenStreamSink {
-  /** Một mảnh H.264 Annex-B. Mảnh đầu của mỗi lần chạy mang SPS/PPS. */
-  chunk(data: Buffer): void;
-  /**
-   * `screenrecord` vừa khởi động lại, nên bộ giải mã phía trình duyệt phải
-   * dựng lại: mảnh tiếp theo bắt đầu một chuỗi mới, không nối tiếp chuỗi cũ.
-   */
-  restart(): void;
-  /** Tiến trình chết vì lý do không phải mốc thời gian. */
-  fail(message: string): void;
-}
-
-function adb(args: string[], udid: string): ChildProcess {
-  return spawn('adb', ['-s', udid, ...args], { stdio: ['ignore', 'pipe', 'pipe'] });
-}
-
-function run(args: string[], udid: string, timeoutMs = 8_000): Promise<string> {
-  return new Promise((resolve, reject) => {
-    let stdout = '';
-    let stderr = '';
-    const child = adb(args, udid);
-    const timer = setTimeout(() => child.kill('SIGTERM'), timeoutMs);
-    child.stdout?.on('data', (buf: Buffer) => { stdout += buf.toString(); });
-    child.stderr?.on('data', (buf: Buffer) => { stderr += buf.toString(); });
-    child.on('error', (err) => { clearTimeout(timer); reject(err); });
-    child.on('close', (code) => {
-      clearTimeout(timer);
-      if (code === 0) resolve(stdout);
-      else reject(new Error(stderr.trim() || stdout.trim() || `adb kết thúc với mã ${code}`));
-    });
-  });
-}
-
-/** `wm size` → số mà `input tap` thật sự dùng. Xem `ScreenSize.overridden`. */
-export function parseScreenSize(output: string): ScreenSize | undefined {
-  const override = /Override size:\s*(\d+)x(\d+)/.exec(output);
-  const physical = /Physical size:\s*(\d+)x(\d+)/.exec(output);
-  const picked = override ?? physical;
-  if (!picked) return undefined;
-  return {
-    width: Number(picked[1]),
-    height: Number(picked[2]),
-    overridden: override !== null,
-  };
-}
-
-export async function screenSize(udid: string): Promise<ScreenSize> {
-  const size = parseScreenSize(await run(['shell', 'wm', 'size'], udid));
-  if (!size) throw new Error(`Không đọc được kích thước màn hình của "${udid}".`);
-  return size;
-}
-
-/**
- * Khung video nhỏ hơn màn hình, giữ đúng tỉ lệ, và chiều nào cũng CHẴN.
- *
- * Bộ mã hoá H.264 trên Android từ chối kích thước lẻ, và nó từ chối bằng cách
- * chết ngay lúc khởi động với một câu khó hiểu.
- */
-export function frameSizeFor(screen: { width: number; height: number }): {
-  width: number; height: number;
-} {
-  const even = (n: number) => Math.max(2, Math.round(n / 2) * 2);
-  if (screen.width <= TARGET_WIDTH) {
-    return { width: even(screen.width), height: even(screen.height) };
-  }
-  return {
-    width: even(TARGET_WIDTH),
-    height: even((TARGET_WIDTH * screen.height) / screen.width),
-  };
-}
-
-/**
- * Một tiến trình cho một chiếc máy.
- *
- * Hai `screenrecord` cùng lúc trên một máy là hai bộ mã hoá tranh nhau, và kết
- * quả là cả hai giật. Nên nhiều người xem — cùng một người mở hai tab là đủ —
- * dùng chung một tiến trình, và tiến trình tắt khi người xem cuối cùng rời đi.
- */
-const streams = new Map<string, {
-  child?: ChildProcess;
-  sinks: Set<ScreenStreamSink>;
-  frame: { width: number; height: number };
-  stopped: boolean;
-}>();
-
-export async function startScreenStream(
-  udid: string,
+export function startScreenStream(
+  target: ControlTarget,
   sink: ScreenStreamSink,
 ): Promise<ScreenStreamHandle> {
-  const existing = streams.get(udid);
-  if (existing) {
-    existing.sinks.add(sink);
-    return { frame: existing.frame, stop: () => detach(udid, sink) };
-  }
-
-  const screen = await screenSize(udid);
-  const frame = frameSizeFor(screen);
-  const state = { sinks: new Set([sink]), frame, stopped: false } as {
-    child?: ChildProcess;
-    sinks: Set<ScreenStreamSink>;
-    frame: { width: number; height: number };
-    stopped: boolean;
-  };
-  streams.set(udid, state);
-
-  const launch = (first: boolean): void => {
-    if (state.stopped) return;
-    const child = adb([
-      'exec-out', 'screenrecord',
-      '--output-format=h264',
-      `--size=${frame.width}x${frame.height}`,
-      '--bit-rate=2000000',
-      `--time-limit=${TIME_LIMIT_SECONDS}`,
-      '-',
-    ], udid);
-    state.child = child;
-    if (!first) for (const each of state.sinks) each.restart();
-
-    child.stdout?.on('data', (buf: Buffer) => {
-      for (const each of state.sinks) each.chunk(buf);
-    });
-    let stderr = '';
-    child.stderr?.on('data', (buf: Buffer) => { stderr += buf.toString(); });
-    child.on('error', (err) => {
-      for (const each of state.sinks) each.fail(err.message);
-      streams.delete(udid);
-    });
-    child.on('close', (code) => {
-      if (state.stopped) return;
-      // Mã 0 là hết mốc thời gian — chuyện bình thường, chạy lại ngay. Mã khác
-      // là máy rút ra hoặc bộ mã hoá từ chối, và im lặng chạy lại một thứ chắc
-      // chắn hỏng sẽ thành một vòng lặp sinh tiến trình.
-      if (code === 0) {
-        launch(false);
-        return;
-      }
-      for (const each of state.sinks) {
-        each.fail(stderr.trim() || `screenrecord kết thúc với mã ${code}`);
-      }
-      streams.delete(udid);
-    });
-  };
-  launch(true);
-
-  return { frame, stop: () => detach(udid, sink) };
+  return target.platform === 'ios'
+    ? ios.startScreenStream(target.udid, sink)
+    : android.startScreenStream(target.udid, sink);
 }
 
-function detach(udid: string, sink: ScreenStreamSink): void {
-  const state = streams.get(udid);
-  if (!state) return;
-  state.sinks.delete(sink);
-  if (state.sinks.size > 0) return;
-  state.stopped = true;
-  state.child?.kill('SIGTERM');
-  streams.delete(udid);
+export function tap(target: ControlTarget, x: number, y: number): Promise<void> {
+  return target.platform === 'ios' ? ios.tap(target.udid, x, y) : android.tap(target.udid, x, y);
 }
 
-/** Dừng mọi luồng — dùng khi tiến trình runner tắt. */
-export function stopAllScreenStreams(): void {
-  for (const [udid, state] of streams) {
-    state.stopped = true;
-    state.child?.kill('SIGTERM');
-    streams.delete(udid);
-  }
-}
-
-/* ── Đầu vào ──────────────────────────────────────────────────────────── */
-
-/**
- * Tên phím của hợp đồng → mã phím của Android.
- *
- * `Record<ControlKey, string>` chứ không phải `Record<string, string>`: thêm
- * một phím vào `CONTROL_KEYS` mà quên mã ở đây thì TYPECHECK đỏ, không phải
- * người dùng bấm rồi mới biết.
- */
-const KEYS: Record<ControlKey, string> = {
-  back: 'KEYCODE_BACK',
-  home: 'KEYCODE_HOME',
-  enter: 'KEYCODE_ENTER',
-  delete: 'KEYCODE_DEL',
-  tab: 'KEYCODE_TAB',
-  recents: 'KEYCODE_APP_SWITCH',
-};
-
-export function controlKeys(): string[] {
-  return [...CONTROL_KEYS];
-}
-
-/** Toạ độ phải là số nguyên không âm: `input` nhận chuỗi, và không kiểm gì. */
-function coord(name: string, value: number): string {
-  if (!Number.isInteger(value) || value < 0 || value > 20_000) {
-    throw new Error(`${name} phải là số nguyên trong [0, 20000], nhận "${value}".`);
-  }
-  return String(value);
-}
-
-export async function tap(udid: string, x: number, y: number): Promise<void> {
-  await run(['shell', 'input', 'tap', coord('x', x), coord('y', y)], udid);
-}
-
-export async function swipe(
-  udid: string,
+export function swipe(
+  target: ControlTarget,
   from: { x: number; y: number },
   to: { x: number; y: number },
-  durationMs = 200,
+  durationMs?: number,
 ): Promise<void> {
-  await run([
-    'shell', 'input', 'swipe',
-    coord('x1', from.x), coord('y1', from.y),
-    coord('x2', to.x), coord('y2', to.y),
-    coord('duration', Math.min(10_000, Math.max(1, Math.round(durationMs)))),
-  ], udid);
+  return target.platform === 'ios'
+    ? ios.swipe(target.udid, from, to, durationMs)
+    : android.swipe(target.udid, from, to, durationMs);
+}
+
+export function typeText(target: ControlTarget, text: string): Promise<void> {
+  return target.platform === 'ios'
+    ? ios.typeText(target.udid, text)
+    : android.typeText(target.udid, text);
+}
+
+export function pressKey(target: ControlTarget, key: string): Promise<void> {
+  return target.platform === 'ios'
+    ? ios.pressKey(target.udid, key)
+    : android.pressKey(target.udid, key);
+}
+
+export function stopAllScreenStreams(): void {
+  android.stopAllScreenStreams();
+  ios.stopAllScreenStreams();
+}
+
+export interface ControlDevice extends ControlTarget {
+  /** Chuỗi người đọc: tên máy, phiên bản hệ điều hành, thật hay giả lập. */
+  label: string;
 }
 
 /**
- * `input text` coi dấu cách là dấu phân cách đối số, nên dấu cách thành `%s`.
+ * Những chiếc máy điều khiển được, cả hai nền tảng, trong MỘT danh sách.
  *
- * Ký tự điều khiển thì bị TỪ CHỐI thay vì tự lọc: một chuỗi có ký tự xuống
- * dòng mà ta lặng lẽ bỏ đi sẽ gõ ra một thứ khác với thứ người ta gõ, và họ
- * không biết phần nào đã mất.
- */
-export function encodeText(text: string): string {
-  if (CONTROL_CHARS.test(text)) {
-    throw new Error('Chuỗi có ký tự điều khiển; dùng phím Enter/Delete thay vì gõ chúng.');
-  }
-  return text.replace(/ /g, '%s');
-}
-
-const CONTROL_CHARS = new RegExp(
-  // Dựng từ mã ký tự thay vì viết thẳng, để chính file này không chứa ký tự
-  // điều khiển nào — `sourceIntegrity.test.ts` canh điều đó.
-  `[${String.fromCharCode(0)}-${String.fromCharCode(31)}${String.fromCharCode(127)}]`,
-);
-
-export async function typeText(udid: string, text: string): Promise<void> {
-  if (text.length === 0) return;
-  await run(['shell', 'input', 'text', encodeText(text)], udid);
-}
-
-/**
- * Kiểm LẠI ở đây, dù control plane đã kiểm.
+ * Trước đó giao diện phải gộp hai nguồn khác hình dạng: `/api/prereq/adb` trả
+ * object có `id`/`model`/`kind`, còn `/api/prereq/ios-devices` trả nguyên văn
+ * `xcrun xctrace list devices` dưới dạng chuỗi — và không nguồn nào liệt kê
+ * simulator đang bật, thứ mà màn điều khiển dùng nhiều nhất lúc phát triển.
  *
- * Runner không tin phía bên kia: ở chế độ server, "phía bên kia" là một thông
- * điệp đi qua mạng, và một control plane bị chiếm không được phép gõ
- * `KEYCODE_POWER` lên chiếc máy đang cắm ở nhà một người.
+ * Một máy không trả lời thì bỏ qua BÊN ẤY, không làm hỏng cả danh sách: một
+ * người chỉ có Android không nên thấy màn hình lỗi vì máy họ không cài Xcode.
  */
-export async function pressKey(udid: string, key: string): Promise<void> {
-  if (!isControlKey(key)) {
-    throw new Error(`Phím "${key}" không có trong danh sách cho phép.`);
-  }
-  await run(['shell', 'input', 'keyevent', KEYS[key]], udid);
+export async function controlDevices(): Promise<ControlDevice[]> {
+  const [androids, iphones] = await Promise.all([
+    android.attachedDevices().catch(() => []),
+    ios.bootedSimulators().catch(() => []),
+  ]);
+  return [
+    ...androids.map((device) => ({ platform: 'android' as const, ...device })),
+    ...iphones.map((device) => ({ platform: 'ios' as const, ...device })),
+  ];
 }
+
+export type { ScreenSize, ScreenStreamHandle, ScreenStreamSink };

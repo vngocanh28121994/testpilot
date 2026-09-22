@@ -90,6 +90,9 @@ export const ROUTE_POLICY: Record<string, Role> = {
   // và nó nằm trong handler vì nó là thuộc tính của dữ liệu, không của người
   // gọi. Một `maintainer` vai cao hơn vẫn không chạm được vào chiếc điện thoại
   // người khác đang cầm.
+  // Danh sách máy điều khiển được: đọc thì vô hại, và người sắp giữ máy cần
+  // thấy nó trước khi có quyền giữ.
+  'GET /api/device/targets': 'viewer',
   'GET /api/device/control/stream': 'runner_user',
   'POST /api/device/control/input': 'runner_user',
 

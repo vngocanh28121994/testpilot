@@ -96,6 +96,7 @@ describe('ranh giới control plane', () => {
   it('RunnerControlApi vẫn là danh sách đóng', async () => {
     const { localRunner } = await import('../../runner/index.js');
     assert.deepEqual(Object.keys(localRunner.control).sort(), [
+      'devices',
       'pressKey',
       'screenSize',
       'startScreenStream',
@@ -105,11 +106,21 @@ describe('ranh giới control plane', () => {
     ]);
   });
 
-  /** Không có POWER/SLEEP: một nút trên web khoá màn hình chiếc máy ở phòng khác. */
-  it('danh sách phím không có phím nguồn', async () => {
-    const { controlKeys } = await import('../../runner/control.js');
-    assert.deepEqual(controlKeys().sort(), [
+  /**
+   * Không có POWER/SLEEP trên nền tảng nào: một nút trên web khoá màn hình
+   * chiếc máy ở phòng khác là thứ không ai gỡ được từ xa.
+   *
+   * iOS ít phím hơn Android, và đó là sự thật của nền tảng: iPhone không có
+   * nút Quay lại.
+   */
+  it('danh sách phím không có phím nguồn, và iOS ít hơn Android', async () => {
+    const { CONTROL_KEYS_BY_PLATFORM } = await import('../../protocol/control.js');
+    assert.deepEqual([...CONTROL_KEYS_BY_PLATFORM.android].sort(), [
       'back', 'delete', 'enter', 'home', 'recents', 'tab',
     ]);
+    assert.deepEqual([...CONTROL_KEYS_BY_PLATFORM.ios].sort(), ['delete', 'enter', 'home']);
+    for (const keys of Object.values(CONTROL_KEYS_BY_PLATFORM)) {
+      for (const key of keys) assert.doesNotMatch(key, /power|sleep|lock/i);
+    }
   });
 });

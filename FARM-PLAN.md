@@ -302,10 +302,15 @@ WDA. Đầu vào thì không cần ai cho: Appium/WDA theo W3C, mà webdriverio 
 - Bỏ endpoint `POST /api/aws/login` tương tác; dùng IAM role của máy chạy runner.
 - **Xong khi:** một job `run_suite` đi qua Device Farm mà UI không cần biết nó khác gì runner khác.
 
-### P3.7 Điều khiển thiết bị từ web
+### P3.7 Điều khiển thiết bị từ web — ✅ xong cả ba bước 2026-09-22
 
 Làm **sau** P3.1–P3.3, vì lease là phần dùng chung. Nhưng bước 1 phải đi TRƯỚC scheduler, vì nó đổi
 lược đồ mà scheduler sẽ đọc.
+
+Hai nền tảng đi hai đường hoàn toàn khác nhau — `adb` + H.264 cho Android, WebDriverAgent + MJPEG
+cho iOS — và [src/runner/control.ts](src/runner/control.ts) là chỗ duy nhất biết điều đó. Phần còn
+lại của hệ thống chỉ thấy một bộ việc, và nền tảng đi kèm trong `ControlTarget` chứ không đoán từ
+hình dạng `udid`.
 
 **Bước 1 — lease của người — ✅ xong 2026-09-22**
 - Migration `0002_human_lease.sql`: `lease.job_id` cho phép NULL, thêm `holder_kind`
@@ -393,9 +398,35 @@ lược đồ mà scheduler sẽ đọc.
   giải thích có ví dụ `useEffect(() => () => …)`). Lần này sửa PHÉP ĐO chứ không sửa chú thích:
   `codeOnly()` lọc chú thích trước, áp cho cả ba khẳng định trong file.
 
-**Bước 3 — iOS (≈2–3 ngày)**
-- Video: MJPEG server của WebDriverAgent. Input: Appium/WDA theo W3C, qua webdriverio.
-- **Xong khi:** giữ được một chiếc iPhone từ web, thấy màn hình, chạm được, và job không chen vào.
+**Bước 3 — iOS — ✅ xong 2026-09-22**
+- Video: MJPEG của WebDriverAgent ở cổng 9100. Input: `execute/sync` với `mobile:` script —
+  **`/wda/keys` và `/appium/device/press_button` đã bị bỏ ở xcuitest 12.5**, cả hai trả
+  "unknown command", một câu không nói gì về việc route đã dời chỗ.
+- **Ba con số đo được** (simulator iPhone 17 Pro, iOS 26.5): dựng phiên lần đầu **184 giây** (Appium
+  build rồi cài WDA), lần sau **4 giây** — nên phiên được GIỮ LẠI giữa các lần xem, và giao diện nói
+  "đang dựng WebDriverAgent" thay vì đứng im. MJPEG **900–1200 KB/s**, gấp hơn trăm lần luồng H.264
+  của Android vì MJPEG không nén liên khung.
+- **Và con số thứ tư quyết định thiết kế: màn hình đứng yên cho 47 khung GIỐNG HỆT NHAU từng byte.**
+  Nên `FrameDeduper` bỏ khung trùng, và 900 KB/s thành gần như không tốn gì trong đúng tình huống
+  thường gặp nhất — người ta đang nhìn màn hình để quyết định chạm vào đâu. Đo lại trên máy thật:
+  5 giây ra dưới 20 khung thay vì 47.
+- Toạ độ iOS là **điểm**, không phải pixel: `window/rect` cho 402x874 còn ảnh chụp là 1206x2622.
+  Nhầm sang pixel làm mọi cú chạm lệch đúng ba lần, và lệch đều thì trông như "ứng dụng hỏng".
+- Mặt tiền runner lên **bảy việc**: thêm `devices()` trả cả Android lẫn simulator iOS trong MỘT danh
+  sách. Trước đó giao diện phải gộp hai nguồn khác hình dạng, và **không nguồn nào liệt kê simulator
+  đang bật** — thứ dùng nhiều nhất lúc phát triển. Route mới `GET /api/device/targets` (65 route).
+- Phím theo nền tảng: iOS chỉ có `home`, `enter`, `delete`. iPhone không có nút Quay lại, nên giao
+  diện KHÔNG vẽ nút ấy, và nếu vẫn gọi thì câu từ chối nói rõ phím nào có.
+- **Đo trong trình duyệt thật:** chọn "iPhone 17 Pro · iOS 26.5 · simulator" → Giữ máy → video chảy,
+  header hiện "402×874 · JPEG"; bấm Safari **trên canvas** → Safari mở; gõ chữ vào ô nhập → chữ hiện
+  trên thanh địa chỉ; `back` → 400 kèm danh sách phím có. 10 test tích hợp trên simulator thật
+  ([iosControl.integration.test.ts](src/runner/__tests__/iosControl.integration.test.ts)) và 8 test
+  đơn cho phép cắt luồng ([mjpeg.test.ts](src/runner/__tests__/mjpeg.test.ts)).
+- **Một lỗi của chính công cụ sinh mã:** bản viết đầu ghi **ký tự U+E007/U+E003 THẬT** vào nguồn
+  thay vì chuỗi escape. Chúng vô hình khi đọc file, nên bản vá sau đó không khớp mà không nói vì
+  sao — mất một lượt sửa để hiểu tại sao "đã sửa rồi" mà hành vi không đổi. Đây là lần thứ hai cùng
+  kiểu hỏng (trước là NUL byte), nên `sourceIntegrity.test.ts` giờ canh luôn cả vùng dùng riêng, và
+  mã viết `String.fromCharCode(0xe007)`.
 
 ---
 

@@ -22,7 +22,7 @@ import {
   stopAllScreenStreams,
   tap,
   typeText,
-} from '../control.js';
+} from '../androidControl.js';
 
 /** Máy đầu tiên ở trạng thái `device`. Không có thì bài test nói ra và dừng. */
 function firstDevice(): string | undefined {

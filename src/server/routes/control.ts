@@ -14,7 +14,8 @@
  * kiểm cho SSE ở P2.6. Khi nào đổi sang scrcpy để hạ độ trễ thì lúc ấy mới cần
  * kênh nhị phân, và lúc ấy nginx đã có sẵn `Upgrade`.
  */
-import { checkAction } from '../../protocol/control.js';
+import { checkAction, type ControlPlatform, type ControlTarget } from '../../protocol/control.js';
+import { codecFor } from '../../runner/control.js';
 import { localRunner } from '../../runner/index.js';
 import type { Lease } from '../db/repo.js';
 import { json, readJson, sse } from '../http.js';
@@ -46,7 +47,33 @@ async function heldBy(
 /** Bao lâu kiểm lại lease trong lúc đang chảy video. */
 const LEASE_RECHECK_MS = 5_000;
 
+/**
+ * Nền tảng do NGƯỜI GỌI nói, và server chỉ kiểm nó có hợp lệ không.
+ *
+ * Đoán từ hình dạng `udid` thì sai: udid của simulator là một UUID, của máy
+ * iOS thật là 25 hoặc 40 ký tự, còn Android thì tuỳ nhà sản xuất —
+ * `emulator-5554` chỉ tình cờ nhận ra được. Client vừa chọn máy từ một danh
+ * sách CÓ nền tảng, nên nó biết chắc; bắt server đoán lại là thay một sự thật
+ * bằng một phỏng đoán.
+ */
+function platformOf(value: unknown): ControlPlatform | undefined {
+  return value === 'android' || value === 'ios' ? value : undefined;
+}
+
 export const controlRoutes: RouteTable = {
+  /**
+   * Máy điều khiển được, cả hai nền tảng, trong một danh sách.
+   *
+   * Không dùng lại `/api/prereq/adb` và `/api/prereq/ios-devices`: hai route
+   * ấy trả hai hình dạng khác nhau (một bên object, một bên nguyên văn đầu ra
+   * của `xctrace`), và KHÔNG bên nào liệt kê simulator đang bật — thứ mà màn
+   * điều khiển dùng nhiều nhất. Gộp ở giao diện nghĩa là giao diện phải biết
+   * cách đọc cả hai, và phải biết nền tảng nào dùng cách nào.
+   */
+  'GET /api/device/targets': async (_req, res) => {
+    return json(res, 200, { devices: await localRunner.control.devices() });
+  },
+
   /**
    * Luồng H.264 của một chiếc máy, dạng SSE.
    *
@@ -62,9 +89,11 @@ export const controlRoutes: RouteTable = {
   'GET /api/device/control/stream': async (req, res, url, ctx) => {
     const deviceId = url.searchParams.get('deviceId')?.trim();
     const leaseId = url.searchParams.get('leaseId')?.trim();
-    if (!deviceId || !leaseId) {
-      return json(res, 400, { error: 'Thiếu deviceId hoặc leaseId.' });
+    const platform = platformOf(url.searchParams.get('platform'));
+    if (!deviceId || !leaseId || !platform) {
+      return json(res, 400, { error: 'Thiếu deviceId, leaseId hoặc platform.' });
     }
+    const target: ControlTarget = { platform, udid: deviceId };
     const held = await heldBy(ctx, deviceId, leaseId);
     if (!held.ok) return json(res, held.status, { error: held.error });
 
@@ -92,7 +121,7 @@ export const controlRoutes: RouteTable = {
     req.on('close', () => finish('Người xem đã đóng.'));
 
     try {
-      const handle = await localRunner.control.startScreenStream(deviceId, {
+      const handle = await localRunner.control.startScreenStream(target, {
         chunk: (data) => {
           if (closed) return;
           // `write` trả false khi bộ đệm socket đã đầy — nghĩa là người xem
@@ -107,7 +136,11 @@ export const controlRoutes: RouteTable = {
       stop = handle.stop;
       send('meta', {
         deviceId,
-        screen: await localRunner.control.screenSize(deviceId),
+        platform,
+        // Người xem phải biết mình đang nhận kiểu ảnh nào TRƯỚC khung đầu
+        // tiên: H.264 cần một bộ giải mã dựng sẵn, còn JPEG thì vẽ thẳng.
+        codec: codecFor(platform),
+        screen: await localRunner.control.screenSize(target),
         frame: handle.frame,
       });
     } catch (err) {
@@ -124,41 +157,45 @@ export const controlRoutes: RouteTable = {
    * chứ không phải ý muốn của người dùng.
    */
   'POST /api/device/control/input': async (req, res, _url, ctx) => {
-    const body = await readJson<{ deviceId?: string; leaseId?: string; action?: unknown }>(req);
+    const body = await readJson<{
+      deviceId?: string; leaseId?: string; platform?: unknown; action?: unknown;
+    }>(req);
     const deviceId = body.deviceId?.trim();
     const leaseId = body.leaseId?.trim();
-    if (!deviceId || !leaseId || !body.action) {
-      return json(res, 400, { error: 'Thiếu deviceId, leaseId hoặc action.' });
+    const platform = platformOf(body.platform);
+    if (!deviceId || !leaseId || !platform || !body.action) {
+      return json(res, 400, { error: 'Thiếu deviceId, leaseId, platform hoặc action.' });
     }
+    const target: ControlTarget = { platform, udid: deviceId };
 
     const held = await heldBy(ctx, deviceId, leaseId);
     if (!held.ok) return json(res, held.status, { error: held.error });
 
     // Kích thước màn hình hỏi TRƯỚC khi kiểm toạ độ, vì biên phụ thuộc vào nó
     // — và hỏi runner, vì chỉ máy có thiết bị mới biết.
-    const screen = await localRunner.control.screenSize(deviceId);
-    const checked = checkAction(body.action, screen);
+    const screen = await localRunner.control.screenSize(target);
+    const checked = checkAction(body.action, screen, platform);
     if (!checked.ok) return json(res, 400, { error: checked.error });
     const action = checked.action;
 
     try {
       switch (action.kind) {
         case 'tap':
-          await localRunner.control.tap(deviceId, action.x, action.y);
+          await localRunner.control.tap(target, action.x, action.y);
           break;
         case 'swipe':
           await localRunner.control.swipe(
-            deviceId,
+            target,
             { x: action.x, y: action.y },
             { x: action.toX, y: action.toY },
             action.durationMs,
           );
           break;
         case 'text':
-          await localRunner.control.typeText(deviceId, action.text);
+          await localRunner.control.typeText(target, action.text);
           break;
         case 'key':
-          await localRunner.control.pressKey(deviceId, action.key);
+          await localRunner.control.pressKey(target, action.key);
           break;
       }
     } catch (err) {

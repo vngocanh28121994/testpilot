@@ -28,14 +28,17 @@ import {
   type PickedDevice,
 } from './execute.js';
 import {
+  controlDevices,
   pressKey,
   screenSize,
   startScreenStream,
   swipe,
   tap,
   typeText,
+  type ControlDevice,
   type ScreenStreamSink,
 } from './control.js';
+import type { ControlTarget } from '../protocol/control.js';
 import type { PrereqAndroidDevice } from './prereq.js';
 import {
   iosDeviceNames,
@@ -126,20 +129,31 @@ export interface RunnerBuildsApi {
  * [src/server/routes/control.ts](../server/routes/control.ts).
  */
 export interface RunnerControlApi {
-  /** Kích thước mà `input tap` dùng — không phải luôn là kích thước vật lý. */
-  screenSize(udid: string): ReturnType<typeof screenSize>;
-  /** Mở luồng H.264. Nhiều người xem dùng chung một tiến trình `screenrecord`. */
-  startScreenStream(udid: string, sink: ScreenStreamSink): ReturnType<typeof startScreenStream>;
-  tap(udid: string, x: number, y: number): Promise<void>;
+  /** Những chiếc máy điều khiển được, cả Android lẫn iOS, trong một danh sách. */
+  devices(): Promise<ControlDevice[]>;
+  /** Kích thước mà toạ độ chạm đi theo — không phải luôn là kích thước vật lý. */
+  screenSize(target: ControlTarget): ReturnType<typeof screenSize>;
+  /**
+   * Mở luồng màn hình. Nhiều người xem dùng chung một nguồn.
+   *
+   * Android cho ra H.264, iOS cho ra JPEG từng khung — xem `codecFor()`. Người
+   * gọi phải biết mình đang nhận kiểu nào, nên control plane gửi kèm `codec`
+   * trong sự kiện `meta` đầu luồng.
+   */
+  startScreenStream(
+    target: ControlTarget,
+    sink: ScreenStreamSink,
+  ): ReturnType<typeof startScreenStream>;
+  tap(target: ControlTarget, x: number, y: number): Promise<void>;
   swipe(
-    udid: string,
+    target: ControlTarget,
     from: { x: number; y: number },
     to: { x: number; y: number },
     durationMs?: number,
   ): Promise<void>;
-  typeText(udid: string, text: string): Promise<void>;
-  /** Chỉ phím trong danh sách cho phép; xem `control.ts`. */
-  pressKey(udid: string, key: string): Promise<void>;
+  typeText(target: ControlTarget, text: string): Promise<void>;
+  /** Chỉ phím trong danh sách cho phép của NỀN TẢNG ấy; xem `protocol/control.ts`. */
+  pressKey(target: ControlTarget, key: string): Promise<void>;
 }
 
 export interface Runner {
@@ -184,13 +198,14 @@ export const localRunner: Runner = {
     readAppVersion: (file) => readAppVersion(file),
   },
   control: {
-    screenSize: (udid) => screenSize(udid),
-    startScreenStream: (udid, sink) => startScreenStream(udid, sink),
-    tap: (udid, x, y) => tap(udid, x, y),
-    swipe: (udid, from, to, durationMs) => swipe(udid, from, to, durationMs),
-    typeText: (udid, text) => typeText(udid, text),
-    pressKey: (udid, key) => pressKey(udid, key),
+    devices: () => controlDevices(),
+    screenSize: (target) => screenSize(target),
+    startScreenStream: (target, sink) => startScreenStream(target, sink),
+    tap: (target, x, y) => tap(target, x, y),
+    swipe: (target, from, to, durationMs) => swipe(target, from, to, durationMs),
+    typeText: (target, text) => typeText(target, text),
+    pressKey: (target, key) => pressKey(target, key),
   },
 };
 
-export type { PickedDevice, PrereqAndroidDevice, ScreenStreamSink };
+export type { ControlDevice, PickedDevice, PrereqAndroidDevice, ScreenStreamSink };
