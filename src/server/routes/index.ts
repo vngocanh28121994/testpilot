@@ -11,6 +11,7 @@ import { authRoutes } from './auth.js';
 import { buildsRoutes } from './builds.js';
 import { catalogRoutes } from './catalog.js';
 import { configRoutes } from './config.js';
+import { controlRoutes } from './control.js';
 import { deviceRoutes } from './devices.js';
 import { featureRoutes } from './feature.js';
 import { farmRoutes } from './farm.js';
@@ -30,6 +31,7 @@ export const allRoutes: RouteTable = mergeTables(
   buildsRoutes,
   catalogRoutes,
   configRoutes,
+  controlRoutes,
   deviceRoutes,
   farmRoutes,
   featureRoutes,

@@ -13,7 +13,7 @@ file nào. Kiến trúc: [FARM-ARCHITECTURE.md](FARM-ARCHITECTURE.md) · Kế ho
 | **R** | Runner. Chạm thiết bị hoặc tiến trình cục bộ; **không** được tồn tại trên control plane |
 | **LOCAL** | Chỉ còn ở chế độ `embedded`. Chế độ server phải trả 404 |
 
-Đếm: **CP 44 · JOB 8 · R 9 · LOCAL 1** — tổng 62.
+Đếm: **CP 46 · JOB 8 · R 9 · LOCAL 1** — tổng 64.
 
 > **Thêm ngày 2026-09-21 (P2.1b).** Bốn route đăng nhập, và chúng là những route DUY NHẤT gọi được
 > khi chưa có phiên: `GET /api/auth/login`, `GET /api/auth/callback`, `POST /api/auth/logout`,
@@ -166,6 +166,8 @@ trên chính máy chạy chúng.
 | `POST /api/device/lease/renew` | `runner_user` | Nhịp tim 30s, lease sống 60s |
 | `POST /api/device/lease/release` | `runner_user` | Chỉ người đang giữ |
 | `POST /api/device/lease/force-release` | `admin` | Bắt buộc có lý do |
+| `GET /api/device/control/stream` | `runner_user` | SSE khung H.264; kiểm lại lease mỗi 5 giây |
+| `POST /api/device/control/input` | `runner_user` | Chạm, quét, gõ, phím trong danh sách |
 
 ---
 

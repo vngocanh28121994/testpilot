@@ -14,7 +14,15 @@
  * Nói cách khác: tăng MINOR khi thêm thứ tuỳ chọn; tăng MAJOR khi đổi hoặc bỏ
  * một trường đang có, hay đổi nghĩa của nó.
  */
-export const PROTOCOL_VERSION = '1.0.0';
+/**
+ * 1.1.0 — thêm nhóm `control` (xem màn hình, chạm) vào mặt tiền runner.
+ *
+ * MINOR chứ không MAJOR: runner 1.0.x vẫn nhận mọi `JobSpec` như trước, chỉ là
+ * không biết làm bốn động tác mới. Server phải chịu được câu trả lời "tôi không
+ * biết việc đó" từ một runner cũ, và đó là điều kiện để tăng MINOR thay vì bắt
+ * cả đội cập nhật cùng lúc.
+ */
+export const PROTOCOL_VERSION = '1.1.0';
 
 export interface SemVer {
   major: number;

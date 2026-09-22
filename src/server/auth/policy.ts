@@ -85,6 +85,14 @@ export const ROUTE_POLICY: Record<string, Role> = {
   'POST /api/device/lease/renew': 'runner_user',
   'POST /api/device/lease/release': 'runner_user',
 
+  // Xem màn hình và chạm vào một chiếc máy. Vai ở đây chỉ chặn NGƯỜI NGOÀI:
+  // quyết định thật là "người gọi có đang giữ lease của chiếc máy này không",
+  // và nó nằm trong handler vì nó là thuộc tính của dữ liệu, không của người
+  // gọi. Một `maintainer` vai cao hơn vẫn không chạm được vào chiếc điện thoại
+  // người khác đang cầm.
+  'GET /api/device/control/stream': 'runner_user',
+  'POST /api/device/control/input': 'runner_user',
+
   /* ── Chạy test: tiêu tiền, nhưng không đổi thứ người khác dựa vào ────── */
   'POST /api/run': 'runner_user',
   'POST /api/run/stop': 'runner_user',

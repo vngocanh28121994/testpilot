@@ -27,6 +27,15 @@ import {
   stopSuite,
   type PickedDevice,
 } from './execute.js';
+import {
+  pressKey,
+  screenSize,
+  startScreenStream,
+  swipe,
+  tap,
+  typeText,
+  type ScreenStreamSink,
+} from './control.js';
 import type { PrereqAndroidDevice } from './prereq.js';
 import {
   iosDeviceNames,
@@ -101,11 +110,44 @@ export interface RunnerBuildsApi {
   readAppVersion(file: string): ReturnType<typeof readAppVersion>;
 }
 
+/**
+ * Xem màn hình và chạm vào một chiếc máy. Sáu việc, và ranh giới ở đây gắt hơn
+ * mọi nhóm khác.
+ *
+ * Bốn nhóm trên là những việc có KẾT QUẢ: chạy một suite, đọc phiên bản app,
+ * hỏi Appium còn sống không. Nhóm này thì đưa cho phía bên kia quyền điều khiển
+ * một chiếc điện thoại thật đang cắm trên máy của một con người — gõ được vào
+ * ứng dụng ngân hàng đang mở, bấm được nút xác nhận. Nên nó không nhận "một
+ * lệnh input bất kỳ" mà nhận đúng bốn động tác, với toạ độ đã kiểm và một danh
+ * sách phím ngắn không có POWER.
+ *
+ * Và nó chỉ chạy khi người gọi đang GIỮ LEASE của chiếc máy ấy — phần kiểm tra
+ * đó nằm ở control plane, vì lease là dữ liệu dùng chung. Xem
+ * [src/server/routes/control.ts](../server/routes/control.ts).
+ */
+export interface RunnerControlApi {
+  /** Kích thước mà `input tap` dùng — không phải luôn là kích thước vật lý. */
+  screenSize(udid: string): ReturnType<typeof screenSize>;
+  /** Mở luồng H.264. Nhiều người xem dùng chung một tiến trình `screenrecord`. */
+  startScreenStream(udid: string, sink: ScreenStreamSink): ReturnType<typeof startScreenStream>;
+  tap(udid: string, x: number, y: number): Promise<void>;
+  swipe(
+    udid: string,
+    from: { x: number; y: number },
+    to: { x: number; y: number },
+    durationMs?: number,
+  ): Promise<void>;
+  typeText(udid: string, text: string): Promise<void>;
+  /** Chỉ phím trong danh sách cho phép; xem `control.ts`. */
+  pressKey(udid: string, key: string): Promise<void>;
+}
+
 export interface Runner {
   prereq: RunnerPrereqApi;
   run: RunnerRunApi;
   farm: RunnerFarmApi;
   builds: RunnerBuildsApi;
+  control: RunnerControlApi;
 }
 
 /**
@@ -141,6 +183,14 @@ export const localRunner: Runner = {
   builds: {
     readAppVersion: (file) => readAppVersion(file),
   },
+  control: {
+    screenSize: (udid) => screenSize(udid),
+    startScreenStream: (udid, sink) => startScreenStream(udid, sink),
+    tap: (udid, x, y) => tap(udid, x, y),
+    swipe: (udid, from, to, durationMs) => swipe(udid, from, to, durationMs),
+    typeText: (udid, text) => typeText(udid, text),
+    pressKey: (udid, key) => pressKey(udid, key),
+  },
 };
 
-export type { PickedDevice, PrereqAndroidDevice };
+export type { PickedDevice, PrereqAndroidDevice, ScreenStreamSink };

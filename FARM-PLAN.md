@@ -345,15 +345,36 @@ lược đồ mà scheduler sẽ đọc.
   `PgLeaseRepo` → Postgres, vì đầu vào cần một phiên Keycloak thật. Đo liền mạch cùng lúc với màn
   điều khiển ở bước 2.
 
-**Bước 2 — Android: xem và chạm (≈3–4 ngày)**
-- scrcpy trong runner, khung H.264 qua WebSocket, giải mã ở trình duyệt. Một người xem một máy,
-  và mọi khung chỉ đi khi người gọi đang giữ lease.
-- `nginx` cần `Upgrade`/`Connection` — hôm nay `testpilot.conf` có `proxy_http_version 1.1` nhưng
-  **không** có hai header ấy, nên WebSocket sẽ chết ngay ở nginx. Thêm phép đo vào
-  [deployConfig.test.ts](src/server/__tests__/deployConfig.test.ts).
-- Protocol lên **1.1.0** (thêm, tương thích): danh sách đóng của runner facade nhận thêm
-  `openControl`/`closeControl` và các lệnh input. Khung video KHÔNG đi qua `JobEvent` — SSE có `seq`
-  để nối lại log, còn video cần kênh riêng.
+**Bước 2 — Android: xem và chạm — ✅ phần server + runner xong 2026-09-22**
+- Nguồn video là `adb exec-out screenrecord --output-format=h264`, **không phải scrcpy**. Đo trên
+  emulator API 36: một khung `screencap -p` mất 1,9–2,6 giây và nặng 1,39 MB, còn năm giây
+  `screenrecord` ở 720x1600 nặng 37 KB — hai mươi lần băng thông cho một phần tư số khung. Và
+  `screenrecord` có sẵn trong Android, nên không phải đẩy jar nào lên máy người dùng. scrcpy là
+  bước sau, nếu độ trễ thành vấn đề.
+- Kênh là **SSE, không WebSocket**: 6 KB/s đo được → 8 KB/s sau base64, không thêm phụ thuộc `ws`,
+  và đi qua đúng cấu hình nginx đã kiểm ở P2.6. Hai header `Upgrade`/`Connection` vẫn được thêm vào
+  [testpilot.conf](infra/nginx/testpilot.conf) kèm hai phép đo, để khi đổi sang scrcpy thì không
+  phải đi tìm vì sao nginx trả 400.
+- `src/runner/control.ts`: một tiến trình `screenrecord` cho một chiếc máy, nhiều người xem dùng
+  chung (một người mở hai tab là đủ), tự khởi động lại ở mốc 180 giây kèm sự kiện `restart` để bộ
+  giải mã dựng lại. Facade lên **năm nhóm**: `RunnerControlApi` với đúng sáu việc, và
+  `noDeviceAccess.test.ts` canh danh sách ấy đóng.
+- Protocol lên **1.1.0** (thêm, tương thích). Danh sách phím nằm ở `src/protocol/control.ts` chứ
+  không ở runner: nó là HỢP ĐỒNG, control plane kiểm để từ chối sớm và runner kiểm lại để không tin
+  phía bên kia. Không có POWER/SLEEP — một cái nút trên web khoá màn hình chiếc máy ở phòng khác là
+  thứ không ai gỡ được từ xa.
+- Hai route (`GET /api/device/control/stream`, `POST /api/device/control/input`), và cả hai đứng
+  trên cùng một câu hỏi: người gọi có đang giữ lease của chiếc máy này. Lease được kiểm **lại mỗi 5
+  giây** trong lúc video đang chảy, không chỉ lúc mở — nếu chỉ kiểm lúc mở thì một tab bị bỏ quên
+  vẫn xem được màn hình của người tiếp theo, và admin cưỡng chế nhả cũng không cắt được hình.
+- **Đo trên emulator thật:** luồng qua HTTP ra H.264 hợp lệ (SPS+PPS+IDR, giải ngược bằng ffmpeg ra
+  đúng ảnh màn hình 720x1600); chạm ở toạ độ màn hình 1080x2400 quy đổi từ khung 720 đúng vị trí;
+  bấm `home` về launcher; toạ độ ngoài màn hình → 400 kèm kích thước thật; `power` → 400; `leaseId`
+  cũ → 409; lease hết hạn sau 60 giây không gia hạn → 409. 13 test tích hợp trên máy thật
+  ([control.integration.test.ts](src/runner/__tests__/control.integration.test.ts)) và 14 test đơn
+  cho cửa lease ([controlGate.test.ts](src/server/routes/__tests__/controlGate.test.ts)).
+- **Còn lại của bước 2:** màn điều khiển trên giao diện web (vẽ khung bằng WebCodecs, chạm bằng
+  chuột, tự gia hạn lease mỗi 30 giây, nhả khi rời trang).
 
 **Bước 3 — iOS (≈2–3 ngày)**
 - Video: MJPEG server của WebDriverAgent. Input: Appium/WDA theo W3C, qua webdriverio.

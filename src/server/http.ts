@@ -71,6 +71,33 @@ export async function readJson<T>(req: IncomingMessage): Promise<T> {
 }
 
 /**
+ * Khung SSE thô: mở đầu, gửi từng sự kiện có tên, đóng.
+ *
+ * Tách ra vì luồng video của màn điều khiển sống theo cách khác với `stream()`:
+ * nó không bọc quanh một công việc có điểm kết, mà chảy tới khi người xem đóng
+ * tab hoặc mất lease. Cả hai vẫn phải viết khung SSE giống nhau tới từng dấu
+ * xuống dòng — hai chỗ tự viết lấy là hai chỗ có thể quên dòng trắng cuối, và
+ * thiếu nó thì trình duyệt giữ sự kiện trong bộ đệm mãi mãi.
+ */
+export function sse(res: ServerResponse): {
+  send: (event: string, data: unknown) => boolean;
+  end: () => void;
+} {
+  res.writeHead(200, {
+    'content-type': 'text/event-stream; charset=utf-8',
+    'cache-control': 'no-cache',
+    connection: 'keep-alive',
+    // Nginx bỏ đệm cho đường này, kể cả khi cấu hình chung có bật đệm. Không
+    // có nó thì log và video đọng lại thành một cục sau hai phút.
+    'x-accel-buffering': 'no',
+  });
+  return {
+    send: (event, data) => res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`),
+    end: () => res.end(),
+  };
+}
+
+/**
  * Server-sent events over a POST, read by the client with a stream reader.
  * Two channels: `log` for console lines, `run` for the stage tracker that draws
  * the progress list and the "3/7" cell.
@@ -80,13 +107,7 @@ export async function stream(
   job: (log: (l: string) => void, stage: (run: WorkflowRun) => void) => Promise<void>,
   onError?: (err: unknown) => Promise<WorkflowRun | undefined>,
 ): Promise<void> {
-  res.writeHead(200, {
-    'content-type': 'text/event-stream; charset=utf-8',
-    'cache-control': 'no-cache',
-    connection: 'keep-alive',
-  });
-  const send = (event: string, data: unknown) =>
-    res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
+  const { send } = sse(res);
 
   try {
     await job(

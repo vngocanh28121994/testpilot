@@ -316,10 +316,30 @@ Ba hệ quả:
    để cái quyền ấy đọc được từ bảng policy, không phải từ thân một handler.
 3. **Video không đi qua kênh log.** `JobEvent` có `seq` để nối lại log sau khi mất mạng; khung hình
    thì vô nghĩa khi phát lại, và một hàng đợi có thứ tự cho chúng chỉ làm độ trễ dồn lại. Nên
-   stream là kênh WebSocket riêng, và mỗi khung chỉ đi khi người gọi đang giữ lease.
+   stream là một kênh RIÊNG, và mỗi khung chỉ đi khi người gọi đang giữ lease.
 
-Phần thực thi: Android bằng scrcpy trong runner (khung H.264 qua WebSocket, giải mã ở trình duyệt),
-iOS bằng MJPEG server của WebDriverAgent — thứ mà `prereq.ts` vốn đã dựng. Đầu vào đi qua
+**Phần thực thi Android, đã đo ngày 22/09/2026 trên emulator API 36.** Nguồn video là
+`adb exec-out screenrecord --output-format=h264`, không phải scrcpy và không phải chụp ảnh theo
+nhịp:
+
+| Cách | Một khung | Năm giây | Tốc độ |
+|---|---|---|---|
+| `screencap -p` theo nhịp | 1,39 MB, 1,9–2,6 giây | ~7 MB | 0,5 khung/giây |
+| `screenrecord` H.264 720x1600 | — | **37 KB** | tốc độ khung của máy |
+
+Tức là chụp ảnh liên tục không phải "chậm hơn một chút" mà là một thứ khác hẳn: hai mươi lần băng
+thông cho một phần tư số khung. Và `screenrecord` là lệnh CÓ SẴN trong Android, nên không phải đẩy
+nhị phân nào lên máy người dùng — điều đáng giữ khi runner chạy trên máy cá nhân của người khác.
+scrcpy cho độ trễ thấp hơn và là bước sau nếu độ trễ thành vấn đề; giá của nó là một jar phải đẩy
+lên máy và một giao thức socket riêng.
+
+Kênh truyền là **SSE, không WebSocket**, và đó là lựa chọn theo con số: 6 KB/s đo được, base64 làm
+nó thành 8 KB/s — SSE tải thoải mái, không thêm phụ thuộc `ws` nào, và đi qua đúng cấu hình nginx đã
+kiểm cho SSE ở P2.6. Khi đổi sang scrcpy thì kênh ấy là nhị phân và lúc ấy mới cần WebSocket; hai
+header `Upgrade`/`Connection` đã có sẵn trong [infra/nginx/testpilot.conf](infra/nginx/testpilot.conf)
+để lúc đó không phải đi tìm vì sao nginx trả 400.
+
+iOS thì dùng MJPEG server của WebDriverAgent — thứ mà `prereq.ts` vốn đã dựng — và đầu vào đi qua
 Appium/WDA theo W3C, tức là qua webdriverio đã có. Xem [FARM-PLAN.md](FARM-PLAN.md) P3.7 về lý do
 không lấy GADS làm hub.
 

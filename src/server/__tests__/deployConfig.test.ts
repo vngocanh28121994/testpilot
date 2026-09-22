@@ -189,6 +189,31 @@ describe('Dockerfile của control plane', () => {
   });
 });
 
+describe('nginx: WebSocket', () => {
+  /**
+   * Hôm nay chưa route nào dùng WebSocket — video đi bằng SSE. Nhưng hai dòng
+   * này là loại thiếu-thì-hỏng-lặng-lẽ: nginx trả 400 cho cái bắt tay Upgrade,
+   * ở một tầng mà không ai nghĩ tới, nên chúng phải có sẵn TRƯỚC khi có route
+   * cần chúng.
+   */
+  it('chuyển tiếp được cái bắt tay Upgrade', () => {
+    const conf = nginx.replace(/^\s*#.*$/gm, '');
+    assert.match(conf, /proxy_set_header\s+Upgrade\s+\$http_upgrade;/);
+    assert.match(conf, /proxy_set_header\s+Connection\s+\$connection_upgrade;/);
+  });
+
+  /**
+   * `Connection: upgrade` đặt cứng cho mọi request sẽ phá keepalive của đường
+   * HTTP thường, nên giá trị phải đi qua một `map` — và `map` chỉ hợp lệ ở tầm
+   * `http`, ngoài mọi `location`.
+   */
+  it('giá trị Connection đi qua map, không đặt cứng', () => {
+    const conf = nginx.replace(/^\s*#.*$/gm, '');
+    assert.match(conf, /map\s+\$http_upgrade\s+\$connection_upgrade\s*\{/);
+    assert.doesNotMatch(conf, /proxy_set_header\s+Connection\s+["']?upgrade["']?;/i);
+  });
+});
+
 describe('.dockerignore', () => {
   /**
    * Một bản copy của secrets trong layer Docker là bản copy không ai xoá được

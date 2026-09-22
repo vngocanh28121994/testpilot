@@ -21,6 +21,7 @@ import { recoverInterruptedRunReports } from '../core/interruptedReport.js';
 import { ensurePersonalConfig, personalConfigProfile } from '../core/personalConfig.js';
 import { closeInterruptedRuns, reindex } from '../core/runstore.js';
 import { adoptStoredApiKeys } from '../core/secrets.js';
+import { stopAllScreenStreams } from '../runner/control.js';
 import { orphans, runChildren } from '../runner/execute.js';
 import { listen, PORT, serverMode } from '../server/http.js';
 import { mayAdoptIntoEnv } from '../server/auth/secrets.js';
@@ -91,6 +92,10 @@ if (mayAdoptIntoEnv(serverMode())) await adoptStoredApiKeys();
 for (const signal of ['SIGINT', 'SIGTERM'] as const) {
   process.on(signal, () => {
     for (const child of runChildren) child.kill('SIGTERM');
+    // Luồng video của màn điều khiển là tiến trình `adb` con, và nó không nằm
+    // trong `runChildren`. Bỏ dòng này thì mỗi lần mở màn điều khiển để lại
+    // một `screenrecord` sống sau khi server đã tắt.
+    stopAllScreenStreams();
     process.exit(signal === 'SIGINT' ? 130 : 143);
   });
 }

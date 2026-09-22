@@ -76,8 +76,40 @@ describe('ranh giới control plane', () => {
    * ở nhóm 4 — chỗ đó bắt control plane phải có Android SDK để trả lời một câu
    * hỏi về file.
    */
-  it('facade có đúng bốn nhóm việc', async () => {
+  it('facade có đúng năm nhóm việc', async () => {
     const { localRunner } = await import('../../runner/index.js');
-    assert.deepEqual(Object.keys(localRunner).sort(), ['builds', 'farm', 'prereq', 'run']);
+    assert.deepEqual(
+      Object.keys(localRunner).sort(),
+      ['builds', 'control', 'farm', 'prereq', 'run'],
+    );
+  });
+
+  /**
+   * Nhóm `control` là nhóm gắt nhất, vì nó đưa cho phía bên kia quyền điều
+   * khiển một chiếc điện thoại thật đang cắm trên máy của một con người: gõ
+   * được vào ứng dụng đang mở, bấm được nút xác nhận.
+   *
+   * Nên nó nhận đúng bốn động tác, không nhận "một lệnh input bất kỳ". Danh
+   * sách dài ra được, nhưng phải là một quyết định — và bài test này là chỗ
+   * quyết định ấy để lại dấu.
+   */
+  it('RunnerControlApi vẫn là danh sách đóng', async () => {
+    const { localRunner } = await import('../../runner/index.js');
+    assert.deepEqual(Object.keys(localRunner.control).sort(), [
+      'pressKey',
+      'screenSize',
+      'startScreenStream',
+      'swipe',
+      'tap',
+      'typeText',
+    ]);
+  });
+
+  /** Không có POWER/SLEEP: một nút trên web khoá màn hình chiếc máy ở phòng khác. */
+  it('danh sách phím không có phím nguồn', async () => {
+    const { controlKeys } = await import('../../runner/control.js');
+    assert.deepEqual(controlKeys().sort(), [
+      'back', 'delete', 'enter', 'home', 'recents', 'tab',
+    ]);
   });
 });
