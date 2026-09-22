@@ -23,12 +23,22 @@ import type { Repos } from '../../db/repo.js';
 import type { Runner } from '../../../runner/index.js';
 import type { RouteContext } from '../types.js';
 import { MemoryRunnerRegistry } from '../../runners/memoryRegistry.js';
+import { MemoryDeviceRegistry } from '../../devices/memoryRegistry.js';
 
-function fakeRes(): { res: ServerResponse; events: Array<{ event: string; data: unknown }> } {
+function fakeRes(): {
+  res: ServerResponse;
+  events: Array<{ event: string; data: unknown }>;
+  out: { status?: number; body: Record<string, unknown> };
+} {
   const events: Array<{ event: string; data: unknown }> = [];
+  // Route này có HAI kiểu phản hồi: SSE cho đường thành công, và JSON thường
+  // cho lúc từ chối. Chỉ bắt SSE thì mọi khẳng định về câu từ chối đều nhìn
+  // vào một mảng rỗng.
+  const out: { status?: number; body: Record<string, unknown> } = { body: {} };
   let pending = '';
+  let plain = '';
   const res = {
-    writeHead() { return this; },
+    writeHead(status: number) { out.status = status; return this; },
     write(chunk: string) {
       pending += chunk;
       for (const block of pending.split('\n\n')) {
@@ -39,9 +49,12 @@ function fakeRes(): { res: ServerResponse; events: Array<{ event: string; data: 
       pending = '';
       return true;
     },
-    end() {},
+    end(chunk?: unknown) {
+      if (chunk) plain += String(chunk);
+      try { out.body = JSON.parse(plain) as Record<string, unknown>; } catch { /* SSE */ }
+    },
   } as unknown as ServerResponse;
-  return { res, events };
+  return { res, events, out };
 }
 
 /** Config một-máy: chiếc máy thật là chiếc duy nhất đang cắm. */
@@ -52,13 +65,24 @@ const CONFIG = ConfigSchema.parse({
 });
 const config = async () => CONFIG;
 
-function context(queue: MemoryJobQueue): RouteContext {
+/**
+ * Sổ thiết bị mặc định của các bài ở đây: một máy DÙNG CHUNG, để những bài
+ * không nói gì về quyền vẫn chạy được đường thường.
+ */
+const defaultDevices = new MemoryDeviceRegistry();
+await defaultDevices.report(
+  { id: 'runner:lab', orgId: 'org-1', visibility: 'shared' },
+  [{ platform: 'android', udid: 'emulator-5554', label: 'emulator' }],
+);
+
+function context(queue: MemoryJobQueue, devices = defaultDevices, who = 'u1'): RouteContext {
   return {
     configFile: 'testpilot.config.json',
     configProfile: { owner: 't', source: 'personal' },
-    identity: { userId: 'u1', orgId: 'org-1', email: 'u@x.dev', role: 'runner_user' },
+    identity: { userId: who, orgId: 'org-1', email: `${who}@x.dev`, role: 'runner_user' },
     repos: { queue } as unknown as Repos,
     runners: new MemoryRunnerRegistry(),
+    devices,
   };
 }
 
@@ -88,8 +112,13 @@ function runner(outcome: { code: number | null; stopped?: boolean }): Runner {
   } as unknown as Runner;
 }
 
-async function postRun(queue: MemoryJobQueue, body: unknown) {
-  const { res, events } = fakeRes();
+async function postRun(
+  queue: MemoryJobQueue,
+  body: unknown,
+  devices = defaultDevices,
+  who = 'u1',
+) {
+  const { res, events, out } = fakeRes();
   const req = Readable.from([Buffer.from(JSON.stringify(body), 'utf8')]) as IncomingMessage;
   // Giữ vòng lặp sự kiện sống trong lúc chờ.
   //
@@ -99,11 +128,13 @@ async function postRun(queue: MemoryJobQueue, body: unknown) {
   // trong lúc route vẫn đang chờ job, và báo "promise still pending".
   const keepAlive = setInterval(() => {}, 20);
   try {
-    await runRoutes['POST /api/run']!(req, res, new URL('http://x/api/run'), context(queue));
+    await runRoutes['POST /api/run']!(
+      req, res, new URL('http://x/api/run'), context(queue, devices, who),
+    );
   } finally {
     clearInterval(keepAlive);
   }
-  return events;
+  return Object.assign(events, { refused: out });
 }
 
 async function getJobs(queue: MemoryJobQueue, query = '') {
@@ -229,5 +260,69 @@ describe('GET /api/jobs', () => {
     assert.equal(queued.length, 1);
     const done = (await getJobs(queue, '?state=succeeded,failed')).jobs as unknown[];
     assert.equal(done.length, 1);
+  });
+});
+
+describe('quyền dùng thiết bị khi tạo job', () => {
+  /**
+   * Nửa thứ hai của điều kiện P4.2: B không ĐẶT ĐƯỢC job trên máy riêng của A.
+   *
+   * Chặn ở lúc TẠO chứ không lúc chạy: một job đã vào hàng đợi là một job
+   * người khác nhìn thấy trong danh sách chờ, kèm tên chiếc máy riêng của
+   * người ta — và đó đã là rò rỉ, dù nó không bao giờ chạy.
+   */
+  it('không đặt được job lên máy riêng của người khác', async () => {
+    const devices = new MemoryDeviceRegistry();
+    await devices.report(
+      { id: 'runner:an', orgId: 'org-1', ownerUserId: 'an', visibility: 'private' },
+      [{ platform: 'android', udid: 'may-cua-an', label: 'Pixel của An' }],
+    );
+
+    const queue = new MemoryJobQueue();
+    const events = await postRun(
+      queue, { platform: 'android', devices: ['android:may-cua-an'] }, devices, 'binh',
+    );
+
+    assert.equal((await queue.list()).length, 0, 'job không được tạo');
+    assert.equal(events.refused.status, 403);
+    const text = JSON.stringify(events.refused.body);
+    assert.match(text, /không có trong danh sách máy của bạn/);
+    // Không nói máy ấy CÓ THẬT hay không: phân biệt hai trường hợp là nói cho
+    // người lạ biết máy nào tồn tại.
+    assert.ok(!text.includes('An'), 'không được rò tên chủ máy');
+  });
+
+  it('chủ máy thì đặt được job lên chính máy mình', async () => {
+    const devices = new MemoryDeviceRegistry();
+    // udid phải là chiếc máy mà runner giả THẤY đang cắm: nếu không, job vào
+    // hàng đợi rồi nằm chờ một chiếc máy chưa cắm — đúng hành vi của P3.3, và
+    // bài test sẽ treo tới hết hạn thay vì đỏ.
+    await devices.report(
+      { id: 'runner:an', orgId: 'org-1', ownerUserId: 'an', visibility: 'private' },
+      [{ platform: 'android', udid: 'emulator-5554', label: 'Pixel của An' }],
+    );
+
+    const queue = new MemoryJobQueue();
+    const worker = startWorker({
+      queue, leases: new MemoryLeaseRepo(), runnerId: 'local', configFile: 'x.json', config,
+      pollMs: 5, runner: runner({ code: 0 }),
+    });
+    try {
+      await postRun(
+        queue, { platform: 'android', devices: ['android:emulator-5554'] }, devices, 'an',
+      );
+      assert.equal((await queue.list()).length, 1);
+    } finally {
+      worker.stop();
+    }
+  });
+
+  it('máy chưa báo cáo bao giờ cũng bị từ chối', async () => {
+    const queue = new MemoryJobQueue();
+    await postRun(
+      queue, { platform: 'android', devices: ['android:khong-co-that'] },
+      new MemoryDeviceRegistry(),
+    );
+    assert.equal((await queue.list()).length, 0);
   });
 });

@@ -27,6 +27,9 @@ import { startWorker } from './worker.js';
 /** Đẩy log đi mỗi nửa giây. Đủ nhanh để người xem thấy gần như tức thì. */
 const FLUSH_MS = 500;
 
+/** Báo danh sách máy mỗi mười giây — cùng nhịp với bản embedded. */
+const DEVICE_REPORT_MS = 10_000;
+
 function required(name: string): string {
   const value = process.env[name]?.trim();
   if (!value) {
@@ -104,11 +107,30 @@ async function main(): Promise<void> {
 
   const flusher = setInterval(() => { void queue.flush(); }, FLUSH_MS);
 
+  /**
+   * Báo danh sách máy theo nhịp, không chỉ một lần lúc chào.
+   *
+   * Máy cắm vào và rút ra giữa ca làm là chuyện thường của một chiếc laptop.
+   * Báo một lần nghĩa là server giữ mãi một danh sách cũ, và job rơi vào một
+   * chiếc máy đã nằm trong cặp từ sáng.
+   */
+  const report = async (): Promise<void> => {
+    const seen = await runner.control.devices().catch(() => []);
+    await queue.reportDevices(
+      seen
+        .filter((device) => device.platform === 'android' || device.platform === 'ios')
+        .map((device) => ({ platform: device.platform, udid: device.udid, label: device.label })),
+    ).catch(() => undefined);
+  };
+  void report();
+  const reporter = setInterval(() => void report(), DEVICE_REPORT_MS);
+
   const stop = (signal: string) => {
     void (async () => {
       console.log(`[runner] ${signal} — đang đẩy nốt log rồi thoát.`);
       worker.stop();
       clearInterval(flusher);
+      clearInterval(reporter);
       const left = await queue.flush();
       if (left > 0) console.error(`[runner] còn ${left} dòng log chưa gửi được.`);
       process.exit(0);

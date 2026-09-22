@@ -147,6 +147,45 @@ export const runnerRoutes: RouteTable = {
     return json(res, 200, { state: back?.state });
   },
 
+  /**
+   * Runner báo toàn bộ danh sách máy nó đang thấy.
+   *
+   * Cả danh sách chứ không phải phần đổi: một chiếc máy bị rút ra là một sự
+   * VẮNG MẶT, và sự vắng mặt không có sự kiện nào để gửi.
+   *
+   * Quyền nhìn của máy thừa hưởng từ runner — một chiếc điện thoại cắm vào
+   * laptop riêng thì cũng riêng — nên server đọc quyền ấy từ SỔ RUNNER, không
+   * từ thứ runner tự khai.
+   */
+  'POST /api/runner/devices': async (req, res, _url, ctx) => {
+    const body = await readJson<{
+      devices?: Array<{ platform?: string; udid?: string; label?: string }>;
+    }>(req);
+
+    const runner = await ctx.runners.find(ctx.identity.userId);
+    if (!runner) return json(res, 404, { error: 'Runner này không còn trong sổ.' });
+
+    const devices = (body.devices ?? [])
+      .filter((device): device is { platform: 'android' | 'ios'; udid: string; label?: string } =>
+        (device.platform === 'android' || device.platform === 'ios')
+        && typeof device.udid === 'string' && device.udid.length > 0)
+      .map((device) => ({
+        platform: device.platform,
+        udid: device.udid,
+        label: device.label?.trim() || device.udid,
+      }));
+
+    await ctx.devices.report({
+      id: runner.id,
+      orgId: runner.orgId,
+      ...(runner.ownerUserId ? { ownerUserId: runner.ownerUserId } : {}),
+      visibility: runner.visibility,
+    }, devices);
+    await ctx.runners.touch(runner.id);
+
+    return json(res, 200, { accepted: devices.length });
+  },
+
   'POST /api/runner/result': async (req, res, _url, ctx) => {
     const body = await readJson<{ jobId?: string; result?: Partial<JobResult> }>(req);
     const jobId = body.jobId?.trim();

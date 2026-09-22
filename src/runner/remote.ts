@@ -90,6 +90,17 @@ export class RemoteJobQueue implements JobQueue {
     });
   }
 
+  /**
+   * Báo danh sách máy đang cắm. Gửi CẢ danh sách, không gửi phần đổi.
+   *
+   * Một chiếc máy bị rút ra là một sự vắng mặt, và sự vắng mặt không có sự
+   * kiện nào để gửi — gửi cả danh sách làm "biến mất" thành một trạng thái
+   * quan sát được ở phía server.
+   */
+  async reportDevices(devices: Array<{ platform: string; udid: string; label: string }>): Promise<void> {
+    await this.post('/api/runner/devices', { devices });
+  }
+
   async claim(by: ClaimBy): Promise<JobRecord | undefined> {
     const answer = await this.post<{ job: { id: string; spec: JobSpec } | null }>(
       '/api/runner/claim',

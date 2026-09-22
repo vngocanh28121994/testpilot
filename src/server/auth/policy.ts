@@ -46,6 +46,7 @@ export const PUBLIC_ROUTES: ReadonlySet<string> = new Set([
 export const RUNNER_ROUTES: ReadonlySet<string> = new Set([
   'POST /api/runner/hello',
   'POST /api/runner/claim',
+  'POST /api/runner/devices',
   'POST /api/runner/events',
   'POST /api/runner/reject',
   'POST /api/runner/result',
@@ -129,6 +130,7 @@ export const ROUTE_POLICY: Record<string, Role> = {
   // được bốn route này, vì cửa của chúng hỏi token chứ không hỏi phiên.
   'POST /api/runner/hello': 'runner_user',
   'POST /api/runner/claim': 'runner_user',
+  'POST /api/runner/devices': 'runner_user',
   'POST /api/runner/events': 'runner_user',
   'POST /api/runner/reject': 'runner_user',
   'POST /api/runner/result': 'runner_user',

@@ -15,6 +15,7 @@ import type { Repos } from './db/repo.js';
 import type { Identity } from './auth/roles.js';
 import type { RouteContext } from './routes/types.js';
 import type { RunnerRegistry } from './runners/registry.js';
+import type { DeviceRegistry } from './devices/registry.js';
 
 /**
  * Sổ rỗng cho host chưa dựng sổ nào.
@@ -23,6 +24,14 @@ import type { RunnerRegistry } from './runners/registry.js';
  * quên kiểm sẽ là chỗ hỏng. Một sổ luôn trả "không có gì" thì mọi đường đều
  * dẫn tới cùng một câu trả lời trung thực.
  */
+/** Sổ thiết bị rỗng — cùng lý do với `emptyRunners`. */
+const emptyDevices: DeviceRegistry = {
+  report: async () => {},
+  list: async () => [],
+  find: async () => undefined,
+  markRunnerOffline: async () => 0,
+};
+
 const emptyRunners: RunnerRegistry = {
   create: () => Promise.reject(new Error('Host này chưa dựng sổ runner.')),
   findByToken: async () => undefined,
@@ -36,6 +45,8 @@ const emptyRunners: RunnerRegistry = {
 
 export interface DispatchDeps extends GuardDeps {
   mode: ServerMode;
+  /** Sổ thiết bị. Thiếu thì mọi danh sách máy đều rỗng — xem `emptyDevices`. */
+  devices?: DeviceRegistry;
   configFile: string;
   configProfile: RouteContext['configProfile'];
   /**
@@ -71,6 +82,7 @@ export async function dispatch(
       // Sổ runner dùng chung với cửa quyền: một sổ, một sự thật về "máy nào
       // được phép". Hai bản sao sẽ lệch nhau đúng lúc một token bị thu hồi.
       runners: deps.runners ?? emptyRunners,
+      devices: deps.devices ?? emptyDevices,
     };
     return handler(req, res, url, ctx);
   }

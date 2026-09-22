@@ -595,10 +595,31 @@ server chung.
   đọc token từ biến môi trường, nên nó nằm trong file dịch vụ nền (systemd đọc từ
   `EnvironmentFile` chmod 600). Keychain là bước tiếp theo, và nó cần một lệnh CLI riêng.
 
-### P4.2 Quyền nhìn thấy thiết bị
-- `private` chỉ chủ runner thấy; có đường chia sẻ cho người khác hoặc cho cả tổ chức.
-- **Xong khi:** `deviceVisibility.test.ts` — người B không tạo được job trên thiết bị private của A,
-  và cũng **không thấy** nó trong danh sách.
+### P4.2 Quyền nhìn thấy thiết bị — ✅ xong 2026-09-22
+- **Sổ thiết bị ở phía server**, nguồn là BÁO CÁO TỪ RUNNER chứ không phải server tự hỏi `adb`: ở
+  chế độ server máy chủ web không cắm thiết bị nào (FARM-ARCHITECTURE mục 12). Runner gửi cả danh
+  sách mỗi mười giây — một chiếc máy bị rút ra là một sự VẮNG MẶT, và sự vắng mặt không có sự kiện
+  nào để gửi.
+- **Cả chế độ embedded cũng đi qua sổ ấy:** host tự báo cáo máy của nó theo nhịp, y như runner ở xa.
+  Hai đường đọc — một hỏi sổ, một hỏi `adb` — sẽ lệch nhau ở đúng phần khó thấy nhất là phép lọc
+  quyền.
+- Máy **thừa hưởng quyền nhìn từ runner**: điện thoại cắm vào laptop riêng thì cũng riêng. Luật gọn
+  trong bốn dòng (`maySee`) và là hàm thuần xuất ra ngoài, vì cùng luật ấy phải áp ở hai chỗ — lúc
+  liệt kê, và lúc ai đó nhắm một chiếc máy bằng tên. Hai bản chép tay sẽ lệch, và bên lỏng hơn
+  thắng.
+- Máy tắt **vẫn hiện, kèm chữ "đang tắt"**: biến mất khỏi danh sách và đang tắt là hai câu khác
+  nhau, và người dùng cần câu thứ hai.
+- Chặn job ở lúc **TẠO**, không lúc chạy: một job đã vào hàng đợi là một job người khác nhìn thấy
+  trong danh sách chờ, kèm tên chiếc máy riêng của người ta — đã là rò rỉ dù nó không bao giờ chạy.
+  Câu từ chối không phân biệt "máy của người khác" với "máy không có thật", cố ý.
+- **Xong khi** — cả hai nửa đã đo: 8 bài cho sổ (gồm cả `maySee` bốn dòng), 3 bài cho việc chặn tạo
+  job. Chạy thật: runner cá nhân báo hai máy lên qua `POST /api/runner/devices`, và chủ của nó thấy
+  đúng hai máy ấy trong `/api/device/targets`.
+- **Chưa đo được trên server thật:** phần "người B không thấy máy của A" cần hai phiên đăng nhập
+  khác nhau, tức là Keycloak — ảnh của nó đã bị xoá lúc dọn đĩa. Luật lọc thì đã đo ở tầng đơn vị
+  và ở tầng route.
+- **Chưa làm:** đường chia sẻ một chiếc máy riêng cho một người cụ thể. Hôm nay chỉ có hai mức
+  `private`/`shared` thừa hưởng từ runner; chia sẻ lẻ cần một bảng quyền riêng.
 
 ### P4.3 Đóng gói và tự cập nhật
 - Phát hành runner lên npm (nội bộ) hoặc bản cài `.pkg` cho macOS.

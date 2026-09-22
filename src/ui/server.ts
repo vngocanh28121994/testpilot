@@ -26,6 +26,8 @@ import { startWorker } from '../runner/worker.js';
 import { localQueue } from '../server/queue/memoryQueue.js';
 import { localLeases } from '../server/db/leaseRepo.js';
 import { localRunners } from '../server/runners/memoryRegistry.js';
+import { localDevices } from '../server/devices/memoryRegistry.js';
+import { localRunner } from '../runner/index.js';
 import { orphans, runChildren } from '../runner/execute.js';
 import { listen, PORT, serverMode } from '../server/http.js';
 import { mayAdoptIntoEnv } from '../server/auth/secrets.js';
@@ -136,6 +138,7 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
   return dispatch(req, res, url, {
     mode: MODE,
     sessions,
+    devices: localDevices,
     // Sổ runner: cửa của đường runner tra ở đây. Ở chế độ embedded nó là sổ
     // trong bộ nhớ, đã nạp sẵn token dùng chung nếu có.
     runners: localRunners,
@@ -156,6 +159,33 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
  * này dựng lên để tránh (xem FARM-ARCHITECTURE mục 12). Ở chế độ server,
  * worker sống trên máy có thiết bị và nối vào qua transport của P3.4.
  */
+/**
+ * Ở chế độ embedded, chính tiến trình này là runner — nên nó BÁO CÁO máy của
+ * mình vào sổ, y như một runner ở xa làm.
+ *
+ * Vì sao không để route hỏi thẳng `adb`: danh sách máy phải được lọc theo
+ * người đang nhìn, và phép lọc ấy chỉ đúng nếu mọi đường đọc đi qua cùng một
+ * chỗ. Hai đường — một hỏi sổ, một hỏi adb — sẽ lệch nhau ở đúng phần quyền.
+ */
+const DEVICE_REPORT_MS = 10_000;
+
+if (MODE === 'embedded') {
+  const reportDevices = async (): Promise<void> => {
+    const devices = await localRunner.control.devices().catch(() => []);
+    await localDevices.report(
+      { id: 'runner:local', orgId: 'local', visibility: 'shared' },
+      devices
+        .filter((device) => device.platform === 'android' || device.platform === 'ios')
+        .map((device) => ({
+          platform: device.platform, udid: device.udid, label: device.label,
+        })),
+    );
+  };
+  void reportDevices();
+  const deviceTimer = setInterval(() => void reportDevices(), DEVICE_REPORT_MS);
+  deviceTimer.unref?.();
+}
+
 if (MODE === 'embedded') {
   // Dọn job treo TRƯỚC khi nhận job mới: một job còn `running` sau khi tiến
   // trình chết là một dòng nói dối, và nó nằm đó mãi.

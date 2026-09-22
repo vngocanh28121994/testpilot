@@ -15,6 +15,7 @@ import { MemoryRunnerRegistry } from '../../runners/memoryRegistry.js';
 import type { Repos } from '../../db/repo.js';
 import type { Identity } from '../../auth/roles.js';
 import type { RouteContext } from '../types.js';
+import { MemoryDeviceRegistry } from '../../devices/memoryRegistry.js';
 
 function person(userId: string, role: Identity['role'] = 'runner_user'): Identity {
   return { userId, orgId: 'org-1', email: `${userId}@x.dev`, role };
@@ -40,6 +41,7 @@ function context(identity: Identity, runners: MemoryRunnerRegistry): RouteContex
     identity,
     repos: {} as unknown as Repos,
     runners,
+    devices: new MemoryDeviceRegistry(),
   };
 }
 

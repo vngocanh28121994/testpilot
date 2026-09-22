@@ -14,6 +14,7 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import type { Identity } from '../auth/roles.js';
 import type { Repos } from '../db/repo.js';
+import type { DeviceRegistry } from '../devices/registry.js';
 import type { RunnerRegistry } from '../runners/registry.js';
 
 /**
@@ -58,6 +59,13 @@ export interface RouteContext {
    * thuộc tổ chức nào. Route thì chỉ thấy sổ của tổ chức người gọi.
    */
   runners: RunnerRegistry;
+  /**
+   * Sổ thiết bị — máy nào đang cắm ở đâu, và ai được nhìn thấy.
+   *
+   * Nguồn là báo cáo từ runner, không phải server tự hỏi `adb`: ở chế độ
+   * server máy chủ web không cắm thiết bị nào.
+   */
+  devices: DeviceRegistry;
 }
 
 export type RouteHandler = (

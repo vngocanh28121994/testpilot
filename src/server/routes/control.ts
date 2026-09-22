@@ -15,6 +15,7 @@
  * kênh nhị phân, và lúc ấy nginx đã có sẵn `Upgrade`.
  */
 import { checkAction, type ControlPlatform, type ControlTarget } from '../../protocol/control.js';
+import { allows } from '../auth/roles.js';
 import { codecFor } from '../../runner/control.js';
 import { localRunner } from '../../runner/index.js';
 import type { Lease } from '../db/repo.js';
@@ -71,8 +72,29 @@ export const controlRoutes: RouteTable = {
    * điều khiển dùng nhiều nhất. Gộp ở giao diện nghĩa là giao diện phải biết
    * cách đọc cả hai, và phải biết nền tảng nào dùng cách nào.
    */
-  'GET /api/device/targets': async (_req, res) => {
-    const body: ControlTargetsResponse = { devices: await localRunner.control.devices() };
+  'GET /api/device/targets': async (_req, res, _url, ctx) => {
+    /**
+     * Đọc từ SỔ, không hỏi thẳng `adb`.
+     *
+     * Hai lý do, và lý do thứ hai mới là lý do thật. Thứ nhất: ở chế độ server
+     * máy chủ web không cắm thiết bị nào. Thứ hai: danh sách máy phải ĐƯỢC LỌC
+     * theo người đang nhìn — máy riêng của người khác không hiện — và phép lọc
+     * ấy chỉ đúng nếu mọi đường đọc đều đi qua cùng một chỗ.
+     */
+    const devices = await ctx.devices.list({
+      userId: ctx.identity.userId,
+      orgId: ctx.identity.orgId,
+      isAdmin: allows(ctx.identity.role, 'admin'),
+    });
+    const body: ControlTargetsResponse = {
+      devices: devices.map((device) => ({
+        platform: device.platform,
+        udid: device.udid,
+        // Máy đang tắt vẫn hiện, kèm lý do: biến mất khỏi danh sách và đang
+        // tắt là hai câu khác nhau, và người dùng cần câu thứ hai.
+        label: device.state === 'offline' ? `${device.label} · đang tắt` : device.label,
+      })),
+    };
     return json(res, 200, body);
   },
 

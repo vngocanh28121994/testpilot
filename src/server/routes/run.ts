@@ -19,6 +19,7 @@ import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { loadConfig } from '../../config.js';
 import { localRunner } from '../../runner/index.js';
+import { allows } from '../auth/roles.js';
 import { activeRuns, findActiveRun } from '../../ui/activeRuns.js';
 import { json, readJson, stream } from '../http.js';
 import type { JobsResponse } from '../../ui/contracts.js';
@@ -154,6 +155,34 @@ export const runRoutes: RouteTable = {
       includeQuarantined?: boolean; devices?: string[]; env?: string;
       appSource?: 'device' | 'upload';
     }>(req);
+
+    /**
+     * Máy mình KHÔNG THẤY thì cũng không đặt job lên được.
+     *
+     * Kiểm ở đây, lúc TẠO, chứ không lúc chạy: một job đã vào hàng đợi là một
+     * job người khác nhìn thấy trong danh sách chờ, kèm tên chiếc máy riêng
+     * của người ta — và đó đã là rò rỉ, dù nó không bao giờ chạy.
+     *
+     * Cùng luật với `maySee` ở sổ thiết bị, gọi qua sổ chứ không chép lại:
+     * hai bản chép tay của một luật quyền sẽ lệch, và bên lỏng hơn thắng.
+     */
+    for (const token of body.devices ?? []) {
+      const udid = token.split(':').slice(1).join(':');
+      if (!udid) continue;
+      const seen = await ctx.devices.find(udid, {
+        userId: ctx.identity.userId,
+        orgId: ctx.identity.orgId,
+        isAdmin: allows(ctx.identity.role, 'admin'),
+      });
+      // Không thấy có thể là "máy của người khác" hoặc "máy chưa báo cáo bao
+      // giờ". Câu trả lời giống nhau cho cả hai, cố ý: phân biệt chúng là nói
+      // cho người lạ biết máy nào có thật.
+      if (!seen) {
+        return json(res, 403, {
+          error: `Không dùng được thiết bị "${udid}": nó không có trong danh sách máy của bạn.`,
+        });
+      }
+    }
 
     const job = await ctx.repos.queue.create({
       orgId: ctx.identity.orgId,
