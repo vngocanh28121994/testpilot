@@ -22,6 +22,7 @@ import { startWorker } from '../../../runner/worker.js';
 import type { Repos } from '../../db/repo.js';
 import type { Runner } from '../../../runner/index.js';
 import type { RouteContext } from '../types.js';
+import { MemoryRunnerRegistry } from '../../runners/memoryRegistry.js';
 
 function fakeRes(): { res: ServerResponse; events: Array<{ event: string; data: unknown }> } {
   const events: Array<{ event: string; data: unknown }> = [];
@@ -57,6 +58,7 @@ function context(queue: MemoryJobQueue): RouteContext {
     configProfile: { owner: 't', source: 'personal' },
     identity: { userId: 'u1', orgId: 'org-1', email: 'u@x.dev', role: 'runner_user' },
     repos: { queue } as unknown as Repos,
+    runners: new MemoryRunnerRegistry(),
   };
 }
 

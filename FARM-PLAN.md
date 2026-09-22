@@ -571,10 +571,29 @@ hình dạng `udid`.
 Mục tiêu: người dùng cắm điện thoại vào laptop của mình và dùng được như hôm nay, nhưng dữ liệu về
 server chung.
 
-### P4.1 Đăng ký runner
-- Web: "Thêm máy của tôi" → sinh token, hiện **một lần**, lưu hash. Có thu hồi và đổi token.
-- `npx testpilot-runner login --token …` lưu token vào keychain của OS, không để trong file phẳng.
-- **Xong khi:** máy thứ hai đăng ký được và thiết bị của nó hiện trên web với `visibility=private`.
+### P4.1 Đăng ký runner — ✅ phần server xong 2026-09-22
+- **Vì sao phải bỏ token dùng chung của P3.4:** nó đủ cho một phòng lab mà người quản trị tự cắm
+  máy, và hỏng ngay khi tới việc của P4 — người dùng cắm điện thoại vào laptop CỦA HỌ. Một bí mật
+  dùng chung nghĩa là không thu hồi được một máy mà không làm chết mọi máy khác, và không biết job
+  nào chạy trên máy nào ngoài cái tên mà chính máy ấy tự khai.
+- Mỗi runner một token, server chỉ giữ **hash sha256**. Token hiện đúng một lần trong phản hồi tạo
+  máy; không route nào đọc lại được. Mất thì `rotate`, và token cũ chết ngay.
+- Thu hồi **không xoá dòng**: `job.runner_id` trỏ vào đây, và "job này chạy ở máy nào" là câu mà
+  một cuộc điều tra sau sự cố cần.
+- `authorize()` giờ tra SỔ thay vì so chuỗi, và **danh tính lấy từ dòng trong sổ** — runner khai gì
+  trong header cũng không đổi được nó thuộc tổ chức nào. Token dùng chung cũ vẫn chạy: nó được nạp
+  thành một dòng trong sổ, nên cửa quyền chỉ có một đường tra.
+- Hình dạng phân quyền của P3.7 lặp lại: vai ở cửa, **quyền sở hữu trong handler**. Hai người cùng
+  vai `runner_user` nhưng chỉ chủ máy (hoặc `admin`) đổi/thu hồi được token máy ấy. Máy dùng chung
+  thì chỉ `admin` tạo — một người tự biến laptop mình thành máy chung rồi tắt đi là cách làm hỏng
+  hàng đợi của cả đội mà không cố ý.
+- Danh sách máy đã LỌC: laptop riêng của người khác không hiện.
+- **Đo được:** 13 bài cho sổ (bộ khẳng định dùng chung cho cả hai hiện thực), 9 bài cho route, 4 bài
+  mới ở cửa quyền. Chạy thật: thêm máy → token hiện một lần → token ấy đòi job được (200) → thu hồi
+  → chính token ấy nhận 401.
+- **Chưa làm:** `npx testpilot-runner login --token …` lưu token vào keychain của OS. Hôm nay runner
+  đọc token từ biến môi trường, nên nó nằm trong file dịch vụ nền (systemd đọc từ
+  `EnvironmentFile` chmod 600). Keychain là bước tiếp theo, và nó cần một lệnh CLI riêng.
 
 ### P4.2 Quyền nhìn thấy thiết bị
 - `private` chỉ chủ runner thấy; có đường chia sẻ cho người khác hoặc cho cả tổ chức.

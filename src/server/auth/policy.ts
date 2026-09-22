@@ -90,6 +90,16 @@ export const ROUTE_POLICY: Record<string, Role> = {
   // Chỉ trả boolean "đã cấu hình chưa", không trả giá trị. Xem `config.ts`.
   'GET /api/confluence-auth': 'viewer',
 
+  /* ── Máy của tôi ─────────────────────────────────────────────────────── */
+  // Ai cũng xem được danh sách máy (đã lọc: máy riêng của người khác không
+  // hiện), và ai chạy test được thì tự thêm máy CỦA MÌNH được. Quyền trên một
+  // máy cụ thể — đổi token, thu hồi — do "ai là chủ" quyết định, kiểm trong
+  // handler: vai giống nhau không có nghĩa quyền giống nhau.
+  'GET /api/runners': 'viewer',
+  'POST /api/runners': 'runner_user',
+  'POST /api/runners/rotate': 'runner_user',
+  'POST /api/runners/revoke': 'runner_user',
+
   /* ── Giữ chỗ thiết bị ────────────────────────────────────────────────── */
   // Ai đang giữ máy nào: người đang chờ máy cần thấy, và thấy thì không làm
   // hỏng được gì.

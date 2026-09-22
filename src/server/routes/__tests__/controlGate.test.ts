@@ -20,6 +20,7 @@ import { MemoryLeaseRepo } from '../../db/leaseRepo.js';
 import type { Repos } from '../../db/repo.js';
 import type { Identity } from '../../auth/roles.js';
 import type { RouteContext } from '../types.js';
+import { MemoryRunnerRegistry } from '../../runners/memoryRegistry.js';
 
 const DEV = 'emulator-5554';
 /**
@@ -62,6 +63,7 @@ function context(identity: Identity, leases: MemoryLeaseRepo): RouteContext {
     configProfile: { owner: 't', source: 'personal' },
     identity,
     repos: { leases } as unknown as Repos,
+    runners: new MemoryRunnerRegistry(),
   };
 }
 

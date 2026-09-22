@@ -14,6 +14,7 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import type { Identity } from '../auth/roles.js';
 import type { Repos } from '../db/repo.js';
+import type { RunnerRegistry } from '../runners/registry.js';
 
 /**
  * Thứ một handler cần mà nó không tự dựng được.
@@ -49,6 +50,14 @@ export interface RouteContext {
    * phục vụ một tổ chức khác — và nó sẽ chạy, chỉ là trả nhầm dữ liệu.
    */
   repos: Repos;
+  /**
+   * Sổ runner — máy nào được phép nhận job, và của ai.
+   *
+   * Nằm cạnh `repos` chứ không nằm trong, vì nó KHÔNG bị giới hạn theo tổ
+   * chức lúc dựng: cửa quyền phải tra được token trước khi biết runner ấy
+   * thuộc tổ chức nào. Route thì chỉ thấy sổ của tổ chức người gọi.
+   */
+  runners: RunnerRegistry;
 }
 
 export type RouteHandler = (

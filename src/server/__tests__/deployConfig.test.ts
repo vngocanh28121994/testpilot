@@ -18,6 +18,7 @@ import type { IncomingMessage, ServerResponse } from 'node:http';
 import { healthRoutes } from '../routes/health.js';
 import { PUBLIC_ROUTES, requiredRole } from '../auth/policy.js';
 import { ANONYMOUS, LOCAL_IDENTITY } from '../auth/roles.js';
+import { MemoryRunnerRegistry } from '../runners/memoryRegistry.js';
 
 const dockerfile = readFileSync('Dockerfile', 'utf8');
 
@@ -47,6 +48,7 @@ const ctx = (identity: typeof ANONYMOUS) => ({
   configProfile: { owner: 't', source: 'personal' as const },
   identity,
   repos: {} as never,
+  runners: new MemoryRunnerRegistry(),
 });
 
 async function callHealth(query: string, identity = ANONYMOUS) {

@@ -11,7 +11,8 @@
 import type { IncomingMessage } from 'node:http';
 import type { ServerMode } from '../http.js';
 import { PUBLIC_ROUTES, RUNNER_ROUTES, requiredRole } from './policy.js';
-import { bearer, runnerIdentity, runnerToken, tokenMatches } from './runnerToken.js';
+import { bearer, runnerIdentity } from './runnerToken.js';
+import type { RunnerRegistry } from '../runners/registry.js';
 import { allows, ANONYMOUS, LOCAL_IDENTITY, type Identity } from './roles.js';
 import { sessionIdFromCookie, type SessionStore } from './session.js';
 
@@ -22,6 +23,14 @@ export type AuthDecision =
 export interface GuardDeps {
   mode: ServerMode;
   sessions?: SessionStore;
+  /**
+   * Sổ runner. Thiếu nó thì đường runner ĐÓNG.
+   *
+   * Từ P4.1 mỗi máy có token riêng và server chỉ giữ hash, nên tra token là
+   * tra sổ — không còn một bí mật dùng chung để so chuỗi. Một sổ rỗng và một
+   * sổ không có đều dẫn tới cùng câu trả lời: không ai vào được.
+   */
+  runners?: RunnerRegistry;
 }
 
 /**
@@ -58,21 +67,23 @@ export async function authorize(
    * job của tổ chức. Runner luôn phải trình token, ở cả hai chế độ.
    */
   if (RUNNER_ROUTES.has(route)) {
-    const expected = runnerToken();
-    if (!expected) {
+    if (!deps.runners) {
       return {
         ok: false, status: 401,
-        error: 'Server chưa đặt TESTPILOT_RUNNER_TOKEN nên đường runner đang đóng.',
+        error: 'Server chưa có sổ runner nên đường runner đang đóng.',
       };
     }
     const given = bearer(req);
-    if (!given || !tokenMatches(given, expected)) {
-      return { ok: false, status: 401, error: 'Token runner không đúng.' };
-    }
-    // Tên runner chỉ để đọc log; nó KHÔNG quyết định quyền gì, nên nhận thẳng
-    // từ header là đủ và không cần kiểm.
-    const name = String(req.headers['x-runner-name'] ?? 'unknown').slice(0, 64);
-    return { ok: true, identity: runnerIdentity(name) };
+    // Tra SỔ, không so với một bí mật dùng chung: từ P4.1 mỗi máy có token
+    // riêng, nên "token này của ai" và "token này có còn hiệu lực không" là
+    // cùng một câu hỏi, và sổ là chỗ duy nhất trả lời được.
+    const runner = given ? await deps.runners.findByToken(given) : undefined;
+    if (!runner) return { ok: false, status: 401, error: 'Token runner không đúng.' };
+
+    // Danh tính lấy từ DÒNG TRONG SỔ, không từ thứ runner tự khai: tên và tổ
+    // chức do người tạo runner đặt, và một máy bị chiếm không được phép tự
+    // nhận mình thuộc tổ chức khác.
+    return { ok: true, identity: runnerIdentity(runner) };
   }
 
   if (deps.mode === 'embedded') return { ok: true, identity: LOCAL_IDENTITY };

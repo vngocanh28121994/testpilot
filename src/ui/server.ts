@@ -25,6 +25,7 @@ import { stopAllScreenStreams } from '../runner/control.js';
 import { startWorker } from '../runner/worker.js';
 import { localQueue } from '../server/queue/memoryQueue.js';
 import { localLeases } from '../server/db/leaseRepo.js';
+import { localRunners } from '../server/runners/memoryRegistry.js';
 import { orphans, runChildren } from '../runner/execute.js';
 import { listen, PORT, serverMode } from '../server/http.js';
 import { mayAdoptIntoEnv } from '../server/auth/secrets.js';
@@ -120,6 +121,10 @@ const MODE = serverMode();
  * tiến trình lên — với người deploy — chứ không phải ở request đầu tiên của
  * một người dùng.
  */
+// Token dùng chung của P3.4 trở thành MỘT DÒNG trong sổ, để cửa quyền chỉ có
+// một đường tra. Không đặt biến ấy thì sổ rỗng và đường runner đóng.
+localRunners.seedFromEnv();
+
 const REPOS = repoFactory({
   mode: MODE,
   db: dbOptionsFromEnv(),
@@ -131,6 +136,9 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
   return dispatch(req, res, url, {
     mode: MODE,
     sessions,
+    // Sổ runner: cửa của đường runner tra ở đây. Ở chế độ embedded nó là sổ
+    // trong bộ nhớ, đã nạp sẵn token dùng chung nếu có.
+    runners: localRunners,
     // Embedded: file JSON trong `registry/`. Server: Postgres của ĐÚNG tổ chức
     // người gọi. Quyết định nằm trong `repoFactory` để đo được — xem wiring.ts.
     repos: REPOS,

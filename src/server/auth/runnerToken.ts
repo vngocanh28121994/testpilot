@@ -18,7 +18,14 @@ import { createHash, timingSafeEqual } from 'node:crypto';
 import type { IncomingMessage } from 'node:http';
 import type { Identity } from './roles.js';
 
-/** Bí mật dùng chung. Không đặt thì đường runner ĐÓNG hoàn toàn. */
+/**
+ * Bí mật dùng chung của P3.4.
+ *
+ * Từ P4.1 nó KHÔNG còn là đường xác thực: `MemoryRunnerRegistry.seedFromEnv()`
+ * biến nó thành một dòng trong sổ, và cửa chỉ tra sổ. Giữ lại vì mọi cấu hình
+ * đang chạy đều dùng nó, và một bản nâng cấp làm hỏng thứ đang dùng được là
+ * một bản nâng cấp không ai cài.
+ */
 export function runnerToken(env = process.env): string | undefined {
   const token = env.TESTPILOT_RUNNER_TOKEN?.trim();
   return token ? token : undefined;
@@ -55,14 +62,18 @@ export function tokenMatches(given: string, expected: string): boolean {
 /**
  * Danh tính của một runner đã trình đúng token.
  *
+ * Mọi trường lấy từ DÒNG TRONG SỔ, không từ thứ runner tự khai qua header: tổ
+ * chức quyết định runner ấy thấy dữ liệu của ai, và để nó tự nhận nghĩa là
+ * một máy bị chiếm tự chọn tổ chức để đọc.
+ *
  * `role` là `runner_user`: nó chạy test và báo kết quả, nhưng KHÔNG sửa được
  * dữ liệu dùng chung. Một runner bị chiếm không được phép duyệt healing hay
  * đổi config — nó chỉ được làm đúng việc của một runner.
  */
-export function runnerIdentity(name: string, env = process.env): Identity {
+export function runnerIdentity(runner: { id: string; orgId: string }): Identity {
   return {
-    userId: `runner:${name}`,
-    orgId: runnerOrg(env),
+    userId: runner.id,
+    orgId: runner.orgId,
     email: '',
     role: 'runner_user',
   };

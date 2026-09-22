@@ -13,7 +13,7 @@ file nào. Kiến trúc: [FARM-ARCHITECTURE.md](FARM-ARCHITECTURE.md) · Kế ho
 | **R** | Runner. Chạm thiết bị hoặc tiến trình cục bộ; **không** được tồn tại trên control plane |
 | **LOCAL** | Chỉ còn ở chế độ `embedded`. Chế độ server phải trả 404 |
 
-Đếm: **CP 52 · JOB 8 · R 10 · LOCAL 1** — tổng 71. (P3.5 không thêm route nào; P3.4 thêm năm route `/api/runner/*`.)
+Đếm: **CP 56 · JOB 8 · R 10 · LOCAL 1** — tổng 75. (P3.5 không thêm route nào; P3.4 thêm năm route `/api/runner/*`.)
 
 > **Thêm ngày 2026-09-21 (P2.1b).** Bốn route đăng nhập, và chúng là những route DUY NHẤT gọi được
 > khi chưa có phiên: `GET /api/auth/login`, `GET /api/auth/callback`, `POST /api/auth/logout`,
@@ -36,6 +36,11 @@ file nào. Kiến trúc: [FARM-ARCHITECTURE.md](FARM-ARCHITECTURE.md) · Kế ho
 > `POST /api/run` đổi nghĩa: nó KHÔNG còn tự chạy suite mà tạo job rồi nối vào log của job. Hình
 > dạng đường dây giữ nguyên (SSE `log` + `done`), nên bản đồ này không đổi phân loại của nó — nhưng
 > nó đã thành **JOB** đúng nghĩa: control plane tạo, runner thực thi.
+
+> **Thêm ngày 2026-09-22 (P4.1).** Bốn route quản máy — **CP**: `GET /api/runners` (`viewer`, đã
+> lọc máy riêng của người khác), `POST /api/runners` (`runner_user` — tạo máy CỦA MÌNH; máy dùng
+> chung cần `admin`), `rotate` và `revoke` (`runner_user` ở cửa, nhưng handler đòi đúng chủ máy
+> hoặc `admin`).
 
 > **Thêm ngày 2026-09-22 (P3.4).** Năm route `/api/runner/*` — **CP** — là đường của MÁY, không
 > phải của người: `hello`, `claim`, `events`, `reject`, `result`. Chúng KHÔNG đi qua phiên đăng

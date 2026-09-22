@@ -14,6 +14,25 @@ import { lazyRepos } from './db/lazyRepos.js';
 import type { Repos } from './db/repo.js';
 import type { Identity } from './auth/roles.js';
 import type { RouteContext } from './routes/types.js';
+import type { RunnerRegistry } from './runners/registry.js';
+
+/**
+ * Sổ rỗng cho host chưa dựng sổ nào.
+ *
+ * Không `undefined`: route sẽ phải kiểm `if (ctx.runners)` ở mọi chỗ, và chỗ
+ * quên kiểm sẽ là chỗ hỏng. Một sổ luôn trả "không có gì" thì mọi đường đều
+ * dẫn tới cùng một câu trả lời trung thực.
+ */
+const emptyRunners: RunnerRegistry = {
+  create: () => Promise.reject(new Error('Host này chưa dựng sổ runner.')),
+  findByToken: async () => undefined,
+  find: async () => undefined,
+  list: async () => [],
+  rotate: async () => undefined,
+  revoke: async () => false,
+  touch: async () => {},
+  reapSilent: async () => 0,
+};
 
 export interface DispatchDeps extends GuardDeps {
   mode: ServerMode;
@@ -49,6 +68,9 @@ export async function dispatch(
       // Hoãn tới lời gọi đầu tiên: xem `lazyRepos`. Một route không đọc dữ
       // liệu — `GET /api/health` là ví dụ — không được chết vì kho chưa mở.
       repos: lazyRepos(() => deps.repos(decision.identity)),
+      // Sổ runner dùng chung với cửa quyền: một sổ, một sự thật về "máy nào
+      // được phép". Hai bản sao sẽ lệch nhau đúng lúc một token bị thu hồi.
+      runners: deps.runners ?? emptyRunners,
     };
     return handler(req, res, url, ctx);
   }
