@@ -368,11 +368,23 @@ WDA. Đầu vào thì không cần ai cho: Appium/WDA theo W3C, mà webdriverio 
 - **Xong khi:** rút mạng runner 2 phút, log không mất một dòng nào sau khi nối lại. Viết
   `src/runner/__tests__/reconnectBuffer.test.ts`.
 
-### P3.5 Màn quản lý thiết bị trên web
-- Trang mới: danh sách thiết bị theo runner, trạng thái, đang chạy job nào, hàng chờ.
-- Hành động: `quarantine`, `release lease`, `drain runner`, đổi `visibility`.
-- Màn prereq hiện có đổi nghĩa: **báo cáo do runner gửi lên**, không phải server tự chạy `xcrun`.
-- **Xong khi:** thấy được ai đang giữ thiết bị nào, và huỷ được một lease đang treo từ trên web.
+### P3.5 Màn quản lý thiết bị trên web — ✅ xong 2026-09-22
+- `/devices`: thiết bị, chỗ giữ, và hàng đợi — **ghép với nhau**, không xếp cạnh nhau. Một danh
+  sách máy không nói ai đang cầm, cạnh một danh sách job không nói chạy trên máy nào, thì người đọc
+  phải tự nối bằng mắt; mà câu hỏi thật của một phòng máy chỉ có một: "chiếc này đang bận vì ai".
+- **Không thêm route nào:** màn hình ghép ba nguồn đã có (`/api/device/targets`,
+  `/api/device/leases`, `/api/jobs`) bằng `deviceId` và `jobId`. Ba hình dạng ấy chuyển vào
+  [contracts.ts](src/ui/contracts.ts), vì phép ghép hỏng IM LẶNG khi một bên đổi tên trường: bảng
+  vẫn vẽ ra, chỉ là mọi máy đều "rảnh".
+- Thu hồi bắt buộc có lý do, và nút xác nhận khoá tới khi có — nếu không người dùng bấm rồi nhận
+  một lỗi 400 không giải thích gì.
+- **Xong khi** (đo trong trình duyệt thật, emulator đang cắm): màn hình hiện
+  `emulator-5554 · emulator` — `người dùng local đang điều khiển` — `45s`, và job `@dang-cho` nằm ở
+  "Đang chờ" kèm đúng lý do. Bấm **Thu hồi** + nhập lý do → máy về `rảnh`, job tự lấy máy và chạy,
+  rồi chuyển sang "Vừa xong". 9 bài test cho màn này.
+- **Chưa làm, và nói ra:** `quarantine`, `drain runner`, đổi `visibility` cần SỔ runner và thiết bị
+  ở phía server — thứ chỉ tồn tại khi runner nối vào qua transport (P3.4). Màn prereq đổi nghĩa
+  thành "báo cáo do runner gửi lên" cũng thuộc P3.4.
 
 ### P3.6 Nối AWS Device Farm thành một runner
 - Bọc `src/farm/`, `src/aws/` thành runner `mode=farm`, khai báo thiết bị ảo từ pool.

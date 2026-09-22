@@ -21,6 +21,7 @@ import { loadConfig } from '../../config.js';
 import { localRunner } from '../../runner/index.js';
 import { activeRuns, findActiveRun } from '../../ui/activeRuns.js';
 import { json, readJson, stream } from '../http.js';
+import type { JobsResponse } from '../../ui/contracts.js';
 import type { JobQueue, JobRecord } from '../queue/queue.js';
 import type { RouteTable } from './types.js';
 
@@ -209,7 +210,7 @@ export const runRoutes: RouteTable = {
       ...(state?.length ? { state: state as never } : {}),
       limit: Number(url.searchParams.get('limit') ?? 50),
     });
-    return json(res, 200, {
+    const body: JobsResponse = {
       jobs: jobs.map((job) => ({
         id: job.id,
         kind: job.kind,
@@ -226,7 +227,8 @@ export const runRoutes: RouteTable = {
         attempt: job.attempt,
         error: job.error,
       })),
-    });
+    };
+    return json(res, 200, body);
   },
 
   /**

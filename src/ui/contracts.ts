@@ -763,3 +763,69 @@ export interface ActiveRunsResponse {
 export interface PrereqIosNamesResponse {
   names: Record<string, string>;
 }
+
+/* ------------------------------------------------------------------ */
+/* Thiết bị và hàng đợi — màn quản lý thiết bị (P3.5)                  */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Ba hình dạng này là hợp đồng giữa route và màn hình, nên chúng nằm ở đây
+ * chứ không ở một trong hai bên.
+ *
+ * Lý do cụ thể: màn quản lý GHÉP ba nguồn lại với nhau — thiết bị, chỗ giữ,
+ * và hàng đợi — bằng `deviceId` và `jobId`. Phép ghép ấy im lặng khi một bên
+ * đổi tên trường: bảng vẫn vẽ ra, chỉ là mọi máy đều "rảnh".
+ */
+export interface ControlDeviceView {
+  platform: 'android' | 'ios';
+  udid: string;
+  /** Tên máy, phiên bản hệ điều hành, thật hay giả lập — dựng sẵn để hiển thị. */
+  label: string;
+}
+
+export interface ControlTargetsResponse {
+  devices: ControlDeviceView[];
+}
+
+/** Ai đang giữ một chiếc máy: một con người, hay một job. */
+export type LeaseHolderView =
+  | { kind: 'human'; userId: string }
+  | { kind: 'job'; jobId: string };
+
+export interface DeviceLeaseView {
+  id: string;
+  deviceId: string;
+  holder: LeaseHolderView;
+  acquiredAt: string;
+  expiresAt: string;
+  renewedAt?: string;
+}
+
+export interface DeviceLeasesResponse {
+  leases: DeviceLeaseView[];
+}
+
+/**
+ * Một job trong hàng đợi, đã lược bỏ `spec`.
+ *
+ * `spec` mang snapshot registry và có thể mang tên môi trường nội bộ, nên nó
+ * KHÔNG đi ra ngoài — màn hình chỉ cần biết chạy cái gì, trên máy nào.
+ */
+export interface JobView {
+  id: string;
+  kind: string;
+  state: 'queued' | 'assigned' | 'running' | 'succeeded' | 'failed' | 'cancelled' | 'interrupted';
+  platform?: string;
+  tag?: string;
+  devices: string[];
+  requestedAt: string;
+  startedAt?: string;
+  finishedAt?: string;
+  runnerId?: string;
+  attempt: number;
+  error?: string;
+}
+
+export interface JobsResponse {
+  jobs: JobView[];
+}

@@ -7,6 +7,7 @@ import {
   ListChecks,
   MonitorSmartphone,
   Package,
+  Server,
   Settings,
   Smartphone,
   Sparkles,
@@ -81,6 +82,7 @@ export const NAV: NavItem[] = [
   { id: 'e2e-runner', label: 'Local Runner', to: '/runner', icon: Activity },
   { id: 'device-farm', label: 'Device Farm', to: '/farm', icon: Smartphone },
   { id: 'device-control', label: 'Điều khiển thiết bị', to: '/control', icon: MonitorSmartphone },
+  { id: 'device-queue', label: 'Thiết bị & hàng đợi', to: '/devices', icon: Server },
   {
     id: 'job-management',
     label: 'Job Management',
@@ -130,7 +132,7 @@ export const NAV_GROUPS: NavGroup[] = [
     title: 'Chạy và sửa',
     items: [
       byId('builds'), byId('e2e-runner'), byId('device-farm'), byId('device-control'),
-      byId('healing-center'),
+      byId('device-queue'), byId('healing-center'),
     ],
   },
   {

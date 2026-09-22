@@ -18,6 +18,7 @@ import { checkAction, type ControlPlatform, type ControlTarget } from '../../pro
 import { codecFor } from '../../runner/control.js';
 import { localRunner } from '../../runner/index.js';
 import type { Lease } from '../db/repo.js';
+import type { ControlTargetsResponse } from '../../ui/contracts.js';
 import { json, readJson, sse } from '../http.js';
 import type { RouteContext, RouteTable } from './types.js';
 
@@ -71,7 +72,8 @@ export const controlRoutes: RouteTable = {
    * cách đọc cả hai, và phải biết nền tảng nào dùng cách nào.
    */
   'GET /api/device/targets': async (_req, res) => {
-    return json(res, 200, { devices: await localRunner.control.devices() });
+    const body: ControlTargetsResponse = { devices: await localRunner.control.devices() };
+    return json(res, 200, body);
   },
 
   /**

@@ -12,6 +12,7 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as BuildsRouteImport } from './routes/builds'
 import { Route as ControlRouteImport } from './routes/control'
+import { Route as DevicesRouteImport } from './routes/devices'
 import { Route as FarmRouteImport } from './routes/farm'
 import { Route as HealingRouteImport } from './routes/healing'
 import { Route as RunnerRouteImport } from './routes/runner'
@@ -37,6 +38,11 @@ const BuildsRoute = BuildsRouteImport.update({
 const ControlRoute = ControlRouteImport.update({
   id: '/control',
   path: '/control',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const DevicesRoute = DevicesRouteImport.update({
+  id: '/devices',
+  path: '/devices',
   getParentRoute: () => rootRouteImport,
 } as any)
 const FarmRoute = FarmRouteImport.update({
@@ -99,6 +105,7 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/builds': typeof BuildsRoute
   '/control': typeof ControlRoute
+  '/devices': typeof DevicesRoute
   '/farm': typeof FarmRoute
   '/healing': typeof HealingRoute
   '/runner': typeof RunnerRoute
@@ -115,6 +122,7 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/builds': typeof BuildsRoute
   '/control': typeof ControlRoute
+  '/devices': typeof DevicesRoute
   '/farm': typeof FarmRoute
   '/healing': typeof HealingRoute
   '/runner': typeof RunnerRoute
@@ -132,6 +140,7 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/builds': typeof BuildsRoute
   '/control': typeof ControlRoute
+  '/devices': typeof DevicesRoute
   '/farm': typeof FarmRoute
   '/healing': typeof HealingRoute
   '/runner': typeof RunnerRoute
@@ -150,6 +159,7 @@ export interface FileRouteTypes {
     | '/'
     | '/builds'
     | '/control'
+    | '/devices'
     | '/farm'
     | '/healing'
     | '/runner'
@@ -166,6 +176,7 @@ export interface FileRouteTypes {
     | '/'
     | '/builds'
     | '/control'
+    | '/devices'
     | '/farm'
     | '/healing'
     | '/runner'
@@ -182,6 +193,7 @@ export interface FileRouteTypes {
     | '/'
     | '/builds'
     | '/control'
+    | '/devices'
     | '/farm'
     | '/healing'
     | '/runner'
@@ -199,6 +211,7 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   BuildsRoute: typeof BuildsRoute
   ControlRoute: typeof ControlRoute
+  DevicesRoute: typeof DevicesRoute
   FarmRoute: typeof FarmRoute
   HealingRoute: typeof HealingRoute
   RunnerRoute: typeof RunnerRoute
@@ -233,6 +246,13 @@ declare module '@tanstack/react-router' {
       path: '/control'
       fullPath: '/control'
       preLoaderRoute: typeof ControlRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/devices': {
+      id: '/devices'
+      path: '/devices'
+      fullPath: '/devices'
+      preLoaderRoute: typeof DevicesRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/farm': {
@@ -319,6 +339,7 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   BuildsRoute: BuildsRoute,
   ControlRoute: ControlRoute,
+  DevicesRoute: DevicesRoute,
   FarmRoute: FarmRoute,
   HealingRoute: HealingRoute,
   RunnerRoute: RunnerRoute,

@@ -14,6 +14,7 @@
  * Cưỡng chế nhả là route riêng, đòi `admin`.
  */
 import { LeaseTakenError, type Lease, type LeaseHolder } from '../db/repo.js';
+import type { DeviceLeasesResponse, DeviceLeaseView } from '../../ui/contracts.js';
 import { json, readJson } from '../http.js';
 import type { RouteTable } from './types.js';
 import type { RouteContext } from './types.js';
@@ -30,7 +31,7 @@ function me(ctx: RouteContext): LeaseHolder {
  * mình — nhưng nó là một mã nội bộ, và mã nội bộ đi ra ngoài thì sớm muộn có
  * người dùng nó làm tham số.
  */
-function view(lease: Lease) {
+function view(lease: Lease): DeviceLeaseView {
   return {
     id: lease.id,
     deviceId: lease.deviceId,
@@ -45,7 +46,8 @@ export const deviceRoutes: RouteTable = {
   /** Ai đang giữ máy nào. Đọc thì vô hại, và người đang chờ máy cần thấy. */
   'GET /api/device/leases': async (_req, res, _url, ctx) => {
     const leases = await ctx.repos.leases.list();
-    return json(res, 200, { leases: leases.map(view) });
+    const body: DeviceLeasesResponse = { leases: leases.map(view) };
+    return json(res, 200, body);
   },
 
   'POST /api/device/lease': async (req, res, _url, ctx) => {

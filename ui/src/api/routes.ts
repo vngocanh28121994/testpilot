@@ -53,6 +53,7 @@ export const ROUTES = {
   prereqIosTunnel: '/api/prereq/ios-tunnel',
   prereqIosTrust: '/api/prereq/ios-trust',
   deviceTargets: '/api/device/targets',
+  jobs: '/api/jobs',
   deviceLeases: '/api/device/leases',
   deviceLease: '/api/device/lease',
   deviceLeaseRenew: '/api/device/lease/renew',
