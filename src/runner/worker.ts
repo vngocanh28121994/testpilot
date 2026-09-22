@@ -70,6 +70,20 @@ export interface WorkerDeps {
    * sẽ từ chối mọi job vì một lý do không đúng với nó.
    */
   skipPrereq?: boolean;
+  /**
+   * Registry dùng chung nằm ở CHỖ KHÁC, nên lượt chạy không được ghi vào file
+   * registry trên máy này.
+   *
+   * Đúng với runner đứng riêng (`npm run runner`): ở đó nguồn sự thật là
+   * Postgres của control plane, còn `registry/elements.json` trên máy runner
+   * chỉ là bản sao để chạy. Lượt chạy gửi phần nó học được lên qua
+   * `JobResult.registryProposal`, và control plane quyết định gộp hay treo lại
+   * chờ duyệt — xem `server/proposals/policy.ts`.
+   *
+   * Ở chế độ embedded thì ngược lại: file ấy CHÍNH LÀ nguồn sự thật, nên ghi
+   * thẳng là đúng và gửi đề xuất cho chính mình là thừa.
+   */
+  deferSharedWrites?: boolean;
   /** Tiêm bản giả trong test. Mặc định là runner thật của máy này. */
   runner?: Runner;
 }
@@ -311,14 +325,17 @@ async function run(
       undefined,
       undefined,
       params.appSource,
+      deps.deferSharedWrites,
     );
+
+    const learned = await harvest(deps, runner, outcome.runDirs, log);
 
     await close(deps, job, lost
       // Mất lease rồi mới kết thúc: lượt chạy ấy đã bị dừng giữa chừng, nên
       // kết quả của nó không nói được gì. `interrupted` là câu đúng, không
       // phải `cancelled` — không ai bấm dừng cả.
       ? { type: 'job.result', jobId: job.id, state: 'interrupted', error: lost }
-      : outcomeToResult(job.id, outcome));
+      : { ...outcomeToResult(job.id, outcome), ...(learned ? { registryProposal: learned } : {}) });
   } catch (err) {
     await close(deps, job, {
       type: 'job.result', jobId: job.id, state: 'failed', error: (err as Error).message,
@@ -380,6 +397,36 @@ async function hold(
  * phần bị bỏ, và đó là chỗ người dùng đọc. Coi nó là `failed` sẽ làm một job
  * hoàn toàn bình thường hiện lên màu đỏ.
  */
+/**
+ * Đọc phần lượt chạy vừa học được, để gửi kèm kết quả.
+ *
+ * Chỉ khi `deferSharedWrites`: nếu lượt chạy đã tự ghi vào registry trên máy
+ * này thì `learned.json` không tồn tại, và gửi đề xuất cho chính mình là một
+ * vòng thừa.
+ *
+ * Hỏng ở đây KHÔNG được làm hỏng job. Lượt chạy đã xong, kết quả đã có; mất
+ * phần học được là đáng tiếc, còn đánh hỏng một lượt chạy thành công vì một
+ * file JSON không đọc được thì tệ hơn nhiều.
+ */
+async function harvest(
+  deps: WorkerDeps,
+  runner: Runner,
+  runDirs: string[],
+  log: (line: string) => void,
+): Promise<unknown | undefined> {
+  if (!deps.deferSharedWrites || runDirs.length === 0) return undefined;
+  try {
+    const learned = await runner.run.learnings(runDirs);
+    if (!learned) return undefined;
+    const count = Object.keys(learned.registry.elements ?? {}).length;
+    if (count > 0) log(`[job] Gửi ${count} element học được lên server để xét.`);
+    return learned.registry;
+  } catch (err) {
+    log(`[job] ⚠ Không đọc được phần lượt chạy học được: ${(err as Error).message}`);
+    return undefined;
+  }
+}
+
 function outcomeToResult(
   jobId: string,
   outcome: { code: number | null; stopped: boolean },

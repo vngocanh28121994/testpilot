@@ -137,6 +137,10 @@ export function farmRunner(options: FarmRunnerOptions): Runner {
       startParallel: () => notHere('chạy song song nhiều máy') as never,
       stop: () => notHere('dừng giữa chừng') as never,
       isNamedDevice: async () => false,
+      // Lượt chạy xảy ra bên trong AWS, nên không có thư mục nào trên máy này
+      // để đọc. Trả `undefined` chứ không ném: "không học được gì" là một câu
+      // trả lời hợp lệ, còn một cú ném ở đây sẽ giết vòng lặp worker.
+      learnings: async () => undefined,
       parseDeviceToken: () => null,
     },
     // Ba nhóm còn lại không có nghĩa ở đây, và ném rõ ràng thay vì trả rỗng:

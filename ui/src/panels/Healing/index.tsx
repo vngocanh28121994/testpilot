@@ -12,6 +12,8 @@ import {
 } from './hooks/useHealingFilters';
 import { HealingRow } from './HealingRow';
 import { DuplicateElements } from './DuplicateElements';
+import { ProposalQueue } from './ProposalQueue';
+import { useProposals } from './hooks/useProposals';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   Table,
@@ -80,6 +82,9 @@ export default function HealingPanel() {
   const summary = query.data?.summary;
   const policy = query.data?.policy;
   const duplicates = query.data?.duplicates ?? [];
+  // Đếm ở đây chứ không trong tab: con số phải hiện trên NHÃN để biết bên kia
+  // có gì mà không phải bấm sang — cùng lý do với hai tab đang có.
+  const proposals = useProposals();
   const [tab, setTab] = useState('records');
 
   return (
@@ -108,6 +113,10 @@ export default function HealingPanel() {
             <TabsTrigger value="duplicates">
               Element trùng vai
               <TabCount value={duplicates.length} />
+            </TabsTrigger>
+            <TabsTrigger value="proposals">
+              Đề xuất
+              <TabCount value={proposals.data?.proposals.length ?? 0} />
             </TabsTrigger>
           </TabsList>
 
@@ -245,6 +254,9 @@ export default function HealingPanel() {
                 <DuplicateElements items={duplicates} />
               </CardContent>
             </Card>
+          </TabsContent>
+          <TabsContent value="proposals">
+            <ProposalQueue />
           </TabsContent>
         </Tabs>
       </section>

@@ -626,7 +626,7 @@ server chung.
 - Kiểm tra phiên bản giao thức lúc `hello`; lệch major thì tự tải bản mới và khởi động lại.
 - **Xong khi:** nâng server lên `2.x` thì runner `1.x` tự cập nhật, không cần ai vào máy đó.
 
-### P4.4 Đề xuất registry từ runner
+### P4.4 Đề xuất registry từ runner — ✅ xong 2026-09-23
 - Kết quả healing và discovery gửi lên dạng `registry_proposal`, kèm `source_job_id` và bằng chứng
   (ảnh, locator cũ/mới).
 - Màn duyệt: mở rộng trang healing đang có (`GET /api/healing`,
@@ -634,6 +634,21 @@ server chung.
 - Chính sách tự nhận: chỉ nhận tự động khi đã verify và đạt ngưỡng tin cậy; còn lại chờ người duyệt.
 - **Xong khi:** heal trên máy cá nhân xuất hiện thành đề xuất trên web, duyệt xong thì runner lab
   dùng được locator mới.
+- **Đã làm:** `learned.json` của mỗi lượt chạy được runner đọc RA (`run.learnings()` — việc thứ sáu
+  của nhóm `run` trong facade) và gửi kèm `JobResult.registryProposal`; runner đứng riêng đặt
+  `deferSharedWrites: true` nên nó không còn ghi vào file registry trên máy mình. Control plane
+  chia đôi ở `proposals/policy.ts` rồi gộp phần an toàn, treo phần còn lại thành đề xuất kèm
+  `source_job_id`. Màn duyệt là tab thứ ba của Healing Center.
+- **Chính sách, nói rõ ra:** element MỚI nhận thẳng (bắt duyệt hai trăm element mới mỗi tuần là cách
+  chắc chắn nhất khiến người ta bấm mà không đọc); locator ĐỔI thì chờ duyệt, trừ khi nó đã thắng
+  ≥ 3 lần thật — đúng ngưỡng `minSuccesses` mà màn Healing đang dùng, vì hai con số khác nhau cho
+  cùng một câu hỏi sẽ cho hai câu trả lời khác nhau. Không bao giờ tự nhận thứ XOÁ: một lượt chạy
+  không chứng minh được rằng một element không còn tồn tại, nó chỉ chứng minh rằng lượt ấy không gặp.
+- **Một lỗi bài test bắt được:** đề xuất dựng trên bản registry đọc TRƯỚC khi gộp sẽ xoá đúng phần
+  vừa gộp lúc có người bấm đồng ý — lượt chạy học thêm ba element, người duyệt bấm "đồng ý", ba
+  element ấy biến mất. Nay đọc lại sau khi gộp.
+- **Đo thật:** trên server đang sống — `registry push` tạo đề xuất (+1 mới, ~1 sửa), tab Đề xuất
+  hiện đúng hai tên element, bấm Đồng ý hỏi lại rồi mới ghi, và registry đổi đúng phần ấy.
 
 ### P4.4b Đường đi lại giữa local và server — ✅ xong 2026-09-23
 - `testpilot registry pull` — kéo bản server về file local để làm offline.

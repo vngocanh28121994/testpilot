@@ -20,6 +20,10 @@
  * kiểm trong `authorize()`. Xem [auth/runnerToken.ts](../auth/runnerToken.ts).
  */
 import { isCompatible, PROTOCOL_VERSION } from '../../protocol/version.js';
+import { split } from '../proposals/policy.js';
+import { summarise } from '../proposals/store.js';
+import type { ElementRegistry } from '../../core/types.js';
+import type { RouteContext } from './types.js';
 import type { JobResult } from '../../protocol/messages.js';
 import { json, readJson } from '../http.js';
 import type { RouteTable } from './types.js';
@@ -210,6 +214,83 @@ export const runnerRoutes: RouteTable = {
       ...(body.result?.error ? { error: body.result.error } : {}),
       ...(body.result?.scenarios ? { scenarios: body.result.scenarios } : {}),
     });
-    return json(res, 200, { state: closed?.state });
+
+    // Phần lượt chạy học được, nếu có. Sau `finish`, cố ý: job phải đóng được
+    // kể cả khi việc gộp registry hỏng — một lượt chạy đã xong mà bị treo ở
+    // trạng thái `running` vì một element lạ là cái giá không đáng.
+    const learned = await absorb(ctx, jobId, body.result?.registryProposal);
+    return json(res, 200, { state: closed?.state, ...(learned ? { learned } : {}) });
   },
 };
+
+/**
+ * Nhận phần một lượt chạy học được: gộp thứ an toàn, treo thứ còn lại.
+ *
+ * Runner KHÔNG ghi vào registry — nó gửi delta và control plane quyết định.
+ * Ranh giới ấy là mục 4b của tài liệu kiến trúc, và nó có một lý do rất cụ
+ * thể: hai mươi máy cùng học được điều gì đó trong một buổi chiều, và nếu mỗi
+ * máy ghi thẳng thì bản cuối cùng thắng còn mười chín bản kia biến mất.
+ *
+ * Việc chia đôi nằm ở `policy.ts`. Ở đây chỉ còn hai lời gọi kho và một câu
+ * tóm tắt — vì phần đáng tranh luận là CHÍNH SÁCH, và nó phải đọc được ở một
+ * chỗ mà không lẫn với đường ống.
+ */
+async function absorb(
+  ctx: RouteContext,
+  jobId: string,
+  proposal: unknown,
+): Promise<{ merged: number; pending: number } | undefined> {
+  const delta = proposal as ElementRegistry | undefined;
+  if (!delta || typeof delta !== 'object' || !delta.elements) return undefined;
+
+  const current = await ctx.repos.registry.read();
+  const parts = split(delta, current.data);
+
+  const mergedCount = Object.keys(parts.autoMerge.elements).length;
+  if (mergedCount > 0 || Object.keys(parts.autoMerge.screens ?? {}).length > 0) {
+    // `merge` chứ không `write`: delta là "những thứ tôi học thêm", và gộp thì
+    // không cần đối chiếu revision — nó không xoá gì của ai.
+    await ctx.repos.registry.merge(parts.autoMerge);
+  }
+
+  let pending = 0;
+  if (parts.needsReview) {
+    pending = Object.keys(parts.needsReview.elements).length;
+    // Đọc LẠI sau khi gộp, không dùng lại bản đọc ở trên. Phần vừa gộp đã nằm
+    // trong registry rồi, và đề xuất dựng trên bản cũ sẽ XOÁ đúng phần ấy lúc
+    // được duyệt — một lượt chạy vừa học thêm ba element, người duyệt bấm
+    // đồng ý, và ba element ấy biến mất. Bài test bắt được chuyện này.
+    const base = await ctx.repos.registry.read();
+    const patch = withCurrent(parts.needsReview, base.data);
+    await ctx.repos.proposals.create({
+      orgId: ctx.identity.orgId,
+      kind: 'elements',
+      key: 'default',
+      // Bản nền là bản ĐANG có lúc lượt chạy kết thúc. Người duyệt mở ra sau
+      // đó vài ngày, và nếu trong lúc ấy registry đã đổi thì `review` phải từ
+      // chối chứ không được đè — xem routes/registry.ts.
+      ...(base.revision ? { baseRevision: base.revision } : {}),
+      patch,
+      sourceJobId: jobId,
+      createdBy: ctx.identity.userId,
+      summary: summarise(base.data, patch),
+    });
+  }
+  return { merged: mergedCount, pending };
+}
+
+/**
+ * Đề xuất mang CẢ registry, không chỉ phần đổi.
+ *
+ * Vì `review` khi duyệt gọi `registry.write()` — ghi đè toàn bộ. Gửi lên mỗi
+ * phần đổi thì duyệt xong registry chỉ còn đúng mấy element ấy, và mọi thứ
+ * khác biến mất. Đây đúng là kiểu hỏng mà cả P4.4 sinh ra để chặn, nên nó
+ * không được phép xuất hiện ở chính đường này.
+ */
+function withCurrent(patch: ElementRegistry, current: ElementRegistry): ElementRegistry {
+  return {
+    ...current,
+    screens: { ...current.screens, ...patch.screens },
+    elements: { ...current.elements, ...patch.elements },
+  };
+}

@@ -100,6 +100,11 @@ async function main(): Promise<void> {
     managesOwnDevices: mode === 'farm',
     // Runner farm không có Appium tại chỗ và không cần: máy nằm ở AWS.
     skipPrereq: mode === 'farm',
+    // Nguồn sự thật của registry là control plane, không phải file trên máy
+    // này. Lượt chạy gửi phần nó học được lên qua `JobResult.registryProposal`
+    // và server quyết định gộp hay treo lại chờ duyệt — runner không ghi thẳng
+    // vào dữ liệu dùng chung. Xem mục 4b của tài liệu kiến trúc.
+    deferSharedWrites: true,
     // Nền tảng KHAI TAY cho farm, vì `control.devices()` của nó rỗng theo đúng
     // nghĩa đen — máy nằm ở AWS. Không truyền thì worker tự đo và ra `['web']`,
     // rồi không bao giờ nhận job Android: nó nằm chờ mãi mà không ai hiểu vì

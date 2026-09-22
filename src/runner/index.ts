@@ -27,6 +27,7 @@ import {
   stopSuite,
   type PickedDevice,
 } from './execute.js';
+import { readLearned } from '../core/learned.js';
 import {
   controlDevices,
   pressKey,
@@ -100,6 +101,15 @@ export interface RunnerRunApi {
   stop(): ReturnType<typeof stopSuite>;
   /** Thiết bị này có tên trong config không — quyết định thư mục lượt chạy. */
   isNamedDevice(picked: PickedDevice, configFile: string): Promise<boolean>;
+  /**
+   * Phần các lượt chạy vừa rồi học được, đọc ra để GỬI ĐI.
+   *
+   * Chỉ đọc, và chỉ từ những thư mục mà chính lượt chạy này vừa báo ra. Ở chế
+   * độ server, đây là đường duy nhất mà thứ máy học được đi về registry dùng
+   * chung — runner không ghi thẳng, nó đề xuất. Xem mục 4b của tài liệu kiến
+   * trúc.
+   */
+  learnings(runDirs: string[]): ReturnType<typeof readLearned>;
   parseDeviceToken(token: string): PickedDevice | null;
 }
 
@@ -189,6 +199,7 @@ export const localRunner: Runner = {
     startParallel: (...args) => runSuiteParallel(...args),
     stop: () => stopSuite(),
     isNamedDevice: (picked, configFile) => isNamedDevice(picked, configFile),
+    learnings: (runDirs) => readLearned(runDirs),
     parseDeviceToken: (token) => parseDeviceToken(token),
   },
   farm: {

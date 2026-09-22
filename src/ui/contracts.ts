@@ -829,3 +829,33 @@ export interface JobView {
 export interface JobsResponse {
   jobs: JobView[];
 }
+
+/**
+ * Một đề xuất sửa dữ liệu dùng chung, như màn duyệt nhìn thấy nó.
+ *
+ * `patch` cố ý KHÔNG có mặt ở đây: nó là cả registry, hàng trăm kilobyte, và
+ * màn duyệt không hiển thị nó. Thứ người duyệt cần là "đổi những gì" và "từ
+ * đâu tới" — `summary` trả lời câu đầu, `sourceJobId` trả lời câu sau.
+ */
+export interface ProposalView {
+  id: string;
+  kind: string;
+  key: string;
+  state: 'pending' | 'accepted' | 'rejected' | 'superseded';
+  createdBy: string;
+  createdAt: string;
+  baseRevision?: string;
+  sourceJobId?: string;
+  reviewedBy?: string;
+  reviewedAt?: string;
+  summary?: { added: string[]; removed: string[]; changed: string[] };
+}
+
+export interface ProposalsResponse {
+  proposals: ProposalView[];
+}
+
+export interface ProposalReviewRequest {
+  id: string;
+  decision: 'accept' | 'reject';
+}

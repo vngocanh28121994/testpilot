@@ -41,6 +41,42 @@ export async function writeLearned(
   await writeFile(path.join(runDir, LEARNED_FILE), JSON.stringify(body, null, 2) + '\n', 'utf8');
 }
 
+/**
+ * Đọc phần các lượt chạy học được, không gộp vào đâu cả.
+ *
+ * `mergeRunLearnings` ở dưới gộp thẳng vào file trên đĩa — đúng cho bản chạy
+ * một máy. Ở chế độ server thì registry dùng chung nằm trên control plane,
+ * không nằm trên máy runner, nên runner cần đọc RA để gửi đi chứ không ghi
+ * xuống. Cùng file `learned.json`, hai đường dùng khác nhau.
+ *
+ * Thư mục thiếu `learned.json` bị bỏ qua chứ không ném: một lượt chạy hỏng
+ * sớm thì chưa kịp học gì, và đó không phải lỗi để dừng việc báo kết quả.
+ */
+export async function readLearned(runDirs: string[]): Promise<LearnedFromRun | undefined> {
+  const registry: ElementRegistry = { version: 1, screens: {}, elements: {} };
+  const runtime: RuntimeRegistryData = { version: 1, entries: {} };
+  const rejections: RegistryCandidateRejection[] = [];
+  let found = false;
+
+  for (const dir of runDirs) {
+    const file = path.join(dir, LEARNED_FILE);
+    if (!existsSync(file)) continue;
+    try {
+      const learned = JSON.parse(await readFile(file, 'utf8')) as LearnedFromRun;
+      Object.assign(registry.screens, learned.registry?.screens ?? {});
+      Object.assign(registry.elements, learned.registry?.elements ?? {});
+      Object.assign(runtime.entries, learned.runtime?.entries ?? {});
+      rejections.push(...(learned.rejections ?? []));
+      found = true;
+    } catch {
+      // Một file hỏng không được làm mất phần các máy khác học được.
+    }
+  }
+
+  if (!found) return undefined;
+  return { version: 1, registry, runtime, ...(rejections.length ? { rejections } : {}) };
+}
+
 export interface MergeSummary {
   runIds: string[];
   elementsMerged: number;
