@@ -14,8 +14,33 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 
+/**
+ * Mã nguồn không kèm chú thích.
+ *
+ * Cần thiết, không phải kỹ càng quá: bản đầu của bài test này đọc cả chú
+ * thích, nên một dòng giải thích "phép gộp sẽ gọi `repos.registry.merge()` ở
+ * P4.4" làm nó báo đỏ đúng cái file mà nó vừa khẳng định là không dùng repo.
+ * Một phép đo đọc cả lời giải thích thì không đo code nữa.
+ */
+function codeOnly(file: string): string {
+  return readFileSync(file, 'utf8')
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .replace(/^\s*\/\/.*$/gm, '');
+}
+
 /** File đã chuyển xong — thêm dần khi chuyển tiếp, không bao giờ bớt đi. */
-const CONVERTED = ['healing.ts', 'state.ts', 'catalog.ts'];
+const CONVERTED = ['healing.ts', 'state.ts', 'catalog.ts', 'feature.ts'];
+
+/**
+ * File KHÔNG đọc registry ở tầng route, và lý do phải nói ra.
+ *
+ * `workflow.ts` ghi registry — nhưng ghi ở TIẾN TRÌNH CON, qua đường dẫn file,
+ * sau khi từng nhánh nền tảng chạy xong. Ở chế độ server những thư mục ấy nằm
+ * trên máy runner chứ không trên server, nên đường đúng không phải "đổi hàm
+ * sang repo" mà là "runner gửi delta lên qua JobResult" (P4.4). Liệt kê ở đây
+ * để không ai nhìn danh sách CONVERTED rồi tưởng nó bị bỏ quên.
+ */
+const NOT_ROUTE_LEVEL = ['workflow.ts'];
 
 describe('route dùng kho dữ liệu qua ctx.repos', () => {
   for (const file of CONVERTED) {
@@ -46,18 +71,38 @@ describe('route dùng kho dữ liệu qua ctx.repos', () => {
      * chất đáng giữ: `state.ts` và `catalog.ts` KHÔNG được ghi registry.
      */
     it(`${file} ghi registry kèm phiên bản và trả 409 khi lệch`, () => {
-      const source = readFileSync(`src/server/routes/${file}`, 'utf8');
+      const source = codeOnly(`src/server/routes/${file}`);
       const writes = [...source.matchAll(/repos\.registry\.write\(([^)]*)\)/g)];
       if (writes.length === 0) return;
       for (const write of writes) {
+        // Tên biến nào cũng được, miễn là NÓ CÓ: `feature.ts` gọi nó
+        // `registryRevision` để không lẫn với `revision` của nội dung feature
+        // — hai phiên bản khác nhau trong cùng một handler.
         assert.match(
           write[1] ?? '',
-          /,\s*revision/,
+          /,\s*\w*[Rr]evision/,
           `một lệnh ghi trong ${file} thiếu baseRevision: ${write[0]}`,
         );
       }
       assert.match(source, /RevisionConflictError/, `${file} phải dịch xung đột thành 409`);
       assert.match(source, /409/);
+    });
+  }
+});
+
+describe('file ghi registry ở tầng khác', () => {
+  for (const file of NOT_ROUTE_LEVEL) {
+    it(`${file} không đọc registry ở tầng route`, () => {
+      const source = codeOnly(`src/server/routes/${file}`);
+      assert.doesNotMatch(source, /(?<!Action)Registry\.load\(/);
+      assert.doesNotMatch(source, /repos\.registry/);
+    });
+
+    /** Và phải nói ra chỗ ghi thật nằm ở đâu, kèm giai đoạn sẽ chuyển. */
+    it(`${file} ghi rõ phép gộp thuộc về runner`, () => {
+      const source = readFileSync(`src/server/routes/${file}`, 'utf8');
+      assert.match(source, /P4\.4/);
+      assert.match(source, /registryProposal/);
     });
   }
 });

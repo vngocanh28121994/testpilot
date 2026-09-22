@@ -22,6 +22,7 @@ import { normalizeFeatureDraft } from '../../genspec/normalizeDraft.js';
 import { pickModel } from '../../llm/client.js';
 import { syncPomProject } from '../../pom/sync.js';
 import { parseFeature } from '../../steps/binding.js';
+import { RevisionConflictError } from '../db/repo.js';
 import { json, readJson } from '../http.js';
 import type { RouteTable } from './types.js';
 
@@ -50,10 +51,10 @@ export function featureRevision(content: string): string {
 async function findScenarioById(
   cfg: TestPilotConfig,
   scenarioId: string,
+  registry: Registry,
 ): Promise<{ filename: string; name: string; contentHash: string } | null> {
   if (!existsSync(cfg.paths.features)) return null;
   const files = (await readdir(cfg.paths.features)).filter((f) => f.endsWith('.feature')).sort();
-  const registry = await Registry.load(cfg.paths.registry);
   for (const filename of files) {
     const uri = path.join(cfg.paths.features, filename);
     const content = await readFile(uri, 'utf8');
@@ -100,7 +101,11 @@ export const featureRoutes: RouteTable = {
       }
     }
     const normalizedTags = normalizeFeatureTags(content);
-    const registry = await Registry.load(cfg.paths.registry);
+    // `registryRevision`, không phải `revision`: biến `revision` ở dưới là hash
+    // của NỘI DUNG FEATURE vừa lưu, một thứ khác hẳn. Hai phiên bản trong cùng
+    // một handler, và đặt trùng tên là cách để lẫn chúng vào nhau.
+    const { data: registryData, revision: registryRevision } = await ctx.repos.registry.read();
+    const registry = Registry.fromData(registryData);
     // Nở action đã duyệt TRƯỚC khi biên dịch, y như đường "Chuẩn hoá".
     //
     // Thiếu bước này thì một action đã duyệt chỉ chạy được nếu người dùng
@@ -120,7 +125,15 @@ export const featureRoutes: RouteTable = {
       maxRepairs: 2,
     });
     const savedContent = prepared.content.trimEnd() + '\n';
-    await registry.save();
+    // `prepareExecutableDraft` có thể HỌC element mới trong lúc biên dịch bản
+    // nháp, nên đây là một lệnh ghi vào dữ liệu dùng chung — dù người dùng chỉ
+    // nghĩ mình đang lưu một file feature.
+    try {
+      await ctx.repos.registry.write(registry.raw, registryRevision);
+    } catch (err) {
+      if (err instanceof RevisionConflictError) return json(res, 409, { error: err.message });
+      throw err;
+    }
     await writeFile(file, savedContent, 'utf8');
     const revision = featureRevision(savedContent);
     // Saving is not approval. New or changed content is pending until the
@@ -181,7 +194,7 @@ export const featureRoutes: RouteTable = {
       return json(res, 404, { error: 'Không tìm thấy feature file.' });
     }
     const content = await readFile(file, 'utf8');
-    const registry = await Registry.load(cfg.paths.registry);
+    const registry = Registry.fromData((await ctx.repos.registry.read()).data);
     // Approval is a stronger gate than saving: the complete file must bind
     // successfully before any one scenario is allowed into execution.
     parseFeature(file, content, registry);
@@ -247,7 +260,11 @@ export const featureRoutes: RouteTable = {
       return json(res, 400, { error: 'Hãy ghi lý do vì sao sản phẩm chưa đáp ứng.' });
     }
 
-    const found = await findScenarioById(cfg, body.scenarioId);
+    const found = await findScenarioById(
+      cfg,
+      body.scenarioId,
+      Registry.fromData((await ctx.repos.registry.read()).data),
+    );
     if (!found) return json(res, 404, { error: 'Không tìm thấy kịch bản nào mang id đó.' });
     const issue = known.mark({
       id: body.scenarioId,
@@ -271,7 +288,7 @@ export const featureRoutes: RouteTable = {
     }
 
     const cfg = await loadConfig(ctx.configFile);
-    const registry = await Registry.load(cfg.paths.registry);
+    const registry = Registry.fromData((await ctx.repos.registry.read()).data);
     const reviews = await ScenarioReviewStore.load(cfg.paths.scenarioReviewDb);
     const files = new Map<string, string>();
     const unique = new Map<string, { filename: string; scenarioName: string }>();
@@ -328,7 +345,7 @@ export const featureRoutes: RouteTable = {
   'POST /api/feature/normalize': async (req, res, _url, ctx) => {
     const { content } = await readJson<{ content: string }>(req);
     const cfg = await loadConfig(ctx.configFile);
-    const registry = await Registry.load(cfg.paths.registry);
+    const registry = Registry.fromData((await ctx.repos.registry.read()).data);
     const actions = await ActionRegistry.load(cfg.paths.actionsDb);
     return json(res, 200, await normalizeFeatureDraft(content, registry, actions, pickModel(cfg.llm.model)));
   },

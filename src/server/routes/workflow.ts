@@ -33,7 +33,6 @@ import {
   type WorkflowQuestion,
   type WorkflowRun,
 } from '../../core/history.js';
-import { Registry } from '../../core/registry.js';
 import { ScenarioReviewStore, scenarioBlocks } from '../../core/scenarioReview.js';
 import { KnownIssueStore } from '../../core/knownIssues.js';
 import { runGenPipeline } from '../../genspec/pipeline.js';
@@ -393,6 +392,15 @@ async function continueWorkflow(
   outcomes.push(...localOutcomes);
 
   if (deferSharedWrites) {
+    // CHÚ Ý cho P3: `mergeRunLearnings` nhận ĐƯỜNG DẪN file, không nhận repo.
+    //
+    // Đó không phải sót — phép gộp này chạy sau khi các tiến trình con đã ghi
+    // learnings vào thư mục lượt chạy của chúng, và ở chế độ server những thư
+    // mục ấy nằm trên máy RUNNER, không nằm trên server. Nên đường đúng không
+    // phải là "đổi hàm này sang repo" mà là "runner gửi delta lên qua
+    // `JobResult.registryProposal`", rồi control plane gọi
+    // `repos.registry.merge()`. Đó là P4.4, và `execute.ts` đã có sẵn
+    // `changesSinceLoad()` để sinh delta ấy.
     const runDirs = localOutcomes.flatMap((outcome) => outcome.runDirs);
     if (runDirs.length > 0) {
       const merged = await mergeRunLearnings({
