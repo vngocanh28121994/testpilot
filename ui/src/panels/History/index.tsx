@@ -46,7 +46,10 @@ export default function HistoryPanel({ focusId }: { focusId?: string }) {
   const reports = state.data?.reports ?? [];
 
   return (
-    <AppShell title="Workflow History">
+    <AppShell
+      title="Workflow History"
+      description="Những lượt sinh kịch bản đã chạy, mới nhất trước."
+    >
       <div className="border-border bg-card mb-4 max-w-sm rounded-lg border p-3">
         <label className="text-sm">Khoảng thời gian<DateRangePicker value={range} onChange={(nextRange) => { setRange(nextRange); setPage(1); }} /></label>
       </div>

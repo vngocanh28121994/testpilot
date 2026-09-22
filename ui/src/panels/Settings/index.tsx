@@ -9,6 +9,7 @@ import {
   XCircle,
 } from 'lucide-react';
 import { AppShell } from '@/components/layout/AppShell';
+import { navTitle } from '@/lib/nav';
 import { Dropdown } from '@/components/Dropdown';
 import type { StateResponse } from '@core/ui/contracts.js';
 import { useAppState } from '@/hooks/useAppState';
@@ -67,7 +68,7 @@ export default function SettingsPanel() {
 
   if (!state.data) {
     return (
-      <AppShell title="Personal Settings" description={PAGE_DESCRIPTION}>
+      <AppShell title={navTitle('settings')} description={PAGE_DESCRIPTION}>
         {state.isError ? (
           <p role="alert" className="text-destructive text-sm">
             {(state.error as Error).message}
@@ -134,7 +135,7 @@ function SettingsForm({
   const set = <K extends keyof McpForm>(k: K, v: McpForm[K]) => setMcp((m) => ({ ...m, [k]: v }));
 
   return (
-    <AppShell title="Personal Settings" description={PAGE_DESCRIPTION}>
+    <AppShell title={navTitle('settings')} description={PAGE_DESCRIPTION}>
       <section
         data-testid="panel-settings"
         aria-label="Personal settings"

@@ -8,6 +8,7 @@
  * máy chỉ có một: "chiếc này đang bận vì ai".
  */
 import { useState } from 'react';
+import { navTitle } from '@/lib/nav';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { api } from '@/api/client';
@@ -103,7 +104,7 @@ export default function DevicesPanel() {
 
   return (
     <AppShell
-      title="Thiết bị và hàng đợi"
+      title={navTitle('device-queue')}
       description="Máy nào đang bận vì ai, và việc gì đang xếp hàng."
     >
       <div className="flex flex-col gap-6">

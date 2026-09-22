@@ -16,6 +16,7 @@ import {
   X,
 } from 'lucide-react';
 import { AppShell } from '@/components/layout/AppShell';
+import { navTitle } from '@/lib/nav';
 import { Dropdown } from '@/components/Dropdown';
 import {
   DropdownMenu,
@@ -30,6 +31,14 @@ import { Pagination } from '@/components/Pagination';
 import { StatusPill } from '@/components/StatusPill';
 import { TagChip } from '@/components/TagChip';
 import { Button } from '@/components/ui/button';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -84,7 +93,7 @@ export default function ScenarioReviewPanel({ search }: { search: ScenarioSearch
   const state = useAppState((s) => s);
   if (!state.data)
     return (
-      <AppShell title="Kịch bản" description={PAGE_DESCRIPTION}>
+      <AppShell title={navTitle('scenario-review')} description={PAGE_DESCRIPTION}>
         <p className="text-muted-foreground text-sm">
           {state.isError ? (state.error as Error).message : 'Đang tải kịch bản…'}
         </p>
@@ -284,7 +293,7 @@ function ReviewBody({ state, search }: { state: StateResponse; search: ScenarioS
 
   return (
     <AppShell
-      title="Kịch bản"
+      title={navTitle('scenario-review')}
       description={PAGE_DESCRIPTION}
       actions={
         <Link to="/scenarios" search={{}} className="text-xs underline">
@@ -427,11 +436,11 @@ function ReviewBody({ state, search }: { state: StateResponse; search: ScenarioS
               </div>
             )}
 
-            <div className="overflow-x-auto rounded-lg border">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="text-muted-foreground text-left">
-                    <th className="p-2">
+            <div className="rounded-lg border">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>
                       <input
                         aria-label="Chọn tất cả trang này"
                         type="checkbox"
@@ -444,22 +453,22 @@ function ReviewBody({ state, search }: { state: StateResponse; search: ScenarioS
                         }
                         onChange={(event) => selectPage(event.target.checked)}
                       />
-                    </th>
-                    <th className="p-2 font-medium">Feature file</th>
-                    <th className="p-2 font-medium">Kịch bản</th>
-                    <th className="p-2 font-medium">Tags</th>
-                    <th className="p-2 text-right font-medium">Bước</th>
-                    <th className="p-2 font-medium">Trạng thái</th>
-                    <th className="p-2" />
-                  </tr>
-                </thead>
-                <tbody>
+                    </TableHead>
+                    <TableHead>Feature file</TableHead>
+                    <TableHead>Kịch bản</TableHead>
+                    <TableHead>Tags</TableHead>
+                    <TableHead className="text-right">Bước</TableHead>
+                    <TableHead>Trạng thái</TableHead>
+                    <TableHead />
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
                   {rows.length === 0 && (
-                    <tr className="border-t">
-                      <td colSpan={7} className="text-muted-foreground p-6 text-center">
+                    <TableRow>
+                      <TableCell colSpan={7} className="text-muted-foreground p-6 text-center">
                         Không có kịch bản khớp bộ lọc.
-                      </td>
-                    </tr>
+                      </TableCell>
+                    </TableRow>
                   )}
                   {pageRows.map(({ feature, scenario }) => {
                     const id = idFor(feature.name, scenario.name);
@@ -470,8 +479,8 @@ function ReviewBody({ state, search }: { state: StateResponse; search: ScenarioS
                     const status = scenario.review?.status ?? 'pending';
                     return (
                       <Fragment key={id}>
-                        <tr className="border-t">
-                          <td className="p-2">
+                        <TableRow>
+                          <TableCell>
                             <input
                               aria-label={`Chọn ${scenario.name}`}
                               type="checkbox"
@@ -479,14 +488,14 @@ function ReviewBody({ state, search }: { state: StateResponse; search: ScenarioS
                               checked={selected.includes(id)}
                               onChange={() => toggle(id)}
                             />
-                          </td>
-                          <td className="p-2">
+                          </TableCell>
+                          <TableCell>
                             <span className="text-muted-foreground flex items-center gap-1.5 font-mono text-xs">
                               <FileCode className="size-3.5 shrink-0" />
                               {feature.name}
                             </span>
-                          </td>
-                          <td className="p-2 font-medium">
+                          </TableCell>
+                          <TableCell className="font-medium">
                             {/* Master cho đọc/sửa testcase bằng một click vào
                                 chính tên của nó. Giữ lại affordance đó ở V2:
                                 menu `…` vẫn mở panel đầy đủ, còn tên bung một
@@ -505,8 +514,8 @@ function ReviewBody({ state, search }: { state: StateResponse; search: ScenarioS
                               )}
                               <span>{scenario.name}</span>
                             </button>
-                          </td>
-                          <td className="p-2">
+                          </TableCell>
+                          <TableCell>
                             {scenario.tags.length > 0 ? (
                               <span className="flex flex-wrap gap-1">
                                 {scenario.tags.map((tag) => (
@@ -516,9 +525,9 @@ function ReviewBody({ state, search }: { state: StateResponse; search: ScenarioS
                             ) : (
                               '—'
                             )}
-                          </td>
-                          <td className="p-2 text-right tabular-nums">{scenario.steps}</td>
-                          <td className="p-2">
+                          </TableCell>
+                          <TableCell className="text-right tabular-nums">{scenario.steps}</TableCell>
+                          <TableCell>
                             {/* Known issue là một TRẠNG THÁI của kịch bản, nên
                                 nó đứng cạnh trạng thái duyệt chứ không nằm lẫn
                                 trong cột hành động. `whitespace-nowrap` vì hai
@@ -544,8 +553,8 @@ function ReviewBody({ state, search }: { state: StateResponse; search: ScenarioS
                                 </span>
                               )}
                             </div>
-                          </td>
-                          <td className="p-2">
+                          </TableCell>
+                          <TableCell>
                             {/* Một hành động chính, phần còn lại nằm trong menu.
                                 Bốn nút bày hết ra hàng thì mỗi hàng thành một
                                 thanh công cụ: mắt phải đọc lại cùng bốn nhãn ở
@@ -650,8 +659,8 @@ function ReviewBody({ state, search }: { state: StateResponse; search: ScenarioS
                                 </DropdownMenuContent>
                               </DropdownMenu>
                             </div>
-                          </td>
-                        </tr>
+                          </TableCell>
+                        </TableRow>
                         {/* Ô soạn thảo khoá theo id của HÀNG, không theo tên file:
                             một file có nhiều kịch bản, khoá theo tên file thì một
                             cú bấm mở ô ở mọi hàng của file đó. */}
@@ -685,8 +694,8 @@ function ReviewBody({ state, search }: { state: StateResponse; search: ScenarioS
                       </Fragment>
                     );
                   })}
-                </tbody>
-              </table>
+                </TableBody>
+              </Table>
             </div>
 
             <Pagination page={page} pageCount={pageCount} onPageChange={goToPage} />
@@ -860,8 +869,8 @@ function InlineScenarioEditor({
   onClose: () => void;
 }) {
   return (
-    <tr className="border-t bg-muted/20">
-      <td colSpan={7} className="p-3">
+    <TableRow className="bg-muted/20">
+      <TableCell colSpan={7}>
         <div className="flex flex-col gap-3 rounded-lg border bg-background p-3 shadow-sm">
           <ScenarioEditorFields
             block={block}
@@ -877,7 +886,7 @@ function InlineScenarioEditor({
             closeLabel="Đóng"
           />
         </div>
-      </td>
-    </tr>
+      </TableCell>
+    </TableRow>
   );
 }

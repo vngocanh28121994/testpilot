@@ -4,6 +4,7 @@ import { useNavigate } from '@tanstack/react-router';
 import { toast } from 'sonner';
 import { FileText, Play, Plus, Save, Trash2, X } from 'lucide-react';
 import { AppShell } from '@/components/layout/AppShell';
+import { navTitle } from '@/lib/nav';
 import { CheckRow } from '@/components/CheckRow';
 import { Dropdown } from '@/components/Dropdown';
 import { LogView } from '@/components/LogView';
@@ -66,7 +67,7 @@ export default function StudioPanel() {
 
   if (!state.data) {
     return (
-      <AppShell title="App Automation Studio" description={PAGE_DESCRIPTION}>
+      <AppShell title={navTitle('studio')} description={PAGE_DESCRIPTION}>
         {state.isError ? (
           <p role="alert" className="text-destructive text-sm">
             {(state.error as Error).message}
@@ -275,7 +276,7 @@ function StudioFormPanel({ state }: { state: StateResponse }) {
     setAccounts((all) => all.map((item, i) => (i === index ? { ...item, ...patch } : item)));
 
   return (
-    <AppShell title="App Automation Studio" description={PAGE_DESCRIPTION}>
+    <AppShell title={navTitle('studio')} description={PAGE_DESCRIPTION}>
       <section aria-label="App Automation Studio" className="flex flex-1 flex-col gap-6">
         <section className="grid gap-4">
           <GroupHeading title="Đầu vào">

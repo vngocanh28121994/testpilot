@@ -13,6 +13,7 @@ import {
   XCircle,
 } from 'lucide-react';
 import { AppShell } from '@/components/layout/AppShell';
+import { navTitle } from '@/lib/nav';
 import { CheckRow } from '@/components/CheckRow';
 import { CheckedAt } from '@/components/CheckedAt';
 import { Dropdown } from '@/components/Dropdown';
@@ -26,6 +27,14 @@ import { LogView } from '@/components/LogView';
 import { Field } from '@/components/Field';
 import { StatusPill } from '@/components/StatusPill';
 import { Badge } from '@/components/ui/badge';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { api, qs } from '@/api/client';
@@ -290,7 +299,7 @@ export default function RunnerPanel() {
   };
 
   return (
-    <AppShell title="Local Runner" description={PAGE_DESCRIPTION}>
+    <AppShell title={navTitle('e2e-runner')} description={PAGE_DESCRIPTION}>
       <section aria-label="Local Runner" className="flex flex-1 flex-col gap-6">
         {/* `items-stretch` (mặc định) + `h-full` cho từng thẻ: hai cột cao bằng
             nhau.
@@ -768,52 +777,52 @@ function History({ reports }: { reports: ReportView[] }) {
             </Button>
           )}
         </div>
-        <div className="overflow-x-auto rounded-lg border">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="text-muted-foreground text-left">
-                <th className="p-2 font-medium">Thời gian</th>
-                <th className="p-2 font-medium">Platform</th>
-                <th className="p-2 font-medium">Tag</th>
-                <th className="p-2 text-right font-medium">Pass</th>
-                <th className="p-2 text-right font-medium">Fail</th>
-                <th />
-              </tr>
-            </thead>
-            <tbody>
+        <div className="rounded-lg border">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Thời gian</TableHead>
+                <TableHead>Platform</TableHead>
+                <TableHead>Tag</TableHead>
+                <TableHead className="text-right">Pass</TableHead>
+                <TableHead className="text-right">Fail</TableHead>
+                <TableHead />
+              </TableRow>
+            </TableHeader>
+            <TableBody>
               {shown.length === 0 && (
-                <tr className="border-t">
-                  <td colSpan={6} className="text-muted-foreground p-6 text-center">
+                <TableRow>
+                  <TableCell colSpan={6} className="text-muted-foreground p-6 text-center">
                     {reports.length === 0
                       ? 'Chưa có lần chạy local nào.'
                       : `Không có lần chạy nào khớp ${active.join(' và ')}.`}
-                  </td>
-                </tr>
+                  </TableCell>
+                </TableRow>
               )}
               {shown.map((report) => (
-                <tr key={report.id} className="border-t">
-                  <td className="p-2 whitespace-nowrap">{when(report.startedAt)}</td>
-                  <td className="p-2">
+                <TableRow key={report.id}>
+                  <TableCell className="whitespace-nowrap">{when(report.startedAt)}</TableCell>
+                  <TableCell>
                     <StatusPill status={report.platform} />
-                  </td>
-                  <td className="p-2">{report.tag ?? 'tất cả'}</td>
-                  <td
+                  </TableCell>
+                  <TableCell>{report.tag ?? 'tất cả'}</TableCell>
+                  <TableCell
                     className={cn(
                       'p-2 text-right tabular-nums',
                       (report.counters?.passed ?? 0) > 0 && 'text-status-pass',
                     )}
                   >
                     {report.counters?.passed ?? 0}
-                  </td>
-                  <td
+                  </TableCell>
+                  <TableCell
                     className={cn(
                       'p-2 text-right tabular-nums',
                       (report.counters?.failed ?? 0) > 0 && 'text-status-fail',
                     )}
                   >
                     {report.counters?.failed ?? 0}
-                  </td>
-                  <td className="p-2">
+                  </TableCell>
+                  <TableCell>
                     <Link
                       to="/runner/history"
                       search={{ runId: report.id }}
@@ -821,11 +830,11 @@ function History({ reports }: { reports: ReportView[] }) {
                     >
                       Chi tiết
                     </Link>
-                  </td>
-                </tr>
+                  </TableCell>
+                </TableRow>
               ))}
-            </tbody>
-          </table>
+            </TableBody>
+          </Table>
         </div>
         <Pagination page={current} pageCount={pageCount} onPageChange={setPage} />
       </CardContent>

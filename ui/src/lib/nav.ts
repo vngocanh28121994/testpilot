@@ -96,6 +96,19 @@ export const NAV: NavItem[] = [
 /** 6 mục chưa nối — dùng để tra `why` từ slug của route /todo/$slug. */
 export const PLACEHOLDERS = new Map(NAV.filter((n) => n.why).map((n) => [n.id, n]));
 
+/**
+ * Tên trang, tra theo id của mục điều hướng.
+ *
+ * Vì sao không để mỗi trang tự gõ tiêu đề của nó: chúng từng làm thế, và kết
+ * quả là mục menu nói "Thiết bị & hàng đợi" còn đầu trang nói "Thiết bị và
+ * hàng đợi", menu nói "Device Farm" còn đầu trang nói "AWS Device Farm".
+ * Không ai gõ sai cả — hai chuỗi ấy được gõ ở hai file, vào hai ngày khác
+ * nhau. Một nguồn thì lệch không xảy ra được.
+ */
+export function navTitle(id: string): string {
+  return byId(id).label;
+}
+
 const byId = (id: string): NavItem => {
   const item = NAV.find((n) => n.id === id);
   if (!item) throw new Error(`NAV thiếu mục "${id}"`);

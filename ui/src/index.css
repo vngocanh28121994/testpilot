@@ -334,25 +334,17 @@ h3 {
 }
 
 /* ============================================================
-   Utility của TestPilot — .input / .button / .console
+   Utility còn lại của TestPilot — .console
    ============================================================
-   Ba class này KHÔNG đến từ sen; chúng có từ trước và 7 file đang dùng
-   (Farm, Runner, ScenarioReview, Healing, DateRangePicker, Pagination).
+   Ở đây từng có ba class: `.input`, `.button`, `.console`. Hai class đầu là
+   một ngôn ngữ thứ hai nằm cạnh <Input>/<Button> của design system — trông
+   gần giống, nên chỗ nào dùng cái nào là chuyện ngẫu nhiên, và hai ô cạnh
+   nhau trong cùng một hàng bộ lọc có thể khác nhau mà không ai cố ý.
 
-   Giữ lại nhưng dựng lại trên đúng token/hình dáng của design system mới
-   (chiều cao 9, radius-md, ring focus 3px) để chúng không còn là một ngôn ngữ
-   thứ hai nằm cạnh <Button>/<Input> của shadcn.
-
-   Hướng đi: mỗi trang khi được migrate ở Phase 4 thì đổi sang <Button>/<Input>
-   và xoá dần chỗ dùng. Khi không còn ai dùng, xoá cả block này.
+   Nay không còn chỗ nào dùng chúng, nên chúng đã bị xoá. `.console` ở lại vì
+   nó không cạnh tranh với component nào: nó là khối log đơn sắc của LogView.
    ============================================================ */
 @layer components {
-  .input {
-    @apply border-input bg-background focus-visible:ring-ring/50 mt-1 block h-9 w-full min-w-0 rounded-md border px-3 py-1 text-sm shadow-xs transition-[color,box-shadow] outline-none focus-visible:ring-[3px];
-  }
-  .button {
-    @apply bg-background hover:bg-accent hover:text-accent-foreground focus-visible:ring-ring/50 inline-flex h-9 shrink-0 items-center justify-center gap-2 rounded-md border px-4 py-2 text-sm font-medium whitespace-nowrap shadow-xs transition-all outline-none focus-visible:ring-[3px] disabled:pointer-events-none disabled:opacity-50;
-  }
   .console {
     @apply bg-muted mt-3 max-h-96 overflow-auto rounded-md p-3 font-mono text-xs whitespace-pre-wrap;
   }

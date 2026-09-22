@@ -24,7 +24,10 @@ export default function StreamProbePanel() {
   }, []);
 
   return (
-    <AppShell title="Stream probe (dev)">
+    <AppShell
+      title="Stream probe (dev)"
+      description="Trang thử luồng log: bật một job giả rồi xem log chảy về."
+    >
       <div className="flex gap-2">
         <button
           type="button"

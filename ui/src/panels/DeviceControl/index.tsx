@@ -11,6 +11,7 @@ import { useQuery } from '@tanstack/react-query';
 import { api } from '@/api/client';
 import { ROUTES } from '@/api/routes';
 import { AppShell } from '@/components/layout/AppShell';
+import { navTitle } from '@/lib/nav';
 import { Dropdown } from '@/components/Dropdown';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -85,7 +86,7 @@ export default function DeviceControlPanel() {
 
   return (
     <AppShell
-      title="Điều khiển thiết bị"
+      title={navTitle('device-control')}
       description={
         'Giữ chỗ một chiếc máy rồi xem màn hình và chạm vào nó. '
         + 'Trong lúc bạn giữ, hàng đợi job không giao chiếc máy ấy cho ai.'

@@ -7,6 +7,7 @@ import {
   TriangleAlert,
 } from 'lucide-react';
 import { AppShell } from '@/components/layout/AppShell';
+import { navTitle } from '@/lib/nav';
 import { DataTable } from '@/components/data-table';
 import { StatTile } from '@/components/StatTile';
 import { TINTS } from '@/lib/tints';
@@ -80,7 +81,7 @@ export default function DashboardPanel() {
     .slice(0, RECENT_RUNS);
 
   return (
-    <AppShell title="Dashboard" description={PAGE_DESCRIPTION}>
+    <AppShell title={navTitle('dashboard')} description={PAGE_DESCRIPTION}>
       <section aria-label="Dashboard" className="flex flex-1 flex-col gap-6">
         {tiles.isError && (
           <p role="alert" className="text-destructive text-sm">

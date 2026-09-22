@@ -11,6 +11,7 @@ import {
   Trash2,
 } from 'lucide-react';
 import { AppShell } from '@/components/layout/AppShell';
+import { navTitle } from '@/lib/nav';
 import { Dropdown } from '@/components/Dropdown';
 import { LogView } from '@/components/LogView';
 import { Field } from '@/components/Field';
@@ -19,6 +20,14 @@ import { GroupHeading } from '@/components/GroupHeading';
 import { StatusBanner } from '@/components/StatusBanner';
 import { StatusPill } from '@/components/StatusPill';
 import { Button } from '@/components/ui/button';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
 import { CheckedAt } from '@/components/CheckedAt';
 import { cn } from '@/lib/utils';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -341,7 +350,7 @@ export default function FarmPanel() {
   const latestFarmRun = farmRuns[0];
 
   return (
-    <AppShell title="AWS Device Farm" description={PAGE_DESCRIPTION}>
+    <AppShell title={navTitle('device-farm')} description={PAGE_DESCRIPTION}>
       <section aria-label="Device Farm" className="flex flex-1 flex-col gap-6">
         <section className="grid gap-4">
           <GroupHeading title="Kết nối và thiết bị">
@@ -728,25 +737,25 @@ export default function FarmPanel() {
             <CardDescription>Các lượt đã gửi lên farm từ máy này.</CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="overflow-x-auto rounded-lg border">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="text-muted-foreground text-left">
-                    <th className="p-2 font-medium">Thời điểm</th>
-                    <th className="p-2 font-medium">Feature</th>
-                    <th className="p-2 font-medium">Trạng thái</th>
-                    <th className="p-2" />
-                  </tr>
-                </thead>
-                <tbody>
+            <div className="rounded-lg border">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Thời điểm</TableHead>
+                    <TableHead>Feature</TableHead>
+                    <TableHead>Trạng thái</TableHead>
+                    <TableHead />
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
                   {farmRuns.map((run) => (
-                    <tr key={run.id} className="border-t">
-                      <td className="p-2">{when(run.startedAt)}</td>
-                      <td className="p-2">{run.feature}</td>
-                      <td className="p-2">
+                    <TableRow key={run.id}>
+                      <TableCell>{when(run.startedAt)}</TableCell>
+                      <TableCell>{run.feature}</TableCell>
+                      <TableCell>
                         <StatusPill status={run.status} />
-                      </td>
-                      <td className="p-2">
+                      </TableCell>
+                      <TableCell>
                         <Link
                           to="/farm/$runId"
                           params={{ runId: run.id }}
@@ -754,18 +763,18 @@ export default function FarmPanel() {
                         >
                           Xem
                         </Link>
-                      </td>
-                    </tr>
+                      </TableCell>
+                    </TableRow>
                   ))}
                   {farmRuns.length === 0 && (
-                    <tr className="border-t">
-                      <td colSpan={4} className="text-muted-foreground p-6 text-center">
+                    <TableRow>
+                      <TableCell colSpan={4} className="text-muted-foreground p-6 text-center">
                         Chưa có lần chạy Device Farm.
-                      </td>
-                    </tr>
+                      </TableCell>
+                    </TableRow>
                   )}
-                </tbody>
-              </table>
+                </TableBody>
+              </Table>
             </div>
           </CardContent>
         </Card>

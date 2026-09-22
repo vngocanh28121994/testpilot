@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { AppShell } from '@/components/layout/AppShell';
+import { navTitle } from '@/lib/nav';
 import { Dropdown } from '@/components/Dropdown';
 import { useHealing, useReviewHealing } from './hooks/useHealing';
 import {
@@ -12,6 +13,14 @@ import {
 import { HealingRow } from './HealingRow';
 import { DuplicateElements } from './DuplicateElements';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
 import { Pagination } from '@/components/Pagination';
 import { Clock, CircleCheckBig, CircleSlash, Eye } from 'lucide-react';
 import { Field } from '@/components/Field';
@@ -74,7 +83,7 @@ export default function HealingPanel() {
   const [tab, setTab] = useState('records');
 
   return (
-    <AppShell title="Healing Center" description={PAGE_DESCRIPTION}>
+    <AppShell title={navTitle('healing-center')} description={PAGE_DESCRIPTION}>
       <section aria-label="Healing Center" className="flex flex-1 flex-col gap-6">
         {query.isError && (
           <p role="alert" className="text-destructive text-sm">
@@ -165,40 +174,38 @@ export default function HealingPanel() {
               </Field>
             </div>
 
-            <div className="overflow-x-auto rounded-lg border">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="text-muted-foreground text-left text-xs">
+            <div className="rounded-lg border">
+              <Table>
+                <TableHeader>
+                  <TableRow className="text-xs">
                     {HEADERS.map((h, i) => (
-                      <th
+                      <TableHead
                         key={h || i}
                         className={`px-2 py-2 font-medium ${i >= 5 && i <= 7 ? 'text-right' : ''}`}
                       >
                         {h}
-                      </th>
+                      </TableHead>
                     ))}
-                  </tr>
-                </thead>
-                <tbody>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
                   {query.isPending && (
-                    <tr>
-                      <td
-                        colSpan={HEADERS.length}
-                        className="text-muted-foreground px-2 py-6 text-center"
+                    <TableRow>
+                      <TableCell
+                        colSpan={HEADERS.length} className="text-muted-foreground px-2 py-6 text-center"
                       >
                         Đang tải healing telemetry…
-                      </td>
-                    </tr>
+                      </TableCell>
+                    </TableRow>
                   )}
                   {!query.isPending && records.length === 0 && (
-                    <tr>
-                      <td
-                        colSpan={HEADERS.length}
-                        className="text-muted-foreground px-2 py-6 text-center"
+                    <TableRow>
+                      <TableCell
+                        colSpan={HEADERS.length} className="text-muted-foreground px-2 py-6 text-center"
                       >
                         Không có healing record khớp bộ lọc.
-                      </td>
-                    </tr>
+                      </TableCell>
+                    </TableRow>
                   )}
                   {visibleRecords.map((r) => (
                     <HealingRow
@@ -213,8 +220,8 @@ export default function HealingPanel() {
                       }
                     />
                   ))}
-                </tbody>
-              </table>
+                </TableBody>
+              </Table>
             </div>
             <Pagination
               page={currentPage}

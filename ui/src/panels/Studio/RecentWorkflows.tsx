@@ -1,5 +1,13 @@
 import { Link, useNavigate } from '@tanstack/react-router';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
 import { StatusPill } from '@/components/StatusPill';
 import { useRecentRuns } from '@/hooks/useAppState';
 import { when } from '@/lib/datetime';
@@ -56,22 +64,22 @@ export function RecentWorkflows() {
         </div>
       </CardHeader>
       <CardContent>
-        <div className="overflow-x-auto rounded-lg border">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="text-muted-foreground text-left">
-                <th className="p-2 font-medium">Chức năng</th>
-                <th className="p-2 font-medium">Thời gian</th>
-                <th className="p-2 font-medium">Trạng thái</th>
-                <th className="p-2 text-right font-medium">Bước</th>
-              </tr>
-            </thead>
-            <tbody>
+        <div className="rounded-lg border">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Chức năng</TableHead>
+                <TableHead>Thời gian</TableHead>
+                <TableHead>Trạng thái</TableHead>
+                <TableHead className="text-right">Bước</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
               {all.slice(0, SHOWN).map((run) => {
                 const waiting =
                   run.status === 'waiting_review' || run.status === 'waiting_input';
                 return (
-                  <tr
+                  <TableRow
                     key={run.id}
                     tabIndex={0}
                     role="button"
@@ -85,19 +93,19 @@ export function RecentWorkflows() {
                       )
                     }
                   >
-                    <td className="p-2">{run.feature ?? '—'}</td>
-                    <td className="p-2 whitespace-nowrap">{when(run.startedAt)}</td>
-                    <td className="p-2">
+                    <TableCell>{run.feature ?? '—'}</TableCell>
+                    <TableCell className="whitespace-nowrap">{when(run.startedAt)}</TableCell>
+                    <TableCell>
                       <StatusPill status={LABEL[run.status] ?? run.status} />
-                    </td>
-                    <td className="p-2 text-right tabular-nums">
+                    </TableCell>
+                    <TableCell className="text-right tabular-nums">
                       {run.stagesDone}/{run.stages?.length ?? 0}
-                    </td>
-                  </tr>
+                    </TableCell>
+                  </TableRow>
                 );
               })}
-            </tbody>
-          </table>
+            </TableBody>
+          </Table>
         </div>
       </CardContent>
     </Card>

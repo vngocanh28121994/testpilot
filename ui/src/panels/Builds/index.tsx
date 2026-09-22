@@ -2,7 +2,18 @@ import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { AppShell } from '@/components/layout/AppShell';
+import { navTitle } from '@/lib/nav';
+
+const PAGE_DESCRIPTION = 'Bản build dùng cho local run, workflow và Device Farm.';
 import { Card, CardContent, CardDescription, CardHeader } from '@/components/ui/card';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
 import { api } from '@/api/client';
 import { ROUTES } from '@/api/routes';
 import { uploadBuild } from '@/api/upload';
@@ -21,12 +32,14 @@ export default function BuildsPanel() {
   // động của AppShell vẽ xuyên qua bất cứ gì không có màu nền riêng, và bảng
   // trần là chỗ duy nhất trong app bị nó làm chìm chữ.
   return (
-    <AppShell title="Bản build">
+    <AppShell title={navTitle('builds')} description={PAGE_DESCRIPTION}>
       <Card>
         <CardHeader>
+          {/* Chỉ phần ĐỘNG ở lại đây. Câu giới thiệu trang đã nằm trên đầu
+              trang cùng chỗ với mọi trang khác — nói hai lần trong một màn
+              hình thì lần thứ hai chỉ là tiếng ồn. */}
           <CardDescription>
-            Bản build dùng cho local run, workflow và Device Farm.
-            {builds.data ? ` File cất ở ${builds.data.root}.` : ''}
+            {builds.data ? `File cất ở ${builds.data.root}.` : 'Đang tìm thư mục build…'}
           </CardDescription>
         </CardHeader>
         <CardContent className="flex flex-col gap-4">
@@ -35,37 +48,37 @@ export default function BuildsPanel() {
               {(builds.error as Error).message}
             </p>
           )}
-          <div className="overflow-x-auto rounded-lg border">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="text-muted-foreground text-left">
-                  <th className="p-3">Môi trường</th>
-                  <th className="p-3">Android (.apk)</th>
-                  <th className="p-3">iOS (.ipa)</th>
-                </tr>
-              </thead>
-              <tbody>
+          <div className="rounded-lg border">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Môi trường</TableHead>
+                  <TableHead>Android (.apk)</TableHead>
+                  <TableHead>iOS (.ipa)</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
                 {builds.isPending && (
-                  <tr>
-                    <td colSpan={3} className="p-6 text-center">
+                  <TableRow>
+                    <TableCell colSpan={3} className="p-6 text-center">
                       Đang tải…
-                    </td>
-                  </tr>
+                    </TableCell>
+                  </TableRow>
                 )}
                 {builds.data?.environments.map((row) => (
-                  <tr key={row.env || 'shared'} className="border-border border-t">
-                    <td className="p-3">
+                  <TableRow key={row.env || 'shared'}>
+                    <TableCell>
                       <b>{(row.env || 'Dùng chung').toUpperCase()}</b>
                       {row.isDefault && row.env && (
                         <span className="text-muted-foreground ms-2 text-xs">mặc định</span>
                       )}
-                    </td>
+                    </TableCell>
                     <BuildCell row={row} platform="android" onDone={refresh} />
                     <BuildCell row={row} platform="ios" onDone={refresh} />
-                  </tr>
+                  </TableRow>
                 ))}
-              </tbody>
-            </table>
+              </TableBody>
+            </Table>
           </div>
         </CardContent>
       </Card>
@@ -110,7 +123,7 @@ export function BuildCell({
   const missing = row.missing.find((item) => item.platform === platform);
 
   return (
-    <td className="p-3 align-top">
+    <TableCell className="align-top">
       <div className="font-mono text-xs">
         {build?.path ?? (missing ? `✕ ${missing.path} — không thấy file` : 'Chưa có')}
       </div>
@@ -134,6 +147,6 @@ export function BuildCell({
       </label>
       {file && <span className="ms-2 text-xs">{file.name}</span>}
       {progress !== null && <progress className="ms-2 h-2" value={progress} max={1} />}
-    </td>
+    </TableCell>
   );
 }

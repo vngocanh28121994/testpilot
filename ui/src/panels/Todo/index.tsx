@@ -13,7 +13,7 @@ export default function TodoPanel({ slug }: { slug: string }) {
   const label = item?.label ?? 'Mục này';
 
   return (
-    <AppShell title={label}>
+    <AppShell title={label} description="Có trong thiết kế, chưa có gì đứng sau.">
       <div className="border-border bg-card max-w-2xl rounded-lg border p-5">
         <p>
           <b>{label}</b> có trong design nhưng chưa có gì đứng sau nó trong TestPilot.

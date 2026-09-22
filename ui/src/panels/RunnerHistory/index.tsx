@@ -31,7 +31,10 @@ export default function RunnerHistoryPanel({ runId }: { runId?: string }) {
   const missing = Boolean(wanted) && !report;
 
   return (
-    <AppShell title="Chi tiết kết quả kiểm thử">
+    <AppShell
+      title="Chi tiết kết quả kiểm thử"
+      description="Một lượt chạy: kịch bản nào đỗ, cái nào hỏng, và hỏng ở bước nào."
+    >
       {/*
         Mỗi lượt chạy phải TỰ NHẬN DẠNG ĐƯỢC.
 

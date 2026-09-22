@@ -1,3 +1,5 @@
+import { Button } from '@/components/ui/button';
+
 interface PaginationProps {
   page: number;
   pageCount: number;
@@ -10,27 +12,27 @@ export function Pagination({ page, pageCount, onPageChange }: PaginationProps) {
 
   return (
     <nav aria-label="Phân trang" className="mt-4 flex items-center gap-2 text-sm">
-      <button
-        className="button"
+      <Button
+        variant="outline"
         type="button"
         aria-label="Trang trước"
         disabled={page <= 1}
         onClick={() => onPageChange(page - 1)}
       >
         ← Trước
-      </button>
+      </Button>
       <span className="text-muted-foreground">
         Trang {page}/{pageCount}
       </span>
-      <button
-        className="button"
+      <Button
+        variant="outline"
         type="button"
         aria-label="Trang sau"
         disabled={page >= pageCount}
         onClick={() => onPageChange(page + 1)}
       >
         Sau →
-      </button>
+      </Button>
     </nav>
   );
 }

@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import { format } from 'date-fns';
 import { DayPicker, type DateRange } from 'react-day-picker';
+import { ChevronDownIcon } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 
 interface DateRangePickerProps {
@@ -26,9 +28,19 @@ export function DateRangePicker({ value, onChange }: DateRangePickerProps) {
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
-        <button className="button mt-1 w-full text-left" type="button" aria-label="Lọc theo ngày">
+        {/* Trông như một Dropdown, vì nó đứng CẠNH các Dropdown và làm cùng
+            một việc: thu hẹp danh sách bên dưới. Trước đây nó mang class
+            `.button` cũ — không mũi tên, chữ đậm hơn — nên trong cùng một hàng
+            bộ lọc có hai thứ nhìn khác nhau mà bấm vào đều xổ ra một bảng. */}
+        <Button
+          type="button"
+          variant="outline"
+          aria-label="Lọc theo ngày"
+          className="mt-1 w-full justify-between px-3 font-normal"
+        >
           {label}
-        </button>
+          <ChevronDownIcon className="size-4 opacity-50" />
+        </Button>
       </PopoverTrigger>
       <PopoverContent>
           <DayPicker
@@ -40,8 +52,8 @@ export function DateRangePicker({ value, onChange }: DateRangePickerProps) {
               months: 'flex flex-col gap-3',
               month_caption: 'mb-2 text-center text-sm font-medium',
               nav: 'flex items-center justify-between',
-              button_previous: 'button',
-              button_next: 'button',
+              button_previous: 'hover:bg-accent rounded-md p-1',
+              button_next: 'hover:bg-accent rounded-md p-1',
               month_grid: 'w-full border-collapse',
               weekdays: 'text-muted-foreground text-xs',
               weekday: 'w-9 h-8 text-center font-normal',
