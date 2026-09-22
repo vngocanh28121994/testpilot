@@ -40,6 +40,14 @@ export interface WorkerDeps {
   platforms?: string[];
   /** Một người được chạy tối đa bao nhiêu job cùng lúc. Bỏ trống là không hạn. */
   maxPerUser?: number;
+  /**
+   * Runner TỰ QUẢN thiết bị của nó — không phân giải udid, không giữ chỗ.
+   *
+   * Đúng với AWS Device Farm: không có gì để `adb devices` nhìn thấy, không có
+   * udid để khoá, và việc xếp hàng đợi thiết bị xảy ra bên trong AWS. Giữ chỗ
+   * ở phía ta cho một chiếc máy ta không sở hữu là khoá một thứ không tồn tại.
+   */
+  managesOwnDevices?: boolean;
   configFile: string;
   /**
    * Đọc config. Bỏ trống thì đọc từ `configFile`.
@@ -178,8 +186,17 @@ async function run(
    * theo id. Hai cái tên khác nhau nghĩa là hai bên khoá hai thứ khác nhau, và
    * lá chắn dựng ở P3.2 chỉ hoạt động với config tình cờ đặt id trùng udid.
    */
-  const cfg = await (deps.config?.() ?? loadConfig(deps.configFile));
-  const resolved = resolveDevices(job.spec, cfg, attached);
+  /**
+   * Runner tự quản thiết bị thì KHÔNG phân giải và KHÔNG giữ chỗ.
+   *
+   * Danh sách rỗng đi tiếp qua đúng đường cũ: `hold([])` thành công mà không
+   * giữ gì, vòng gia hạn không có gì để gia hạn, và `finally` không có gì để
+   * nhả. Một nhánh `if` riêng cho cả phần còn lại sẽ là bản sao thứ hai của
+   * cùng đoạn mã, và hai bản sao thì lệch nhau.
+   */
+  const resolved = deps.managesOwnDevices
+    ? ({ ok: true, udids: [] as string[] } as const)
+    : resolveDevices(job.spec, await (deps.config?.() ?? loadConfig(deps.configFile)), attached);
   if (!resolved.ok) {
     if (!resolved.wait) {
       await close(deps, job, {

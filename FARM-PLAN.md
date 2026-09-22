@@ -235,7 +235,7 @@ Sau giai đoạn này mới được phép mở ra domain.
 
 ---
 
-# P3 — Hàng đợi và giữ chỗ thiết bị (14–19 ngày)
+# P3 — Hàng đợi và giữ chỗ thiết bị — ✅ XONG 2026-09-22 (14–19 ngày)
 
 Đây là lúc hệ thống thành device farm.
 
@@ -412,10 +412,31 @@ WDA. Đầu vào thì không cần ai cho: Appium/WDA theo W3C, mà webdriverio 
   ở phía server — thứ chỉ tồn tại khi runner nối vào qua transport (P3.4). Màn prereq đổi nghĩa
   thành "báo cáo do runner gửi lên" cũng thuộc P3.4.
 
-### P3.6 Nối AWS Device Farm thành một runner
-- Bọc `src/farm/`, `src/aws/` thành runner `mode=farm`, khai báo thiết bị ảo từ pool.
-- Bỏ endpoint `POST /api/aws/login` tương tác; dùng IAM role của máy chạy runner.
-- **Xong khi:** một job `run_suite` đi qua Device Farm mà UI không cần biết nó khác gì runner khác.
+### P3.6 Nối AWS Device Farm thành một runner — ✅ xong 2026-09-22
+- Ý tưởng gọn trong một câu: **Device Farm là một runner nữa.** Nó nhận job từ cùng hàng đợi, báo
+  log về cùng đường, đóng job bằng cùng `JobResult`. `TESTPILOT_RUNNER_MODE=farm npm run runner` —
+  cùng tiến trình, cùng worker, chỉ đổi `Runner` bên dưới.
+- Khác biệt thật, và là lý do có cờ `managesOwnDevices`: **Device Farm tự quản thiết bị.** Không có
+  gì để `adb devices` nhìn thấy, không udid để giữ chỗ, và việc xếp hàng đợi máy xảy ra bên trong
+  AWS. Giữ chỗ ở phía ta cho một chiếc máy ta không sở hữu là khoá một thứ không tồn tại — và nó
+  chặn chính job kế tiếp.
+- `farmReadiness()` kiểm **trước khi đòi job**, không phải lúc chạy. Bản không kiểm đã có lịch sử:
+  job được nhận, 216 MB bundle tải lên, thiết bị khởi động, rồi vòng lặp chết vì thiếu credential —
+  sau khi tiền đã tiêu.
+- Nền tảng khai tay cho farm chứ không đo từ `control.devices()`: danh sách ấy rỗng theo đúng nghĩa
+  đen. Không khai thì worker tự đo ra `['web']` và mọi job Android nằm chờ mãi — một lỗi đã xảy ra
+  thật trong lúc làm bước này.
+- **Lệch có chủ ý so với kế hoạch:** `POST /api/aws/login` **không bị bỏ**. Nó là route `LOCAL`,
+  chỉ có nghĩa ở chế độ embedded, và là cách người dùng trên máy mình lấy phiên SSO. Runner farm thì
+  không bao giờ gọi nó — nó dùng credential của máy đang chạy, đúng như kế hoạch muốn. Bỏ route ấy
+  chỉ làm hỏng một thứ đang dùng được mà không đổi lại gì.
+- **Đo được:** 6 bài với AWS được tiêm — chạy được, test đỏ, job sai nền tảng bị từ chối TRƯỚC khi
+  tải gì lên, config thiếu ARN thì nói rõ, và job farm chạy qua worker mà **không giữ chỗ chiếc máy
+  nào**. Chạy thật: `TESTPILOT_RUNNER_MODE=farm npm run runner` nối được vào control plane và khai
+  đúng nền tảng `android` đọc từ device pool.
+- **Chưa làm:** một lượt `run_suite` THẬT đi qua Device Farm. Nó tốn tiền của người dùng và mất
+  khoảng mười phút, nên nó là quyết định của họ, không phải của tôi. Mọi thứ trước lúc bấm — đọc
+  credential, kiểm pool, đóng gói, khai nền tảng — đã chạy thật.
 
 ### P3.7 Điều khiển thiết bị từ web — ✅ xong cả ba bước 2026-09-22
 
