@@ -25,6 +25,8 @@ export class MemoryJobQueue implements JobQueue {
   /** Thứ tự tạo, để `claim` lấy job cũ nhất trước — không ai phải chờ vô hạn. */
   private readonly order: string[] = [];
   private readonly logs = new Map<string, string[]>();
+  /** Mốc sớm nhất job được đòi lại; xem `defer()`. */
+  private readonly notBefore = new Map<string, number>();
   private readonly logListeners = new Map<string, Set<(line: string) => void>>();
   private readonly stateListeners = new Map<string, Set<(record: JobRecord) => void>>();
 
@@ -63,6 +65,7 @@ export class MemoryJobQueue implements JobQueue {
     for (const id of this.order) {
       const record = this.jobs.get(id);
       if (!record || record.state !== 'queued') continue;
+      if ((this.notBefore.get(id) ?? 0) > Date.now()) continue;
       if (!this.suits(record, by)) continue;
 
       const claimed: JobRecord = {
@@ -105,6 +108,23 @@ export class MemoryJobQueue implements JobQueue {
     return { ...closed };
   }
 
+  async defer(id: string, reason: string, delayMs: number): Promise<JobRecord | undefined> {
+    const record = this.jobs.get(id);
+    if (!record || !OPEN.includes(record.state)) return undefined;
+    const waiting: JobRecord = {
+      ...record,
+      state: 'queued',
+      runnerId: undefined,
+      startedAt: undefined,
+      // `attempt` GIỮ NGUYÊN: máy bận không phải một lần thử hỏng.
+      error: reason,
+    };
+    this.jobs.set(id, waiting);
+    this.notBefore.set(id, Date.now() + delayMs);
+    this.announce(waiting);
+    return { ...waiting };
+  }
+
   async release(id: string, reason: string): Promise<JobRecord | undefined> {
     const record = this.jobs.get(id);
     if (!record || !OPEN.includes(record.state)) return undefined;
@@ -119,6 +139,10 @@ export class MemoryJobQueue implements JobQueue {
       error: reason,
     };
     this.jobs.set(id, back);
+    // Xoá mốc hoãn: đây là một lần thử MỚI, không phải phần còn lại của lần
+    // chờ máy trước đó. Bộ khẳng định dùng chung bắt được chỗ này — bản
+    // Postgres xoá `not_before` còn bản bộ nhớ thì quên.
+    this.notBefore.delete(id);
     this.announce(back);
     return { ...back };
   }

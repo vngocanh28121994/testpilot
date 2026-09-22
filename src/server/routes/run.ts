@@ -49,8 +49,17 @@ async function waitForClose(
       off();
       resolve(record);
     };
+    // Nói "đã nhận" MỘT LẦN cho mỗi runner, không phải mỗi lần job được đòi.
+    //
+    // Một job đang chờ máy bận sẽ đi qua `running → queued` sau mỗi nhịp hoãn,
+    // và in lại câu ấy mỗi năm giây nghĩa là sau năm phút có sáu mươi dòng
+    // giống hệt nhau — người đọc không học thêm gì sau dòng đầu.
+    let announced: string | undefined;
     void queue.onState(id, (record) => {
-      if (record.state === 'running') log(`[job] runner ${record.runnerId} đã nhận.`);
+      if (record.state === 'running' && record.runnerId !== announced) {
+        announced = record.runnerId;
+        log(`[job] runner ${record.runnerId} đã nhận.`);
+      }
       if (CLOSED.includes(record.state)) settle(record);
     }).then(async (unsubscribe) => {
       off = unsubscribe;

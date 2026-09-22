@@ -24,6 +24,7 @@ import { adoptStoredApiKeys } from '../core/secrets.js';
 import { stopAllScreenStreams } from '../runner/control.js';
 import { startWorker } from '../runner/worker.js';
 import { localQueue } from '../server/queue/memoryQueue.js';
+import { localLeases } from '../server/db/leaseRepo.js';
 import { orphans, runChildren } from '../runner/execute.js';
 import { listen, PORT, serverMode } from '../server/http.js';
 import { mayAdoptIntoEnv } from '../server/auth/secrets.js';
@@ -153,6 +154,9 @@ if (MODE === 'embedded') {
   void localQueue.interruptStale();
   startWorker({
     queue: localQueue,
+    // CÙNG kho lease mà màn Điều khiển dùng. Hai kho riêng nghĩa là job chạy
+    // đè lên tay người đang cầm máy — xem FARM-ARCHITECTURE mục 6b.
+    leases: localLeases,
     runnerId: 'local',
     configFile: CONFIG_FILE,
   });

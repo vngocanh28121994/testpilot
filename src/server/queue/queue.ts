@@ -81,6 +81,16 @@ export interface JobQueue {
   finish(id: string, result: JobResult): Promise<JobRecord | undefined>;
 
   /**
+   * Hoãn job lại một lúc, KHÔNG tính là một lần thử.
+   *
+   * Dùng khi việc chưa làm được là chuyện tạm thời và không phải lỗi của ai:
+   * chiếc máy job cần đang có người cầm. Job về `queued` nhưng không được đòi
+   * lại trước `delayMs`, nên worker không quay vòng bận rộn — đo được ở lần
+   * chạy thật đầu tiên: `attempt` lên 33 trong tám giây.
+   */
+  defer(id: string, reason: string, delayMs: number): Promise<JobRecord | undefined>;
+
+  /**
    * Trả job về hàng đợi để máy khác nhận.
    *
    * Dùng khi runner từ chối vì lý do CỦA RIÊNG NÓ — hết đĩa, mất mạng. Lý do

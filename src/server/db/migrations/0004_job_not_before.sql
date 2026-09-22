@@ -1,0 +1,12 @@
+-- Sớm nhất là lúc nào thì job này được đòi lại.
+--
+-- Không phải mọi lần "chưa chạy được" đều là một lần THỬ. Một chiếc máy đang
+-- có người cầm là chuyện tạm thời: job phải chờ, không phải thất bại. Bản đầu
+-- không phân biệt hai thứ ấy, và đo được ngay ở lần chạy thật đầu tiên:
+-- `attempt` lên 33 trong tám giây, log lặp lại cùng một câu mỗi phần tư giây,
+-- và một hạn mức thử lại — thứ P3.3 sắp thêm — sẽ cháy trong chớp mắt vì một
+-- lý do không liên quan gì tới chất lượng của job.
+--
+-- Nên hoãn và thất bại là hai lệnh khác nhau: `defer` đặt mốc này và GIỮ
+-- NGUYÊN `attempt`, còn `release` tăng `attempt` như cũ.
+ALTER TABLE job ADD COLUMN not_before TEXT;

@@ -16,6 +16,7 @@ import { Readable } from 'node:stream';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { runRoutes } from '../run.js';
 import { MemoryJobQueue } from '../../queue/memoryQueue.js';
+import { MemoryLeaseRepo } from '../../db/leaseRepo.js';
 import { startWorker } from '../../../runner/worker.js';
 import type { Repos } from '../../db/repo.js';
 import type { Runner } from '../../../runner/index.js';
@@ -107,7 +108,8 @@ describe('POST /api/run tạo job', () => {
   it('chạy xong thì log chảy qua SSE và kết thúc bằng done', async () => {
     const queue = new MemoryJobQueue();
     const worker = startWorker({
-      queue, runnerId: 'local', configFile: 'x.json', pollMs: 5, runner: runner({ code: 0 }),
+      queue, leases: new MemoryLeaseRepo(), runnerId: 'local', configFile: 'x.json',
+      pollMs: 5, runner: runner({ code: 0 }),
     });
     try {
       const events = await postRun(queue, { platform: 'android', tag: '@smoke' });
@@ -126,7 +128,8 @@ describe('POST /api/run tạo job', () => {
   it('test đỏ vẫn kết thúc bằng done ok, không phải error', async () => {
     const queue = new MemoryJobQueue();
     const worker = startWorker({
-      queue, runnerId: 'local', configFile: 'x.json', pollMs: 5, runner: runner({ code: 1 }),
+      queue, leases: new MemoryLeaseRepo(), runnerId: 'local', configFile: 'x.json',
+      pollMs: 5, runner: runner({ code: 1 }),
     });
     try {
       const events = await postRun(queue, { platform: 'android' });
@@ -144,7 +147,8 @@ describe('POST /api/run tạo job', () => {
   it('body của nút chạy đi trọn vẹn vào spec', async () => {
     const queue = new MemoryJobQueue();
     const worker = startWorker({
-      queue, runnerId: 'local', configFile: 'x.json', pollMs: 5, runner: runner({ code: 0 }),
+      queue, leases: new MemoryLeaseRepo(), runnerId: 'local', configFile: 'x.json',
+      pollMs: 5, runner: runner({ code: 0 }),
     });
     try {
       await postRun(queue, {

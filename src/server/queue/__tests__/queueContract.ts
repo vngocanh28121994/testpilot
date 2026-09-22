@@ -179,6 +179,48 @@ export function queueContract(
     assert.equal((await queue.claim({ runnerId: 'b' }))?.id, job.id);
   });
 
+  /**
+   * Hoãn khác trả-lại-hàng-đợi ở đúng một điểm, và điểm ấy quan trọng:
+   * `attempt` không tăng. Máy đang có người cầm là chuyện tạm thời, không phải
+   * một lần thử hỏng — đo được ở lần chạy thật đầu tiên của P3.2, khi
+   * `attempt` lên 33 trong tám giây và log lặp lại cùng một câu.
+   */
+  it('hoãn thì không tính là một lần thử, và không đòi lại được ngay', async () => {
+    const queue = await fresh();
+    const job = await queue.create(androidJob());
+    await queue.claim({ runnerId: 'a' });
+
+    const waiting = await queue.defer(job.id, 'Máy đang có người cầm.', 30_000);
+    assert.equal(waiting?.state, 'queued');
+    assert.equal(waiting?.attempt, 1, 'chờ máy không phải một lần thử');
+    assert.equal(waiting?.error, 'Máy đang có người cầm.');
+    assert.equal(waiting?.runnerId, undefined);
+
+    assert.equal(await queue.claim({ runnerId: 'b' }), undefined, 'chưa tới hạn thì chưa đòi được');
+  });
+
+  it('hết hạn hoãn thì đòi lại được', async () => {
+    const queue = await fresh();
+    const job = await queue.create(androidJob());
+    await queue.claim({ runnerId: 'a' });
+    await queue.defer(job.id, 'Máy đang bận.', 0);
+
+    assert.equal((await queue.claim({ runnerId: 'b' }))?.id, job.id);
+  });
+
+  /** Trả lại hàng đợi vì lỗi THẬT thì xoá mốc hoãn: nó là một lần thử mới. */
+  it('trả lại hàng đợi xoá mốc hoãn', async () => {
+    const queue = await fresh();
+    const job = await queue.create(androidJob());
+    await queue.claim({ runnerId: 'a' });
+    await queue.defer(job.id, 'Máy đang bận.', 30_000);
+    await queue.release(job.id, 'Hết đĩa.');
+
+    const back = await queue.claim({ runnerId: 'b' });
+    assert.equal(back?.id, job.id);
+    assert.equal(back?.attempt, 2);
+  });
+
   it('job đã đóng thì không trả lại hàng đợi được', async () => {
     const queue = await fresh();
     const job = await queue.create(androidJob());

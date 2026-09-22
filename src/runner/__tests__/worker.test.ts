@@ -9,6 +9,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { MemoryJobQueue } from '../../server/queue/memoryQueue.js';
+import { MemoryLeaseRepo } from '../../server/db/leaseRepo.js';
 import { startWorker } from '../worker.js';
 import type { Runner } from '../index.js';
 import type { JobState } from '../../protocol/messages.js';
@@ -88,7 +89,7 @@ describe('worker', () => {
     assert.equal((await queue.find(job.id))?.state, 'queued');
 
     const { runner, seen } = fakeRunner({ code: 0 });
-    const worker = startWorker({ queue, runnerId: 'local', configFile: 'x.json', pollMs: 5, runner });
+    const worker = startWorker({ queue, leases: new MemoryLeaseRepo(), runnerId: 'local', configFile: 'x.json', pollMs: 5, runner });
     try {
       assert.equal(await settled(queue, job.id), 'succeeded');
       assert.deepEqual(seen.calls, [{ platform: 'android', tag: '@smoke', device: undefined }]);
@@ -104,10 +105,13 @@ describe('worker', () => {
     await queue.onLog(job.id, (line) => lines.push(line));
 
     const { runner } = fakeRunner({ code: 0 });
-    const worker = startWorker({ queue, runnerId: 'local', configFile: 'x.json', pollMs: 5, runner });
+    const worker = startWorker({ queue, leases: new MemoryLeaseRepo(), runnerId: 'local', configFile: 'x.json', pollMs: 5, runner });
     try {
       await settled(queue, job.id);
-      assert.deepEqual(lines, ['dòng đầu', 'dòng cuối']);
+      // Dòng đầu là của worker nói về chỗ giữ máy; phần sau là log của chính
+      // lượt chạy, và nó phải tới nơi nguyên vẹn.
+      assert.match(lines[0]!, /không nêu máy cụ thể/);
+      assert.deepEqual(lines.slice(1), ['dòng đầu', 'dòng cuối']);
     } finally {
       worker.stop();
     }
@@ -117,7 +121,7 @@ describe('worker', () => {
     const queue = new MemoryJobQueue();
     const job = await queue.create(androidJob());
     const { runner } = fakeRunner({ code: 1 });
-    const worker = startWorker({ queue, runnerId: 'local', configFile: 'x.json', pollMs: 5, runner });
+    const worker = startWorker({ queue, leases: new MemoryLeaseRepo(), runnerId: 'local', configFile: 'x.json', pollMs: 5, runner });
     try {
       assert.equal(await settled(queue, job.id), 'failed');
       assert.match((await queue.find(job.id))?.error ?? '', /mã 1/);
@@ -134,7 +138,7 @@ describe('worker', () => {
     const queue = new MemoryJobQueue();
     const job = await queue.create(androidJob());
     const { runner } = fakeRunner({ code: 2 });
-    const worker = startWorker({ queue, runnerId: 'local', configFile: 'x.json', pollMs: 5, runner });
+    const worker = startWorker({ queue, leases: new MemoryLeaseRepo(), runnerId: 'local', configFile: 'x.json', pollMs: 5, runner });
     try {
       assert.equal(await settled(queue, job.id), 'succeeded');
     } finally {
@@ -146,7 +150,7 @@ describe('worker', () => {
     const queue = new MemoryJobQueue();
     const job = await queue.create(androidJob());
     const { runner } = fakeRunner({ code: null, stopped: true });
-    const worker = startWorker({ queue, runnerId: 'local', configFile: 'x.json', pollMs: 5, runner });
+    const worker = startWorker({ queue, leases: new MemoryLeaseRepo(), runnerId: 'local', configFile: 'x.json', pollMs: 5, runner });
     try {
       assert.equal(await settled(queue, job.id), 'cancelled');
     } finally {
@@ -159,7 +163,7 @@ describe('worker', () => {
     const queue = new MemoryJobQueue();
     const first = await queue.create(androidJob());
     const { runner } = fakeRunner(new Error('adb không thấy máy'));
-    const worker = startWorker({ queue, runnerId: 'local', configFile: 'x.json', pollMs: 5, runner });
+    const worker = startWorker({ queue, leases: new MemoryLeaseRepo(), runnerId: 'local', configFile: 'x.json', pollMs: 5, runner });
     try {
       assert.equal(await settled(queue, first.id), 'failed');
       assert.match((await queue.find(first.id))?.error ?? '', /adb không thấy máy/);
@@ -175,7 +179,7 @@ describe('worker', () => {
     const queue = new MemoryJobQueue();
     const job = await queue.create(androidJob(['android:emulator-5554', 'android:emulator-5556']));
     const { runner, seen } = fakeRunner({ code: 0 });
-    const worker = startWorker({ queue, runnerId: 'local', configFile: 'x.json', pollMs: 5, runner });
+    const worker = startWorker({ queue, leases: new MemoryLeaseRepo(), runnerId: 'local', configFile: 'x.json', pollMs: 5, runner });
     try {
       assert.equal(await settled(queue, job.id), 'succeeded');
       assert.deepEqual(seen.parallel, [{
@@ -196,7 +200,7 @@ describe('worker', () => {
       spec: { orgId: 'org-1', kind: 'crawl', createdBy: 'u1', timeoutMs: 1_000, deviceTokens: [] },
     });
     const { runner } = fakeRunner({ code: 0 });
-    const worker = startWorker({ queue, runnerId: 'local', configFile: 'x.json', pollMs: 5, runner });
+    const worker = startWorker({ queue, leases: new MemoryLeaseRepo(), runnerId: 'local', configFile: 'x.json', pollMs: 5, runner });
     try {
       assert.equal(await settled(queue, job.id), 'failed');
       assert.match((await queue.find(job.id))?.error ?? '', /crawl/);
@@ -208,11 +212,175 @@ describe('worker', () => {
   it('dừng worker thì job mới không bị nhận nữa', async () => {
     const queue = new MemoryJobQueue();
     const { runner } = fakeRunner({ code: 0 });
-    const worker = startWorker({ queue, runnerId: 'local', configFile: 'x.json', pollMs: 5, runner });
+    const worker = startWorker({ queue, leases: new MemoryLeaseRepo(), runnerId: 'local', configFile: 'x.json', pollMs: 5, runner });
     worker.stop();
 
     const job = await queue.create(androidJob());
     await new Promise((resolve) => setTimeout(resolve, 60));
     assert.equal((await queue.find(job.id))?.state, 'queued');
+  });
+});
+
+describe('worker và chỗ giữ thiết bị', () => {
+  const HUMAN = { kind: 'human' as const, userId: 'an' };
+
+  /**
+   * Lỗ hổng mà P3.2 bịt, viết thành một khẳng định.
+   *
+   * Trước bước này, worker chạy job mà không hề lấy lease: một người đang cầm
+   * chiếc điện thoại qua màn Điều khiển vẫn bị một job chạy đè lên. Job không
+   * đỏ — nó chỉ chạy sai, vì màn hình không ở nơi nó tưởng.
+   */
+  it('máy đang có người cầm thì job KHÔNG chạy, và quay lại hàng đợi', async () => {
+    const queue = new MemoryJobQueue();
+    const leases = new MemoryLeaseRepo();
+    await leases.acquire('emulator-5554', HUMAN);
+
+    const job = await queue.create(androidJob(['android:emulator-5554']));
+    const { runner, seen } = fakeRunner({ code: 0 });
+    const worker = startWorker({
+      queue, leases, runnerId: 'local', configFile: 'x.json', pollMs: 5, deferMs: 10, runner,
+    });
+    try {
+      // Đợi đủ lâu để worker thử vài lượt.
+      await new Promise((resolve) => setTimeout(resolve, 80));
+      assert.deepEqual(seen.calls, [], 'không một lượt chạy nào được bắt đầu');
+
+      const record = await queue.find(job.id);
+      assert.equal(record?.state, 'queued', 'job phải quay lại hàng đợi, không phải hỏng');
+      assert.match(record?.error ?? '', /an/, 'lý do phải nói ai đang giữ');
+      // `attempt` KHÔNG tăng: máy bận là chuyện tạm thời, không phải một lần
+      // thử hỏng. Bản đầu tăng nó mỗi 250ms và lần chạy thật cho ra attempt=33
+      // trong tám giây — một hạn mức thử lại sẽ cháy vì lý do không liên quan.
+      assert.equal(record?.attempt, 1, 'chờ máy không phải một lần thử');
+    } finally {
+      worker.stop();
+    }
+  });
+
+  it('máy rảnh thì job giữ chỗ trước khi chạy, và nhả sau khi xong', async () => {
+    const queue = new MemoryJobQueue();
+    const leases = new MemoryLeaseRepo();
+    const job = await queue.create(androidJob(['android:emulator-5554']));
+
+    let heldWhileRunning: string | undefined;
+    const { runner } = fakeRunner({ code: 0 });
+    // Chụp lại ai đang giữ máy ĐÚNG lúc lượt chạy đang chạy.
+    const wrapped = {
+      run: {
+        ...runner.run,
+        startSuite: async (...args: Parameters<typeof runner.run.startSuite>) => {
+          const lease = await leases.find('emulator-5554');
+          heldWhileRunning = lease?.holder.kind === 'job' ? lease.holder.jobId : undefined;
+          return runner.run.startSuite(...args);
+        },
+      },
+    } as typeof runner;
+
+    const worker = startWorker({
+      queue, leases, runnerId: 'local', configFile: 'x.json', pollMs: 5, runner: wrapped,
+    });
+    try {
+      assert.equal(await settled(queue, job.id), 'succeeded');
+      assert.equal(heldWhileRunning, job.id, 'job phải giữ máy trong lúc chạy');
+      assert.equal(await leases.find('emulator-5554'), undefined, 'xong thì phải nhả');
+    } finally {
+      worker.stop();
+    }
+  });
+
+  /** Một job ném mà không nhả máy là chiếc điện thoại bị khoá 60 giây mỗi lần hỏng. */
+  it('job ném thì vẫn nhả máy', async () => {
+    const queue = new MemoryJobQueue();
+    const leases = new MemoryLeaseRepo();
+    const job = await queue.create(androidJob(['android:emulator-5554']));
+    const { runner } = fakeRunner(new Error('adb chết'));
+    const worker = startWorker({
+      queue, leases, runnerId: 'local', configFile: 'x.json', pollMs: 5, runner,
+    });
+    try {
+      assert.equal(await settled(queue, job.id), 'failed');
+      assert.equal(await leases.find('emulator-5554'), undefined);
+    } finally {
+      worker.stop();
+    }
+  });
+
+  /**
+   * Giữ được một nửa rồi chờ nửa kia là cách hai job khoá chéo nhau: mỗi bên
+   * cầm một chiếc máy bên kia cần, và cả hai chờ mãi.
+   */
+  it('nhiều máy: giữ tất cả hoặc không giữ gì', async () => {
+    const queue = new MemoryJobQueue();
+    const leases = new MemoryLeaseRepo();
+    // Chiếc thứ hai đã có người cầm.
+    await leases.acquire('emulator-5556', HUMAN);
+
+    const job = await queue.create(androidJob(['android:emulator-5554', 'android:emulator-5556']));
+    const { runner, seen } = fakeRunner({ code: 0 });
+    const worker = startWorker({
+      queue, leases, runnerId: 'local', configFile: 'x.json', pollMs: 5, runner,
+    });
+    try {
+      await new Promise((resolve) => setTimeout(resolve, 80));
+      assert.deepEqual(seen.parallel, [], 'không được chạy khi thiếu một máy');
+      assert.equal((await queue.find(job.id))?.state, 'queued');
+      assert.equal(
+        await leases.find('emulator-5554'), undefined,
+        'chiếc đã giữ được phải nhả ra, nếu không nó khoá luôn máy khác',
+      );
+    } finally {
+      worker.stop();
+    }
+  });
+
+  /**
+   * Mất nhịp gia hạn là mất máy: một người khác có thể đã được cấp chiếc ấy.
+   * Chạy tiếp lúc đó là hai bên cùng bấm trên một màn hình.
+   */
+  it('bị cưỡng chế nhả giữa chừng thì dừng lượt chạy và job thành interrupted', async () => {
+    const queue = new MemoryJobQueue();
+    const leases = new MemoryLeaseRepo();
+    const job = await queue.create(androidJob(['android:emulator-5554']));
+
+    let stopped = 0;
+    let release: (() => void) | undefined;
+    const slow = new Promise<void>((resolve) => { release = resolve; });
+    const runner = {
+      run: {
+        parseDeviceToken: (token: string) => {
+          const [platform, ...rest] = token.split(':');
+          const id = rest.join(':');
+          if (!id || (platform !== 'android' && platform !== 'ios')) return null;
+          return { platform, id } as { platform: 'android' | 'ios'; id: string };
+        },
+        isNamedDevice: async () => true,
+        startSuite: async () => {
+          await slow;
+          return { code: 0, stopped: true, reportPaths: [], runDirs: [] };
+        },
+        startParallel: async () => undefined as never,
+        stop: async () => { stopped += 1; release?.(); return { stopped: 1 } as never; },
+      },
+    } as unknown as Parameters<typeof startWorker>[0]['runner'];
+
+    const worker = startWorker({
+      queue, leases, runnerId: 'local', configFile: 'x.json', pollMs: 5, renewMs: 10, runner,
+    });
+    try {
+      // Chờ job giữ được máy rồi mới cưỡng chế nhả — đúng cảnh admin bấm thu hồi.
+      for (let i = 0; i < 100 && !(await leases.find('emulator-5554')); i += 1) {
+        await new Promise((resolve) => setTimeout(resolve, 5));
+      }
+      const lease = await leases.find('emulator-5554');
+      assert.ok(lease, 'job phải giữ được máy trước đã');
+      await leases.release(lease.id);
+
+      assert.equal(await settled(queue, job.id), 'interrupted');
+      assert.ok(stopped > 0, 'phải DỪNG lượt chạy, không chỉ ghi nhận');
+      assert.match((await queue.find(job.id))?.error ?? '', /Mất chỗ giữ thiết bị/);
+    } finally {
+      worker.stop();
+    }
   });
 });

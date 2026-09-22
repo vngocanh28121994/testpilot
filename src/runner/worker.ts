@@ -12,11 +12,21 @@
  * sẽ tranh cùng một chiếc điện thoại, và không ai phân xử.
  */
 import type { JobRecord, JobQueue } from '../server/queue/queue.js';
+import { LeaseTakenError, type Lease, type LeaseHolder, type LeaseRepo } from '../server/db/repo.js';
 import type { JobResult } from '../protocol/messages.js';
 import { localRunner, type Runner } from './index.js';
 
 export interface WorkerDeps {
   queue: JobQueue;
+  /**
+   * Kho giữ chỗ thiết bị.
+   *
+   * Cùng kho mà màn Điều khiển dùng, và đó là toàn bộ điểm: một con người đang
+   * cầm chiếc điện thoại qua trình duyệt phải chặn được job, và ngược lại. Hai
+   * cơ chế giữ chỗ riêng nghĩa là hai câu trả lời cho "máy này có rảnh không",
+   * và job sẽ chạy đè lên tay người đang bấm — không đỏ, chỉ sai.
+   */
+  leases: LeaseRepo;
   /** Tên runner này trong sổ. Ở embedded là `local`. */
   runnerId: string;
   /** Nền tảng chạy được; `undefined` nghĩa là nhận tất. */
@@ -24,6 +34,10 @@ export interface WorkerDeps {
   configFile: string;
   /** Nhịp hỏi hàng đợi. Nhỏ thì job chạy nhanh hơn, to thì đỡ tốn CPU khi rỗi. */
   pollMs?: number;
+  /** Nhịp gia hạn lease. Phải nhỏ hơn TTL 60 giây, và có lề cho một nhịp lỡ. */
+  renewMs?: number;
+  /** Chờ bao lâu trước khi thử lại một job có máy đang bận. */
+  deferMs?: number;
   /** Tiêm bản giả trong test. Mặc định là runner thật của máy này. */
   runner?: Runner;
 }
@@ -73,7 +87,7 @@ export function startWorker(deps: WorkerDeps): WorkerHandle {
   };
 }
 
-/** Chạy một job và đóng nó lại. Mọi đường ra đều phải gọi `finish`. */
+/** Chạy một job và đóng nó lại. Mọi đường ra đều phải gọi `finish` hoặc `release`. */
 async function run(job: JobRecord, deps: WorkerDeps, runner: Runner): Promise<void> {
   const log = (line: string): void => { void deps.queue.appendLog(job.id, line); };
 
@@ -96,11 +110,44 @@ async function run(job: JobRecord, deps: WorkerDeps, runner: Runner): Promise<vo
     return;
   }
 
-  try {
-    const picked = job.spec.deviceTokens
-      .map((token) => runner.run.parseDeviceToken(token))
-      .filter((device): device is NonNullable<typeof device> => device !== null);
+  const picked = job.spec.deviceTokens
+    .map((token) => runner.run.parseDeviceToken(token))
+    .filter((device): device is NonNullable<typeof device> => device !== null);
 
+  const holder: LeaseHolder = { kind: 'job', jobId: job.id };
+  const held = await hold(picked.map((device) => device.id), deps, holder, log);
+  if (!held.ok) {
+    // HOÃN, không đánh hỏng và cũng không tính là một lần thử: máy đang bận là
+    // chuyện tạm thời, và đánh hỏng ở đây nghĩa là người dùng phải bấm lại —
+    // đúng thứ hàng đợi sinh ra để khỏi phải làm.
+    //
+    // Nói MỘT LẦN cho mỗi lý do. Bản đầu in lại câu ấy sau mỗi lần thử, và
+    // lần chạy thật đầu tiên cho ra ba mươi ba dòng giống hệt nhau trong tám
+    // giây — người đọc không học thêm được gì sau dòng thứ nhất.
+    if (job.error !== held.reason) log(`[job] ${held.reason} Job chờ tới lượt.`);
+    await deps.queue.defer(job.id, held.reason, deps.deferMs ?? 5_000);
+    return;
+  }
+
+  // Nhịp gia hạn. Lease sống 60 giây; ngừng nhịp là mất máy giữa chừng, nên
+  // mất nhịp phải DỪNG lượt chạy chứ không chạy tiếp trên một chiếc máy mà
+  // người khác đã được cấp.
+  let lost: string | undefined;
+  const renew = setInterval(() => {
+    void (async () => {
+      for (const lease of held.leases) {
+        const still = await deps.leases.renew(lease.id, holder).catch(() => undefined);
+        if (still) continue;
+        lost ??= `Mất chỗ giữ thiết bị ${lease.deviceId}.`;
+        log(`[job] ${lost} Đang dừng lượt chạy.`);
+        await runner.run.stop().catch(() => undefined);
+        return;
+      }
+    })();
+  }, deps.renewMs ?? 30_000);
+  renew.unref?.();
+
+  try {
     if (picked.length > 1) {
       // Nhiều máy: cùng đường mà nút "chạy" vẫn đi, không phải một đường thứ hai.
       const platforms = [...new Set(picked.map((device) => device.platform))].join(',');
@@ -109,7 +156,9 @@ async function run(job: JobRecord, deps: WorkerDeps, runner: Runner): Promise<vo
         platforms, tokens, params.tag, Boolean(params.includeQuarantined), log,
         params.env, params.appSource,
       );
-      await close(deps, job, { type: 'job.result', jobId: job.id, state: 'succeeded' });
+      await close(deps, job, lost
+        ? { type: 'job.result', jobId: job.id, state: 'interrupted', error: lost }
+        : { type: 'job.result', jobId: job.id, state: 'succeeded' });
       return;
     }
 
@@ -128,12 +177,65 @@ async function run(job: JobRecord, deps: WorkerDeps, runner: Runner): Promise<vo
       params.appSource,
     );
 
-    await close(deps, job, outcomeToResult(job.id, outcome));
+    await close(deps, job, lost
+      // Mất lease rồi mới kết thúc: lượt chạy ấy đã bị dừng giữa chừng, nên
+      // kết quả của nó không nói được gì. `interrupted` là câu đúng, không
+      // phải `cancelled` — không ai bấm dừng cả.
+      ? { type: 'job.result', jobId: job.id, state: 'interrupted', error: lost }
+      : outcomeToResult(job.id, outcome));
   } catch (err) {
     await close(deps, job, {
       type: 'job.result', jobId: job.id, state: 'failed', error: (err as Error).message,
     });
+  } finally {
+    clearInterval(renew);
+    // Nhả trong `finally`: một job ném mà không nhả máy là một chiếc điện thoại
+    // bị khoá 60 giây cho mỗi lần hỏng, và người tiếp theo không biết vì sao.
+    for (const lease of held.leases) {
+      await deps.leases.release(lease.id, holder).catch(() => undefined);
+    }
   }
+}
+
+/**
+ * Giữ TẤT CẢ máy job cần, hoặc không giữ gì cả.
+ *
+ * Giữ được một nửa rồi chờ nửa còn lại là cách hai job khoá chéo nhau: mỗi bên
+ * cầm một chiếc máy bên kia cần, và cả hai chờ mãi. Nên hỏng ở chiếc thứ hai
+ * thì nhả luôn chiếc thứ nhất.
+ *
+ * Job không nêu máy nào thì KHÔNG giữ gì, và nói ra. Biết chiếc máy thật mà
+ * một lượt chạy sẽ dùng khi người dùng không chọn là việc của P3.3 — ở đó danh
+ * tính thiết bị được phân giải đàng hoàng. Khoá một cái tên đoán được ở đây sẽ
+ * TRÔNG như bảo vệ mà không bảo vệ gì, và đó tệ hơn là không khoá.
+ */
+async function hold(
+  deviceIds: string[],
+  deps: WorkerDeps,
+  holder: LeaseHolder,
+  log: (line: string) => void,
+): Promise<{ ok: true; leases: Lease[] } | { ok: false; reason: string }> {
+  if (deviceIds.length === 0) {
+    log('[job] Job không nêu máy cụ thể, nên không giữ chỗ thiết bị (xem P3.3).');
+    return { ok: true, leases: [] };
+  }
+
+  const leases: Lease[] = [];
+  for (const deviceId of deviceIds) {
+    try {
+      leases.push(await deps.leases.acquire(deviceId, holder));
+    } catch (err) {
+      for (const lease of leases) {
+        await deps.leases.release(lease.id, holder).catch(() => undefined);
+      }
+      const reason = err instanceof LeaseTakenError
+        ? err.message
+        : `Không giữ được thiết bị ${deviceId}: ${(err as Error).message}`;
+      return { ok: false, reason };
+    }
+  }
+  log(`[job] Đã giữ chỗ: ${deviceIds.join(', ')}.`);
+  return { ok: true, leases };
 }
 
 /**

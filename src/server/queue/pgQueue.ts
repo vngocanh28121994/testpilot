@@ -30,6 +30,7 @@ interface JobRow {
   result: JobResult | null;
   attempt: number;
   error: string | null;
+  not_before: string | null;
 }
 
 function toRecord(row: JobRow): JobRecord {
@@ -101,6 +102,7 @@ export class PgJobQueue implements JobQueue {
        WHERE id = (
          SELECT id FROM job
          WHERE org_id = $1 AND state = 'queued' AND payload ? 'spec'
+           AND (not_before IS NULL OR not_before <= $5)
            AND (
              $4::text[] IS NULL
              OR payload -> 'spec' -> 'run' ->> 'platform' IS NULL
@@ -113,7 +115,21 @@ export class PgJobQueue implements JobQueue {
          LIMIT 1
        )
        RETURNING *`,
-      [this.orgId, by.runnerId, new Date().toISOString(), platforms],
+      [this.orgId, by.runnerId, new Date().toISOString(), platforms, new Date().toISOString()],
+    );
+    return rows[0] ? toRecord(rows[0]) : undefined;
+  }
+
+  async defer(id: string, reason: string, delayMs: number): Promise<JobRecord | undefined> {
+    const { rows } = await this.pool.query<JobRow>(
+      `UPDATE job
+       SET state = 'queued', runner_id = NULL, started_at = NULL,
+           error = $3, not_before = $4
+       WHERE org_id = $1 AND id = $2
+         AND state IN ('queued', 'assigned', 'running')
+       RETURNING *`,
+      // `attempt` không đụng tới: máy bận không phải một lần thử hỏng.
+      [this.orgId, id, reason, new Date(Date.now() + delayMs).toISOString()],
     );
     return rows[0] ? toRecord(rows[0]) : undefined;
   }
@@ -132,7 +148,7 @@ export class PgJobQueue implements JobQueue {
     const { rows } = await this.pool.query<JobRow>(
       `UPDATE job
        SET state = 'queued', runner_id = NULL, started_at = NULL,
-           attempt = attempt + 1, error = $3
+           attempt = attempt + 1, error = $3, not_before = NULL
        WHERE org_id = $1 AND id = $2
          AND state IN ('queued', 'assigned', 'running')
        RETURNING *`,

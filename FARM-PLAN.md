@@ -292,20 +292,32 @@ WDA. Đầu vào thì không cần ai cho: Appium/WDA theo W3C, mà webdriverio 
   "duplicate key" — một câu không nói gì về nguyên nhân thật. Giàn test giờ tự dọn dấu vết lần
   trước.
 
-### P3.2 Lease manager
-- **Đã có sẵn từ P3.1:** hàng đợi, worker, và vòng đời job. Phần còn lại là buộc lease vào job —
-  worker lấy lease trước khi chạy, nhả sau khi xong — và vòng thu hồi job quá hạn.
-- **Đã có sẵn từ P3.7 bước 1:** `LeaseRepo` (hợp đồng), `MemoryLeaseRepo` (embedded) và
-  `PgLeaseRepo` (server) — giữ, gia hạn, nhả, cưỡng chế nhả, thu hồi hạn. Phần còn lại của P3.2 là
-  *người gọi*: scheduler lấy lease `holder_kind='job'` thay vì người, và vòng lặp chuyển job quá
-  hạn sang `interrupted`.
-- `src/server/scheduler/lease.ts`: lấy lease trong một transaction (`SELECT … FOR UPDATE`), TTL 60s,
-  runner gia hạn mỗi 30s.
-- Job nhiều thiết bị: lấy tất cả lease cùng lúc hoặc không lấy gì, để tránh chờ chéo.
-- Vòng lặp thu hồi lease hết hạn → job `interrupted`, thiết bị `idle`. Tái dùng
-  `closeInterruptedRuns` và `OrphanTracker`.
-- **Xong khi:** `src/server/scheduler/__tests__/leaseExclusive.test.ts` — 20 job tranh 1 thiết bị,
-  không bao giờ có 2 job cùng nắm; `leaseExpiry.test.ts` — runner chết, thiết bị được nhả trong 90s.
+### P3.2 Lease manager — ✅ xong 2026-09-22
+- **Lỗ hổng đã bịt:** trước bước này worker chạy job mà KHÔNG lấy lease, nên một người đang cầm
+  chiếc điện thoại qua màn Điều khiển vẫn bị job chạy đè lên — job không đỏ, nó chỉ chạy sai vì màn
+  hình không ở nơi nó tưởng. Giờ worker dùng CHÍNH kho lease mà màn Điều khiển dùng.
+- Giữ **tất cả hoặc không gì**: hỏng ở chiếc thứ hai thì nhả luôn chiếc thứ nhất, nếu không hai job
+  khoá chéo nhau — mỗi bên cầm một chiếc máy bên kia cần.
+- Gia hạn mỗi 30 giây trong lúc chạy (TTL 60). **Mất nhịp thì DỪNG lượt chạy** và job thành
+  `interrupted`: chiếc máy ấy có thể đã được cấp cho người khác, và chạy tiếp là hai bên cùng bấm
+  trên một màn hình. Nhả lease nằm trong `finally` — một job ném mà không nhả là chiếc điện thoại bị
+  khoá 60 giây cho mỗi lần hỏng.
+- **`defer` tách khỏi `release`, và đó là thứ lần chạy thật dạy ra.** Bản đầu trả job về hàng đợi
+  bằng `release` mỗi khi máy bận, và kết quả đo được là `attempt = 33` trong tám giây cùng ba mươi
+  ba dòng log giống hệt nhau. Máy đang có người cầm là chuyện TẠM THỜI, không phải một lần thử
+  hỏng: `defer` giữ nguyên `attempt`, đặt mốc `not_before` (migration 0004) và chờ 5 giây, còn
+  câu giải thích chỉ in một lần cho mỗi lý do.
+- Bộ khẳng định dùng chung bắt được một chỗ hai hiện thực lệch nhau: `release` của bản Postgres xoá
+  `not_before` còn bản bộ nhớ thì quên — một job bị hoãn rồi hỏng thật sẽ nằm chờ thêm vô cớ.
+- **Xong khi** (đo thật trên server, không phải suy luận): giữ `sm-s918b` qua màn Điều khiển rồi bắn
+  job vào đúng chiếc ấy → `[job] Thiết bị "sm-s918b" đang được local giữ tới … Job chờ tới lượt.`,
+  `state=queued attempt=1`, và **không một lượt chạy nào được bắt đầu**. Nhả máy → trong một nhịp
+  job lấy được lease (`[job] Đã giữ chỗ: sm-s918b.`) và chạy thật. Xong thì lease rỗng trở lại.
+  5 bài trong [worker.test.ts](src/runner/__tests__/worker.test.ts) canh cả năm đường: máy bận, giữ
+  rồi nhả, job ném vẫn nhả, tất-cả-hoặc-không-gì, và cưỡng chế nhả giữa chừng.
+- **Chưa làm, và nói ra:** job KHÔNG nêu máy cụ thể thì không giữ chỗ được — biết chiếc máy thật mà
+  một lượt chạy sẽ dùng khi người dùng không chọn là việc của P3.3, nơi danh tính thiết bị được
+  phân giải đàng hoàng. Khoá một cái tên đoán được ở đây sẽ TRÔNG như bảo vệ mà không bảo vệ gì.
 
 ### P3.3 Ghép job với thiết bị
 - `src/server/scheduler/match.ts`: lọc theo tổ chức, quyền nhìn thấy, platform, năng lực runner,
