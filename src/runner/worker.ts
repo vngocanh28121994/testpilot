@@ -13,6 +13,7 @@
  */
 import { loadConfig, type TestPilotConfig } from '../config.js';
 import { resolveDevices, runnerPlatforms, type AttachedDevice } from '../server/scheduler/match.js';
+import { measurePrereq, refuseReason, type PrereqByPlatform } from './prereqReport.js';
 import type { JobRecord, JobQueue } from '../server/queue/queue.js';
 import { LeaseTakenError, type Lease, type LeaseHolder, type LeaseRepo } from '../server/db/repo.js';
 import type { JobResult } from '../protocol/messages.js';
@@ -62,6 +63,13 @@ export interface WorkerDeps {
   renewMs?: number;
   /** Chờ bao lâu trước khi thử lại một job có máy đang bận. */
   deferMs?: number;
+  /**
+   * Bỏ qua phép đo môi trường.
+   *
+   * Runner farm không có Appium tại chỗ và không cần: máy nằm ở AWS. Đo ở đây
+   * sẽ từ chối mọi job vì một lý do không đúng với nó.
+   */
+  skipPrereq?: boolean;
   /** Tiêm bản giả trong test. Mặc định là runner thật của máy này. */
   runner?: Runner;
 }
@@ -87,6 +95,20 @@ export function startWorker(deps: WorkerDeps): WorkerHandle {
    * thật mới là chỗ sai được bắt chắc chắn.
    */
   let snapshot: { at: number; devices: AttachedDevice[] } = { at: 0, devices: [] };
+  /**
+   * Môi trường đo lại mỗi ba mươi giây.
+   *
+   * Không đo mỗi lần đòi job: `xcode-select` và lời gọi Appium mất vài trăm
+   * mili giây, mà nhịp đòi job là một phần tư giây. Ba mươi giây đủ nhanh để
+   * bắt được lúc ai đó vừa bật Appium lên.
+   */
+  let prereq: { at: number; report: PrereqByPlatform } = { at: 0, report: {} };
+  const environment = async (): Promise<PrereqByPlatform> => {
+    if (deps.skipPrereq) return {};
+    if (Date.now() - prereq.at < 30_000) return prereq.report;
+    prereq = { at: Date.now(), report: await measurePrereq(runner).catch(() => ({})) };
+    return prereq.report;
+  };
   const attached = async (): Promise<AttachedDevice[]> => {
     if (Date.now() - snapshot.at < 10_000) return snapshot.devices;
     let devices: Array<{ platform: string; udid: string }> = [];
@@ -116,6 +138,7 @@ export function startWorker(deps: WorkerDeps): WorkerHandle {
     busy = true;
     try {
       const devices = await attached();
+      await environment();
       const job = await deps.queue.claim({
         runnerId: deps.runnerId,
         platforms: deps.platforms ?? runnerPlatforms(devices),
@@ -123,7 +146,7 @@ export function startWorker(deps: WorkerDeps): WorkerHandle {
       });
       if (!job) return;
       current = job.id;
-      await run(job, deps, runner, devices);
+      await run(job, deps, runner, devices, prereq.report);
     } catch (err) {
       // Vòng lặp KHÔNG được chết vì một job hỏng: nó còn phải phục vụ job sau.
       // Nhưng im lặng thì cũng không được — một worker đã chết và một worker
@@ -152,6 +175,7 @@ async function run(
   deps: WorkerDeps,
   runner: Runner,
   attached: AttachedDevice[],
+  prereq: PrereqByPlatform,
 ): Promise<void> {
   const log = (line: string): void => { void deps.queue.appendLog(job.id, line); };
 
@@ -170,6 +194,23 @@ async function run(
     await close(deps, job, {
       type: 'job.result', jobId: job.id, state: 'failed',
       error: 'Job run_suite thiếu phần `run` trong spec.',
+    });
+    return;
+  }
+
+  /**
+   * Môi trường thiếu thì TỪ CHỐI NGAY, không nhận rồi hỏng ở phút thứ ba.
+   *
+   * `failed` chứ không `defer`: thiếu driver hay thiếu Xcode không tự khỏi,
+   * nên trả job về hàng đợi chỉ tạo một vòng lặp bận rộn — và ở một phòng máy
+   * một runner thì nó là vòng lặp vô tận. Câu lỗi nói VIỆC CẦN LÀM, vì người
+   * đọc nó là người sẽ đi sửa chiếc máy ấy.
+   */
+  const refused = refuseReason(prereq, params.platform);
+  if (refused) {
+    log(`[job] ${refused}`);
+    await close(deps, job, {
+      type: 'job.result', jobId: job.id, state: 'failed', error: refused,
     });
     return;
   }

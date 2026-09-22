@@ -71,6 +71,12 @@ function fakeRunner(
         platform: 'android' as const, udid, label: udid,
       })),
     },
+    // Môi trường mặc định là ĐỦ, để những bài không nói gì về nó vẫn đi đường
+    // thường. Bài về môi trường thiếu thì tự dựng runner riêng.
+    prereq: {
+      appiumStatus: async () => ({ running: true, managed: true }),
+      xcode: async () => ({ ok: true }),
+    },
   } as unknown as Runner;
   return { runner, seen };
 }
@@ -523,6 +529,71 @@ describe('worker ghép job với thiết bị (P3.3)', () => {
       await new Promise((resolve) => setTimeout(resolve, 60));
       assert.equal((await queue.find(job.id))?.state, 'queued', 'job iOS phải nằm chờ máy khác');
       assert.deepEqual(seen.calls, []);
+    } finally {
+      worker.stop();
+    }
+  });
+});
+
+describe('worker và môi trường của máy (P4.5)', () => {
+  /**
+   * Điều kiện hoàn thành của P4.5: máy thiếu driver thì job bị từ chối NGAY,
+   * kèm câu nói việc cần làm — không phải một lỗi Appium ở phút thứ ba, thứ
+   * không nói được rằng chiếc máy ở đầu kia thiếu gì.
+   */
+  it('Appium chưa chạy thì job android hỏng ngay, kèm cách sửa', async () => {
+    const queue = new MemoryJobQueue();
+    const { runner, seen } = fakeRunner({ code: 0 });
+    const broken = {
+      ...runner,
+      prereq: {
+        appiumStatus: async () => ({ running: false, managed: false }),
+        xcode: async () => ({ ok: true }),
+      },
+    } as typeof runner;
+
+    const job = await queue.create(androidJob(['android:emulator-5554']));
+    const worker = startWorker({
+      queue, leases: new MemoryLeaseRepo(), runnerId: 'local', configFile: 'x.json', config,
+      pollMs: 5, runner: broken,
+    });
+    try {
+      assert.equal(await settled(queue, job.id), 'failed');
+      assert.deepEqual(seen.calls, [], 'không được bắt đầu lượt chạy nào');
+      assert.match((await queue.find(job.id))?.error ?? '', /Appium chưa chạy/);
+      // `failed` chứ không `queued`: thiếu Appium không tự khỏi, nên trả job
+      // về hàng đợi chỉ tạo một vòng lặp bận rộn.
+      assert.equal((await queue.find(job.id))?.attempt, 1);
+    } finally {
+      worker.stop();
+    }
+  });
+
+  /** Web không cần Appium, nên nó vẫn chạy trên đúng chiếc máy ấy. */
+  it('job web vẫn chạy khi Appium chưa bật', async () => {
+    const queue = new MemoryJobQueue();
+    const { runner } = fakeRunner({ code: 0 });
+    const broken = {
+      ...runner,
+      prereq: {
+        appiumStatus: async () => ({ running: false, managed: false }),
+        xcode: async () => ({ ok: true }),
+      },
+    } as typeof runner;
+
+    const job = await queue.create({
+      orgId: 'org-1', kind: 'run_suite', createdBy: 'u1',
+      spec: {
+        orgId: 'org-1', kind: 'run_suite', createdBy: 'u1', timeoutMs: 60_000,
+        deviceTokens: [], run: { platform: 'web' },
+      },
+    });
+    const worker = startWorker({
+      queue, leases: new MemoryLeaseRepo(), runnerId: 'local', configFile: 'x.json', config,
+      pollMs: 5, runner: broken,
+    });
+    try {
+      assert.equal(await settled(queue, job.id), 'succeeded');
     } finally {
       worker.stop();
     }

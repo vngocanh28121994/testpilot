@@ -643,10 +643,25 @@ server chung.
 - **Xong khi:** `registryRoundtrip.test.ts` — pull, sửa offline, push, và thay đổi hiện ra thành đề
   xuất đúng nội dung; push lần hai trên bản cũ thì bị từ chối kèm diff.
 
-### P4.5 Preflight của máy cá nhân
-- Runner tự kiểm tra Xcode, Appium, adb, driver và **hiện lên web** kèm hướng dẫn sửa.
-- Từ chối job kèm lý do thay vì fail giữa lượt chạy.
-- **Xong khi:** máy thiếu driver `xcuitest` thì job bị từ chối ngay với thông báo nói rõ việc cần làm.
+### P4.5 Preflight của máy cá nhân — ✅ phần từ chối xong 2026-09-23
+- **Vì sao máy cá nhân cần cái này mà máy lab thì không:** máy lab do người quản trị dựng một lần
+  rồi để yên; laptop của một người thì hôm nay có Xcode, tuần sau nâng cấp macOS và Appium mất
+  driver, tháng sau cài lại máy. Runner cứ nhận job rồi hỏng ở phút thứ ba thì người đặt job nhận
+  một câu lỗi của Appium — thứ không nói được rằng chiếc máy ở đầu kia thiếu gì.
+- `measurePrereq()` đo theo nhịp 30 giây (không đo mỗi lần đòi job: `xcode-select` và lời gọi Appium
+  mất vài trăm mili giây, mà nhịp đòi job là một phần tư giây). `web` luôn sẵn sàng; `android` cần
+  Appium; `ios` cần cả Appium lẫn Xcode — và Xcode chỉ được hỏi khi Appium đã chạy, vì nó là lời
+  gọi đắt nhất và không có Appium thì câu trả lời của nó không đổi được kết luận.
+- Job bị từ chối là **`failed`, không phải `defer`**: thiếu driver không tự khỏi, nên trả job về
+  hàng đợi chỉ tạo một vòng lặp bận rộn — ở một phòng máy một runner thì nó là vòng lặp vô tận.
+- Chưa đo bao giờ thì KHÔNG từ chối: thà chạy rồi hỏng còn hơn từ chối một máy hoàn toàn tốt vì
+  phép đo chưa kịp chạy lần đầu.
+- **Xong khi:** 8 bài cho phép đo và 2 bài ở worker — Appium tắt thì job Android hỏng ngay kèm câu
+  "mở màn Local Runner rồi bấm khởi động Appium", và không một lượt chạy nào được bắt đầu; job web
+  trên chính máy ấy vẫn chạy.
+- **Chưa làm:** hiện trạng thái môi trường của từng máy LÊN WEB. Phép đo và đường báo cáo đã có
+  (`POST /api/runner/devices` gửi kèm được), còn màn hiển thị thì đi cùng P4.4 để không phải sửa
+  cùng một màn hai lần.
 
 ### P4.6 Nói thật về máy có thể tắt — ✅ xong 2026-09-23
 - **Máy cá nhân tắt lúc nào cũng được — đó là sự thật của P4, không phải lỗi.** Laptop đóng nắp lúc

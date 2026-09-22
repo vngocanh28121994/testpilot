@@ -98,6 +98,8 @@ async function main(): Promise<void> {
     // Device Farm tự quản thiết bị của nó: không udid để giữ chỗ, và việc xếp
     // hàng đợi máy xảy ra bên trong AWS.
     managesOwnDevices: mode === 'farm',
+    // Runner farm không có Appium tại chỗ và không cần: máy nằm ở AWS.
+    skipPrereq: mode === 'farm',
     // Nền tảng KHAI TAY cho farm, vì `control.devices()` của nó rỗng theo đúng
     // nghĩa đen — máy nằm ở AWS. Không truyền thì worker tự đo và ra `['web']`,
     // rồi không bao giờ nhận job Android: nó nằm chờ mãi mà không ai hiểu vì
