@@ -1,0 +1,69 @@
+/**
+ * Token của runner — cửa cho MÁY, không phải cho người.
+ *
+ * Mọi route khác của server hỏi "ai đang đăng nhập". Runner thì không đăng
+ * nhập: nó là một tiến trình trên một máy khác, chạy suốt ngày, không có
+ * trình duyệt và không có ai ngồi trước nó. Nên nó mang một bí mật dùng chung,
+ * gửi trong `Authorization: Bearer`.
+ *
+ * Kiểm tra nằm trong `authorize()` chứ không rải vào từng handler, vì file ấy
+ * có một lời hứa: **mọi request đi qua đúng một cửa**. Thêm một chỗ kiểm quyền
+ * thứ hai là thêm một chỗ có thể quên kiểm, và cái quên ấy không tự lộ ra.
+ *
+ * Bản này dùng MỘT token cho cả tổ chức. Token riêng cho từng runner — cột
+ * `runner.token_hash` đã có sẵn trong lược đồ — thuộc về P4, nơi người dùng tự
+ * đăng ký máy cá nhân của họ; lúc ấy mỗi máy phải thu hồi được riêng.
+ */
+import { createHash, timingSafeEqual } from 'node:crypto';
+import type { IncomingMessage } from 'node:http';
+import type { Identity } from './roles.js';
+
+/** Bí mật dùng chung. Không đặt thì đường runner ĐÓNG hoàn toàn. */
+export function runnerToken(env = process.env): string | undefined {
+  const token = env.TESTPILOT_RUNNER_TOKEN?.trim();
+  return token ? token : undefined;
+}
+
+/** Tổ chức mà runner nối vào thuộc về. `local` là chế độ embedded. */
+export function runnerOrg(env = process.env): string {
+  return env.TESTPILOT_RUNNER_ORG?.trim() || 'local';
+}
+
+export function bearer(req: IncomingMessage): string | undefined {
+  const header = req.headers.authorization;
+  if (!header?.startsWith('Bearer ')) return undefined;
+  const value = header.slice('Bearer '.length).trim();
+  return value ? value : undefined;
+}
+
+/**
+ * So sánh trong thời gian KHÔNG phụ thuộc nội dung.
+ *
+ * `a === b` thoát ngay ở ký tự đầu khác nhau, nên thời gian trả lời rò rỉ số
+ * ký tự đúng ở đầu chuỗi. Với một endpoint mà máy khác gọi được hàng nghìn lần
+ * một giây, đó là đủ để dò ra token.
+ *
+ * Hash trước rồi mới so: `timingSafeEqual` đòi hai buffer DÀI BẰNG NHAU và ném
+ * khi không — mà chính cú ném ấy lại rò rỉ độ dài token.
+ */
+export function tokenMatches(given: string, expected: string): boolean {
+  const a = createHash('sha256').update(given).digest();
+  const b = createHash('sha256').update(expected).digest();
+  return timingSafeEqual(a, b);
+}
+
+/**
+ * Danh tính của một runner đã trình đúng token.
+ *
+ * `role` là `runner_user`: nó chạy test và báo kết quả, nhưng KHÔNG sửa được
+ * dữ liệu dùng chung. Một runner bị chiếm không được phép duyệt healing hay
+ * đổi config — nó chỉ được làm đúng việc của một runner.
+ */
+export function runnerIdentity(name: string, env = process.env): Identity {
+  return {
+    userId: `runner:${name}`,
+    orgId: runnerOrg(env),
+    email: '',
+    role: 'runner_user',
+  };
+}

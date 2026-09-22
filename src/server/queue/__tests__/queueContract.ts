@@ -302,9 +302,19 @@ export function queueContract(
 }
 
 /**
- * Phần log sống, tách riêng: bản Postgres sẽ hiện thực nó bằng `job_event` ở
- * P3.4 cùng với transport của runner, nên hôm nay chỉ bản bộ nhớ có.
+ * Phần log sống. Từ P3.4 cả hai kho đều có: bản bộ nhớ giữ trong RAM, bản
+ * Postgres ghi vào `job_event` và hỏi lại mỗi nửa giây.
+ *
+ * Vì bản Postgres hỏi theo nhịp, những khẳng định ở đây phải CHỜ chứ không
+ * đọc ngay — nên chúng dùng `until()`.
  */
+async function until(check: () => boolean, within = 4_000): Promise<void> {
+  const deadline = Date.now() + within;
+  while (!check() && Date.now() < deadline) {
+    await new Promise((resolve) => setTimeout(resolve, 25));
+  }
+}
+
 export function logContract(
   it: (name: string, fn: () => Promise<void>) => void,
   fresh: () => Promise<JobQueue>,
@@ -318,11 +328,36 @@ export function logContract(
     const seen: string[] = [];
     const off = await queue.onLog(job.id, (line) => seen.push(line));
     await queue.appendLog(job.id, 'dòng ba');
+    await until(() => seen.length >= 3);
 
     assert.deepEqual(seen, ['dòng một', 'dòng hai', 'dòng ba']);
     off();
     await queue.appendLog(job.id, 'dòng bốn');
+    await new Promise((resolve) => setTimeout(resolve, 700));
     assert.equal(seen.length, 3, 'thôi nghe thì không nhận nữa');
+  });
+
+  /**
+   * Gửi lại một lô đã tới nơi là chuyện BÌNH THƯỜNG của một runner mất mạng.
+   * Cùng một `seq` chỉ được ghi một lần, nếu không log nhân đôi sau mỗi lần
+   * mạng chập — và người đọc không có cách nào biết dòng nào là thật.
+   */
+  it('cùng seq gửi hai lần chỉ ghi một lần', async () => {
+    const queue = await fresh();
+    const job = await queue.create(androidJob());
+
+    const seen: string[] = [];
+    const off = await queue.onLog(job.id, (line) => seen.push(line));
+    await queue.appendLog(job.id, 'một', 1);
+    await queue.appendLog(job.id, 'hai', 2);
+    // Runner không nhận được xác nhận nên gửi lại cả lô.
+    await queue.appendLog(job.id, 'một', 1);
+    await queue.appendLog(job.id, 'hai', 2);
+    await queue.appendLog(job.id, 'ba', 3);
+    await until(() => seen.length >= 3);
+
+    assert.deepEqual(seen, ['một', 'hai', 'ba']);
+    off();
   });
 
   it('báo mỗi lần job đổi trạng thái', async () => {
@@ -330,10 +365,13 @@ export function logContract(
     const job = await queue.create(androidJob());
 
     const states: string[] = [];
-    await queue.onState(job.id, (record) => states.push(record.state));
+    const off = await queue.onState(job.id, (record) => states.push(record.state));
     await queue.claim({ runnerId: 'a' });
+    await until(() => states.includes('running'));
     await queue.finish(job.id, { type: 'job.result', jobId: job.id, state: 'succeeded' });
+    await until(() => states.includes('succeeded'));
 
     assert.deepEqual(states, ['running', 'succeeded']);
+    off();
   });
 }

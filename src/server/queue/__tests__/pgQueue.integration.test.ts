@@ -12,7 +12,7 @@ import assert from 'node:assert/strict';
 import { Pool } from 'pg';
 import { connect } from '../../db/connect.js';
 import { PgJobQueue } from '../pgQueue.js';
-import { queueContract } from './queueContract.js';
+import { logContract, queueContract } from './queueContract.js';
 
 const URL_ = process.env.TESTPILOT_DATABASE_URL
   ?? 'postgres://testpilot:testpilot-dev@localhost:5432/testpilot';
@@ -88,6 +88,16 @@ describe('PgJobQueue', () => {
     const org = `${ORG}-${n}`;
     await pool.query('INSERT INTO org (id, name, created_at) VALUES ($1, $2, $3)',
       [org, 'Queue', new Date().toISOString()]);
+    return new PgJobQueue(pool, org);
+  });
+
+  // Phần log sống, CÙNG bộ khẳng định với bản bộ nhớ — từ P3.4 bản Postgres
+  // ghi vào `job_event` nên nó chạy được.
+  logContract(it, async () => {
+    n += 1;
+    const org = `${ORG}-${n}`;
+    await pool.query('INSERT INTO org (id, name, created_at) VALUES ($1, $2, $3)',
+      [org, 'Queue log', new Date().toISOString()]);
     return new PgJobQueue(pool, org);
   });
 

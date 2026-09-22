@@ -36,6 +36,21 @@ export const PUBLIC_ROUTES: ReadonlySet<string> = new Set([
   'GET /api/auth/me',
 ]);
 
+/**
+ * Route mà RUNNER gọi, không phải người.
+ *
+ * Chúng không đi qua phiên đăng nhập — runner là một tiến trình trên máy khác,
+ * không có trình duyệt. Cửa của chúng là token dùng chung, và cửa ấy nằm
+ * trong `authorize()` cùng chỗ với mọi cửa khác. Xem `runnerToken.ts`.
+ */
+export const RUNNER_ROUTES: ReadonlySet<string> = new Set([
+  'POST /api/runner/hello',
+  'POST /api/runner/claim',
+  'POST /api/runner/events',
+  'POST /api/runner/reject',
+  'POST /api/runner/result',
+]);
+
 export const ROUTE_POLICY: Record<string, Role> = {
   /* ── Công khai: xem PUBLIC_ROUTES ở trên ─────────────────────────────── */
   // Bản nông trả đúng một chữ `ok`; bản `?deep=1` tự kiểm vai `admin` bên
@@ -96,6 +111,17 @@ export const ROUTE_POLICY: Record<string, Role> = {
   'GET /api/device/targets': 'viewer',
   'GET /api/device/control/stream': 'runner_user',
   'POST /api/device/control/input': 'runner_user',
+
+  /* ── Đường của runner: token thay cho phiên. Xem RUNNER_ROUTES ở trên ── */
+  //
+  // Vai ghi ở đây là vai mà một runner ĐÃ trình đúng token mang theo, không
+  // phải điều kiện để gọi: người dùng có phiên `runner_user` vẫn KHÔNG gọi
+  // được bốn route này, vì cửa của chúng hỏi token chứ không hỏi phiên.
+  'POST /api/runner/hello': 'runner_user',
+  'POST /api/runner/claim': 'runner_user',
+  'POST /api/runner/events': 'runner_user',
+  'POST /api/runner/reject': 'runner_user',
+  'POST /api/runner/result': 'runner_user',
 
   /* ── Chạy test: tiêu tiền, nhưng không đổi thứ người khác dựa vào ────── */
   'POST /api/run': 'runner_user',

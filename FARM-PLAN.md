@@ -360,13 +360,39 @@ WDA. Đầu vào thì không cần ai cho: Appium/WDA theo W3C, mà webdriverio 
   giống; và server phải có `adb` trong PATH, nếu không danh sách máy rỗng và mọi job Android nằm
   chờ với câu "chưa cắm".
 
-### P3.4 Runner lab chạy độc lập
-- `src/runner/main.ts` + script `npm run runner`, đóng gói qua `scripts/bundle-runner.sh`
-  (theo mẫu `scripts/bundle-farm.sh` đã có).
-- Chạy nền bằng `launchd` (macOS) hoặc `systemd` (Linux), có log riêng và tự khởi động lại.
-- `WebSocketTransport` với kết nối lại theo backoff, hàng đợi event cục bộ khi mất mạng.
-- **Xong khi:** rút mạng runner 2 phút, log không mất một dòng nào sau khi nối lại. Viết
-  `src/runner/__tests__/reconnectBuffer.test.ts`.
+### P3.4 Runner lab chạy độc lập — ✅ xong 2026-09-22
+- **HTTP, không WebSocket — đổi so với kế hoạch, và có lý do đo được.** Yêu cầu khó nhất của bước
+  này là "rút mạng hai phút, không mất dòng log nào". Với POST gom lô và đánh số `seq`, điều đó là
+  CẤU TRÚC: runner giữ đệm tới khi server xác nhận (`ack`), gửi lại thì trùng seq bị khoá chính
+  `(job_id, seq)` nuốt. Với WebSocket ta phải dựng lại đúng cơ chế xác nhận ấy trên nền socket.
+  Cộng thêm: không thêm phụ thuộc `ws`, đi qua đúng cấu hình nginx đã kiểm ở P2.6, và gỡ lỗi được
+  bằng `curl` — thứ mà một runner đặt ở phòng máy người khác rất cần. Cái mất là độ trễ nhận job:
+  một nhịp hỏi thay vì một cú đẩy, và với một phòng máy thì một giây không đáng kể.
+- Năm route `/api/runner/*` (71 route). Cửa của chúng là **token dùng chung**, kiểm trong
+  `authorize()` cùng chỗ với mọi cửa khác — và đòi token ở CẢ chế độ embedded, vì mở chúng ra nghĩa
+  là bất kỳ trang web nào trong cùng trình duyệt cũng đòi được job và trả về kết quả bịa.
+- `RemoteJobQueue` đội đúng hình dạng `JobQueue`, nên runner độc lập chạy lại **toàn bộ** hành vi
+  của P3.2 và P3.3 — giữ chỗ thiết bị, ghép theo udid, hoãn khi máy bận — mà không viết lại dòng
+  nào.
+- `PgJobQueue.appendLog/onLog/onState` nối vào bảng `job_event`, nên **chế độ server giờ stream
+  được log thật**. Hỏi lại mỗi nửa giây thay vì `LISTEN/NOTIFY`: thông báo của Postgres đi theo KẾT
+  NỐI, mà pool thì đổi kết nối giữa các truy vấn — một `LISTEN` có thể nằm trên một kết nối lát sau
+  không ai dùng, và log im lặng ngừng chảy.
+- **Xong khi** — đo thật, hai lớp:
+  1. `reconnectBuffer.test.ts`: rút mạng 240 nhịp (hai phút), 240 dòng sinh ra trong lúc đứt, nối
+     lại → **241/241 dòng tới nơi, đúng thứ tự**. Cộng: chỉ quên phần đã được `ack`; đệm đầy thì bỏ
+     phần CŨ và NÓI RA số dòng đã mất.
+  2. Chạy thật: server ở **chế độ server + Postgres** (`/api/jobs` trả 401 khi chưa đăng nhập),
+     runner ở **tiến trình riêng** nối bằng token → nó đòi job, chạy trên máy của nó, gửi log về, và
+     Postgres ghi `state=succeeded`, `runner_id=runner:lab-01`, **6 dòng trong `job_event`** kèm
+     `seq` tăng dần.
+- `scripts/bundle-runner.sh` (gói 880 KB, không có secret, không có phần web, không có node_modules
+  vì nó phụ thuộc kiến trúc máy), `infra/runner/com.testpilot.runner.plist` (launchd) và
+  `testpilot-runner.service` (systemd). 12 phép đo canh những dòng mà xoá đi thì vẫn chạy: `-lc` để
+  có PATH của người dùng, `RestartSec` để một runner hỏng cấu hình không thành vòng lặp đốt CPU,
+  token đi qua `EnvironmentFile` chứ không nằm trong file unit ai cũng đọc được.
+- **Chưa làm:** cài dịch vụ nền lên máy này — đó là sửa cấu hình máy của người dùng, nên hai file
+  kia được viết ra và kiểm bằng test, không được `launchctl load`.
 
 ### P3.5 Màn quản lý thiết bị trên web — ✅ xong 2026-09-22
 - `/devices`: thiết bị, chỗ giữ, và hàng đợi — **ghép với nhau**, không xếp cạnh nhau. Một danh

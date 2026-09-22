@@ -13,7 +13,7 @@ file nào. Kiến trúc: [FARM-ARCHITECTURE.md](FARM-ARCHITECTURE.md) · Kế ho
 | **R** | Runner. Chạm thiết bị hoặc tiến trình cục bộ; **không** được tồn tại trên control plane |
 | **LOCAL** | Chỉ còn ở chế độ `embedded`. Chế độ server phải trả 404 |
 
-Đếm: **CP 47 · JOB 8 · R 10 · LOCAL 1** — tổng 66. (P3.5 không thêm route nào: màn quản lý ghép ba nguồn đã có.)
+Đếm: **CP 52 · JOB 8 · R 10 · LOCAL 1** — tổng 71. (P3.5 không thêm route nào; P3.4 thêm năm route `/api/runner/*`.)
 
 > **Thêm ngày 2026-09-21 (P2.1b).** Bốn route đăng nhập, và chúng là những route DUY NHẤT gọi được
 > khi chưa có phiên: `GET /api/auth/login`, `GET /api/auth/callback`, `POST /api/auth/logout`,
@@ -36,6 +36,11 @@ file nào. Kiến trúc: [FARM-ARCHITECTURE.md](FARM-ARCHITECTURE.md) · Kế ho
 > `POST /api/run` đổi nghĩa: nó KHÔNG còn tự chạy suite mà tạo job rồi nối vào log của job. Hình
 > dạng đường dây giữ nguyên (SSE `log` + `done`), nên bản đồ này không đổi phân loại của nó — nhưng
 > nó đã thành **JOB** đúng nghĩa: control plane tạo, runner thực thi.
+
+> **Thêm ngày 2026-09-22 (P3.4).** Năm route `/api/runner/*` — **CP** — là đường của MÁY, không
+> phải của người: `hello`, `claim`, `events`, `reject`, `result`. Chúng KHÔNG đi qua phiên đăng
+> nhập; cửa của chúng là token dùng chung, kiểm trong `authorize()` và đòi ở cả chế độ embedded.
+> Một người dùng có phiên `runner_user` vẫn không gọi được chúng.
 
 > **Sửa ngày 2026-09-21 (P1.2 nhóm 5).** `POST /api/builds/source` từng bị xếp vào **R** vì cái tên
 > nghe như đi đọc thiết bị. Đọc kỹ thì nó chỉ ghi một cờ `useInstalledApp` vào config — thuần

@@ -13,15 +13,17 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import type { IncomingMessage } from 'node:http';
 import { allRoutes } from '../../routes/index.js';
-import { PUBLIC_ROUTES, ROUTE_POLICY, requiredRole } from '../policy.js';
+import { PUBLIC_ROUTES, ROUTE_POLICY, RUNNER_ROUTES, requiredRole } from '../policy.js';
 import { ROLES, allows, LOCAL_IDENTITY, type Role } from '../roles.js';
 import { authorize } from '../guard.js';
 import { MemorySessionStore, sessionCookie, sessionIdFromCookie, secretEquals } from '../session.js';
 
 const routes = Object.keys(allRoutes).sort();
 
-function reqWith(cookie?: string): IncomingMessage {
-  return { headers: cookie ? { cookie } : {} } as unknown as IncomingMessage;
+/** `reqWith('cookie=…')` cho đường phiên; `reqWith({ authorization })` cho runner. */
+function reqWith(headers?: string | Record<string, string>): IncomingMessage {
+  const asHeaders = typeof headers === 'string' ? { cookie: headers } : (headers ?? {});
+  return { headers: asHeaders } as unknown as IncomingMessage;
 }
 
 describe('mọi route đều khai báo quyền', () => {
@@ -126,9 +128,63 @@ describe('cửa quyền', () => {
    */
   it('embedded cho qua với danh tính local', async () => {
     for (const route of routes) {
+      // Trừ đường của runner: xem bài ngay dưới.
+      if (RUNNER_ROUTES.has(route)) continue;
       const decision = await authorize(reqWith(), route, { mode: 'embedded' });
       assert.equal(decision.ok, true, `${route} bị chặn ở chế độ embedded`);
       assert.deepEqual(decision.ok && decision.identity, LOCAL_IDENTITY);
+    }
+  });
+
+  /**
+   * Đường của runner đòi token ở CẢ HAI chế độ — kể cả embedded.
+   *
+   * Vì sao không nới cho embedded như mọi route khác: bốn route ấy cấp job và
+   * nhận kết quả. Mở chúng ra nghĩa là bất kỳ trang web nào đang mở trong cùng
+   * trình duyệt cũng đòi được job của tổ chức và trả về kết quả bịa. Mọi route
+   * khác chỉ làm được những việc mà người ngồi trước máy vốn đã làm được bằng
+   * tay; route này thì không.
+   */
+  it('route của runner luôn đòi token, kể cả ở embedded', async () => {
+    const before = process.env.TESTPILOT_RUNNER_TOKEN;
+    try {
+      process.env.TESTPILOT_RUNNER_TOKEN = 'bi-mat';
+      for (const route of RUNNER_ROUTES) {
+        const without = await authorize(reqWith(), route, { mode: 'embedded' });
+        assert.equal(without.ok, false, `${route} cho qua khi không có token`);
+
+        const wrong = await authorize(
+          reqWith({ authorization: 'Bearer sai' }), route, { mode: 'embedded' },
+        );
+        assert.equal(wrong.ok, false, `${route} cho qua với token sai`);
+
+        const right = await authorize(
+          reqWith({ authorization: 'Bearer bi-mat', 'x-runner-name': 'lab-01' }),
+          route, { mode: 'embedded' },
+        );
+        assert.equal(right.ok, true, `${route} chặn cả token đúng`);
+        assert.equal(right.ok && right.identity.userId, 'runner:lab-01');
+        assert.equal(right.ok && right.identity.role, 'runner_user');
+      }
+    } finally {
+      if (before === undefined) delete process.env.TESTPILOT_RUNNER_TOKEN;
+      else process.env.TESTPILOT_RUNNER_TOKEN = before;
+    }
+  });
+
+  /** Server chưa đặt token thì đường runner ĐÓNG, không mở toang. */
+  it('không đặt TESTPILOT_RUNNER_TOKEN thì runner không vào được', async () => {
+    const before = process.env.TESTPILOT_RUNNER_TOKEN;
+    delete process.env.TESTPILOT_RUNNER_TOKEN;
+    try {
+      const decision = await authorize(
+        reqWith({ authorization: 'Bearer bat-ky' }), 'POST /api/runner/claim',
+        { mode: 'server', sessions: new MemorySessionStore() },
+      );
+      assert.equal(decision.ok, false);
+      assert.match(decision.ok === false ? decision.error : '', /TESTPILOT_RUNNER_TOKEN/);
+    } finally {
+      if (before !== undefined) process.env.TESTPILOT_RUNNER_TOKEN = before;
     }
   });
 

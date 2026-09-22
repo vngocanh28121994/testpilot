@@ -1,0 +1,38 @@
+# Runner TestPilot chạy nền trên Linux.
+#
+# Cài (thay <USER> và đường dẫn):
+#
+#   sudo cp infra/runner/testpilot-runner.service /etc/systemd/system/
+#   sudo systemctl enable --now testpilot-runner
+#
+# Xem log:  journalctl -u testpilot-runner -f
+#
+# Chạy dưới NGƯỜI DÙNG THƯỜNG, không phải root: runner cần `adb` và quyền truy
+# cập thiết bị USB của người ấy, và một tiến trình root cầm điện thoại của cả
+# phòng là thứ không nên tồn tại.
+
+[Unit]
+Description=TestPilot runner
+# Có mạng rồi mới chạy: runner nối tới control plane ngay khi khởi động, và
+# một lần thất bại lúc boot chỉ tạo ra một dòng lỗi khó hiểu.
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=<USER>
+WorkingDirectory=/home/<USER>/projects/testpilot
+Environment=TESTPILOT_SERVER=https://testpilot.example.com
+Environment=TESTPILOT_RUNNER_NAME=lab-01
+# Token KHÔNG viết thẳng vào đây: file unit đọc được bởi mọi người trên máy.
+# `EnvironmentFile` để chmod 600 được.
+EnvironmentFile=/etc/testpilot/runner.env
+ExecStart=/usr/bin/npm run runner
+
+# Chết thì bật lại, nhưng có nghỉ giữa các lần: một runner hỏng cấu hình sẽ
+# chết ngay lập tức, và bật lại không nghỉ biến nó thành một vòng lặp đốt CPU.
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target

@@ -10,7 +10,8 @@
  */
 import type { IncomingMessage } from 'node:http';
 import type { ServerMode } from '../http.js';
-import { PUBLIC_ROUTES, requiredRole } from './policy.js';
+import { PUBLIC_ROUTES, RUNNER_ROUTES, requiredRole } from './policy.js';
+import { bearer, runnerIdentity, runnerToken, tokenMatches } from './runnerToken.js';
 import { allows, ANONYMOUS, LOCAL_IDENTITY, type Identity } from './roles.js';
 import { sessionIdFromCookie, type SessionStore } from './session.js';
 
@@ -46,6 +47,32 @@ export async function authorize(
       status: 501,
       error: `Route "${route}" chưa khai báo quyền trong policy.ts.`,
     };
+  }
+
+  /**
+   * Đường của runner đi TRƯỚC nhánh embedded.
+   *
+   * Vì sao trước: ở chế độ embedded mọi request được coi là của chính người
+   * ngồi trước máy, và nếu bốn route runner rơi vào nhánh ấy thì chúng mở toang
+   * — một trang web bất kỳ trong cùng trình duyệt cũng gọi được chúng và nhận
+   * job của tổ chức. Runner luôn phải trình token, ở cả hai chế độ.
+   */
+  if (RUNNER_ROUTES.has(route)) {
+    const expected = runnerToken();
+    if (!expected) {
+      return {
+        ok: false, status: 401,
+        error: 'Server chưa đặt TESTPILOT_RUNNER_TOKEN nên đường runner đang đóng.',
+      };
+    }
+    const given = bearer(req);
+    if (!given || !tokenMatches(given, expected)) {
+      return { ok: false, status: 401, error: 'Token runner không đúng.' };
+    }
+    // Tên runner chỉ để đọc log; nó KHÔNG quyết định quyền gì, nên nhận thẳng
+    // từ header là đủ và không cần kiểm.
+    const name = String(req.headers['x-runner-name'] ?? 'unknown').slice(0, 64);
+    return { ok: true, identity: runnerIdentity(name) };
   }
 
   if (deps.mode === 'embedded') return { ok: true, identity: LOCAL_IDENTITY };

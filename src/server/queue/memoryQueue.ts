@@ -25,6 +25,8 @@ export class MemoryJobQueue implements JobQueue {
   /** Thứ tự tạo, để `claim` lấy job cũ nhất trước — không ai phải chờ vô hạn. */
   private readonly order: string[] = [];
   private readonly logs = new Map<string, string[]>();
+  /** `seq` lớn nhất đã nhận cho mỗi job; xem `appendLog`. */
+  private readonly lastSeq = new Map<string, number>();
   /** Mốc sớm nhất job được đòi lại; xem `defer()`. */
   private readonly notBefore = new Map<string, number>();
   private readonly logListeners = new Map<string, Set<(line: string) => void>>();
@@ -180,9 +182,14 @@ export class MemoryJobQueue implements JobQueue {
     return closed;
   }
 
-  async appendLog(id: string, line: string): Promise<void> {
+  async appendLog(id: string, line: string, seq?: number): Promise<void> {
     const lines = this.logs.get(id);
     if (!lines) return;
+    if (seq !== undefined) {
+      // Gửi lại lô đã tới nơi là chuyện bình thường của một runner mất mạng.
+      if (seq <= (this.lastSeq.get(id) ?? 0)) return;
+      this.lastSeq.set(id, seq);
+    }
     lines.push(line);
     if (lines.length > MAX_LOG_LINES) lines.splice(0, lines.length - MAX_LOG_LINES);
     for (const listener of this.logListeners.get(id) ?? []) listener(line);

@@ -132,8 +132,13 @@ export interface JobQueue {
    * `Promise` chứ không phải đồng bộ, dù bản bộ nhớ xong ngay: ở chế độ server
    * một dòng log là một lệnh ghi vào `job_event`. Khai báo đồng bộ rồi sau này
    * đổi là đổi chữ ký ở mọi nơi gọi — và những nơi ấy sẽ quên `await`.
+   *
+   * `seq` do RUNNER đặt, tăng đơn điệu trong phạm vi một job. Nó tồn tại để
+   * gửi lại một lô đã tới nơi là chuyện vô hại: runner mất mạng thì giữ đệm và
+   * gửi lại, và cùng một `seq` chỉ được ghi một lần. Không có `seq` — worker
+   * trong cùng tiến trình — thì không có đường nào để trùng.
    */
-  appendLog(id: string, line: string): Promise<void>;
+  appendLog(id: string, line: string, seq?: number): Promise<void>;
 
   /**
    * Nghe log của một job, và nhận luôn phần đã có.

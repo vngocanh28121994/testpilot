@@ -225,6 +225,16 @@ Với đề xuất, trường hợp xấu nhất chỉ là **có việc phải d
 
 ## 5. Giao thức runner ↔ server
 
+> **Sửa ngày 2026-09-22 (P3.4): đường truyền là HTTP, không phải WebSocket.**
+>
+> Mục này viết WebSocket. Làm tới nơi thì HTTP hợp hơn với đúng cái yêu cầu khó nhất — "rút mạng
+> hai phút, không mất dòng log nào". Với POST gom lô kèm `seq` và một `ack` trả về, điều đó là cấu
+> trúc chứ không phải cố gắng: runner giữ đệm tới khi được xác nhận, và gửi lại là vô hại nhờ khoá
+> chính `(job_id, seq)`. Trên WebSocket ta vẫn phải dựng lại đúng cơ chế ấy, cộng thêm một phụ
+> thuộc và một lớp khó gỡ lỗi. Cái đánh đổi: nhận job chậm hơn một nhịp hỏi.
+>
+> Hình dạng thông điệp trong `src/protocol/messages.ts` KHÔNG đổi — chỉ đường truyền đổi.
+
 WebSocket, JSON, runner luôn là bên mở kết nối. Máy người dùng không mở port nào.
 
 **Runner → server**

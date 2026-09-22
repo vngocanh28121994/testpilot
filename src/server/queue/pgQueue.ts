@@ -187,23 +187,76 @@ export class PgJobQueue implements JobQueue {
     return rowCount ?? 0;
   }
 
-  /* ── Log sống ─────────────────────────────────────────────────────────
+  /* ── Log sống, qua bảng `job_event` ─────────────────────────────────── */
+
+  /**
+   * Một dòng log là một DÒNG TRONG BẢNG, không phải một sự kiện trong RAM.
    *
-   * Chưa hiện thực, và KHÔNG im lặng giả vờ đã làm. Ở chế độ server log đi từ
-   * runner qua transport rồi vào bảng `job_event` với `seq` để nối lại được —
-   * cả đường ấy là P3.4. Một bản rỗng trả về "không có dòng nào" sẽ làm màn
-   * hình trống mà không ai biết vì sao, nên nó ném.
+   * Đó là khác biệt thật giữa hai chế độ: ở embedded người xem và người chạy ở
+   * cùng tiến trình, còn ở server họ cách nhau một mạng và một lần restart.
+   * Log phải sống qua cả hai, nếu không một tab mở lại sau khi server khởi
+   * động lại sẽ thấy một job "đang chạy" mà không có dòng nào.
+   *
+   * `ON CONFLICT DO NOTHING` là thứ cho phép runner gửi lại: mất mạng thì nó
+   * giữ đệm và gửi lại từ chỗ chưa được xác nhận, và những dòng đã tới nơi bị
+   * bỏ qua thay vì nhân đôi.
    */
-  async appendLog(): Promise<void> {
-    throw new Error('Log của chế độ server đi qua job_event ở P3.4, chưa nối.');
+  async appendLog(id: string, line: string, seq?: number): Promise<void> {
+    const next = seq ?? await this.nextSeq(id);
+    await this.pool.query(
+      `INSERT INTO job_event (job_id, seq, at, type, payload)
+       VALUES ($1, $2, $3, 'log', $4)
+       ON CONFLICT (job_id, seq) DO NOTHING`,
+      [id, next, new Date().toISOString(), { kind: 'log', line }],
+    );
   }
 
-  async onLog(): Promise<() => void> {
-    throw new Error('Log của chế độ server đi qua job_event ở P3.4, chưa nối.');
+  private async nextSeq(id: string): Promise<number> {
+    const { rows } = await this.pool.query<{ seq: number | null }>(
+      'SELECT MAX(seq) AS seq FROM job_event WHERE job_id = $1',
+      [id],
+    );
+    return (rows[0]?.seq ?? 0) + 1;
   }
 
-  async onState(): Promise<() => void> {
-    throw new Error('Theo dõi trạng thái ở chế độ server đi qua transport ở P3.4, chưa nối.');
+  /**
+   * Đọc phần đã có, rồi hỏi lại mỗi nửa giây.
+   *
+   * Hỏi lại chứ không `LISTEN/NOTIFY`: thông báo của Postgres đi theo KẾT NỐI,
+   * mà pool thì đổi kết nối giữa các truy vấn — nên một `LISTEN` đặt đúng lúc
+   * có thể nằm trên một kết nối mà lát sau không ai dùng nữa, và log im lặng
+   * ngừng chảy. Nửa giây là độ trễ người đọc log không nhận ra.
+   */
+  async onLog(id: string, listener: (line: string) => void): Promise<() => void> {
+    let seen = 0;
+    const pump = async (): Promise<void> => {
+      const { rows } = await this.pool.query<{ seq: number; payload: { line?: string } }>(
+        'SELECT seq, payload FROM job_event WHERE job_id = $1 AND seq > $2 ORDER BY seq',
+        [id, seen],
+      );
+      for (const row of rows) {
+        seen = row.seq;
+        if (typeof row.payload.line === 'string') listener(row.payload.line);
+      }
+    };
+    await pump();
+    const timer = setInterval(() => { void pump().catch(() => undefined); }, 500);
+    timer.unref?.();
+    return () => clearInterval(timer);
+  }
+
+  /** Cùng cách với `onLog`: hỏi lại, và chỉ báo khi trạng thái ĐỔI. */
+  async onState(id: string, listener: (record: JobRecord) => void): Promise<() => void> {
+    let last: JobState | undefined = (await this.find(id))?.state;
+    const timer = setInterval(() => {
+      void this.find(id).then((record) => {
+        if (!record || record.state === last) return;
+        last = record.state;
+        listener(record);
+      }).catch(() => undefined);
+    }, 500);
+    timer.unref?.();
+    return () => clearInterval(timer);
   }
 }
 

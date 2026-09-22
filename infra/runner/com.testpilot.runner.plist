@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Runner TestPilot chạy nền trên macOS.
+
+  Vì sao launchd chứ không phải `nohup … &`: một tiến trình chạy bằng tay chết
+  cùng phiên đăng nhập, và không ai biết nó đã chết cho tới khi job nằm chờ
+  mãi. launchd khởi động lại nó, ghi log ra chỗ cố định, và bật lại sau khi
+  máy khởi động.
+
+  Cài (thay <USER> và đường dẫn):
+
+    cp infra/runner/com.testpilot.runner.plist ~/Library/LaunchAgents/
+    launchctl load -w ~/Library/LaunchAgents/com.testpilot.runner.plist
+
+  Gỡ:
+
+    launchctl unload -w ~/Library/LaunchAgents/com.testpilot.runner.plist
+
+  LaunchAgent (người dùng) chứ không phải LaunchDaemon (hệ thống), và đó là
+  chủ ý: runner cần `adb` và Xcode của CHÍNH người dùng ấy, cùng quyền truy cập
+  thiết bị USB mà một daemon chạy dưới root không có sẵn.
+-->
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.testpilot.runner</string>
+
+  <key>ProgramArguments</key>
+  <array>
+    <string>/bin/zsh</string>
+    <string>-lc</string>
+    <!-- `-lc`: nạp hồ sơ đăng nhập để `adb`, `node` và `xcrun` có trong PATH.
+         Thiếu nó thì runner chạy nhưng không thấy máy nào, và triệu chứng là
+         "mọi job Android nằm chờ" chứ không phải một lỗi. -->
+    <string>cd /Users/&lt;USER&gt;/projects/testpilot &amp;&amp; npm run runner</string>
+  </array>
+
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>TESTPILOT_SERVER</key>
+    <string>https://testpilot.example.com</string>
+    <key>TESTPILOT_RUNNER_TOKEN</key>
+    <string>DAT-TOKEN-O-DAY</string>
+    <key>TESTPILOT_RUNNER_NAME</key>
+    <string>lab-01</string>
+  </dict>
+
+  <key>RunAtLoad</key>
+  <true/>
+  <key>KeepAlive</key>
+  <true/>
+
+  <!-- Log ra file riêng. Runner in ra vì sao nó không nhận được job, và đó là
+       thứ đầu tiên người ta cần đọc khi "job nằm chờ mãi". -->
+  <key>StandardOutPath</key>
+  <string>/Users/&lt;USER&gt;/Library/Logs/testpilot-runner.log</string>
+  <key>StandardErrorPath</key>
+  <string>/Users/&lt;USER&gt;/Library/Logs/testpilot-runner.log</string>
+</dict>
+</plist>

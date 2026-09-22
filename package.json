@@ -44,7 +44,8 @@
     "bench:ai": "tsx scripts/bench-ai-discovery.ts",
     "show:run": "tsx scripts/show-run.ts",
     "locators:import": "tsx src/cli/locators-import.ts",
-    "locators:verify": "tsx src/cli/locators-verify.ts"
+    "locators:verify": "tsx src/cli/locators-verify.ts",
+    "runner": "tsx src/runner/main.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.68.0",
