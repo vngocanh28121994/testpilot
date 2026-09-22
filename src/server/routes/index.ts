@@ -19,6 +19,7 @@ import { healingRoutes } from './healing.js';
 import { healthRoutes } from './health.js';
 import { historyRoutes } from './history.js';
 import { prereqRoutes } from './prereq.js';
+import { registryRoutes } from './registry.js';
 import { runnerAdminRoutes } from './runnerAdmin.js';
 import { runnerRoutes } from './runner.js';
 import { runRoutes } from './run.js';
@@ -41,6 +42,7 @@ export const allRoutes: RouteTable = mergeTables(
   healthRoutes,
   historyRoutes,
   prereqRoutes,
+  registryRoutes,
   runnerAdminRoutes,
   runnerRoutes,
   runRoutes,

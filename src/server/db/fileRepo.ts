@@ -14,6 +14,7 @@
 import { existsSync } from 'node:fs';
 import { readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
+import { localProposals } from '../proposals/memoryStore.js';
 import { localLeases } from './leaseRepo.js';
 import { localQueue } from '../queue/memoryQueue.js';
 import { Registry } from '../../core/registry.js';
@@ -130,5 +131,7 @@ export function fileRepos(paths: { registry: string; runs: string }): Repos {
     // Cùng lý do: hàng đợi mới mỗi request nghĩa là job vừa tạo biến mất ở
     // request kế tiếp.
     queue: localQueue,
+    // Và cùng lý do lần thứ ba: đề xuất tạo ở request này phải còn ở request sau.
+    proposals: localProposals,
   };
 }

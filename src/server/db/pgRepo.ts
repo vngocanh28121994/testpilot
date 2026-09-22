@@ -13,6 +13,7 @@
  */
 import type { Pool, PoolClient } from 'pg';
 import { PgJobQueue } from '../queue/pgQueue.js';
+import { PgProposalStore } from '../proposals/pgStore.js';
 import { randomUUID } from 'node:crypto';
 import type { ElementRegistry } from '../../core/types.js';
 import type { WorkflowRun } from '../../core/history.js';
@@ -477,6 +478,7 @@ export function pgRepos(pool: Pool, orgId: string): Repos {
     runs: new PgRunRepo(pool, orgId),
     leases: new PgLeaseRepo(pool, orgId),
     queue: new PgJobQueue(pool, orgId),
+    proposals: new PgProposalStore(pool, orgId),
   };
 }
 

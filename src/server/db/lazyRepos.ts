@@ -14,6 +14,7 @@
  */
 import type { JobRepo, LeaseRepo, RegistryRepo, Repos, RunRepo } from './repo.js';
 import type { JobQueue } from '../queue/queue.js';
+import type { ProposalStore } from '../proposals/store.js';
 
 type Build = () => Repos | Promise<Repos>;
 
@@ -56,5 +57,6 @@ export function lazyRepos(build: Build): Repos {
     runs: proxy<RunRepo>((repos) => repos.runs, open),
     leases: proxy<LeaseRepo>((repos) => repos.leases, open),
     queue: proxy<JobQueue>((repos) => repos.queue, open),
+    proposals: proxy<ProposalStore>((repos) => repos.proposals, open),
   };
 }

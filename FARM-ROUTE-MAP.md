@@ -13,7 +13,7 @@ file nào. Kiến trúc: [FARM-ARCHITECTURE.md](FARM-ARCHITECTURE.md) · Kế ho
 | **R** | Runner. Chạm thiết bị hoặc tiến trình cục bộ; **không** được tồn tại trên control plane |
 | **LOCAL** | Chỉ còn ở chế độ `embedded`. Chế độ server phải trả 404 |
 
-Đếm: **CP 57 · JOB 8 · R 10 · LOCAL 1** — tổng 76. (P3.5 không thêm route nào; P3.4 thêm năm route `/api/runner/*`.)
+Đếm: **CP 61 · JOB 8 · R 10 · LOCAL 1** — tổng 80. (P3.5 không thêm route nào; P3.4 thêm năm route `/api/runner/*`; P4.4b thêm bốn route registry/proposal.)
 
 > **Thêm ngày 2026-09-21 (P2.1b).** Bốn route đăng nhập, và chúng là những route DUY NHẤT gọi được
 > khi chưa có phiên: `GET /api/auth/login`, `GET /api/auth/callback`, `POST /api/auth/logout`,
@@ -83,11 +83,13 @@ file nào. Kiến trúc: [FARM-ARCHITECTURE.md](FARM-ARCHITECTURE.md) · Kế ho
 | 964 | `GET /api/actions` | Từ DB |
 | 970 | `POST /api/actions/review` | `maintainer` |
 
-### `registry.ts` (mới — chưa có route tương ứng hôm nay)
-| Route | Ghi chú |
-|---|---|
-| `GET/PUT /api/registry/elements` | Tách khỏi `state`; mọi ghi kèm `baseRevision` |
-| `GET /api/registry/proposals`, `POST .../review` | Đề xuất từ runner (P4.4) |
+### `registry.ts` (P4.4b — đã có)
+| Route | Quyền | Ghi chú |
+|---|---|---|
+| `GET /api/registry` | `viewer` | Trả registry KÈM `revision`; `testpilot registry pull` đọc ở đây |
+| `POST /api/registry/push` | `runner_user` | Tạo ĐỀ XUẤT, không ghi. `baseRevision` lệch → 409 kèm diff |
+| `GET /api/proposals` | `viewer` | Mặc định chỉ `pending`; `?state=all` cho cả lịch sử |
+| `POST /api/proposals/review` | `maintainer` | Đường ghi DUY NHẤT vào registry từ đề xuất; vẫn đối chiếu `baseRevision` |
 
 ### `healing.ts`
 | Dòng | Route | Ghi chú |

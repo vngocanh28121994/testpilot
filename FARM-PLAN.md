@@ -635,13 +635,25 @@ server chung.
 - **Xong khi:** heal trên máy cá nhân xuất hiện thành đề xuất trên web, duyệt xong thì runner lab
   dùng được locator mới.
 
-### P4.4b Đường đi lại giữa local và server
+### P4.4b Đường đi lại giữa local và server — ✅ xong 2026-09-23
 - `testpilot registry pull` — kéo bản server về file local để làm offline.
 - `testpilot registry push` — đẩy thay đổi local lên thành đề xuất, kiểm tra `revision`, xung đột thì
   in diff chứ không ghi đè.
 - Không có hai lệnh này, người làm offline sẽ copy file bằng tay và dữ liệu bắt đầu lệch.
 - **Xong khi:** `registryRoundtrip.test.ts` — pull, sửa offline, push, và thay đổi hiện ra thành đề
   xuất đúng nội dung; push lần hai trên bản cũ thì bị từ chối kèm diff.
+- **Đã làm:** `ProposalStore` (bộ nhớ + Postgres, cùng một bộ bài hợp đồng), bốn route
+  `GET /api/registry`, `POST /api/registry/push`, `GET /api/proposals`,
+  `POST /api/proposals/review`, và `npm run registry:pull|push [-- --dry-run]`.
+- **Đo thật:** chạy vòng tròn trên server đang sống ở `localhost:4300` với một file registry riêng
+  (136 element): pull → thêm 1, sửa 1 → push tạo đề xuất đúng hai mục → duyệt thì registry đổi
+  revision → đẩy lại trên bản nền cũ bị từ chối 409. Bản Postgres kiểm thêm hai điều bản bộ nhớ
+  không kiểm được: `org_id` chặn được người tổ chức khác đọc, và hai người duyệt cùng lúc thì đúng
+  một người thắng.
+- **Hai điều đổi so với lúc viết kế hoạch.** (1) Tóm tắt đếm cả `screens`, không chỉ `elements`:
+  route từ chối tạo đề xuất rỗng, nên một lần đẩy chỉ sửa màn hình sẽ được báo "thành công" rồi
+  biến mất. (2) `review` khi DUYỆT vẫn đối chiếu `baseRevision` lần nữa — giữa lúc đẩy và lúc duyệt
+  có thể là ba ngày, và trong ba ngày ấy runner đã `merge` thêm nhiều thứ.
 
 ### P4.5 Preflight của máy cá nhân — ✅ phần từ chối xong 2026-09-23
 - **Vì sao máy cá nhân cần cái này mà máy lab thì không:** máy lab do người quản trị dựng một lần

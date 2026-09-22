@@ -5,6 +5,7 @@
  * lặng lẽ dựng sớm trở lại, mọi test khác vẫn xanh — chỉ `/api/health` trong
  * container là lại nói về file cấu hình.
  */
+import { MemoryProposalStore } from '../../proposals/memoryStore.js';
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { lazyRepos } from '../lazyRepos.js';
@@ -29,6 +30,7 @@ function stub(onOpen: () => void): () => Repos {
         find: async () => undefined,
         reap: async () => 0,
       },
+      proposals: new MemoryProposalStore(),
       queue: {
         create: async () => { throw new Error('không dùng ở test này'); },
         find: async () => undefined,
@@ -88,6 +90,7 @@ describe('lazyRepos', () => {
         find: async () => undefined,
         reap: async () => 0,
       },
+      proposals: new MemoryProposalStore(),
       queue: {
         create: async () => { throw new Error('không dùng ở test này'); },
         find: async () => undefined,

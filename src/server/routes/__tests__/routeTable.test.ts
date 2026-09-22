@@ -66,11 +66,11 @@ describe('bảng route và switch không chồng nhau', () => {
    * route là việc hợp lệ — nhưng khi ấy phải sửa cả FARM-ROUTE-MAP.md, vì đó
    * là danh sách việc của P1.
    */
-  it('tổng số route vẫn là 76', () => {
+  it('tổng số route vẫn là 80', () => {
     const total = switchRoutes().length + Object.keys(moved).length;
     assert.equal(
       total,
-      76,
+      80,
       `Tổng route đổi thành ${total}. Nếu cố ý thêm/bỏ route thì cập nhật `
         + 'FARM-ROUTE-MAP.md rồi sửa con số này.',
     );

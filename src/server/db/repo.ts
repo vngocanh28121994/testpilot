@@ -15,6 +15,7 @@
  */
 import { createHash } from 'node:crypto';
 import type { JobQueue } from '../queue/queue.js';
+import type { ProposalStore } from '../proposals/store.js';
 import type { ElementRegistry } from '../../core/types.js';
 import type { WorkflowRun } from '../../core/history.js';
 import type { RunMeta } from '../../core/runstore.js';
@@ -177,4 +178,11 @@ export interface Repos {
    * `payload`.
    */
   queue: JobQueue;
+  /**
+   * Đề xuất sửa dữ liệu dùng chung — xem [proposals/store.ts](../proposals/store.ts).
+   *
+   * Nằm cạnh `registry` vì nó là mặt kia của cùng một đồng xu: `registry` là
+   * thứ đã được đồng ý, `proposals` là thứ chưa.
+   */
+  proposals: ProposalStore;
 }

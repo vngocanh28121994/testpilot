@@ -66,6 +66,8 @@ export const ROUTE_POLICY: Record<string, Role> = {
   'GET /api/state': 'viewer',
   'GET /api/history': 'viewer',
   'GET /api/healing': 'viewer',
+  'GET /api/registry': 'viewer',
+  'GET /api/proposals': 'viewer',
   'GET /api/vocabulary': 'viewer',
   'GET /api/actions': 'viewer',
   'GET /api/builds': 'viewer',
@@ -167,6 +169,10 @@ export const ROUTE_POLICY: Record<string, Role> = {
   'POST /api/actions/review': 'maintainer',
   'POST /api/healing/review': 'maintainer',
   'POST /api/healing/duplicate': 'maintainer',
+  // Đẩy lên chỉ tạo ĐỀ XUẤT, nên nó không phải quyền sửa: một người chạy test
+  // học được điều gì đó thì gửi được điều ấy đi.
+  'POST /api/registry/push': 'runner_user',
+  'POST /api/proposals/review': 'maintainer',
 
   /* ── Quản trị ────────────────────────────────────────────────────────── */
   'PUT /api/config': 'admin',
