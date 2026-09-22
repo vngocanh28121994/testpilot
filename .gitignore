@@ -41,3 +41,5 @@ tmp_spreadsheet_preview/
 
 # Danh bạ thành viên của bản chạy local. Ở P2.4 nó là bảng trong DB.
 .testpilot/members.json
+dist-runner/
+*.tgz

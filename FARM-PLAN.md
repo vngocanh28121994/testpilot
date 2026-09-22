@@ -621,10 +621,33 @@ server chung.
 - **Chưa làm:** đường chia sẻ một chiếc máy riêng cho một người cụ thể. Hôm nay chỉ có hai mức
   `private`/`shared` thừa hưởng từ runner; chia sẻ lẻ cần một bảng quyền riêng.
 
-### P4.3 Đóng gói và tự cập nhật
+### P4.3 Đóng gói và tự cập nhật — ✅ cơ chế xong 2026-09-23, chưa phát hành
 - Phát hành runner lên npm (nội bộ) hoặc bản cài `.pkg` cho macOS.
 - Kiểm tra phiên bản giao thức lúc `hello`; lệch major thì tự tải bản mới và khởi động lại.
 - **Xong khi:** nâng server lên `2.x` thì runner `1.x` tự cập nhật, không cần ai vào máy đó.
+- **Đã làm:** `npm run build:runner` dựng gói phát hành; `packaging/` có file dịch vụ systemd và
+  launchd; runner tự cài bản mới rồi thoát mã **75** cho bộ giám sát dựng lại.
+- **Không tự khởi động lại chính mình, cố ý.** Tự `exec` lấy nghe gọn hơn và hỏng theo những cách
+  rất khó gỡ từ xa: tiến trình cũ còn giữ cổng, bản mới chết ngay lúc khởi động, và không còn ai
+  dựng nó dậy nữa. Ba mã thoát nói ba chuyện: 75 "đã cài, dựng tôi dậy", 2 "máy này không cấu hình
+  để tự cập nhật", 3 "đã thử và hỏng".
+- **Server KHÔNG nói cho runner biết phải chạy lệnh gì.** Nó chỉ nói phiên bản giao thức của mình;
+  tên gói nằm trong biến môi trường của chính chiếc máy ấy. Một server bị chiếm mà sai khiến được
+  câu lệnh cài đặt trên hai mươi máy có Xcode và keychain thì đã không còn là chuyện cập nhật nữa.
+  Không đặt biến ấy thì runner KHÔNG tự cập nhật, và đó là mặc định.
+- **Hai lỗi phát hiện khi dựng gói thật, cả hai chỉ hỏng trên máy người khác.** (1) `runSuite` gọi
+  `path.resolve('node_modules/.bin/tsx')` và `'src/cli/run.ts'` — đúng trong lúc phát triển vì thư
+  mục làm việc tình cờ luôn là gốc repo, và ENOENT trên một máy cài từ npm. Nay phân giải theo vị
+  trí của chính file, ưu tiên bản đã biên dịch. (2) Gói chép nguyên khối `dependencies` của repo:
+  mỗi chiếc máy trong phòng lab phải tải React, Radix và Tailwind để chạy một tiến trình không vẽ
+  gì lên màn hình — 1553 file, 9.5 MB. Nay đi theo đồ thị import: **102 file, 9 phụ thuộc**. Hai
+  CLI chạy test phải khai làm gốc riêng, vì chúng được `spawn` chứ không được `import`, và đồ thị
+  import không thấy được một lời gọi `spawn`.
+- **Đo thật:** server nói 1.1.0, runner giả làm 2.0.0 → 409; có `TESTPILOT_RUNNER_PACKAGE` thì nó
+  gọi đúng một lệnh cài rồi thoát **75**, không có thì thoát **2** kèm câu chỉ đường. Gói đã dựng
+  chạy được từ một thư mục khác hẳn: nối server, đo ra `web, android`, nhận job và chạy xong.
+- **Chưa làm:** phát hành lên registry nội bộ. Việc ấy cần registry của đội và quyền phát hành,
+  không dựng được từ đây. Mọi mảnh còn lại đã có — xem `packaging/README.md`.
 
 ### P4.4 Đề xuất registry từ runner — ✅ xong 2026-09-23
 - Kết quả healing và discovery gửi lên dạng `registry_proposal`, kèm `source_job_id` và bằng chứng

@@ -47,7 +47,8 @@
     "show:run": "tsx scripts/show-run.ts",
     "locators:import": "tsx src/cli/locators-import.ts",
     "locators:verify": "tsx src/cli/locators-verify.ts",
-    "runner": "tsx src/runner/main.ts"
+    "runner": "tsx src/runner/main.ts",
+    "build:runner": "bash packaging/build-runner.sh"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.68.0",

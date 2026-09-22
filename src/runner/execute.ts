@@ -48,6 +48,29 @@ export const orphans = OrphanTracker.load();
  * trường hợp server KHÔNG còn sống — lúc đó Set biến mất còn tiến trình con
  * thì không, vì giết cha không giết con.
  */
+/**
+ * Lệnh chạy một CLI của dự án — và cách gọi nó đổi theo chỗ mã đang nằm.
+ *
+ * Chạy từ mã nguồn thì đó là `tsx src/cli/run.ts`. Chạy từ gói đã phát hành
+ * thì không có `src/`, không có `tsx`, và `node_modules/.bin` của thư mục làm
+ * việc chẳng liên quan gì tới nơi runner được cài.
+ *
+ * Nên phân giải theo VỊ TRÍ CỦA CHÍNH FILE NÀY, không theo thư mục làm việc.
+ * Bản đầu dùng `path.resolve('node_modules/.bin/tsx')` và nó chạy suốt trong
+ * lúc phát triển, vì thư mục làm việc tình cờ luôn là gốc repo. Trên một chiếc
+ * máy cài từ npm thì nó trỏ vào một đường dẫn không tồn tại, và lượt chạy đầu
+ * tiên hỏng bằng ENOENT — thứ không nói được gì về nguyên nhân.
+ */
+export function cliCommand(name: 'run' | 'run-parallel'): { bin: string; entry: string } {
+  const compiled = path.join(import.meta.dirname, '..', 'cli', `${name}.js`);
+  // Bản đã biên dịch chạy bằng chính `node` đang chạy tiến trình này — không
+  // cần tsx, và không cần đoán xem nó được cài ở đâu.
+  if (existsSync(compiled)) return { bin: process.execPath, entry: compiled };
+
+  const source = path.join(import.meta.dirname, '..', 'cli', `${name}.ts`);
+  return { bin: path.resolve('node_modules/.bin/tsx'), entry: source };
+}
+
 export function track(child: ReturnType<typeof spawn>, signature: string, label: string): void {
   runChildren.add(child);
   if (child.pid !== undefined) orphans.add(child.pid, signature, label);
@@ -94,9 +117,9 @@ export function runSuite(
   deferSharedWrites = false,
 ): Promise<RunSuiteOutcome> {
   return new Promise<RunSuiteOutcome>((resolve, reject) => {
-    const bin = path.resolve('node_modules/.bin/tsx');
+    const { bin, entry } = cliCommand('run');
     const args = [
-      'src/cli/run.ts',
+      entry,
       '--platform',
       platform,
       ...(device ? ['--device', device] : []),
@@ -197,9 +220,9 @@ export function runSuiteParallel(
   appSource?: 'device' | 'upload',
 ) {
   return new Promise<void>((resolve, reject) => {
-    const bin = path.resolve('node_modules/.bin/tsx');
+    const { bin, entry } = cliCommand('run-parallel');
     const args = [
-      'src/cli/run-parallel.ts',
+      entry,
       '--platform', platform,
       '--devices', devices.join(','),
       ...(env ? ['--env', env] : []),

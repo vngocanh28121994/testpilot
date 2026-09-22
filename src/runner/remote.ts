@@ -41,6 +41,14 @@ interface Pending {
 /** 50 nghìn dòng: một lượt Android dài nhất đã đo còn chưa tới một phần mười. */
 const MAX_BUFFERED = 50_000;
 
+/** Server và runner khác số MAJOR. Xem `runner/update.ts`. */
+export class ProtocolMismatchError extends Error {
+  constructor(message: string, readonly serverProtocolVersion: string) {
+    super(message);
+    this.name = 'ProtocolMismatchError';
+  }
+}
+
 export class RemoteJobQueue implements JobQueue {
   private readonly buffers = new Map<string, Pending[]>();
   private readonly nextSeq = new Map<string, number>();
@@ -70,7 +78,16 @@ export class RemoteJobQueue implements JobQueue {
     } catch {
       throw new Error(`Server trả về thứ không phải JSON: ${text.slice(0, 200)}`);
     }
-    if (!res.ok) throw new Error(String(parsed.error ?? `HTTP ${res.status}`));
+    if (!res.ok) {
+      const message = String(parsed.error ?? `HTTP ${res.status}`);
+      // 409 kèm phiên bản giao thức của server là MỘT tình huống, không phải
+      // một lỗi chung: nó có đường xử lý riêng (tự cập nhật), và phân biệt nó
+      // bằng cách dò chuỗi lỗi là thứ sẽ hỏng ngay lần đầu ai đó sửa câu chữ.
+      if (res.status === 409 && typeof parsed.serverProtocolVersion === 'string') {
+        throw new ProtocolMismatchError(message, parsed.serverProtocolVersion);
+      }
+      throw new Error(message);
+    }
     return parsed as T;
   }
 

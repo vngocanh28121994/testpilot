@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Runner TestPilot trên macOS.
+
+  KeepAlive/SuccessfulExit=false: dựng lại khi tiến trình thoát khác 0 — bao
+  gồm mã 75 "đã cài bản mới, dựng tôi dậy". launchd không có
+  SuccessExitStatus như systemd, nên mã 75 chỉ đơn giản là "khác 0".
+
+  macOS là nơi runner iOS phải sống: Xcode và simulator chỉ có ở đây.
+-->
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.testpilot.runner</string>
+
+  <key>ProgramArguments</key>
+  <array>
+    <string>/usr/local/bin/testpilot-runner</string>
+  </array>
+
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>TESTPILOT_SERVER</key>
+    <string>https://testpilot.example.com</string>
+    <key>TESTPILOT_RUNNER_PACKAGE</key>
+    <string>@noi-bo/testpilot-runner</string>
+    <key>PATH</key>
+    <string>/usr/local/bin:/usr/bin:/bin:/opt/homebrew/bin</string>
+  </dict>
+
+  <key>KeepAlive</key>
+  <dict>
+    <key>SuccessfulExit</key>
+    <false/>
+  </dict>
+
+  <key>RunAtLoad</key>
+  <true/>
+  <key>ThrottleInterval</key>
+  <integer>10</integer>
+
+  <key>StandardOutPath</key>
+  <string>/usr/local/var/log/testpilot-runner.log</string>
+  <key>StandardErrorPath</key>
+  <string>/usr/local/var/log/testpilot-runner.log</string>
+</dict>
+</plist>

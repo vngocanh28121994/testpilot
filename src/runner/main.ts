@@ -21,7 +21,8 @@ import { localLeases } from '../server/db/leaseRepo.js';
 import { runnerPlatforms } from '../server/scheduler/match.js';
 import { farmReadiness, farmRunner } from './farmRunner.js';
 import { localRunner } from './index.js';
-import { RemoteJobQueue } from './remote.js';
+import { ProtocolMismatchError, RemoteJobQueue } from './remote.js';
+import { applyUpdate, EXIT_UPDATED, planUpdate } from './update.js';
 import { startWorker } from './worker.js';
 
 /** Đẩy log đi mỗi nửa giây. Đủ nhanh để người xem thấy gần như tức thì. */
@@ -29,6 +30,37 @@ const FLUSH_MS = 500;
 
 /** Báo danh sách máy mỗi mười giây — cùng nhịp với bản embedded. */
 const DEVICE_REPORT_MS = 10_000;
+
+/**
+ * Server đã nâng major: cài bản mới rồi thoát cho bộ giám sát dựng lại.
+ *
+ * Luôn thoát — bằng một trong ba mã, và ba mã ấy nói ba chuyện khác nhau với
+ * người đang đọc log từ xa:
+ *
+ *   75  đã cài xong, dựng tôi dậy (bộ giám sát hiểu đây không phải lỗi)
+ *   2   máy này không được cấu hình để tự cập nhật, cần người vào
+ *   3   đã thử cập nhật và hỏng
+ *
+ * Chạy tiếp với giao thức lệch major thì tệ hơn cả ba: runner nhận job rồi
+ * hỏng ở giữa, với một câu lỗi nói về một trường bị thiếu chứ không nói rằng
+ * nó đã quá cũ.
+ */
+async function selfUpdate(err: ProtocolMismatchError): Promise<never> {
+  console.error(`[runner] ${err.message}`);
+  const plan = planUpdate();
+  if (!plan) {
+    console.error(
+      '[runner] Máy này không tự cập nhật được: chưa đặt TESTPILOT_RUNNER_PACKAGE. '
+      + 'Cài bản runner mới rồi khởi động lại dịch vụ — xem packaging/README.md.',
+    );
+    process.exit(2);
+  }
+
+  console.log(`[runner] Đang cài ${plan.packageName}@${plan.tag}…`);
+  const outcome = await applyUpdate(plan);
+  console[outcome.ok ? 'log' : 'error'](`[runner] ${outcome.message}`);
+  process.exit(outcome.ok ? EXIT_UPDATED : 3);
+}
 
 function required(name: string): string {
   const value = process.env[name]?.trim();
@@ -80,7 +112,12 @@ async function main(): Promise<void> {
 
   // Chào TRƯỚC khi đòi job: nếu hai bên khác major thì dừng ngay, thay vì nhận
   // một job rồi hỏng ở giữa với một câu lỗi nói về trường nào đó bị thiếu.
-  const hello = await queue.hello({ platforms, mode });
+  const hello = await queue.hello({ platforms, mode }).catch(async (err: Error) => {
+    if (!(err instanceof ProtocolMismatchError)) throw err;
+    await selfUpdate(err);
+    // `selfUpdate` luôn thoát. Dòng này chỉ để TypeScript biết thế.
+    throw err;
+  });
   console.log(
     `[runner] ${name} (${mode}) đã nối ${serverUrl} (giao thức ${hello.protocolVersion}, `
     + `tổ chức ${hello.orgId}). Nền tảng: ${platforms.join(', ')}.`,

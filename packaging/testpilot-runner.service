@@ -1,0 +1,30 @@
+# Runner TestPilot chạy nền trên một máy có thiết bị cắm vào.
+#
+# `Restart=always` là một nửa của cơ chế tự cập nhật: runner cài bản mới rồi
+# thoát với mã 75, và dòng dưới đây dựng bản vừa cài dậy. Xem packaging/README.md.
+#
+# `SuccessExitStatus=75` để systemd không ghi "failed" vào log cho một lần
+# thoát hoàn toàn bình thường — người trực đêm đọc đúng dòng ấy.
+
+[Unit]
+Description=TestPilot runner
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+# Token nằm trong file này, chmod 600, KHÔNG nằm trong unit file — unit file
+# thường được commit.
+EnvironmentFile=/etc/testpilot/runner.env
+ExecStart=/usr/local/bin/testpilot-runner
+Restart=always
+RestartSec=5
+SuccessExitStatus=75
+# Thoát vì "không cấu hình để tự cập nhật" thì đừng dựng lại mãi: nó cần người
+# vào máy, và một vòng lặp khởi động lại chỉ làm đầy log.
+RestartPreventExitStatus=2
+User=testpilot
+WorkingDirectory=/var/lib/testpilot
+
+[Install]
+WantedBy=multi-user.target
