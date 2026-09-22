@@ -167,7 +167,7 @@ describe('hàng đợi', () => {
     // theo CHỮ, không theo vai trò.
     const cardOf = (title: string) =>
       screen.getByText(title, { selector: '[data-slot="card-title"]' })
-        .closest('[aria-labelledby]')!;
+        .closest<HTMLElement>('[aria-labelledby]')!;
 
     expect(within(cardOf('Đang chạy')).getByText(/@smoke/)).toBeInTheDocument();
 
