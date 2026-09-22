@@ -117,3 +117,52 @@ describe('decodeBase64', () => {
     expect([...decodeBase64('AAAAAWdCwCo=')]).toEqual([0, 0, 0, 1, 0x67, 0x42, 0xc0, 0x2a]);
   });
 });
+
+describe('AnnexBAssembler.flush', () => {
+  /**
+   * Lỗi thật, và nó chỉ lộ ra khi màn hình ĐỨNG YÊN.
+   *
+   * `push()` chỉ phát một khung khi thấy khung kế tiếp. Trên máy đang dùng thì
+   * khung nối nhau nên độ trễ ấy là một khung; trên một màn hình không đổi thì
+   * đo được mười giây chỉ một mảnh — và khung đầu tiên không bao giờ được vẽ.
+   * Người mở màn điều khiển nhìn một ô trống mà không hiểu vì sao.
+   */
+  it('phát nốt khung đang gom khi luồng im lặng', () => {
+    const assembler = new AnnexBAssembler();
+    // Đúng thứ một mảnh đầu tiên mang: SPS + PPS + khung khoá, rồi im lặng.
+    assert_empty(assembler.push(bytes(SPS, PPS, IDR)));
+
+    const flushed = assembler.flush();
+    expect(flushed).toHaveLength(1);
+    expect(flushed[0]!.key).toBe(true);
+    expect([...flushed[0]!.data]).toEqual([...SPS, ...PPS, ...IDR]);
+  });
+
+  it('phát rồi thì không phát lại', () => {
+    const assembler = new AnnexBAssembler();
+    assembler.push(bytes(SPS, PPS, IDR));
+    expect(assembler.flush()).toHaveLength(1);
+    expect(assembler.flush()).toHaveLength(0);
+  });
+
+  /** Chưa có NAL ảnh nào thì chưa có gì để vẽ — giữ lại chờ tiếp. */
+  it('chỉ có SPS/PPS thì chưa phát', () => {
+    const assembler = new AnnexBAssembler();
+    assembler.push(bytes(SPS, PPS));
+    expect(assembler.flush()).toHaveLength(0);
+
+    // Khung khoá tới sau thì cả cụm đi cùng nhau.
+    assembler.push(bytes(IDR));
+    const flushed = assembler.flush();
+    expect(flushed).toHaveLength(1);
+    expect([...flushed[0]!.data]).toEqual([...SPS, ...PPS, ...IDR]);
+  });
+
+  it('bộ đệm rỗng thì không phát gì', () => {
+    expect(new AnnexBAssembler().flush()).toHaveLength(0);
+  });
+});
+
+function assert_empty(units: unknown[]): void {
+  expect(units).toHaveLength(0);
+}

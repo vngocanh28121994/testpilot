@@ -72,6 +72,14 @@ export type ControlState =
 /** Gia hạn mỗi 30 giây; lease sống 60. Một nhịp lỡ vẫn còn một nhịp dự phòng. */
 const RENEW_MS = 30_000;
 
+/**
+ * Im lặng bao lâu thì coi phần đang gom là một khung trọn vẹn.
+ *
+ * 300ms: đủ dài để không cắt giữa một khung đang được ghi vào ống, đủ ngắn để
+ * người mở màn điều khiển trên một chiếc máy đứng yên không nhìn ô trống.
+ */
+const IDLE_FLUSH_MS = 300;
+
 export function useDeviceControl(canvas: React.RefObject<HTMLCanvasElement | null>) {
   const [state, setState] = useState<ControlState>({ phase: 'idle' });
   const leaseRef = useRef<Lease | undefined>(undefined);
@@ -81,6 +89,7 @@ export function useDeviceControl(canvas: React.RefObject<HTMLCanvasElement | nul
   const assemblerRef = useRef(new AnnexBAssembler());
   const framesRef = useRef(0);
   const codecRef = useRef<StreamCodec>('h264');
+  const idleRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   const teardown = useCallback(() => {
     sourceRef.current?.close();
@@ -89,6 +98,7 @@ export function useDeviceControl(canvas: React.RefObject<HTMLCanvasElement | nul
     decoderRef.current = undefined;
     assemblerRef.current.reset();
     framesRef.current = 0;
+    clearTimeout(idleRef.current);
   }, []);
 
   /**
@@ -136,6 +146,41 @@ export function useDeviceControl(canvas: React.RefObject<HTMLCanvasElement | nul
     framesRef.current += 1;
   }, [canvas]);
 
+  /**
+   * Giải mã một đơn vị truy cập và vẽ nó.
+   *
+   * Tách khỏi chỗ nhận sự kiện vì có HAI đường tới đây: mảnh mới đẩy tới, và
+   * phần còn lại được phát nốt khi luồng im lặng. Hai bản chép tay của cùng
+   * đoạn này sẽ lệch nhau ở phần dựng bộ giải mã.
+   */
+  const decode = useCallback((unit: { data: Uint8Array; key: boolean }) => {
+    // Bộ giải mã dựng ở khung KHOÁ đầu tiên, vì chuỗi codec đọc từ SPS đi kèm
+    // nó. Dựng sẵn bằng một chuỗi đặt cứng sẽ đúng cho phần lớn máy và sai
+    // lặng lẽ cho những máy mã hoá ở profile khác.
+    if (!decoderRef.current && unit.key) {
+      const codec = codecFromAnnexB(unit.data);
+      if (!codec) return;
+      const decoder = new VideoDecoder({
+        output: draw,
+        error: (err) => setState({ phase: 'error', message: err.message }),
+      });
+      decoder.configure({ codec, optimizeForLatency: true });
+      decoderRef.current = decoder;
+    }
+    const decoder = decoderRef.current;
+    if (!decoder || decoder.state !== 'configured') return;
+    // Khung thường trước khi có khung khoá thì bỏ: giải mã chúng chỉ ra hình
+    // vỡ, vì chúng mô tả PHẦN ĐỔI so với một khung ta chưa có.
+    if (!unit.key && framesRef.current === 0 && decoder.decodeQueueSize === 0) return;
+    decoder.decode(new EncodedVideoChunk({
+      type: unit.key ? 'key' : 'delta',
+      // Mốc thời gian phải tăng dần; giá trị thật không quan trọng vì ta vẽ
+      // ngay chứ không đồng bộ với âm thanh.
+      timestamp: framesRef.current * 16_667,
+      data: unit.data,
+    }));
+  }, [draw]);
+
   const open = useCallback((lease: Lease, platform: ControlPlatform) => {
     const source = new EventSource(
       `${ROUTES.controlStream}?platform=${platform}`
@@ -157,39 +202,19 @@ export function useDeviceControl(canvas: React.RefObject<HTMLCanvasElement | nul
 
     source.addEventListener('video', (event) => {
       const bytes = decodeBase64(JSON.parse((event as MessageEvent<string>).data) as string);
+      // Màn hình đứng yên thì mảnh kế tiếp có thể không tới trong nhiều giây,
+      // và bộ ghép chỉ phát một khung khi thấy khung sau. Hẹn giờ để phát nốt.
+      clearTimeout(idleRef.current);
+      idleRef.current = setTimeout(() => {
+        for (const unit of assemblerRef.current.flush()) decode(unit);
+      }, IDLE_FLUSH_MS);
       // iOS: mỗi sự kiện là MỘT ảnh JPEG trọn vẹn. Không có bộ giải mã nào để
       // dựng, không có khung khoá để chờ — vẽ thẳng.
       if (codecRef.current === 'mjpeg') {
         void drawJpeg(bytes);
         return;
       }
-      for (const unit of assemblerRef.current.push(bytes)) {
-        // Bộ giải mã dựng ở khung KHOÁ đầu tiên, vì chuỗi codec đọc từ SPS đi
-        // kèm nó. Dựng sẵn bằng một chuỗi đặt cứng sẽ đúng cho phần lớn máy và
-        // sai lặng lẽ cho những máy mã hoá ở profile khác.
-        if (!decoderRef.current && unit.key) {
-          const codec = codecFromAnnexB(unit.data);
-          if (!codec) continue;
-          const decoder = new VideoDecoder({
-            output: draw,
-            error: (err) => setState({ phase: 'error', message: err.message }),
-          });
-          decoder.configure({ codec, optimizeForLatency: true });
-          decoderRef.current = decoder;
-        }
-        const decoder = decoderRef.current;
-        if (!decoder || decoder.state !== 'configured') continue;
-        // Khung thường trước khi có khung khoá thì bỏ: giải mã chúng chỉ ra
-        // hình vỡ, vì chúng mô tả PHẦN ĐỔI so với một khung ta chưa có.
-        if (!unit.key && framesRef.current === 0 && decoder.decodeQueueSize === 0) continue;
-        decoder.decode(new EncodedVideoChunk({
-          type: unit.key ? 'key' : 'delta',
-          // Mốc thời gian phải tăng dần; giá trị thật không quan trọng vì ta
-          // vẽ ngay chứ không đồng bộ với âm thanh.
-          timestamp: framesRef.current * 16_667,
-          data: unit.data,
-        }));
-      }
+      for (const unit of assemblerRef.current.push(bytes)) decode(unit);
     });
 
     source.addEventListener('restart', () => {
@@ -215,7 +240,7 @@ export function useDeviceControl(canvas: React.RefObject<HTMLCanvasElement | nul
       teardown();
       setState({ phase: 'error', message: 'Mất kết nối tới luồng màn hình.' });
     };
-  }, [canvas, draw, drawJpeg, teardown]);
+  }, [canvas, decode, drawJpeg, teardown]);
 
   const hold = useCallback(async (device: ControlDevice) => {
     // WebCodecs chỉ cần cho Android (H.264). iOS gửi JPEG, mà mọi trình duyệt

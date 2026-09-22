@@ -88,6 +88,44 @@ export class AnnexBAssembler {
     return units;
   }
 
+  /**
+   * Phát nốt phần đang gom, dùng khi luồng IM LẶNG.
+   *
+   * `push()` chỉ phát một đơn vị khi thấy đơn vị KẾ TIẾP, vì chỉ lúc ấy mới
+   * biết đơn vị trước đã hết. Trên một chiếc máy đang được dùng thì khung nối
+   * nhau liên tục nên độ trễ ấy là một khung. Trên một màn hình ĐỨNG YÊN thì
+   * không có khung kế tiếp — đo được: mười giây chỉ một mảnh — nên khung đầu
+   * tiên không bao giờ được vẽ, và người dùng nhìn một ô trống mà không hiểu
+   * vì sao.
+   *
+   * Nên khi không có byte mới trong một lúc, phần đang gom được coi là trọn
+   * vẹn. Đó là một PHỎNG ĐOÁN, và nó đúng vì bộ mã hoá ghi từng khung một vào
+   * ống; đoán sai thì bộ giải mã báo lỗi và khung sau vẽ lại.
+   */
+  flush(): AccessUnit[] {
+    if (this.buffer.length === 0) return [];
+    let hasPicture = false;
+    let key = false;
+    let cursor = 0;
+    for (;;) {
+      const here = nextStartCode(this.buffer, cursor);
+      if (!here) break;
+      const headerAt = here.at + here.size;
+      if (headerAt >= this.buffer.length) break;
+      const type = nalType(this.buffer, headerAt);
+      if (VCL.has(type)) {
+        hasPicture = true;
+        if (type === 5) key = true;
+      }
+      cursor = headerAt + 1;
+    }
+    // Không có NAL ảnh nào thì chưa có gì để vẽ — giữ lại chờ tiếp.
+    if (!hasPicture) return [];
+    const unit = { data: this.buffer, key };
+    this.buffer = new Uint8Array(0);
+    return [unit];
+  }
+
   /** Quên mọi thứ đang gom — dùng khi luồng khởi động lại. */
   reset(): void {
     this.buffer = new Uint8Array(0);
