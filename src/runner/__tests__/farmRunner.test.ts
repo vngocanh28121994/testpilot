@@ -47,6 +47,14 @@ function runnerFor(passed: boolean, config = cfg) {
       configFile: 'x.json',
       run: farm.run,
       loadCfg: async () => config,
+      // Phép kiểm sẵn sàng cũng tiêm: bản thật gọi Device Farm, nên không tiêm
+      // thì mỗi lần chạy bộ test là một lời gọi AWS — chậm, và đỏ vào đúng
+      // ngày phiên đăng nhập hết hạn.
+      readiness: async (cfg) => (
+        cfg.farm.projectArn && cfg.farm.devicePoolArn
+          ? { ok: true, platforms: [cfg.farm.platform] }
+          : { ok: false, reason: 'Config chưa khai `farm.projectArn`.' }
+      ),
     }),
   };
 }
@@ -131,6 +139,10 @@ describe('worker với runner tự quản thiết bị', () => {
     const worker = startWorker({
       queue, leases, runnerId: 'farm-01', configFile: 'x.json',
       pollMs: 5, runner, managesOwnDevices: true,
+      // Cùng cờ mà `main.ts` bật cho chế độ farm: máy nằm ở AWS nên không có
+      // Appium tại chỗ, và đo ở đây sẽ từ chối mọi job vì một lý do không
+      // đúng với nó.
+      skipPrereq: true,
       // Khai tay: `control.devices()` của farm rỗng theo đúng nghĩa đen, nên
       // để worker tự đo sẽ ra `['web']` và job Android nằm chờ mãi.
       platforms: ['android'],

@@ -25,6 +25,15 @@ export interface FarmRunnerOptions {
   /** Tiêm trong test: thứ thật gọi AWS và tốn tiền. */
   run?: typeof runOnFarm;
   loadCfg?: (file: string) => Promise<TestPilotConfig>;
+  /**
+   * Phép kiểm sẵn sàng. Tiêm được vì bản thật GỌI RA AWS.
+   *
+   * Bản đầu chỉ tiêm `run` và `loadCfg`, nên mỗi lần chạy bộ test là một lời
+   * gọi Device Farm thật — chậm, phụ thuộc phiên đăng nhập của máy, và đỏ vào
+   * đúng ngày phiên ấy hết hạn. Một bài test chạm mạng là một bài test đo tình
+   * trạng mạng.
+   */
+  readiness?: typeof farmReadiness;
 }
 
 /**
@@ -66,6 +75,7 @@ export async function farmReadiness(cfg: TestPilotConfig): Promise<
 export function farmRunner(options: FarmRunnerOptions): Runner {
   const runFarm = options.run ?? runOnFarm;
   const load = options.loadCfg ?? loadConfig;
+  const ready = options.readiness ?? farmReadiness;
 
   /**
    * Từ chối bằng một lời hứa BỊ TỪ CHỐI, không bằng một cú ném đồng bộ.
@@ -83,8 +93,8 @@ export function farmRunner(options: FarmRunnerOptions): Runner {
     run: {
       startSuite: async (platform, tag, _headed, _includeQuarantined, log) => {
         const cfg = await load(options.configFile);
-        const ready = await farmReadiness(cfg);
-        if (!ready.ok) throw new Error(ready.reason);
+        const readiness = await ready(cfg);
+        if (!readiness.ok) throw new Error(readiness.reason);
         if (platform !== cfg.farm.platform) {
           throw new Error(
             `Job nhắm nền tảng ${platform} nhưng device pool đang cấu hình cho ${cfg.farm.platform}.`,
