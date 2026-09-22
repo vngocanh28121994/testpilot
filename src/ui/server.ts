@@ -27,6 +27,7 @@ import { localQueue } from '../server/queue/memoryQueue.js';
 import { localLeases } from '../server/db/leaseRepo.js';
 import { localRunners } from '../server/runners/memoryRegistry.js';
 import { localDevices } from '../server/devices/memoryRegistry.js';
+import { startReaper } from '../server/runners/reaper.js';
 import { localRunner } from '../runner/index.js';
 import { orphans, runChildren } from '../runner/execute.js';
 import { listen, PORT, serverMode } from '../server/http.js';
@@ -199,5 +200,25 @@ if (MODE === 'embedded') {
     configFile: CONFIG_FILE,
   });
 }
+
+/**
+ * Vòng dọn máy đã tắt, chạy ở CẢ HAI chế độ.
+ *
+ * Ở embedded nó gần như không có việc gì — máy chạy server cũng là máy có
+ * thiết bị. Nhưng một runner cá nhân nối vào bản local là chuyện P4 cho phép,
+ * và lúc ấy nó tắt đúng như mọi laptop khác.
+ */
+startReaper({
+  runners: localRunners,
+  devices: localDevices,
+  queue: localQueue,
+  leases: localLeases,
+  // Hạn im lặng chỉnh được: một phòng máy có mạng chập cần hạn dài hơn, còn
+  // lúc thử nghiệm thì chờ 90 giây cho mỗi lần kiểm là quá lâu để ai đó chịu
+  // kiểm.
+  ...(process.env.TESTPILOT_RUNNER_SILENT_MS
+    ? { silentMs: Number(process.env.TESTPILOT_RUNNER_SILENT_MS) }
+    : {}),
+});
 
 listen(handle);

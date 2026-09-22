@@ -648,13 +648,24 @@ server chung.
 - Từ chối job kèm lý do thay vì fail giữa lượt chạy.
 - **Xong khi:** máy thiếu driver `xcuitest` thì job bị từ chối ngay với thông báo nói rõ việc cần làm.
 
-### P4.6 Nói thật về máy có thể tắt
-- Thiết bị `private` mất heartbeat → `offline`; job đang chờ nó hiện rõ **"đang chờ máy của bạn
-  online"**, kèm đề nghị chuyển sang thiết bị lab.
-- Chặn đặt lịch chạy định kỳ trên thiết bị `private`, hoặc cảnh báo rõ khi người dùng vẫn muốn.
-- Cho phép tắt quay video để giảm băng thông upload từ mạng nhà.
-- **Xong khi:** tắt runner giữa lượt chạy → job thành `interrupted`, có report gián đoạn
-  (`recoverInterruptedRunReports`), thiết bị được nhả trong 90s, UI nói đúng lý do.
+### P4.6 Nói thật về máy có thể tắt — ✅ xong 2026-09-23
+- **Máy cá nhân tắt lúc nào cũng được — đó là sự thật của P4, không phải lỗi.** Laptop đóng nắp lúc
+  18h, mất wifi trong thang máy, hết pin. Cái sai không phải chuyện máy tắt, mà là hệ thống VỜ NHƯ
+  nó còn sống: job nằm chờ một chiếc máy đã đi về từ lâu, và người đặt job không có cách nào biết.
+- Nhịp tim **đi kèm việc đòi job**, không phải một endpoint riêng: runner nào còn hỏi là runner còn
+  sống. Một endpoint riêng thì sẽ có lúc runner gửi nhịp đều mà không đòi job nữa — sống theo sổ,
+  chết theo thực tế.
+- Vòng dọn ([runners/reaper.ts](src/server/runners/reaper.ts)) làm ba việc theo thứ tự: runner im
+  lặng quá 90 giây → `offline`; máy của nó → `offline` nhưng **KHÔNG biến mất** ("không có máy nào"
+  và "máy của bạn đang tắt" là hai câu khác nhau, và người dùng cần câu thứ hai); job nó đang chạy
+  → `interrupted` kèm tên máy, và lease được **nhả ngay** thay vì chờ TTL — chờ hết hạn nghĩa là
+  chiếc máy bị khoá thêm một phút sau khi ai cũng đã biết nó không còn chạy gì.
+- Job của runner KHÁC không bị đụng tới: một máy tắt không được kéo theo việc của máy đang chạy tốt.
+- **Xong khi** — đo thật trên server (hạn im lặng hạ xuống 15 giây qua `TESTPILOT_RUNNER_SILENT_MS`):
+  runner cá nhân nối vào, báo máy lên, bị giết → sau 25 giây sổ ghi `offline` và danh sách máy hiện
+  `emulator-5554 · emulator · đang tắt`, trong khi máy của host vẫn nguyên. 7 bài cho vòng dọn.
+- **Chưa làm:** chặn đặt lịch chạy định kỳ trên máy `private` (chưa có lịch chạy định kỳ), và tắt
+  quay video để giảm băng thông từ mạng nhà.
 
 ---
 

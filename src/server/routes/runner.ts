@@ -72,6 +72,11 @@ export const runnerRoutes: RouteTable = {
    */
   'POST /api/runner/claim': async (req, res, _url, ctx) => {
     const body = await readJson<{ platforms?: string[]; maxPerUser?: number }>(req);
+    // Mỗi lần đòi job là một nhịp tim: runner nào còn hỏi là runner còn sống.
+    // Không cần một endpoint heartbeat riêng, và một endpoint riêng thì sẽ có
+    // lúc runner gửi nhịp đều mà không đòi job nữa — sống theo sổ, chết theo
+    // thực tế.
+    await ctx.runners.touch(ctx.identity.userId);
     const job = await ctx.repos.queue.claim({
       runnerId: ctx.identity.userId,
       ...(body.platforms ? { platforms: body.platforms } : {}),
