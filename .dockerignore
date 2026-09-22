@@ -1,0 +1,30 @@
+# Thứ không được vào ảnh, và lý do quan trọng hơn danh sách.
+
+node_modules
+dist
+
+# Dữ liệu và bí mật của máy phát triển. `.testpilot.secrets.json` chứa khoá
+# API và mật khẩu tài khoản test; một bản copy của nó nằm trong layer Docker
+# là một bản copy không ai xoá được nữa, kể cả khi file gốc đã đổi.
+.testpilot
+.testpilot.secrets.json
+.env
+.env.server
+testpilot.config.json
+
+# Artifact và dữ liệu lượt chạy: hàng trăm MB video và ảnh, không dòng nào
+# trong đó cần cho việc phục vụ HTTP.
+runs
+reports
+artifacts
+build
+outputs
+farm
+
+.git
+.github
+*.log
+coverage
+ui/coverage
+ui/test-results
+ui/playwright-report

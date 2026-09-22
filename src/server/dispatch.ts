@@ -10,6 +10,7 @@ import type { IncomingMessage, ServerResponse } from 'node:http';
 import { json, serveStaticRequest, type ServerMode } from './http.js';
 import { authorize, type GuardDeps } from './auth/guard.js';
 import { allRoutes } from './routes/index.js';
+import { lazyRepos } from './db/lazyRepos.js';
 import type { Repos } from './db/repo.js';
 import type { Identity } from './auth/roles.js';
 import type { RouteContext } from './routes/types.js';
@@ -45,7 +46,9 @@ export async function dispatch(
       configFile: deps.configFile,
       configProfile: deps.configProfile,
       identity: decision.identity,
-      repos: await deps.repos(decision.identity),
+      // Hoãn tới lời gọi đầu tiên: xem `lazyRepos`. Một route không đọc dữ
+      // liệu — `GET /api/health` là ví dụ — không được chết vì kho chưa mở.
+      repos: lazyRepos(() => deps.repos(decision.identity)),
     };
     return handler(req, res, url, ctx);
   }

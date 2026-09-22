@@ -68,11 +68,16 @@ describe('route công khai', () => {
    * lạ chạm được. Danh sách dài ra là một quyết định bảo mật, nên nó phải làm
    * test đỏ để có người đọc lại.
    */
-  it('đúng bốn route gọi được khi chưa đăng nhập', () => {
+  it('đúng năm route gọi được khi chưa đăng nhập', () => {
+    // Danh sách này dài ra được, nhưng mỗi lần dài ra phải làm test đỏ để có
+    // người đọc lại — nó là bề mặt người lạ chạm được. `/api/health` được thêm
+    // ở P2.6 vì load balancer không có phiên, và một health check trả 401
+    // nghĩa là mọi instance bị coi là chết.
     assert.deepEqual([...PUBLIC_ROUTES].sort(), [
       'GET /api/auth/callback',
       'GET /api/auth/login',
       'GET /api/auth/me',
+      'GET /api/health',
       'POST /api/auth/logout',
     ]);
   });

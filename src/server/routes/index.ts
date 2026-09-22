@@ -14,6 +14,7 @@ import { configRoutes } from './config.js';
 import { featureRoutes } from './feature.js';
 import { farmRoutes } from './farm.js';
 import { healingRoutes } from './healing.js';
+import { healthRoutes } from './health.js';
 import { historyRoutes } from './history.js';
 import { prereqRoutes } from './prereq.js';
 import { runRoutes } from './run.js';
@@ -31,6 +32,7 @@ export const allRoutes: RouteTable = mergeTables(
   farmRoutes,
   featureRoutes,
   healingRoutes,
+  healthRoutes,
   historyRoutes,
   prereqRoutes,
   runRoutes,

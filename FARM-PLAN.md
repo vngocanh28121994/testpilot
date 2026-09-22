@@ -207,7 +207,7 @@ Sau giai đoạn này mới được phép mở ra domain.
 - **Xong khi:** `src/server/storage/__tests__/pathTraversal.test.ts` xanh, và report mở được qua
   link có chữ ký hết hạn được.
 
-### P2.6 Hạ tầng — ✅ phần môi trường thử xong 2026-09-21
+### P2.6 Hạ tầng — ✅ xong 2026-09-22
 - `docker-compose.yml`: Keycloak + Postgres + MinIO, một lệnh là có đủ. Realm nhập tự động từ
   `infra/keycloak/testpilot-realm.json` (client, bốn người dùng, bốn vai) nên hai máy giống nhau
   và không ai phải bấm tay trên giao diện Keycloak.
@@ -215,8 +215,23 @@ Sau giai đoạn này mới được phép mở ra domain.
 - **Đóng luôn một khoảng trống của P0.3:** migration giờ đã chạy THẬT trên Postgres 16, không chỉ
   trên SQLite. 16 bảng dựng đúng, `UNIQUE (device_id)` của `lease` từ chối lease thứ hai, `CHECK`
   chặn `state` sai chính tả, cột `payload` đúng kiểu `jsonb`.
-- Còn lại: `Dockerfile` cho control plane, cấu hình nginx/Caddy (HTTPS, `proxy_buffering off` cho
-  SSE), `GET /api/health`.
+- `GET /api/health`: nông thì công khai (`{"ok":true}`), `?deep=1` đòi vai `admin` — kiểm NGAY TRONG
+  handler, vì một route không thể vừa công khai vừa đòi quyền ở cửa.
+- `Dockerfile` hai tầng, 464 MB, chạy bằng `USER node`, `HEALTHCHECK` gọi đúng endpoint mà load
+  balancer gọi. `.dockerignore` giữ `.testpilot.secrets.json` và `testpilot.config.json` ở ngoài mọi
+  layer. `infra/nginx/testpilot.conf`: `proxy_buffering off`, `gzip off`, `proxy_read_timeout 3600s`
+  cho SSE.
+- **Ba lỗi chỉ CHẠY THẬT mới thấy**, và cả ba đều xanh ở build lẫn typecheck trước đó:
+  1. `npm ci --omit=dev` chết exit 127 vì `prepare` gọi `husky` (devDependency) → `--ignore-scripts`;
+  2. `tsx` nằm ở devDependencies nhưng `CMD` gọi nó → chuyển sang `dependencies`;
+  3. `/app` thuộc root nên `USER node` không tạo được `.testpilot` → tạo sẵn và `chown`, kèm `VOLUME`
+     cho registry/runs/artifacts.
+  Hai phép đo mới trong [deployConfig.test.ts](src/server/__tests__/deployConfig.test.ts) canh (1)
+  và (2); (3) thì chỉ có việc chạy container mới bắt được — nên đó là bước bắt buộc của P2.6.
+- `lazyRepos`: `dispatch` dựng kho ở LỜI GỌI ĐẦU TIÊN, không ở lúc điều phối. Trước đó
+  `/api/health` trong container trả về "No config at /app/.testpilot/..." — endpoint để biết tiến
+  trình còn sống lại phụ thuộc vào cấu hình đã đúng, và load balancer đọc câu ấy rồi kết luận sai
+  theo cả hai hướng.
 
 ---
 

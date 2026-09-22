@@ -66,6 +66,19 @@ Lượt chạy local (`runs/`) **không** được di trú, có chủ ý: chúng
 trên đĩa máy chạy test, và ở chế độ server thư mục ấy không nằm trên server.
 Chúng đi lên cùng artifact khi runner đẩy kết quả.
 
+## Đưa lên máy chủ thật
+
+- `Dockerfile` ở gốc repo dựng ảnh control plane — **chỉ phần server**, không có
+  Appium/adb/Xcode. Phần chạm tới thiết bị sống trong `src/runner/`, trên máy có
+  thiết bị cắm vào.
+- `infra/nginx/testpilot.conf` là cấu hình reverse proxy mẫu. **Đọc phần SSE
+  trong đó trước khi sửa**: cấu hình proxy mặc định của nginx làm hỏng stream
+  log theo cách không báo lỗi — log không hiện, hoặc hiện dồn một cục, hoặc đứt
+  giữa lượt chạy, và server không có dòng lỗi nào.
+- `GET /api/health` trả đúng một chữ `ok` cho load balancer. Chi tiết
+  (`?deep=1`) đòi vai `admin`: đây là điểm duy nhất người lạ chạm được trước
+  khi đăng nhập, nên nó không kể phiên bản, không kể tên máy.
+
 ## Dọn
 
 ```bash

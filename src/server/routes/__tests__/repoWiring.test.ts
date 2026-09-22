@@ -119,8 +119,19 @@ describe('bối cảnh route', () => {
    * thứ nó trả về là dữ liệu của người khác.
    */
   it('dispatch dựng kho theo danh tính người gọi', () => {
-    const dispatcher = readFileSync('src/server/dispatch.ts', 'utf8');
+    // Lọc chú thích trước khi đo, như mọi phép đo mã nguồn khác trong dự án.
+    const dispatcher = readFileSync('src/server/dispatch.ts', 'utf8')
+      .replace(/\/\*[\s\S]*?\*\//g, '')
+      .replace(/^\s*\/\/.*$/gm, '');
     assert.match(dispatcher, /repos: \(identity: Identity\) => Repos \| Promise<Repos>/);
-    assert.match(dispatcher, /repos: await deps\.repos\(decision\.identity\)/);
+    // Đo đúng điều quan trọng: kho dựng từ danh tính ĐÃ qua cửa quyền. Cách
+    // bọc thì đổi được — hôm nay là `lazyRepos`, và laziness ấy có test riêng
+    // ở db/__tests__/lazyRepos.test.ts — nhưng nguồn của `identity` thì không.
+    assert.match(dispatcher, /deps\.repos\(decision\.identity\)/);
+    assert.doesNotMatch(
+      dispatcher,
+      /deps\.repos\((?!decision\.identity)/,
+      'kho dựng từ thứ gì khác ngoài danh tính người gọi là đường rò dữ liệu giữa hai tổ chức',
+    );
   });
 });

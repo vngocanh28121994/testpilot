@@ -26,6 +26,9 @@ import type { Role } from './roles.js';
  * đăng xuất, một cái để giao diện biết nên vẽ màn đăng nhập hay vẽ ứng dụng.
  */
 export const PUBLIC_ROUTES: ReadonlySet<string> = new Set([
+  // Load balancer không có phiên. Một health check trả 401 nghĩa là mọi
+  // instance bị coi là chết, và hệ thống tự gỡ chính nó khỏi mạng.
+  'GET /api/health',
   'GET /api/auth/login',
   'GET /api/auth/callback',
   'POST /api/auth/logout',
@@ -34,6 +37,9 @@ export const PUBLIC_ROUTES: ReadonlySet<string> = new Set([
 
 export const ROUTE_POLICY: Record<string, Role> = {
   /* ── Công khai: xem PUBLIC_ROUTES ở trên ─────────────────────────────── */
+  // Bản nông trả đúng một chữ `ok`; bản `?deep=1` tự kiểm vai `admin` bên
+  // trong handler, vì một route không thể vừa công khai vừa đòi admin.
+  'GET /api/health': 'viewer',
   'GET /api/auth/login': 'viewer',
   'GET /api/auth/callback': 'viewer',
   'POST /api/auth/logout': 'viewer',
