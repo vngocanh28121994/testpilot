@@ -287,7 +287,13 @@ describe('0002: lease của người', () => {
               '2026-09-20T00:01:00.000Z')`);
 
     const result = await migrate(runner, 'sqlite');
-    assert.deepEqual(result.applied, ['0002_human_lease.sql']);
+    // Mọi migration SAU 0001, không phải một tên chép tay: thêm 0003 thì phép
+    // đo này vẫn nói đúng điều nó muốn nói — "phần còn lại chạy tiếp được
+    // trên một DB đã có dữ liệu".
+    assert.deepEqual(
+      result.applied,
+      (await migrationFiles()).filter((name) => name !== '0001_init.sql'),
+    );
 
     const row = db.prepare('SELECT * FROM lease').get() as Record<string, unknown>;
     assert.equal(row.id, 'old-1');

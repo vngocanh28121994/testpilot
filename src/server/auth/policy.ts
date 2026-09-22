@@ -54,6 +54,7 @@ export const ROUTE_POLICY: Record<string, Role> = {
   'GET /api/actions': 'viewer',
   'GET /api/builds': 'viewer',
   'GET /api/models': 'viewer',
+  'GET /api/jobs': 'viewer',
   'GET /api/run/active': 'viewer',
   'GET /api/run/attach': 'viewer',
   'GET /api/run/log': 'viewer',

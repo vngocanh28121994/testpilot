@@ -13,7 +13,7 @@ file nào. Kiến trúc: [FARM-ARCHITECTURE.md](FARM-ARCHITECTURE.md) · Kế ho
 | **R** | Runner. Chạm thiết bị hoặc tiến trình cục bộ; **không** được tồn tại trên control plane |
 | **LOCAL** | Chỉ còn ở chế độ `embedded`. Chế độ server phải trả 404 |
 
-Đếm: **CP 46 · JOB 8 · R 10 · LOCAL 1** — tổng 65.
+Đếm: **CP 47 · JOB 8 · R 10 · LOCAL 1** — tổng 66.
 
 > **Thêm ngày 2026-09-21 (P2.1b).** Bốn route đăng nhập, và chúng là những route DUY NHẤT gọi được
 > khi chưa có phiên: `GET /api/auth/login`, `GET /api/auth/callback`, `POST /api/auth/logout`,
@@ -31,6 +31,11 @@ file nào. Kiến trúc: [FARM-ARCHITECTURE.md](FARM-ARCHITECTURE.md) · Kế ho
 > `maintainer` có vai đủ để gọi `release` nhưng không nhả được lease của người khác — thứ quyết
 > định không phải vai. Vì thế mới có route `force-release` riêng: quyền lấy máy khỏi tay người đang
 > dùng phải đọc được từ bảng policy, không phải từ một cờ trong thân handler.
+
+> **Thêm ngày 2026-09-22 (P3.1).** `GET /api/jobs` — **CP**, vai `viewer`: hàng đợi job. Và
+> `POST /api/run` đổi nghĩa: nó KHÔNG còn tự chạy suite mà tạo job rồi nối vào log của job. Hình
+> dạng đường dây giữ nguyên (SSE `log` + `done`), nên bản đồ này không đổi phân loại của nó — nhưng
+> nó đã thành **JOB** đúng nghĩa: control plane tạo, runner thực thi.
 
 > **Sửa ngày 2026-09-21 (P1.2 nhóm 5).** `POST /api/builds/source` từng bị xếp vào **R** vì cái tên
 > nghe như đi đọc thiết bị. Đọc kỹ thì nó chỉ ghi một cờ `useInstalledApp` vào config — thuần

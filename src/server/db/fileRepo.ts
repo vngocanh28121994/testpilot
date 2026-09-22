@@ -15,6 +15,7 @@ import { existsSync } from 'node:fs';
 import { readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { localLeases } from './leaseRepo.js';
+import { localQueue } from '../queue/memoryQueue.js';
 import { Registry } from '../../core/registry.js';
 import { History } from '../../core/history.js';
 import type { WorkflowRun } from '../../core/history.js';
@@ -126,5 +127,8 @@ export function fileRepos(paths: { registry: string; runs: string }): Repos {
     // Lease sống trong bộ nhớ, và là MỘT bản cho cả tiến trình — `fileRepos()`
     // được gọi lại mỗi request. Xem `leaseRepo.ts`.
     leases: localLeases,
+    // Cùng lý do: hàng đợi mới mỗi request nghĩa là job vừa tạo biến mất ở
+    // request kế tiếp.
+    queue: localQueue,
   };
 }

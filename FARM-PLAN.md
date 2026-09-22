@@ -254,16 +254,41 @@ giữa các tiến trình "gần như không có bảo mật". Đường đượ
 runner đã có) cho Android, và MJPEG của WebDriverAgent cho iOS, vì `prereq.ts` vốn đã dựng và dọn
 WDA. Đầu vào thì không cần ai cho: Appium/WDA theo W3C, mà webdriverio đã nói thứ tiếng đó.
 
-### P3.1 Job queue
-- Bảng `job` là nguồn sự thật. Redis (BullMQ) chỉ để đánh thức worker, không giữ trạng thái — nếu
-  Redis mất, job vẫn còn.
-- `POST /api/run` đổi nghĩa: **tạo job và trả `jobId`**, thay vì chạy ngay và stream. UI chuyển sang
-  tạo job rồi `attach` — `streamJob()` đã hỗ trợ `method: 'GET'` cho việc nối lại
-  ([ui/src/lib/streamJob.ts](ui/src/lib/streamJob.ts)).
-- **Xong khi:** tạo job trong lúc không có runner nào online, job nằm `queued`; bật runner lên thì
-  job tự chạy.
+### P3.1 Job queue — ✅ xong 2026-09-22
+- Bảng `job` là nguồn sự thật. **Không có Redis:** worker nối bằng WebSocket thì server đẩy thẳng,
+  còn tranh job thì `SELECT … FOR UPDATE SKIP LOCKED` của Postgres làm đúng việc ấy. Thêm Redis là
+  thêm một service phải vận hành và một nguồn sự thật thứ hai.
+- `JobQueue` + hai hiện thực ([memoryQueue.ts](src/server/queue/memoryQueue.ts) cho embedded,
+  [pgQueue.ts](src/server/queue/pgQueue.ts) cho server), đo bằng **một bộ khẳng định dùng chung**
+  ([queueContract.ts](src/server/queue/__tests__/queueContract.ts)) — 18 bài chạy với bản bộ nhớ
+  trong `npm test`, và chính chúng chạy lại với Postgres trong `npm run test:integration`.
+- `POST /api/run` **đổi nghĩa mà KHÔNG đổi hình dạng đường dây**: nó tạo job rồi nối vào log của
+  job, vẫn là SSE với `log` và `done`. Giao diện không phải sửa một dòng nào — đổi engine và đổi
+  giao diện cùng lúc là cách chắc chắn để không biết cái nào làm hỏng. Việc chuyển sang
+  tạo-rồi-`attach` ở phía UI để dành cho lúc có màn hàng đợi thật (P3.5).
+- Worker ([src/runner/worker.ts](src/runner/worker.ts)) đòi job, chạy, báo kết quả. Nó chỉ bật ở
+  chế độ `embedded` — bật trong control plane ở chế độ server nghĩa là máy chủ web chạy Appium và
+  adb, đúng thứ kiến trúc này dựng lên để tránh. `noDeviceAccess.test.ts` canh điều đó.
+- Route mới `GET /api/jobs` (66 route): cái gì đang chờ, cái gì đang chạy, cái gì vừa xong — câu hỏi
+  mà bản cũ không trả lời được, vì lượt chạy chỉ tồn tại trên đường dây SSE của tab đã bấm nút.
+  `spec` KHÔNG đi ra ngoài: nó mang snapshot registry.
+- Migration 0003 thêm cột `job.error`: `result` chỉ có khi job ĐÃ ĐÓNG, còn một job bị trả về hàng
+  đợi thì chưa đóng mà lý do lần trước hỏng vẫn phải còn.
+- Hai người viết chung bảng `job` — hàng đợi ghi `JobSpec`, lịch sử ghi `WorkflowRun` — nên mỗi bên
+  nhận ra dòng của mình qua `payload ? 'spec'`. Tạm thời, tới khi lịch sử cũng thành job.
+- **Xong khi** (đo thật, không phải suy luận): job tạo lúc chưa có worker thì nằm `queued` và không
+  tự đổi; bật worker lên thì nó chạy — đo ở [worker.test.ts](src/runner/__tests__/worker.test.ts).
+  Trên server thật: bấm chạy → `[job] … đã vào hàng đợi` → `[job] runner local đã nhận` → log của
+  lượt chạy → `done`, và `/api/jobs` ghi đủ `requestedAt`/`startedAt`/`finishedAt`/`runnerId`.
+  **Và điều bản cũ không làm được: đóng tab sau 150ms thì job VẪN chạy xong** và vẫn nằm trong sổ.
+- **Chưa chạy được bản Postgres:** engine Docker trên máy này không phản hồi (`docker info` treo),
+  nên [pgQueue.integration.test.ts](src/server/queue/__tests__/pgQueue.integration.test.ts) — gồm
+  cả bài "mười runner đòi cùng lúc" — đã viết và biên dịch được nhưng chưa chạy lần nào. Chạy nó là
+  việc đầu tiên khi Docker trở lại.
 
 ### P3.2 Lease manager
+- **Đã có sẵn từ P3.1:** hàng đợi, worker, và vòng đời job. Phần còn lại là buộc lease vào job —
+  worker lấy lease trước khi chạy, nhả sau khi xong — và vòng thu hồi job quá hạn.
 - **Đã có sẵn từ P3.7 bước 1:** `LeaseRepo` (hợp đồng), `MemoryLeaseRepo` (embedded) và
   `PgLeaseRepo` (server) — giữ, gia hạn, nhả, cưỡng chế nhả, thu hồi hạn. Phần còn lại của P3.2 là
   *người gọi*: scheduler lấy lease `holder_kind='job'` thay vì người, và vòng lặp chuyển job quá

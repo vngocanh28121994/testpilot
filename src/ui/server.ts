@@ -22,6 +22,8 @@ import { ensurePersonalConfig, personalConfigProfile } from '../core/personalCon
 import { closeInterruptedRuns, reindex } from '../core/runstore.js';
 import { adoptStoredApiKeys } from '../core/secrets.js';
 import { stopAllScreenStreams } from '../runner/control.js';
+import { startWorker } from '../runner/worker.js';
+import { localQueue } from '../server/queue/memoryQueue.js';
 import { orphans, runChildren } from '../runner/execute.js';
 import { listen, PORT, serverMode } from '../server/http.js';
 import { mayAdoptIntoEnv } from '../server/auth/secrets.js';
@@ -133,6 +135,26 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
     repos: REPOS,
     configFile: CONFIG_FILE,
     configProfile: { owner: CONFIG_PROFILE.owner, source: CONFIG_PROFILE.source },
+  });
+}
+
+/**
+ * Worker chỉ chạy ở chế độ `embedded`, và đó là một ranh giới chứ không phải
+ * một tối ưu.
+ *
+ * Worker sinh tiến trình con để chạy test. Bật nó trong control plane ở chế độ
+ * server nghĩa là máy chủ web chạy Appium và adb — đúng thứ mà cả kiến trúc
+ * này dựng lên để tránh (xem FARM-ARCHITECTURE mục 12). Ở chế độ server,
+ * worker sống trên máy có thiết bị và nối vào qua transport của P3.4.
+ */
+if (MODE === 'embedded') {
+  // Dọn job treo TRƯỚC khi nhận job mới: một job còn `running` sau khi tiến
+  // trình chết là một dòng nói dối, và nó nằm đó mãi.
+  void localQueue.interruptStale();
+  startWorker({
+    queue: localQueue,
+    runnerId: 'local',
+    configFile: CONFIG_FILE,
   });
 }
 

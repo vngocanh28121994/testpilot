@@ -29,6 +29,18 @@ function stub(onOpen: () => void): () => Repos {
         find: async () => undefined,
         reap: async () => 0,
       },
+      queue: {
+        create: async () => { throw new Error('không dùng ở test này'); },
+        find: async () => undefined,
+        list: async () => [],
+        claim: async () => undefined,
+        finish: async () => undefined,
+        release: async () => undefined,
+        interruptStale: async () => 0,
+        appendLog: async () => {},
+        onLog: async () => () => {},
+        onState: async () => () => {},
+      },
     };
   };
 }
@@ -38,7 +50,7 @@ describe('lazyRepos', () => {
     let opened = 0;
     const repos = lazyRepos(stub(() => { opened += 1; }));
     // Chạm vào cả ba nhánh mà không gọi phương thức nào.
-    void repos.registry; void repos.jobs; void repos.runs; void repos.leases;
+    void repos.registry; void repos.jobs; void repos.runs; void repos.leases; void repos.queue;
     assert.equal(opened, 0);
   });
 
@@ -74,6 +86,18 @@ describe('lazyRepos', () => {
         list: async () => [],
         find: async () => undefined,
         reap: async () => 0,
+      },
+      queue: {
+        create: async () => { throw new Error('không dùng ở test này'); },
+        find: async () => undefined,
+        list: async () => [],
+        claim: async () => undefined,
+        finish: async () => undefined,
+        release: async () => undefined,
+        interruptStale: async () => 0,
+        appendLog: async () => {},
+        onLog: async () => () => {},
+        onState: async () => () => {},
       },
     }));
     const payload = { elements: {} } as never;

@@ -12,6 +12,7 @@
  * không ai gặp trên một máy, và đủ lớn khi có hai mươi người dùng chung.
  */
 import type { Pool, PoolClient } from 'pg';
+import { PgJobQueue } from '../queue/pgQueue.js';
 import { randomUUID } from 'node:crypto';
 import type { ElementRegistry } from '../../core/types.js';
 import type { WorkflowRun } from '../../core/history.js';
@@ -178,7 +179,11 @@ export class PgJobRepo implements JobRepo {
 
   async list(): Promise<WorkflowRun[]> {
     const { rows } = await this.pool.query<{ payload: WorkflowRun }>(
-      `SELECT payload FROM job WHERE org_id = $1 ORDER BY requested_at DESC`,
+      // `NOT payload ? 'spec'`: lịch sử chỉ đọc dòng của CHÍNH nó. Dòng do
+      // hàng đợi ghi mang `JobSpec`, và đọc nó như một `WorkflowRun` sẽ cho ra
+      // những lượt chạy không có trạng thái, không có thời gian, không có gì.
+      `SELECT payload FROM job
+       WHERE org_id = $1 AND NOT payload ? 'spec' ORDER BY requested_at DESC`,
       [this.orgId],
     );
     return rows.map((row) => row.payload);
@@ -186,7 +191,7 @@ export class PgJobRepo implements JobRepo {
 
   async find(id: string): Promise<WorkflowRun | undefined> {
     const { rows } = await this.pool.query<{ payload: WorkflowRun }>(
-      `SELECT payload FROM job WHERE org_id = $1 AND id = $2`,
+      `SELECT payload FROM job WHERE org_id = $1 AND id = $2 AND NOT payload ? 'spec'`,
       [this.orgId, id],
     );
     return rows[0]?.payload;
@@ -213,7 +218,12 @@ export class PgJobRepo implements JobRepo {
     // chết là một dòng nói dối. Ở đây nó còn quan trọng hơn, vì nhiều người
     // cùng nhìn vào bảng ấy.
     const { rows } = await this.pool.query<{ id: string; payload: WorkflowRun }>(
-      `SELECT id, payload FROM job WHERE org_id = $1 AND state IN ('running', 'assigned')`,
+      // `NOT payload ? 'spec'`: bỏ qua dòng do HÀNG ĐỢI ghi — chúng mang
+      // `JobSpec` chứ không phải `WorkflowRun`, và `PgJobQueue.interruptStale()`
+      // mới là chỗ dọn chúng. Hai người viết chung một bảng thì mỗi người phải
+      // nhận ra dòng của mình.
+      `SELECT id, payload FROM job
+       WHERE org_id = $1 AND state IN ('running', 'assigned') AND NOT payload ? 'spec'`,
       [this.orgId],
     );
     for (const row of rows) {
@@ -272,7 +282,8 @@ export class PgRunRepo implements RunRepo {
 
   async list(): Promise<RunMeta[]> {
     const { rows } = await this.pool.query<{ result: RunMeta[] | null }>(
-      `SELECT result FROM job WHERE org_id = $1 AND result IS NOT NULL
+      `SELECT result FROM job
+       WHERE org_id = $1 AND result IS NOT NULL AND NOT payload ? 'spec'
        ORDER BY requested_at DESC`,
       [this.orgId],
     );
@@ -465,6 +476,7 @@ export function pgRepos(pool: Pool, orgId: string): Repos {
     jobs: new PgJobRepo(pool, orgId),
     runs: new PgRunRepo(pool, orgId),
     leases: new PgLeaseRepo(pool, orgId),
+    queue: new PgJobQueue(pool, orgId),
   };
 }
 

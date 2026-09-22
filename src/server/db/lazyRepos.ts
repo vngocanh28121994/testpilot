@@ -13,6 +13,7 @@
  * đầu tiên mới mở kho, và lỗi mở kho nổi ra ĐÚNG ở chỗ cần dữ liệu.
  */
 import type { JobRepo, LeaseRepo, RegistryRepo, Repos, RunRepo } from './repo.js';
+import type { JobQueue } from '../queue/queue.js';
 
 type Build = () => Repos | Promise<Repos>;
 
@@ -54,5 +55,6 @@ export function lazyRepos(build: Build): Repos {
     jobs: proxy<JobRepo>((repos) => repos.jobs, open),
     runs: proxy<RunRepo>((repos) => repos.runs, open),
     leases: proxy<LeaseRepo>((repos) => repos.leases, open),
+    queue: proxy<JobQueue>((repos) => repos.queue, open),
   };
 }

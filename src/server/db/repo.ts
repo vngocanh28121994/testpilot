@@ -14,6 +14,7 @@
  * Xem [FARM-PLAN.md](../../../FARM-PLAN.md) P0.2 và [FARM-ARCHITECTURE.md](../../../FARM-ARCHITECTURE.md) mục 4.
  */
 import { createHash } from 'node:crypto';
+import type { JobQueue } from '../queue/queue.js';
 import type { ElementRegistry } from '../../core/types.js';
 import type { WorkflowRun } from '../../core/history.js';
 import type { RunMeta } from '../../core/runstore.js';
@@ -166,4 +167,14 @@ export interface Repos {
   jobs: JobRepo;
   runs: RunRepo;
   leases: LeaseRepo;
+  /**
+   * Hàng đợi job — xem [queue/queue.ts](../queue/queue.ts).
+   *
+   * Nằm trong bộ repo vì nó là kho DÙNG CHUNG và bị giới hạn theo tổ chức
+   * đúng như những kho khác: một người chỉ được thấy job của tổ chức mình.
+   * `jobs` ở trên là LỊCH SỬ lượt chạy — hai thứ khác nhau dùng chung một
+   * bảng ở chế độ server, và mỗi bên nhận ra dòng của mình qua hình dạng
+   * `payload`.
+   */
+  queue: JobQueue;
 }

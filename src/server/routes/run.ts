@@ -19,10 +19,47 @@ import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { loadConfig } from '../../config.js';
 import { localRunner } from '../../runner/index.js';
-import type { PickedDevice } from '../../runner/execute.js';
 import { activeRuns, findActiveRun } from '../../ui/activeRuns.js';
 import { json, readJson, stream } from '../http.js';
+import type { JobQueue, JobRecord } from '../queue/queue.js';
 import type { RouteTable } from './types.js';
+
+/** Trạng thái mà job không đổi nữa. */
+const CLOSED = ['succeeded', 'failed', 'cancelled', 'interrupted'];
+
+/**
+ * Chờ job đóng lại, và nói ra khi nó được nhận.
+ *
+ * Đăng ký nghe TRƯỚC rồi mới đọc trạng thái hiện tại, không phải ngược lại:
+ * worker có thể nhận và chạy xong job trong vài mili giây, và nếu đọc trước
+ * thì sự kiện "đã xong" rơi vào khoảng giữa hai lời gọi — người bấm nút sẽ
+ * chờ mãi một job đã xong từ lâu.
+ */
+async function waitForClose(
+  queue: JobQueue,
+  id: string,
+  log: (line: string) => void,
+): Promise<JobRecord | undefined> {
+  return new Promise<JobRecord | undefined>((resolve) => {
+    let off = (): void => {};
+    let done = false;
+    const settle = (record: JobRecord | undefined): void => {
+      if (done) return;
+      done = true;
+      off();
+      resolve(record);
+    };
+    void queue.onState(id, (record) => {
+      if (record.state === 'running') log(`[job] runner ${record.runnerId} đã nhận.`);
+      if (CLOSED.includes(record.state)) settle(record);
+    }).then(async (unsubscribe) => {
+      off = unsubscribe;
+      if (done) { unsubscribe(); return; }
+      const now = await queue.find(id);
+      if (now && CLOSED.includes(now.state)) settle(now);
+    });
+  });
+}
 
 export const runRoutes: RouteTable = {
   'GET /api/run/active': async (_req, res) => json(res, 200, { runs: activeRuns() }),
@@ -66,53 +103,103 @@ export const runRoutes: RouteTable = {
     return;
   },
 
+  /**
+   * Bấm nút chạy: TẠO JOB, rồi nối vào log của nó.
+   *
+   * Trước đây route này tự chạy suite trong tiến trình của server và stream về
+   * đúng cái tab đã bấm. Điều đó ổn khi server và thiết bị ở cùng một máy —
+   * nhưng nó làm ba thứ trở thành không thể: bấm chạy khi chưa máy nào rảnh,
+   * chạy trên runner ở máy khác, và biết có bao nhiêu việc đang chờ.
+   *
+   * Hình dạng đường dây KHÔNG đổi: vẫn là SSE với sự kiện `log` và `done`, nên
+   * giao diện không phải sửa gì. Thứ đổi là ai chạy — worker đòi job từ hàng
+   * đợi, và ở chế độ embedded worker ấy tình cờ nằm trong cùng tiến trình.
+   *
+   * Job KHÔNG bị huỷ khi tab đóng: nó là việc đã được đặt, và `GET /api/jobs`
+   * nói nó đang ở đâu. Đó là khác biệt thật so với bản cũ, nơi đóng tab là mất
+   * đường dây duy nhất nhìn thấy lượt chạy.
+   */
   'POST /api/run': async (req, res, _url, ctx) => {
     const body = await readJson<{
       platform: string; tag?: string; headed?: boolean;
       includeQuarantined?: boolean; devices?: string[]; env?: string;
       appSource?: 'device' | 'upload';
     }>(req);
-    // Ticked devices arrive qualified as `platform:id`, because an id alone
-    // cannot say which phone it means once both platforms are on offer.
-    const picked = (body.devices ?? []).map(localRunner.run.parseDeviceToken).filter(Boolean) as PickedDevice[];
 
-    // One device is the single-device path, unchanged — not a parallel run of
-    // size one, which would suffix its directory and defer its writes for no
-    // reason. Only a genuine second device changes how this runs.
-    if (picked.length > 1) {
-      // The platforms to run are the ones actually ticked, not whatever the
-      // Platform select happens to show: the select is only the default for
-      // when nothing is ticked at all.
-      const platforms = [...new Set(picked.map((d) => d.platform))].join(',');
-      const tokens = picked.map((d) => `${d.platform}:${d.id}`);
-      return stream(res, (log) =>
-        localRunner.run.startParallel(
-          platforms, tokens, body.tag, Boolean(body.includeQuarantined), log, body.env, body.appSource,
-        ));
-    }
+    const job = await ctx.repos.queue.create({
+      orgId: ctx.identity.orgId,
+      kind: 'run_suite',
+      createdBy: ctx.identity.userId,
+      spec: {
+        orgId: ctx.identity.orgId,
+        kind: 'run_suite',
+        createdBy: ctx.identity.userId,
+        // Mười lăm phút: dài hơn mọi lượt chạy đã đo, ngắn hơn một đêm. Thu hồi
+        // job quá hạn là việc của P3.2.
+        timeoutMs: 15 * 60_000,
+        // Thiết bị tới dưới dạng `platform:id` vì một id trần không nói được
+        // nó là máy nào khi cả hai nền tảng cùng có mặt.
+        deviceTokens: body.devices ?? [],
+        run: {
+          platform: body.platform,
+          tag: body.tag,
+          headed: Boolean(body.headed),
+          includeQuarantined: Boolean(body.includeQuarantined),
+          env: body.env,
+          appSource: body.appSource,
+        },
+      },
+    });
 
-    const one = picked[0];
-    // A platform with no `devices` list has a single synthesised entry whose
-    // id is the platform's own name. Passing `--device` for it would suffix
-    // the run directory and gain nothing, so the plain path is used instead.
-    const named = one ? await localRunner.run.isNamedDevice(one, ctx.configFile) : false;
     return stream(res, async (log) => {
-      await localRunner.run.startSuite(
-        one?.platform ?? body.platform,
-        body.tag,
-        Boolean(body.headed),
-        Boolean(body.includeQuarantined),
-        log,
-        named ? one!.id : undefined,
-        body.env,
-        undefined,
-        undefined,
-        body.appSource,
-      );
+      log(`[job] ${job.id} đã vào hàng đợi.`);
+      const offLog = await ctx.repos.queue.onLog(job.id, log);
+      try {
+        const closed = await waitForClose(ctx.repos.queue, job.id, log);
+        // KHÔNG ném khi job `failed`: một lượt test đỏ không phải lỗi của
+        // request, và dòng log đã nói rõ. Ném ở đây sẽ biến mọi lượt có test
+        // fail thành một toast lỗi chồng lên chính cái log đang nói điều đó.
+        if (closed?.state === 'interrupted') log(`[job] ${closed.error ?? 'Job bị bỏ dở.'}`);
+      } finally {
+        offLog();
+      }
     });
   },
 
   'POST /api/run/stop': async (_req, res) => json(res, 200, await localRunner.run.stop()),
+
+  /**
+   * Hàng đợi: cái gì đang chờ, cái gì đang chạy, cái gì vừa xong.
+   *
+   * Đây là câu trả lời mà bản cũ không có. Một lượt chạy chỉ tồn tại trên
+   * đường dây SSE của tab đã bấm nút, nên "có gì đang chạy không" là câu hỏi
+   * không ai trả lời được sau khi đóng tab.
+   */
+  'GET /api/jobs': async (_req, res, url, ctx) => {
+    const state = url.searchParams.get('state')?.split(',').filter(Boolean);
+    const jobs = await ctx.repos.queue.list({
+      ...(state?.length ? { state: state as never } : {}),
+      limit: Number(url.searchParams.get('limit') ?? 50),
+    });
+    return json(res, 200, {
+      jobs: jobs.map((job) => ({
+        id: job.id,
+        kind: job.kind,
+        state: job.state,
+        // `spec` KHÔNG đi ra ngoài: nó mang snapshot registry và có thể mang
+        // tên môi trường nội bộ. Màn hình chỉ cần biết chạy cái gì.
+        platform: job.spec.run?.platform,
+        tag: job.spec.run?.tag,
+        devices: job.spec.deviceTokens,
+        requestedAt: job.requestedAt,
+        startedAt: job.startedAt,
+        finishedAt: job.finishedAt,
+        runnerId: job.runnerId,
+        attempt: job.attempt,
+        error: job.error,
+      })),
+    });
+  },
 
   /**
    * Nội dung log của một lượt chạy, lấy riêng khi người dùng bung nó ra.

@@ -107,6 +107,28 @@ describe('ranh giới control plane', () => {
   });
 
   /**
+   * Worker sinh tiến trình con để chạy test, nên nó chỉ được bật ở chế độ
+   * `embedded`.
+   *
+   * Bật nó trong control plane ở chế độ server nghĩa là máy chủ web chạy
+   * Appium và adb — đúng thứ mà cả kiến trúc này dựng lên để tránh. Và kiểu
+   * hỏng ấy im lặng: mọi thứ vẫn chạy, chỉ là chạy ở sai chỗ.
+   */
+  it('worker chỉ khởi động ở chế độ embedded', () => {
+    const host = readFileSync('src/ui/server.ts', 'utf8')
+      .replace(/\/\*[\s\S]*?\*\//g, '')
+      .replace(/^\s*\/\/.*$/gm, '');
+    const call = host.indexOf('startWorker(');
+    assert.ok(call > 0, 'server.ts phải khởi động worker ở chế độ embedded');
+
+    const guard = host.lastIndexOf("MODE === 'embedded'", call);
+    assert.ok(
+      guard > 0 && call - guard < 600,
+      'lời gọi startWorker phải nằm trong nhánh kiểm MODE === embedded',
+    );
+  });
+
+  /**
    * Không có POWER/SLEEP trên nền tảng nào: một nút trên web khoá màn hình
    * chiếc máy ở phòng khác là thứ không ai gỡ được từ xa.
    *
