@@ -62,12 +62,30 @@ export class MemoryJobQueue implements JobQueue {
   }
 
   async claim(by: ClaimBy): Promise<JobRecord | undefined> {
-    for (const id of this.order) {
-      const record = this.jobs.get(id);
-      if (!record || record.state !== 'queued') continue;
-      if ((this.notBefore.get(id) ?? 0) > Date.now()) continue;
-      if (!this.suits(record, by)) continue;
+    // Ai đang chạy bao nhiêu job — cơ sở của cả thứ tự lẫn hạn mức.
+    const busy = new Map<string, number>();
+    for (const record of this.jobs.values()) {
+      if (record.state !== 'assigned' && record.state !== 'running') continue;
+      busy.set(record.createdBy, (busy.get(record.createdBy) ?? 0) + 1);
+    }
 
+    const ready = this.order
+      .map((id) => this.jobs.get(id))
+      .filter((record): record is JobRecord => {
+        if (!record || record.state !== 'queued') return false;
+        if ((this.notBefore.get(record.id) ?? 0) > Date.now()) return false;
+        if (!this.suits(record, by)) return false;
+        if (by.maxPerUser !== undefined
+          && (busy.get(record.createdBy) ?? 0) >= by.maxPerUser) return false;
+        return true;
+      })
+      // Người ít việc đang chạy nhất trước. `order` đã là thứ tự đặt job, và
+      // `sort` của JS ổn định, nên giữa hai người ngang nhau thì job cũ hơn
+      // vẫn thắng — không ai bị bỏ quên.
+      .sort((a, b) => (busy.get(a.createdBy) ?? 0) - (busy.get(b.createdBy) ?? 0));
+
+    for (const record of ready) {
+      const id = record.id;
       const claimed: JobRecord = {
         ...record,
         state: 'running',

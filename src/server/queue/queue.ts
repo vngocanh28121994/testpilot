@@ -48,18 +48,24 @@ export interface NewJob {
   spec: Omit<JobSpec, 'jobId'>;
 }
 
-/** Runner tự giới thiệu lúc đòi job. Ghép theo năng lực thật là việc của P3.3. */
+/** Runner tự giới thiệu lúc đòi job. */
 export interface ClaimBy {
   runnerId: string;
   /**
-   * Nền tảng runner chạy được.
+   * Nền tảng runner chạy được, ĐO từ máy đang cắm — xem
+   * [scheduler/match.ts](../scheduler/match.ts).
    *
-   * Lọc thô, và cố ý thô: ghép job thật — năng lực đo được, tag, điều kiện
-   * thiết bị, quota theo tổ chức — là P3.3. Nhưng KHÔNG lọc gì thì một runner
-   * chỉ chạy web sẽ nhận job Android rồi fail giữa chừng, và job ấy quay lại
-   * hàng đợi để lại bị chính nó nhận.
+   * Không lọc thì một runner chỉ chạy web sẽ nhận job Android rồi fail giữa
+   * chừng, và job ấy quay lại hàng đợi để lại bị chính nó nhận.
    */
   platforms?: string[];
+  /**
+   * Một người được chạy tối đa bao nhiêu job cùng lúc. `undefined` là không hạn.
+   *
+   * Hạn mức là lớp thứ hai; lớp thứ nhất là THỨ TỰ (xem dưới). Hạn mức chỉ cần
+   * khi một người muốn chiếm hết công suất bằng cách giữ job chạy thật lâu.
+   */
+  maxPerUser?: number;
 }
 
 export interface JobQueue {
@@ -74,6 +80,11 @@ export interface JobQueue {
    * bản Postgres dùng `FOR UPDATE SKIP LOCKED`, bản bộ nhớ chạy trong một
    * tiến trình nên bản thân nó đã tuần tự. Trả `undefined` khi không có gì
    * hợp — không phải lỗi, chỉ là hàng đợi rỗng.
+   *
+   * **Thứ tự là công bằng, không phải đến-trước-lấy-trước.** Người đang có ít
+   * job chạy nhất được xét trước, rồi mới tới `priority`, rồi mới tới thời
+   * điểm đặt. Thuần FIFO nghĩa là một người bắn năm mươi job làm người kế tiếp
+   * chờ hết năm mươi lượt — và họ không làm gì sai, họ chỉ bấm chậm hơn.
    */
   claim(by: ClaimBy): Promise<JobRecord | undefined>;
 

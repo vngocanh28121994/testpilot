@@ -100,22 +100,39 @@ export class PgJobQueue implements JobQueue {
     const { rows } = await this.pool.query<JobRow>(
       `UPDATE job SET state = 'running', runner_id = $2, started_at = $3
        WHERE id = (
-         SELECT id FROM job
-         WHERE org_id = $1 AND state = 'queued' AND payload ? 'spec'
-           AND (not_before IS NULL OR not_before <= $5)
+         SELECT j.id FROM job j
+         WHERE j.org_id = $1 AND j.state = 'queued' AND j.payload ? 'spec'
+           AND (j.not_before IS NULL OR j.not_before <= $5)
            AND (
              $4::text[] IS NULL
-             OR payload -> 'spec' -> 'run' ->> 'platform' IS NULL
-             OR payload -> 'spec' -> 'run' ->> 'platform' = ANY($4)
+             OR j.payload -> 'spec' -> 'run' ->> 'platform' IS NULL
+             OR j.payload -> 'spec' -> 'run' ->> 'platform' = ANY($4)
            )
-         -- Ưu tiên cao trước, rồi tới cũ nhất: không ai phải chờ vô hạn chỉ vì
-         -- có người liên tục bắn job mới.
-         ORDER BY priority DESC, requested_at
+           AND (
+             $6::int IS NULL
+             OR (SELECT COUNT(*) FROM job b
+                 WHERE b.org_id = j.org_id AND b.created_by = j.created_by
+                   AND b.state IN ('assigned', 'running')) < $6
+           )
+         -- Công bằng TRƯỚC, rồi mới tới ưu tiên và thời điểm đặt.
+         --
+         -- Người đang có ít job chạy nhất được xét trước. Thuần FIFO nghĩa là
+         -- một người bắn năm mươi job làm người kế tiếp chờ hết năm mươi lượt
+         -- — và họ không làm gì sai, họ chỉ bấm chậm hơn.
+         ORDER BY
+           (SELECT COUNT(*) FROM job b
+            WHERE b.org_id = j.org_id AND b.created_by = j.created_by
+              AND b.state IN ('assigned', 'running')),
+           j.priority DESC,
+           j.requested_at
          FOR UPDATE SKIP LOCKED
          LIMIT 1
        )
        RETURNING *`,
-      [this.orgId, by.runnerId, new Date().toISOString(), platforms, new Date().toISOString()],
+      [
+        this.orgId, by.runnerId, new Date().toISOString(), platforms,
+        new Date().toISOString(), by.maxPerUser ?? null,
+      ],
     );
     return rows[0] ? toRecord(rows[0]) : undefined;
   }

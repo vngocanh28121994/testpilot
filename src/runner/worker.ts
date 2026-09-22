@@ -11,6 +11,8 @@
  * nhiều job trên một máy là việc của lease (P3.2) — ở đây mà làm thì hai job
  * sẽ tranh cùng một chiếc điện thoại, và không ai phân xử.
  */
+import { loadConfig, type TestPilotConfig } from '../config.js';
+import { resolveDevices, runnerPlatforms, type AttachedDevice } from '../server/scheduler/match.js';
 import type { JobRecord, JobQueue } from '../server/queue/queue.js';
 import { LeaseTakenError, type Lease, type LeaseHolder, type LeaseRepo } from '../server/db/repo.js';
 import type { JobResult } from '../protocol/messages.js';
@@ -29,9 +31,23 @@ export interface WorkerDeps {
   leases: LeaseRepo;
   /** Tên runner này trong sổ. Ở embedded là `local`. */
   runnerId: string;
-  /** Nền tảng chạy được; `undefined` nghĩa là nhận tất. */
+  /**
+   * Nền tảng chạy được. Bỏ trống thì worker TỰ ĐO từ máy đang cắm.
+   *
+   * Khai tay chỉ dùng cho test: khai điều mình mong thay vì điều mình đo được
+   * nghĩa là job iOS rơi vào một máy không có iPhone nào.
+   */
   platforms?: string[];
+  /** Một người được chạy tối đa bao nhiêu job cùng lúc. Bỏ trống là không hạn. */
+  maxPerUser?: number;
   configFile: string;
+  /**
+   * Đọc config. Bỏ trống thì đọc từ `configFile`.
+   *
+   * Tiêm được để test không phải dựng một file thật trên đĩa — và quan trọng
+   * hơn: để test mô tả được những config khác với config của chính dự án này.
+   */
+  config?: () => Promise<TestPilotConfig>;
   /** Nhịp hỏi hàng đợi. Nhỏ thì job chạy nhanh hơn, to thì đỡ tốn CPU khi rỗi. */
   pollMs?: number;
   /** Nhịp gia hạn lease. Phải nhỏ hơn TTL 60 giây, và có lề cho một nhịp lỡ. */
@@ -54,17 +70,52 @@ export function startWorker(deps: WorkerDeps): WorkerHandle {
   let busy = false;
   let current: string | undefined;
 
+  /**
+   * Ảnh chụp máy đang cắm, làm mới nhiều nhất mười giây một lần.
+   *
+   * Hỏi `adb` và `simctl` thật mất 200-500ms. Nhịp đòi job là một phần tư
+   * giây, nên hỏi mỗi nhịp sẽ tốn nhiều thời gian máy hơn cả việc chạy test.
+   * Mười giây cũ là chấp nhận được vì đây chỉ là bộ LỌC: lease và lần chạy
+   * thật mới là chỗ sai được bắt chắc chắn.
+   */
+  let snapshot: { at: number; devices: AttachedDevice[] } = { at: 0, devices: [] };
+  const attached = async (): Promise<AttachedDevice[]> => {
+    if (Date.now() - snapshot.at < 10_000) return snapshot.devices;
+    let devices: Array<{ platform: string; udid: string }> = [];
+    try {
+      devices = await runner.control.devices();
+    } catch {
+      // `try` chứ không phải `.catch()` trên lời hứa: một runner không có nhóm
+      // `control` làm lời gọi này ném ĐỒNG BỘ, trước khi có lời hứa nào để bắt
+      // — và cú ném ấy đi thẳng ra vòng lặp, làm worker không đòi job nữa mà
+      // không ai thấy. Một bài test treo mười phút vì đúng chuyện này.
+      //
+      // Không đọc được danh sách máy thì coi như KHÔNG có máy nào: job cần
+      // thiết bị sẽ nằm chờ, thay vì được nhận rồi hỏng sâu bên trong driver.
+      devices = [];
+    }
+    snapshot = {
+      at: Date.now(),
+      devices: devices
+        .filter((device) => device.platform === 'android' || device.platform === 'ios')
+        .map((device) => ({ platform: device.platform as 'android' | 'ios', udid: device.udid })),
+    };
+    return snapshot.devices;
+  };
+
   const tick = async (): Promise<void> => {
     if (stopped || busy) return;
     busy = true;
     try {
+      const devices = await attached();
       const job = await deps.queue.claim({
         runnerId: deps.runnerId,
-        ...(deps.platforms ? { platforms: deps.platforms } : {}),
+        platforms: deps.platforms ?? runnerPlatforms(devices),
+        ...(deps.maxPerUser !== undefined ? { maxPerUser: deps.maxPerUser } : {}),
       });
       if (!job) return;
       current = job.id;
-      await run(job, deps, runner);
+      await run(job, deps, runner, devices);
     } catch (err) {
       // Vòng lặp KHÔNG được chết vì một job hỏng: nó còn phải phục vụ job sau.
       // Nhưng im lặng thì cũng không được — một worker đã chết và một worker
@@ -88,7 +139,12 @@ export function startWorker(deps: WorkerDeps): WorkerHandle {
 }
 
 /** Chạy một job và đóng nó lại. Mọi đường ra đều phải gọi `finish` hoặc `release`. */
-async function run(job: JobRecord, deps: WorkerDeps, runner: Runner): Promise<void> {
+async function run(
+  job: JobRecord,
+  deps: WorkerDeps,
+  runner: Runner,
+  attached: AttachedDevice[],
+): Promise<void> {
   const log = (line: string): void => { void deps.queue.appendLog(job.id, line); };
 
   if (job.kind !== 'run_suite') {
@@ -114,8 +170,30 @@ async function run(job: JobRecord, deps: WorkerDeps, runner: Runner): Promise<vo
     .map((token) => runner.run.parseDeviceToken(token))
     .filter((device): device is NonNullable<typeof device> => device !== null);
 
+  /**
+   * Chiếc máy này tên là gì — và đó là chỗ P3.3 sửa một lỗi im lặng.
+   *
+   * Cùng một điện thoại có `id` trong config (`sm-s918b`) và `udid` mà adb trả
+   * về (`R5CW525G35Y`). Màn Điều khiển giữ chỗ theo udid; job trước P3.3 giữ
+   * theo id. Hai cái tên khác nhau nghĩa là hai bên khoá hai thứ khác nhau, và
+   * lá chắn dựng ở P3.2 chỉ hoạt động với config tình cờ đặt id trùng udid.
+   */
+  const cfg = await (deps.config?.() ?? loadConfig(deps.configFile));
+  const resolved = resolveDevices(job.spec, cfg, attached);
+  if (!resolved.ok) {
+    if (!resolved.wait) {
+      await close(deps, job, {
+        type: 'job.result', jobId: job.id, state: 'failed', error: resolved.reason,
+      });
+      return;
+    }
+    if (job.error !== resolved.reason) log(`[job] ${resolved.reason} Job chờ tới lượt.`);
+    await deps.queue.defer(job.id, resolved.reason, deps.deferMs ?? 5_000);
+    return;
+  }
+
   const holder: LeaseHolder = { kind: 'job', jobId: job.id };
-  const held = await hold(picked.map((device) => device.id), deps, holder, log);
+  const held = await hold(resolved.udids, deps, holder, log);
   if (!held.ok) {
     // HOÃN, không đánh hỏng và cũng không tính là một lần thử: máy đang bận là
     // chuyện tạm thời, và đánh hỏng ở đây nghĩa là người dùng phải bấm lại —
@@ -204,10 +282,9 @@ async function run(job: JobRecord, deps: WorkerDeps, runner: Runner): Promise<vo
  * cầm một chiếc máy bên kia cần, và cả hai chờ mãi. Nên hỏng ở chiếc thứ hai
  * thì nhả luôn chiếc thứ nhất.
  *
- * Job không nêu máy nào thì KHÔNG giữ gì, và nói ra. Biết chiếc máy thật mà
- * một lượt chạy sẽ dùng khi người dùng không chọn là việc của P3.3 — ở đó danh
- * tính thiết bị được phân giải đàng hoàng. Khoá một cái tên đoán được ở đây sẽ
- * TRÔNG như bảo vệ mà không bảo vệ gì, và đó tệ hơn là không khoá.
+ * Danh sách vào đây đã là UDID, do `resolveDevices` phân giải — không phải id
+ * của config. Đó là cái tên mà màn Điều khiển cũng khoá, và trùng tên là điều
+ * kiện để hai bên chặn được nhau.
  */
 async function hold(
   deviceIds: string[],
@@ -215,10 +292,9 @@ async function hold(
   holder: LeaseHolder,
   log: (line: string) => void,
 ): Promise<{ ok: true; leases: Lease[] } | { ok: false; reason: string }> {
-  if (deviceIds.length === 0) {
-    log('[job] Job không nêu máy cụ thể, nên không giữ chỗ thiết bị (xem P3.3).');
-    return { ok: true, leases: [] };
-  }
+  // Rỗng chỉ còn đúng một nghĩa: job web, không cần thiết bị nào. Mọi đường
+  // "không biết máy nào" đã bị `resolveDevices` chặn trước đó.
+  if (deviceIds.length === 0) return { ok: true, leases: [] };
 
   const leases: Lease[] = [];
   for (const deviceId of deviceIds) {

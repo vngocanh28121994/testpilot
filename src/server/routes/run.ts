@@ -43,9 +43,11 @@ async function waitForClose(
   return new Promise<JobRecord | undefined>((resolve) => {
     let off = (): void => {};
     let done = false;
+    let quiet: ReturnType<typeof setTimeout>;
     const settle = (record: JobRecord | undefined): void => {
       if (done) return;
       done = true;
+      clearTimeout(quiet);
       off();
       resolve(record);
     };
@@ -55,6 +57,23 @@ async function waitForClose(
     // và in lại câu ấy mỗi năm giây nghĩa là sau năm phút có sáu mươi dòng
     // giống hệt nhau — người đọc không học thêm gì sau dòng đầu.
     let announced: string | undefined;
+    /**
+     * Sau năm giây mà chưa ai nhận thì NÓI RA.
+     *
+     * Một job nằm `queued` im lặng nhìn giống hệt một job bị treo, và người
+     * bấm nút không có cách nào phân biệt. Câu này không đoán nguyên nhân —
+     * control plane chưa có sổ năng lực runner, đó là P3.4 — nhưng nó nói
+     * đúng thứ nó biết, và chỉ đúng chỗ để đi kiểm.
+     */
+    quiet = setTimeout(() => {
+      void queue.find(id).then((record) => {
+        if (done || record?.state !== 'queued' || record.error) return;
+        log('[job] Chưa runner nào nhận job này. Kiểm tra máy đã cắm chưa, '
+          + 'hoặc xem hàng đợi ở /api/jobs.');
+      });
+    }, 5_000);
+    quiet.unref?.();
+
     void queue.onState(id, (record) => {
       if (record.state === 'running' && record.runnerId !== announced) {
         announced = record.runnerId;

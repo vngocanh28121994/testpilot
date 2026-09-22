@@ -319,12 +319,38 @@ WDA. Đầu vào thì không cần ai cho: Appium/WDA theo W3C, mà webdriverio 
   một lượt chạy sẽ dùng khi người dùng không chọn là việc của P3.3, nơi danh tính thiết bị được
   phân giải đàng hoàng. Khoá một cái tên đoán được ở đây sẽ TRÔNG như bảo vệ mà không bảo vệ gì.
 
-### P3.3 Ghép job với thiết bị
-- `src/server/scheduler/match.ts`: lọc theo tổ chức, quyền nhìn thấy, platform, năng lực runner,
-  điều kiện thiết bị (`os>=13`), tag pool.
-- Công bằng: hàng đợi theo tổ chức, quota số job đồng thời, `priority`.
-- **Xong khi:** `matchCapability.test.ts` — job iOS không bao giờ được gửi cho runner Linux;
-  `fairness.test.ts` — một người bắn 50 job không làm người khác chờ vô hạn.
+### P3.3 Ghép job với thiết bị — ✅ xong 2026-09-22
+- **Lỗi im lặng đã sửa, và nó lớn hơn phần ghép:** cùng một chiếc điện thoại có `id` trong config
+  (`sm-s918b`), `udid` mà adb trả về (`R5CW525G35Y`), và `deviceName` của Appium (`SM_S918B`). Màn
+  Điều khiển giữ chỗ theo **udid**; job ở P3.2 giữ theo **id**. Hai cái tên khác nhau cho cùng một
+  chiếc máy nghĩa là hai bên khoá hai thứ khác nhau — lá chắn dựng ở P3.2 chỉ hoạt động với config
+  tình cờ đặt id trùng udid, và không có lỗi nào hiện ra. Giờ mọi đường quy về **udid**, vì đó là
+  cái tên duy nhất cả ba bên đều gọi giống nhau.
+- [scheduler/match.ts](src/server/scheduler/match.ts) là hàm THUẦN, nên 13 bài đo nó không cần một
+  chiếc máy nào. Bốn đường ra, và ba trong số đó là "chưa chạy": chạy được, **chờ** (máy chưa cắm),
+  hoặc **hỏng** (spec mơ hồ). Phân biệt chờ với hỏng quyết định job nằm đợi hay đỏ lên, và phần lớn
+  cái sai ở đây là "chưa đủ điều kiện" chứ không phải lỗi.
+- Một mã thiết bị lạ là **chờ**, không phải hỏng: danh sách chọn máy lấy từ máy đang cắm, nên mã lạ
+  gần như luôn là chiếc máy vừa bị rút ra. Câu trả lời nói cả khả năng kia, vì gõ sai nhìn từ đây
+  giống hệt.
+- Config một-máy không khai udid — mọi config chưa nâng cấp đều thế — thì lấy chiếc duy nhất đang
+  cắm. Hai chiếc trở lên thì **không đoán**: đoán sai là chạy nhầm điện thoại, và sai ấy chỉ lộ ra
+  sau khi báo cáo đã được đọc và tin.
+- Năng lực runner ĐO từ máy đang cắm, không khai tay: job iOS rơi vào một máy không có iPhone nào
+  sẽ fail sau ba phút chờ WebDriverAgent, và đó là ba phút thiết bị của cả đội bị giữ vô ích. Ảnh
+  chụp thiết bị có đệm 10 giây — hỏi `adb` và `simctl` thật mất 200-500ms, còn nhịp đòi job là một
+  phần tư giây.
+- **Công bằng nằm trong `claim`, ở CẢ HAI kho:** người đang có ít job chạy nhất được xét trước, rồi
+  mới tới `priority`, rồi mới tới thời điểm đặt. Thuần FIFO nghĩa là một người bắn năm mươi job làm
+  người kế tiếp chờ hết năm mươi lượt — và họ không làm gì sai, họ chỉ bấm chậm hơn. `maxPerUser`
+  là lớp thứ hai, tuỳ chọn.
+- Job nằm `queued` quá năm giây thì route NÓI RA. Một job im lặng nhìn giống hệt một job bị treo.
+- **Đo được:** 13 bài cho `match.ts`, 4 bài mới trong `worker.test.ts` (gồm bài dựng đúng config
+  thật `id ≠ udid` và chứng minh người cầm máy theo udid chặn được job chọn theo id), 3 bài công
+  bằng chạy ở cả bản bộ nhớ lẫn **Postgres thật** (22 bài tích hợp xanh). Trên server thật: job
+  android khi không máy nào cắm → chờ kèm câu giải thích; job web → chạy ngay vì không cần thiết bị.
+- **Chưa đo được trên máy thật:** đường id→udid với một chiếc điện thoại cắm thật, vì đĩa máy này
+  còn 335 MB và emulator từ chối khởi động. Phần ấy hiện chỉ có bằng chứng ở tầng đơn vị.
 
 ### P3.4 Runner lab chạy độc lập
 - `src/runner/main.ts` + script `npm run runner`, đóng gói qua `scripts/bundle-runner.sh`

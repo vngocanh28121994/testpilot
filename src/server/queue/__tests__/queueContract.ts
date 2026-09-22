@@ -125,6 +125,52 @@ export function queueContract(
     assert.ok(await queue.claim({ runnerId: 'web-only', platforms: ['web'] }));
   });
 
+  /**
+   * Điều kiện hoàn thành của P3.3, viết thành một khẳng định.
+   *
+   * Một người bắn năm mươi job không được làm người kế tiếp chờ hết năm mươi
+   * lượt — họ không làm gì sai, họ chỉ bấm chậm hơn.
+   */
+  it('công bằng: người bắn nhiều job không chặn người bắn ít', async () => {
+    const queue = await fresh();
+    for (let i = 0; i < 5; i += 1) {
+      await queue.create({ ...androidJob(), createdBy: 'nguoi-ban-nhieu' });
+    }
+    await queue.create({ ...androidJob(), createdBy: 'nguoi-ban-it' });
+
+    // Lượt đầu: chưa ai chạy gì, nên job cũ nhất thắng.
+    const first = await queue.claim({ runnerId: 'r1' });
+    assert.equal(first?.createdBy, 'nguoi-ban-nhieu');
+
+    // Lượt thứ hai: người kia đã có một job chạy, nên tới lượt người ít việc —
+    // dù job của họ đặt SAU cả năm job trên.
+    const second = await queue.claim({ runnerId: 'r2' });
+    assert.equal(second?.createdBy, 'nguoi-ban-it');
+  });
+
+  it('cùng số job đang chạy thì ai đặt trước được trước', async () => {
+    const queue = await fresh();
+    const early = await queue.create({ ...androidJob(), createdBy: 'a' });
+    await queue.create({ ...androidJob(), createdBy: 'b' });
+
+    assert.equal((await queue.claim({ runnerId: 'r1' }))?.id, early.id);
+  });
+
+  /** Lớp thứ hai: chặn người giữ job chạy thật lâu để chiếm hết công suất. */
+  it('hạn mức job đồng thời cho mỗi người', async () => {
+    const queue = await fresh();
+    await queue.create({ ...androidJob(), createdBy: 'mot-minh' });
+    await queue.create({ ...androidJob(), createdBy: 'mot-minh' });
+
+    assert.ok(await queue.claim({ runnerId: 'r1', maxPerUser: 1 }));
+    assert.equal(
+      await queue.claim({ runnerId: 'r2', maxPerUser: 1 }), undefined,
+      'đã chạm hạn thì không nhận thêm, dù hàng đợi còn job',
+    );
+    // Không đặt hạn thì vẫn nhận được: hạn là tuỳ chọn, không phải mặc định.
+    assert.ok(await queue.claim({ runnerId: 'r3' }));
+  });
+
   it('job đã nhận thì không ai đòi lại được', async () => {
     const queue = await fresh();
     await queue.create(androidJob());

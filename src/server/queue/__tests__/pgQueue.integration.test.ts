@@ -20,8 +20,11 @@ const URL_ = process.env.TESTPILOT_DATABASE_URL
 let pool: Pool;
 const ORG = `org-queue-${Date.now()}`;
 
+/** Người tạo job mà bộ khẳng định dùng tên. `created_by` có khoá ngoại. */
+const USERS = ['u1', 'nguoi-ban-nhieu', 'nguoi-ban-it', 'mot-minh', 'a', 'b'];
+
 /** Runner mà bộ khẳng định dùng tên. `runner_id` có khoá ngoại, nên phải có thật. */
-const RUNNERS = ['runner-1', 'a', 'b', 'c', 'r', 'web-only', 'full', ...Array.from(
+const RUNNERS = ['runner-1', 'a', 'b', 'c', 'r', 'r1', 'r2', 'r3', 'web-only', 'full', ...Array.from(
   { length: 10 }, (_unused, i) => `racer-${i}`,
 )];
 
@@ -29,11 +32,15 @@ before(async () => {
   pool = await connect({ url: URL_ });
   const at = new Date().toISOString();
   await pool.query('INSERT INTO org (id, name, created_at) VALUES ($1, $2, $3)', [ORG, 'Queue', at]);
-  await pool.query(
-    `INSERT INTO app_user (id, email, name, created_at) VALUES ('u1', 'u1@test.dev', 'U', $1)
-     ON CONFLICT DO NOTHING`,
-    [at],
-  );
+  // Người tạo job có khoá ngoại, nên mọi tên mà bộ khẳng định dùng phải có
+  // thật — kể cả những tên chỉ xuất hiện trong bài công bằng.
+  for (const id of USERS) {
+    await pool.query(
+      `INSERT INTO app_user (id, email, name, created_at) VALUES ($1, $2, $1, $3)
+       ON CONFLICT DO NOTHING`,
+      [id, `${id}@test.dev`, at],
+    );
+  }
   // Dọn dấu vết của lần chạy TRƯỚC trước khi cắm dòng mới.
   //
   // Tên runner ở đây phải đúng từng chữ, vì bộ khẳng định kiểm rằng hàng đợi

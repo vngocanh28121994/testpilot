@@ -17,6 +17,7 @@ import type { IncomingMessage, ServerResponse } from 'node:http';
 import { runRoutes } from '../run.js';
 import { MemoryJobQueue } from '../../queue/memoryQueue.js';
 import { MemoryLeaseRepo } from '../../db/leaseRepo.js';
+import { ConfigSchema } from '../../../config.js';
 import { startWorker } from '../../../runner/worker.js';
 import type { Repos } from '../../db/repo.js';
 import type { Runner } from '../../../runner/index.js';
@@ -41,6 +42,14 @@ function fakeRes(): { res: ServerResponse; events: Array<{ event: string; data: 
   } as unknown as ServerResponse;
   return { res, events };
 }
+
+/** Config một-máy: chiếc máy thật là chiếc duy nhất đang cắm. */
+const CONFIG = ConfigSchema.parse({
+  web: { baseUrl: 'https://example.test' },
+  android: { deviceName: 'Android Device' },
+  ios: { deviceName: 'iPhone' },
+});
+const config = async () => CONFIG;
 
 function context(queue: MemoryJobQueue): RouteContext {
   return {
@@ -70,6 +79,9 @@ function runner(outcome: { code: number | null; stopped?: boolean }): Runner {
       },
       startParallel: async () => undefined as never,
       stop: async () => ({ stopped: 0 }) as never,
+    },
+    control: {
+      devices: async () => [{ platform: 'android' as const, udid: 'emulator-5554', label: 'x' }],
     },
   } as unknown as Runner;
 }
@@ -108,7 +120,7 @@ describe('POST /api/run tạo job', () => {
   it('chạy xong thì log chảy qua SSE và kết thúc bằng done', async () => {
     const queue = new MemoryJobQueue();
     const worker = startWorker({
-      queue, leases: new MemoryLeaseRepo(), runnerId: 'local', configFile: 'x.json',
+      queue, leases: new MemoryLeaseRepo(), runnerId: 'local', configFile: 'x.json', config,
       pollMs: 5, runner: runner({ code: 0 }),
     });
     try {
@@ -128,7 +140,7 @@ describe('POST /api/run tạo job', () => {
   it('test đỏ vẫn kết thúc bằng done ok, không phải error', async () => {
     const queue = new MemoryJobQueue();
     const worker = startWorker({
-      queue, leases: new MemoryLeaseRepo(), runnerId: 'local', configFile: 'x.json',
+      queue, leases: new MemoryLeaseRepo(), runnerId: 'local', configFile: 'x.json', config,
       pollMs: 5, runner: runner({ code: 1 }),
     });
     try {
@@ -144,23 +156,31 @@ describe('POST /api/run tạo job', () => {
     }
   });
 
+  /**
+   * Máy trong bài này phải là máy ĐANG CẮM của runner giả.
+   *
+   * Bản đầu dùng `ios:0001` cho tiện, và từ P3.3 thì job ấy nằm CHỜ máy iOS
+   * cắm vào — đúng hành vi mong muốn, nhưng nó làm route không bao giờ trả về
+   * và bài test treo tới hết hạn. Một bài test treo mười phút là cái giá của
+   * một chi tiết tưởng là không quan trọng.
+   */
   it('body của nút chạy đi trọn vẹn vào spec', async () => {
     const queue = new MemoryJobQueue();
     const worker = startWorker({
-      queue, leases: new MemoryLeaseRepo(), runnerId: 'local', configFile: 'x.json',
+      queue, leases: new MemoryLeaseRepo(), runnerId: 'local', configFile: 'x.json', config,
       pollMs: 5, runner: runner({ code: 0 }),
     });
     try {
       await postRun(queue, {
-        platform: 'ios', tag: '@p0', headed: true, includeQuarantined: true,
-        env: 'uat', appSource: 'upload', devices: ['ios:0001'],
+        platform: 'android', tag: '@p0', headed: true, includeQuarantined: true,
+        env: 'uat', appSource: 'upload', devices: ['android:emulator-5554'],
       });
       const [job] = await queue.list();
       assert.deepEqual(job!.spec.run, {
-        platform: 'ios', tag: '@p0', headed: true, includeQuarantined: true,
+        platform: 'android', tag: '@p0', headed: true, includeQuarantined: true,
         env: 'uat', appSource: 'upload',
       });
-      assert.deepEqual(job!.spec.deviceTokens, ['ios:0001']);
+      assert.deepEqual(job!.spec.deviceTokens, ['android:emulator-5554']);
       assert.equal(job!.spec.orgId, 'org-1');
       assert.equal(job!.createdBy, 'u1');
     } finally {
