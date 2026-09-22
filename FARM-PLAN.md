@@ -349,8 +349,16 @@ WDA. Đầu vào thì không cần ai cho: Appium/WDA theo W3C, mà webdriverio 
   thật `id ≠ udid` và chứng minh người cầm máy theo udid chặn được job chọn theo id), 3 bài công
   bằng chạy ở cả bản bộ nhớ lẫn **Postgres thật** (22 bài tích hợp xanh). Trên server thật: job
   android khi không máy nào cắm → chờ kèm câu giải thích; job web → chạy ngay vì không cần thiết bị.
-- **Chưa đo được trên máy thật:** đường id→udid với một chiếc điện thoại cắm thật, vì đĩa máy này
-  còn 335 MB và emulator từ chối khởi động. Phần ấy hiện chỉ có bằng chứng ở tầng đơn vị.
+- **Đo trên máy thật (emulator Android, sau khi dọn đĩa):** khai `may-ao` trong config với
+  `udid: emulator-5554`, rồi giữ chỗ `emulator-5554` qua màn Điều khiển — đúng cái tên mà màn ấy
+  dùng. Job xin `android:may-ao` — đúng cái tên mà màn chạy dùng — bị CHẶN:
+  `Thiết bị "emulator-5554" đang được local giữ… Job chờ tới lượt.` Trước P3.3 job này chạy đè lên.
+  Nhả máy → `[job] Đã giữ chỗ: emulator-5554.` rồi `tsx src/cli/run.ts --device may-ao`, tức là
+  lease dùng udid còn CLI nhận id — đúng hai vai của hai cái tên. Xong thì lease rỗng lại.
+- Hai chỗ dễ mất thời gian, ghi lại để lần sau khỏi tìm: server đọc **config cá nhân**
+  (`.testpilot/users/<user>/config.json`), không phải `testpilot.config.json` — bản kia chỉ là hạt
+  giống; và server phải có `adb` trong PATH, nếu không danh sách máy rỗng và mọi job Android nằm
+  chờ với câu "chưa cắm".
 
 ### P3.4 Runner lab chạy độc lập
 - `src/runner/main.ts` + script `npm run runner`, đóng gói qua `scripts/bundle-runner.sh`
