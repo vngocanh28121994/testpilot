@@ -19,7 +19,12 @@ import type { RunMeta } from '../../core/runstore.js';
 import {
   revisionOf,
   RevisionConflictError,
+  LEASE_TTL_MS,
+  LeaseTakenError,
   type JobRepo,
+  type Lease,
+  type LeaseHolder,
+  type LeaseRepo,
   type RegistryRepo,
   type Repos,
   type RunRepo,
@@ -279,11 +284,187 @@ export class PgRunRepo implements RunRepo {
   }
 }
 
+
+/* ── Giữ chỗ thiết bị ─────────────────────────────────────────────────── */
+
+interface LeaseRow {
+  id: string;
+  device_id: string;
+  org_id: string;
+  holder_kind: 'job' | 'human';
+  job_id: string | null;
+  holder_user_id: string | null;
+  acquired_at: string;
+  expires_at: string;
+  renewed_at: string | null;
+}
+
+function toLease(row: LeaseRow): Lease {
+  return {
+    id: row.id,
+    deviceId: row.device_id,
+    orgId: row.org_id,
+    holder: row.holder_kind === 'job'
+      ? { kind: 'job', jobId: row.job_id! }
+      : { kind: 'human', userId: row.holder_user_id! },
+    acquiredAt: row.acquired_at,
+    expiresAt: row.expires_at,
+    renewedAt: row.renewed_at ?? undefined,
+  };
+}
+
+function sameHolder(a: LeaseHolder, b: LeaseHolder): boolean {
+  if (a.kind === 'job' && b.kind === 'job') return a.jobId === b.jobId;
+  if (a.kind === 'human' && b.kind === 'human') return a.userId === b.userId;
+  return false;
+}
+
+/**
+ * Lease trên Postgres. Phép loại trừ là `UNIQUE (device_id)`, không phải mã ta viết.
+ *
+ * Điều bản bộ nhớ không làm được, và là lý do bản này tồn tại: hai control
+ * plane chạy song song sau load balancer. Hai tiến trình khác nhau thì không có
+ * `Map` nào dùng chung, nên thứ duy nhất còn lại để phân xử là DB — và nó phân
+ * xử bằng một chỉ mục, tức là bằng một khẳng định không mã nào lách được.
+ */
+export class PgLeaseRepo implements LeaseRepo {
+  constructor(
+    private readonly pool: Pool,
+    private readonly orgId: string,
+  ) {}
+
+  async acquire(deviceId: string, holder: LeaseHolder, now = new Date()): Promise<Lease> {
+    const at = now.toISOString();
+    const expires = new Date(now.getTime() + LEASE_TTL_MS).toISOString();
+    const client = await this.pool.connect();
+    try {
+      await client.query('BEGIN');
+      // Dọn hạn CÙNG transaction với việc giữ. Tách làm hai lệnh nghĩa là giữa
+      // chúng có một khoảng mà lease đã hết hạn vẫn còn chặn chỉ mục, và người
+      // bấm đúng lúc đó nhận "máy đang bị giữ" bởi một người đã đi khỏi.
+      await client.query('DELETE FROM lease WHERE org_id = $1 AND expires_at <= $2',
+        [this.orgId, at]);
+
+      // `DO NOTHING` chứ không phải `DO UPDATE`: người thua cuộc phải ĐỌC xem
+      // ai thắng, vì câu trả lời cho họ là "ai đang giữ", không phải "không".
+      const inserted = await client.query<LeaseRow>(
+        `INSERT INTO lease (id, device_id, org_id, holder_kind, job_id, holder_user_id,
+                            acquired_at, expires_at)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+         ON CONFLICT (device_id) DO NOTHING
+         RETURNING *`,
+        [randomUUID(), deviceId, this.orgId, holder.kind,
+         holder.kind === 'job' ? holder.jobId : null,
+         holder.kind === 'human' ? holder.userId : null, at, expires],
+      );
+      if (inserted.rows[0]) {
+        await client.query('COMMIT');
+        return toLease(inserted.rows[0]);
+      }
+
+      const { rows } = await client.query<LeaseRow>(
+        'SELECT * FROM lease WHERE org_id = $1 AND device_id = $2',
+        [this.orgId, deviceId],
+      );
+      const current = rows[0];
+      if (!current) {
+        // Chỉ mục từ chối nhưng không đọc được dòng nào: dòng ấy thuộc tổ chức
+        // khác. Một thiết bị chỉ thuộc một tổ chức, nên đây là dữ liệu đã lệch,
+        // và im lặng cấp lease thì hai tổ chức dùng chung một chiếc máy.
+        await client.query('ROLLBACK');
+        throw new Error(`Thiết bị "${deviceId}" đang bị giữ bởi một tổ chức khác.`);
+      }
+      const existing = toLease(current);
+      if (!sameHolder(existing.holder, holder)) {
+        await client.query('ROLLBACK');
+        throw new LeaseTakenError(existing);
+      }
+      // Chính người đang giữ bấm lại: gia hạn, không xung đột. Một cú F5 không
+      // nên làm mất quyền điều khiển của người vừa lấy nó.
+      const renewed = await client.query<LeaseRow>(
+        `UPDATE lease SET expires_at = $3, renewed_at = $4
+         WHERE org_id = $1 AND id = $2 RETURNING *`,
+        [this.orgId, existing.id, expires, at],
+      );
+      await client.query('COMMIT');
+      return toLease(renewed.rows[0]!);
+    } catch (err) {
+      await client.query('ROLLBACK').catch(() => {});
+      throw err;
+    } finally {
+      client.release();
+    }
+  }
+
+  async renew(leaseId: string, holder: LeaseHolder, now = new Date()): Promise<Lease | undefined> {
+    const at = now.toISOString();
+    // `expires_at > $at` nằm trong chính câu UPDATE: một lease đã hết hạn thì
+    // không gia hạn được, kể cả bởi người từng giữ nó. Cho phép thì thành một
+    // đường lấy lại máy mà người khác có thể đã giữ trong lúc đó.
+    const { rows } = await this.pool.query<LeaseRow>(
+      `UPDATE lease SET expires_at = $4, renewed_at = $3
+       WHERE org_id = $1 AND id = $2 AND expires_at > $3
+         AND holder_kind = $5
+         AND (($5 = 'job' AND job_id = $6) OR ($5 = 'human' AND holder_user_id = $6))
+       RETURNING *`,
+      [this.orgId, leaseId, at, new Date(now.getTime() + LEASE_TTL_MS).toISOString(),
+       holder.kind, holder.kind === 'job' ? holder.jobId : holder.userId],
+    );
+    return rows[0] ? toLease(rows[0]) : undefined;
+  }
+
+  async release(leaseId: string, holder?: LeaseHolder): Promise<boolean> {
+    if (!holder) {
+      const forced = await this.pool.query(
+        'DELETE FROM lease WHERE org_id = $1 AND id = $2',
+        [this.orgId, leaseId],
+      );
+      return (forced.rowCount ?? 0) > 0;
+    }
+    const { rowCount } = await this.pool.query(
+      `DELETE FROM lease
+       WHERE org_id = $1 AND id = $2 AND holder_kind = $3
+         AND (($3 = 'job' AND job_id = $4) OR ($3 = 'human' AND holder_user_id = $4))`,
+      [this.orgId, leaseId, holder.kind, holder.kind === 'job' ? holder.jobId : holder.userId],
+    );
+    return (rowCount ?? 0) > 0;
+  }
+
+  async list(now = new Date()): Promise<Lease[]> {
+    const at = now.toISOString();
+    await this.reap(now);
+    const { rows } = await this.pool.query<LeaseRow>(
+      'SELECT * FROM lease WHERE org_id = $1 AND expires_at > $2 ORDER BY acquired_at',
+      [this.orgId, at],
+    );
+    return rows.map(toLease);
+  }
+
+  async find(deviceId: string, now = new Date()): Promise<Lease | undefined> {
+    const at = now.toISOString();
+    await this.reap(now);
+    const { rows } = await this.pool.query<LeaseRow>(
+      'SELECT * FROM lease WHERE org_id = $1 AND device_id = $2 AND expires_at > $3',
+      [this.orgId, deviceId, at],
+    );
+    return rows[0] ? toLease(rows[0]) : undefined;
+  }
+
+  async reap(now = new Date()): Promise<number> {
+    const { rowCount } = await this.pool.query(
+      'DELETE FROM lease WHERE org_id = $1 AND expires_at <= $2',
+      [this.orgId, now.toISOString()],
+    );
+    return rowCount ?? 0;
+  }
+}
+
 export function pgRepos(pool: Pool, orgId: string): Repos {
   return {
     registry: new PgRegistryRepo(pool, orgId),
     jobs: new PgJobRepo(pool, orgId),
     runs: new PgRunRepo(pool, orgId),
+    leases: new PgLeaseRepo(pool, orgId),
   };
 }
 

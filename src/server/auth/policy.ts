@@ -19,11 +19,12 @@
 import type { Role } from './roles.js';
 
 /**
- * Route gọi được khi CHƯA có phiên. Đúng bốn cái, và không thêm nữa.
+ * Route gọi được khi CHƯA có phiên. Đúng năm cái, và không thêm nữa.
  *
  * Mỗi route ở đây là một phần bề mặt mà người lạ chạm được, nên danh sách này
  * phải ngắn tới mức đọc hết trong một giây: hai cái để đăng nhập, một cái để
- * đăng xuất, một cái để giao diện biết nên vẽ màn đăng nhập hay vẽ ứng dụng.
+ * đăng xuất, một cái để giao diện biết nên vẽ màn đăng nhập hay vẽ ứng dụng,
+ * và một cái để load balancer biết tiến trình còn sống.
  */
 export const PUBLIC_ROUTES: ReadonlySet<string> = new Set([
   // Load balancer không có phiên. Một health check trả 401 nghĩa là mọi
@@ -73,6 +74,17 @@ export const ROUTE_POLICY: Record<string, Role> = {
   // Chỉ trả boolean "đã cấu hình chưa", không trả giá trị. Xem `config.ts`.
   'GET /api/confluence-auth': 'viewer',
 
+  /* ── Giữ chỗ thiết bị ────────────────────────────────────────────────── */
+  // Ai đang giữ máy nào: người đang chờ máy cần thấy, và thấy thì không làm
+  // hỏng được gì.
+  'GET /api/device/leases': 'viewer',
+  // Giữ một chiếc máy là chiếm chỗ của người khác và tiêu phút thiết bị — đúng
+  // ranh giới của `runner_user`. Vai KHÔNG quyết định được ai nhả được lease
+  // nào: cái đó do "ai đang giữ" quyết định, và kiểm ở tầng kho.
+  'POST /api/device/lease': 'runner_user',
+  'POST /api/device/lease/renew': 'runner_user',
+  'POST /api/device/lease/release': 'runner_user',
+
   /* ── Chạy test: tiêu tiền, nhưng không đổi thứ người khác dựa vào ────── */
   'POST /api/run': 'runner_user',
   'POST /api/run/stop': 'runner_user',
@@ -112,6 +124,9 @@ export const ROUTE_POLICY: Record<string, Role> = {
   'POST /api/confluence-auth': 'admin',
   'POST /api/farm/pool': 'admin',
   'POST /api/aws/login': 'admin',
+  // Lấy máy khỏi tay một người đang dùng. Route riêng thay vì một cờ trong
+  // `release`, để cái quyền ấy đọc được từ bảng này mà không phải mở handler.
+  'POST /api/device/lease/force-release': 'admin',
 };
 
 /** Không có trong bảng nghĩa là CHƯA quyết định — và chưa quyết định thì cấm. */

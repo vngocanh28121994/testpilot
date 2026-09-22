@@ -235,9 +235,24 @@ Sau giai đoạn này mới được phép mở ra domain.
 
 ---
 
-# P3 — Hàng đợi và giữ chỗ thiết bị (8–12 ngày)
+# P3 — Hàng đợi và giữ chỗ thiết bị (14–19 ngày)
 
 Đây là lúc hệ thống thành device farm.
+
+**Quyết định ngày 2026-09-22 — có điều khiển thiết bị từ web.** Kéo theo P3.7, và kéo theo một
+thay đổi phải làm TRƯỚC scheduler: lease mang cả người giữ, không chỉ job. Đã xong ở bước 1 (xem
+P3.7). Đổi ước lượng 8–12 → 14–19 ngày.
+
+**Đã khảo sát và KHÔNG lấy GADS.** Nó có sẵn stream màn hình và điều khiển tay, nhưng provider
+đồng bộ với hub qua MongoDB nên "chỉ lấy provider" không phải một chế độ được hỗ trợ — muốn có
+stream thì phải dựng cả Mongo + hub + provider, rồi bỏ không dùng hub UI (phần đóng gói kín, giấy
+phép riêng) và ghép reservation của họ vào lease của ta, tức là hai nguồn sự thật cho "ai đang giữ
+máy này". Nó cũng không có hàng đợi job, nên ba mục đắt nhất về nghiệp vụ (P3.1–P3.3) không được
+đỡ dòng nào. STF/DeviceFarmer loại thẳng: chỉ Android, cần RethinkDB, và tài liệu của chính họ nói
+giữa các tiến trình "gần như không có bảo mật". Đường được chọn cho phần video:
+[ws-scrcpy](https://github.com/NetrisTV/ws-scrcpy) (MIT, chạy Node, cần `adb` — đúng hai thứ
+runner đã có) cho Android, và MJPEG của WebDriverAgent cho iOS, vì `prereq.ts` vốn đã dựng và dọn
+WDA. Đầu vào thì không cần ai cho: Appium/WDA theo W3C, mà webdriverio đã nói thứ tiếng đó.
 
 ### P3.1 Job queue
 - Bảng `job` là nguồn sự thật. Redis (BullMQ) chỉ để đánh thức worker, không giữ trạng thái — nếu
@@ -249,6 +264,10 @@ Sau giai đoạn này mới được phép mở ra domain.
   job tự chạy.
 
 ### P3.2 Lease manager
+- **Đã có sẵn từ P3.7 bước 1:** `LeaseRepo` (hợp đồng), `MemoryLeaseRepo` (embedded) và
+  `PgLeaseRepo` (server) — giữ, gia hạn, nhả, cưỡng chế nhả, thu hồi hạn. Phần còn lại của P3.2 là
+  *người gọi*: scheduler lấy lease `holder_kind='job'` thay vì người, và vòng lặp chuyển job quá
+  hạn sang `interrupted`.
 - `src/server/scheduler/lease.ts`: lấy lease trong một transaction (`SELECT … FOR UPDATE`), TTL 60s,
   runner gia hạn mỗi 30s.
 - Job nhiều thiết bị: lấy tất cả lease cùng lúc hoặc không lấy gì, để tránh chờ chéo.
@@ -282,6 +301,63 @@ Sau giai đoạn này mới được phép mở ra domain.
 - Bọc `src/farm/`, `src/aws/` thành runner `mode=farm`, khai báo thiết bị ảo từ pool.
 - Bỏ endpoint `POST /api/aws/login` tương tác; dùng IAM role của máy chạy runner.
 - **Xong khi:** một job `run_suite` đi qua Device Farm mà UI không cần biết nó khác gì runner khác.
+
+### P3.7 Điều khiển thiết bị từ web
+
+Làm **sau** P3.1–P3.3, vì lease là phần dùng chung. Nhưng bước 1 phải đi TRƯỚC scheduler, vì nó đổi
+lược đồ mà scheduler sẽ đọc.
+
+**Bước 1 — lease của người — ✅ xong 2026-09-22**
+- Migration `0002_human_lease.sql`: `lease.job_id` cho phép NULL, thêm `holder_kind`
+  (`job` | `human`), `holder_user_id`, `org_id`. `UNIQUE (device_id)` của 0001 trở thành phép loại
+  trừ cho CẢ HAI loại người giữ — một chiếc máy, một người giữ, bất kể đó là người hay job.
+  Ràng buộc `lease_holder_matches` chặn dòng nói "human" mà không nói ai: một chiếc máy bị giữ bởi
+  không ai thì không ai thu hồi được bằng tay.
+- Bảng được **dựng lại** chứ không `ALTER COLUMN`, vì SQLite không bỏ được `NOT NULL`. Dữ liệu lease
+  đang chạy được mang sang kèm `org_id` suy từ thiết bị.
+- `LeaseRepo` + hai hiện thực. TTL 60s, nhịp tim 30s, thu hồi lúc ĐỌC chứ không bằng vòng lặp nền —
+  nên một chiếc máy mà người giữ đã gập laptop trở lại rỗi ngay khi có người hỏi tới nó.
+- Năm route (xem [FARM-ROUTE-MAP.md](FARM-ROUTE-MAP.md)) với hình dạng quyền mới: vai ở cửa,
+  "ai đang giữ" ở tầng kho. `force-release` đòi `admin` **và** một lý do.
+- **Đã đo:** 20 bên đòi cùng một máy trong cùng phần nghìn giây trên Postgres thật → đúng 1 thắng,
+  19 nhận `LeaseTakenError` kèm tên người giữ, và bảng chỉ có 1 dòng cho chiếc máy ấy
+  ([pgLease.integration.test.ts](src/server/db/__tests__/pgLease.integration.test.ts)). Cùng bộ
+  khẳng định chạy lại với bản bộ nhớ, nên hai hiện thực không lệch nhau.
+- **Một lỗi chỉ Postgres thấy:** đặt tên khoá chính là `lease_pkey` cho bảng mới làm cả migration
+  chết với 42P07, vì bảng `lease` của 0001 vẫn giữ tên ấy ở đúng lúc đó — tên chỉ mục ở Postgres là
+  toàn cục, còn SQLite không có không gian tên chung nên nó xanh. Thứ bắt được là bài test chạy
+  migration trên Postgres thật.
+- **Nối nốt phần P2.6 còn treo:** `src/ui/server.ts` trước đó dùng `fileRepos` ở CẢ HAI chế độ, nên
+  `pgRepos` là mã chết. Giờ có `repoFactory` ([db/wiring.ts](src/server/db/wiring.ts)): embedded →
+  file JSON dùng chung một kho lease trong bộ nhớ; server → `pgRepos` theo `orgId`, một pool cho cả
+  tiến trình. Chế độ server mà thiếu `TESTPILOT_DATABASE_URL` thì **từ chối khởi động** — quay về
+  file ở chế độ server là đường rò dữ liệu giữa các tổ chức, im lặng và không sửa được sau đó.
+  Đã đo: không có DB → chết lúc khởi động kèm câu chỉ cách sửa, cổng không phục vụ gì; có DB →
+  `/api/health` 200 còn ba route lease đều 401 khi chưa đăng nhập.
+- **Một lỗi nữa chỉ chạy thật mới thấy:** `fileRepos()` được dựng lại ở mỗi request, nên
+  `MemoryLeaseRepo` mới mỗi lần — lấy máy xong hỏi lại thì máy rỗi, và lần lấy thứ hai sinh lease
+  thứ hai cho cùng chiếc máy. Mọi test đơn lẻ đều xanh vì mỗi bài dùng một repo. Đây là lần thứ hai
+  cùng một lỗi (trước là `OrphanTracker` bị dựng hai bản), nên nó thành `localLeases` ở tầm module
+  kèm một test dựng hai bộ repo rồi tranh nhau một chiếc máy.
+- **Còn lại của bước 1:** ghi `audit_log` cho phiên điều khiển và cho mỗi lần cưỡng chế nhả. Hôm nay
+  chỉ có một dòng log kèm ai thu hồi của ai; nối vào bảng cùng lúc với phần video, vì lúc ấy mới có
+  chỗ xem. Và một mắt nối chỉ được đo THEO PHẦN chứ chưa đo liền mạch: route → `repoFactory` →
+  `PgLeaseRepo` → Postgres, vì đầu vào cần một phiên Keycloak thật. Đo liền mạch cùng lúc với màn
+  điều khiển ở bước 2.
+
+**Bước 2 — Android: xem và chạm (≈3–4 ngày)**
+- scrcpy trong runner, khung H.264 qua WebSocket, giải mã ở trình duyệt. Một người xem một máy,
+  và mọi khung chỉ đi khi người gọi đang giữ lease.
+- `nginx` cần `Upgrade`/`Connection` — hôm nay `testpilot.conf` có `proxy_http_version 1.1` nhưng
+  **không** có hai header ấy, nên WebSocket sẽ chết ngay ở nginx. Thêm phép đo vào
+  [deployConfig.test.ts](src/server/__tests__/deployConfig.test.ts).
+- Protocol lên **1.1.0** (thêm, tương thích): danh sách đóng của runner facade nhận thêm
+  `openControl`/`closeControl` và các lệnh input. Khung video KHÔNG đi qua `JobEvent` — SSE có `seq`
+  để nối lại log, còn video cần kênh riêng.
+
+**Bước 3 — iOS (≈2–3 ngày)**
+- Video: MJPEG server của WebDriverAgent. Input: Appium/WDA theo W3C, qua webdriverio.
+- **Xong khi:** giữ được một chiếc iPhone từ web, thấy màn hình, chạm được, và job không chen vào.
 
 ---
 

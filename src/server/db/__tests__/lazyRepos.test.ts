@@ -21,6 +21,14 @@ function stub(onOpen: () => void): () => Repos {
       },
       jobs: { list: async () => [], find: async () => undefined, closeInterrupted: async () => 0 },
       runs: { list: async () => [], find: async () => undefined },
+      leases: {
+        acquire: async () => { throw new Error('không dùng ở test này'); },
+        renew: async () => undefined,
+        release: async () => false,
+        list: async () => [],
+        find: async () => undefined,
+        reap: async () => 0,
+      },
     };
   };
 }
@@ -30,7 +38,7 @@ describe('lazyRepos', () => {
     let opened = 0;
     const repos = lazyRepos(stub(() => { opened += 1; }));
     // Chạm vào cả ba nhánh mà không gọi phương thức nào.
-    void repos.registry; void repos.jobs; void repos.runs;
+    void repos.registry; void repos.jobs; void repos.runs; void repos.leases;
     assert.equal(opened, 0);
   });
 
@@ -59,6 +67,14 @@ describe('lazyRepos', () => {
       },
       jobs: { list: async () => [], find: async () => undefined, closeInterrupted: async () => 0 },
       runs: { list: async () => [], find: async () => undefined },
+      leases: {
+        acquire: async () => { throw new Error('không dùng ở test này'); },
+        renew: async () => undefined,
+        release: async () => false,
+        list: async () => [],
+        find: async () => undefined,
+        reap: async () => 0,
+      },
     }));
     const payload = { elements: {} } as never;
     await repos.registry.write(payload, 'rev-7');

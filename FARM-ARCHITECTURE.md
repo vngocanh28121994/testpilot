@@ -263,7 +263,11 @@ Quy tắc:
 
 ## 6. Hàng đợi và giữ chỗ thiết bị
 
-Trạng thái thiết bị: `idle → leased → busy → idle`, cộng `offline` và `quarantined`.
+**Một chiếc máy đang bị giữ hay không được TÍNH từ bảng `lease`, không đọc từ một cột.** Cột
+`device.state` chỉ còn nói về tình trạng vật lý và hành chính: `idle`, `offline`, `quarantined`.
+Hai giá trị `leased` và `busy` còn trong `CHECK` của migration 0001 nhưng không dòng code nào ghi
+chúng, và không nên — một cột mirror là nguồn sự thật thứ hai, và nó sẽ lệch khỏi bảng `lease` vào
+đúng lúc tệ nhất: khi một tiến trình chết giữa hai lệnh ghi.
 
 Thuật toán ghép job với thiết bị:
 
@@ -285,6 +289,39 @@ Thuật toán ghép job với thiết bị:
 
 Job nhiều thiết bị (`runSuiteParallel`, [src/ui/server.ts:559](src/ui/server.ts)) giữ nguyên tinh
 thần: **lấy tất cả lease cùng lúc, hoặc không lấy gì cả**, để tránh hai job chờ chéo nhau.
+
+---
+
+## 6b. Người giữ máy, không chỉ job
+
+Điều khiển thiết bị từ trình duyệt — xem màn hình trực tiếp, tự chạm để dò một bước hỏng — là một
+yêu cầu đã chốt (2026-09-22). Nó đổi một điều trong mục 6, và đổi ở chỗ sâu nhất:
+
+**Một con người đang cầm máy chiếm chỗ trong CÙNG bảng `lease` mà scheduler đọc.** Nếu việc giữ ấy
+dùng một cơ chế riêng, sẽ có hai câu trả lời cho "ai đang giữ máy này", và scheduler — vốn chỉ đọc
+một câu — sẽ giao máy cho một job trong lúc có người đang bấm trên màn hình. Kiểu hỏng đó không báo
+lỗi: job chỉ đơn giản chạy sai, vì màn hình không ở nơi nó tưởng. Nên `lease.holder_kind` có đúng
+hai giá trị `job` | `human`, và `UNIQUE (device_id)` phân xử cả hai.
+
+Ba hệ quả:
+
+1. **Nhịp tim, không phải "nhả khi đóng tab".** Tab bị gập laptop, mất mạng, hay bị kill thì không
+   gửi được gì. Thứ duy nhất chịu được cả ba là im lặng thì mất quyền: lease sống 60s, tab gia hạn
+   mỗi 30s, nên một chiếc máy bị bỏ rơi rỗi lại trong ≤90s.
+2. **Một hình dạng phân quyền mới.** Tới trước mục này, mọi quyền đều quyết định được bằng VAI, nên
+   `authorize()` ở cửa là đủ. Ở đây không: `runner_user` được giữ một chiếc máy rỗi, nhưng không ai
+   — kể cả `maintainer` — nhả được lease của người khác, vì thứ quyết định là *ai đang giữ*, một
+   thuộc tính của dữ liệu chứ không của người gọi. Nên vai kiểm ở cửa, quyền-của-người-giữ kiểm ở
+   tầng kho, và việc lấy máy khỏi tay người đang dùng là một route RIÊNG đòi `admin` kèm lý do —
+   để cái quyền ấy đọc được từ bảng policy, không phải từ thân một handler.
+3. **Video không đi qua kênh log.** `JobEvent` có `seq` để nối lại log sau khi mất mạng; khung hình
+   thì vô nghĩa khi phát lại, và một hàng đợi có thứ tự cho chúng chỉ làm độ trễ dồn lại. Nên
+   stream là kênh WebSocket riêng, và mỗi khung chỉ đi khi người gọi đang giữ lease.
+
+Phần thực thi: Android bằng scrcpy trong runner (khung H.264 qua WebSocket, giải mã ở trình duyệt),
+iOS bằng MJPEG server của WebDriverAgent — thứ mà `prereq.ts` vốn đã dựng. Đầu vào đi qua
+Appium/WDA theo W3C, tức là qua webdriverio đã có. Xem [FARM-PLAN.md](FARM-PLAN.md) P3.7 về lý do
+không lấy GADS làm hub.
 
 ---
 

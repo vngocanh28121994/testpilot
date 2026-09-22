@@ -51,6 +51,11 @@ npm run ui
 Không đặt `TESTPILOT_MODE=server` thì bản local chạy y như cũ: một người, một
 máy, không đăng nhập, dữ liệu là file trên đĩa.
 
+Ngược lại, `TESTPILOT_MODE=server` mà **thiếu `TESTPILOT_DATABASE_URL` thì tiến
+trình từ chối khởi động**. Đó là chủ ý: quay về file JSON ở chế độ server nghĩa
+là mọi tổ chức đọc ghi cùng một chỗ trên đĩa máy chủ — một đường rò dữ liệu
+không báo lỗi và không sửa được sau khi đã xảy ra. Thà chết lúc deploy.
+
 ## Đưa dữ liệu hiện có vào Postgres
 
 ```bash

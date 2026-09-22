@@ -12,7 +12,7 @@
  * Mọi phương thức của repo đều async, nên hoãn được mà không đổi kiểu: lời gọi
  * đầu tiên mới mở kho, và lỗi mở kho nổi ra ĐÚNG ở chỗ cần dữ liệu.
  */
-import type { JobRepo, RegistryRepo, Repos, RunRepo } from './repo.js';
+import type { JobRepo, LeaseRepo, RegistryRepo, Repos, RunRepo } from './repo.js';
 
 type Build = () => Repos | Promise<Repos>;
 
@@ -53,5 +53,6 @@ export function lazyRepos(build: Build): Repos {
     registry: proxy<RegistryRepo>((repos) => repos.registry, open),
     jobs: proxy<JobRepo>((repos) => repos.jobs, open),
     runs: proxy<RunRepo>((repos) => repos.runs, open),
+    leases: proxy<LeaseRepo>((repos) => repos.leases, open),
   };
 }

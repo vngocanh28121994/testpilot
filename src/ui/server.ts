@@ -29,7 +29,8 @@ import { dispatch } from '../server/dispatch.js';
 // hệ thống đăng nhập xong vẫn báo chưa đăng nhập — và đó đúng là thứ đã xảy ra
 // khi `dispatch` được gọi mà quên truyền kho này vào.
 import { sessions } from '../server/auth/state.js';
-import { fileRepos } from '../server/db/fileRepo.js';
+import { dbOptionsFromEnv } from '../server/db/connect.js';
+import { repoFactory } from '../server/db/wiring.js';
 
 const CONFIG_PROFILE = await ensurePersonalConfig(personalConfigProfile());
 const CONFIG_FILE = CONFIG_PROFILE.file;
@@ -103,15 +104,28 @@ for (const signal of ['SIGINT', 'SIGTERM'] as const) {
  */
 const MODE = serverMode();
 
+/**
+ * Kho dữ liệu, chọn MỘT LẦN lúc khởi động.
+ *
+ * Dựng ở đây chứ không trong `handle()`: chế độ server thiếu
+ * `TESTPILOT_DATABASE_URL` thì `repoFactory` ném, và cú ném ấy phải xảy ra lúc
+ * tiến trình lên — với người deploy — chứ không phải ở request đầu tiên của
+ * một người dùng.
+ */
+const REPOS = repoFactory({
+  mode: MODE,
+  db: dbOptionsFromEnv(),
+  paths: async () => (await loadConfig(CONFIG_FILE)).paths,
+});
+
 async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> {
   const url = new URL(req.url ?? '/', `http://localhost:${PORT}`);
   return dispatch(req, res, url, {
     mode: MODE,
     sessions,
-    // Chế độ embedded: kho là chính các file JSON trong `registry/`, đọc theo
-    // cấu hình của người đang chạy. Chế độ server dựng `pgRepos` theo `orgId`
-    // — sẽ nối khi host cho chế độ ấy có mặt (P2.6).
-    repos: async () => fileRepos((await loadConfig(CONFIG_FILE)).paths),
+    // Embedded: file JSON trong `registry/`. Server: Postgres của ĐÚNG tổ chức
+    // người gọi. Quyết định nằm trong `repoFactory` để đo được — xem wiring.ts.
+    repos: REPOS,
     configFile: CONFIG_FILE,
     configProfile: { owner: CONFIG_PROFILE.owner, source: CONFIG_PROFILE.source },
   });

@@ -13,7 +13,7 @@ file nào. Kiến trúc: [FARM-ARCHITECTURE.md](FARM-ARCHITECTURE.md) · Kế ho
 | **R** | Runner. Chạm thiết bị hoặc tiến trình cục bộ; **không** được tồn tại trên control plane |
 | **LOCAL** | Chỉ còn ở chế độ `embedded`. Chế độ server phải trả 404 |
 
-Đếm: **CP 39 · JOB 8 · R 9 · LOCAL 1** — tổng 57.
+Đếm: **CP 44 · JOB 8 · R 9 · LOCAL 1** — tổng 62.
 
 > **Thêm ngày 2026-09-21 (P2.1b).** Bốn route đăng nhập, và chúng là những route DUY NHẤT gọi được
 > khi chưa có phiên: `GET /api/auth/login`, `GET /api/auth/callback`, `POST /api/auth/logout`,
@@ -22,6 +22,15 @@ file nào. Kiến trúc: [FARM-ARCHITECTURE.md](FARM-ARCHITECTURE.md) · Kế ho
 > **Thêm ngày 2026-09-22 (P2.6).** `GET /api/health` cũng công khai — load balancer không có phiên.
 > Bản nông trả đúng một chữ `ok`; bản `?deep=1` tự kiểm vai `admin` trong handler, vì một route
 > không thể vừa công khai vừa đòi admin.
+
+> **Thêm ngày 2026-09-22 (P3.7 bước 1).** Năm route giữ chỗ thiết bị, tất cả **CP**:
+> `GET /api/device/leases` (`viewer`), `POST /api/device/lease` · `/renew` · `/release`
+> (`runner_user`), `POST /api/device/lease/force-release` (`admin`).
+>
+> Chúng mang một hình dạng quyền **mới**: vai kiểm ở cửa, còn "ai đang giữ" kiểm ở tầng kho. Một
+> `maintainer` có vai đủ để gọi `release` nhưng không nhả được lease của người khác — thứ quyết
+> định không phải vai. Vì thế mới có route `force-release` riêng: quyền lấy máy khỏi tay người đang
+> dùng phải đọc được từ bảng policy, không phải từ một cờ trong thân handler.
 
 > **Sửa ngày 2026-09-21 (P1.2 nhóm 5).** `POST /api/builds/source` từng bị xếp vào **R** vì cái tên
 > nghe như đi đọc thiết bị. Đọc kỹ thì nó chỉ ghi một cờ `useInstalledApp` vào config — thuần
@@ -145,6 +154,18 @@ trên chính máy chạy chúng.
 | 1188 | `GET /api/prereq/ios-names` | `devices` |
 | 1206 | `POST /api/prereq/ios-trust` | job `prereq` — chỉ chủ runner được gọi |
 | 1209 | `POST /api/prereq/driver` | job `prereq`. Hôm nay là `spawn('appium', ['driver','install', …])` ([:4249](src/ui/server.ts)) — phải đi qua sandbox danh sách cho phép |
+
+---
+
+## CP — giữ chỗ thiết bị (P3.7 bước 1, chưa có trong `handle()` cũ)
+
+| Route | Vai | Ghi chú |
+|---|---|---|
+| `GET /api/device/leases` | `viewer` | Ai đang giữ máy nào |
+| `POST /api/device/lease` | `runner_user` | 409 kèm tên người đang giữ, không phải 403 |
+| `POST /api/device/lease/renew` | `runner_user` | Nhịp tim 30s, lease sống 60s |
+| `POST /api/device/lease/release` | `runner_user` | Chỉ người đang giữ |
+| `POST /api/device/lease/force-release` | `admin` | Bắt buộc có lý do |
 
 ---
 

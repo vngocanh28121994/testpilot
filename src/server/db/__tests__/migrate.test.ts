@@ -12,7 +12,8 @@
  */
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFile } from 'node:fs/promises';
+import { copyFile, mkdtemp, readFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { knownTokens, renderSql } from '../dialect.js';
@@ -40,12 +41,15 @@ function tables(db: DatabaseSync): string[] {
     .sort();
 }
 
-describe('migration 0001 trên SQLite thật', () => {
+describe('migration trên SQLite thật', () => {
   it('dựng đủ bảng của mô hình dữ liệu', async () => {
     const { db, runner } = sqlite();
     const result = await migrate(runner, 'sqlite');
 
-    assert.deepEqual(result.applied, ['0001_init.sql']);
+    // So với danh sách file thật, không với một danh sách chép tay: thêm
+    // migration mới thì phép đo này vẫn nói đúng điều nó muốn nói — "mọi
+    // migration đều chạy được trên SQLite", chứ không đỏ vì đếm sai.
+    assert.deepEqual(result.applied, await migrationFiles());
     for (const table of [
       'org', 'app_user', 'membership', 'runner', 'runner_capability',
       'device', 'device_tag', 'job', 'job_device', 'job_event',
@@ -63,7 +67,7 @@ describe('migration 0001 trên SQLite thật', () => {
     const second = await migrate(runner, 'sqlite');
 
     assert.deepEqual(second.applied, []);
-    assert.deepEqual(second.skipped, ['0001_init.sql']);
+    assert.deepEqual(second.skipped, await migrationFiles());
   });
 
   /**
@@ -157,11 +161,20 @@ describe('dịch cú pháp hai dialect', () => {
    * triển khai kia — thường là muộn nhất có thể.
    */
   it('migration không dùng cú pháp riêng của Postgres', async () => {
-    const raw = await readFile(path.join(MIGRATIONS_DIR, '0001_init.sql'), 'utf8');
-    const sqlOnly = raw.split('\n').filter((line) => !line.trim().startsWith('--')).join('\n');
+    // MỌI file, không chỉ 0001: file thứ hai là chỗ dễ lọt nhất, vì lúc viết
+    // nó người ta đang nghĩ về Postgres đang chạy trước mắt.
+    for (const name of await migrationFiles()) {
+      const raw = await readFile(path.join(MIGRATIONS_DIR, name), 'utf8');
+      const sqlOnly = raw.split('\n').filter((line) => !line.trim().startsWith('--')).join('\n');
 
-    for (const forbidden of [/\bSERIAL\b/i, /\bTIMESTAMPTZ\b/i, /\bNOW\(\)/i, /\[\]/, /\bJSONB\b/i]) {
-      assert.doesNotMatch(sqlOnly, forbidden, `dùng cú pháp riêng: ${forbidden}`);
+      for (const forbidden of [
+        /\bSERIAL\b/i, /\bTIMESTAMPTZ\b/i, /\bNOW\(\)/i, /\[\]/, /\bJSONB\b/i,
+        // SQLite không có `ALTER COLUMN` dưới mọi hình thức, nên một migration
+        // dùng nó chạy được trên server và chết ở bản embedded.
+        /\bALTER COLUMN\b/i, /\bDROP CONSTRAINT\b/i,
+      ]) {
+        assert.doesNotMatch(sqlOnly, forbidden, `${name} dùng cú pháp riêng: ${forbidden}`);
+      }
     }
   });
 
@@ -169,6 +182,119 @@ describe('dịch cú pháp hai dialect', () => {
     for (const name of await migrationFiles()) {
       assert.match(name, /^\d{4}_/, `${name}: thứ tự chạy là một phần của lược đồ`);
     }
+  });
+});
+
+describe('0002: lease của người', () => {
+  it('nhận lease không có job, do một con người giữ', async () => {
+    const { db, runner } = sqlite();
+    await migrate(runner, 'sqlite');
+    seedOrgUserRunnerDevice(db);
+
+    db.exec(humanLease('lease-h1', 'dev-1'));
+    const row = db.prepare('SELECT holder_kind, job_id, holder_user_id FROM lease').get() as {
+      holder_kind: string; job_id: string | null; holder_user_id: string;
+    };
+    // `{...row}`: `node:sqlite` trả object không prototype, còn `deepEqual`
+    // của node:assert so cả prototype.
+    assert.deepEqual({ ...row }, { holder_kind: 'human', job_id: null, holder_user_id: 'user-1' });
+  });
+
+  /**
+   * Phép loại trừ phải trùm CẢ HAI loại người giữ.
+   *
+   * Đây là lý do của cả migration này: nếu người và job giữ máy bằng hai cơ chế
+   * khác nhau thì scheduler đọc một cơ chế và không thấy cơ chế kia — nó giao
+   * máy cho job trong lúc có người đang chạm vào màn hình, và job không hỏng
+   * theo cách nhìn thấy được, nó chỉ chạy sai.
+   */
+  it('người đang giữ thì job không lấy được cùng chiếc máy', async () => {
+    const { db, runner } = sqlite();
+    await migrate(runner, 'sqlite');
+    seedOrgUserRunnerDevice(db);
+    insertJob(db, 'job-1');
+
+    db.exec(humanLease('lease-h1', 'dev-1'));
+    assert.throws(
+      () => db.exec(lease('lease-j1', 'dev-1', 'job-1')),
+      /UNIQUE|constraint/i,
+    );
+  });
+
+  it('job đang giữ thì người không lấy được cùng chiếc máy', async () => {
+    const { db, runner } = sqlite();
+    await migrate(runner, 'sqlite');
+    seedOrgUserRunnerDevice(db);
+    insertJob(db, 'job-1');
+
+    db.exec(lease('lease-j1', 'dev-1', 'job-1'));
+    assert.throws(() => db.exec(humanLease('lease-h1', 'dev-1')), /UNIQUE|constraint/i);
+  });
+
+  /** Một chiếc máy bị giữ bởi không ai thì không ai thu hồi được bằng tay. */
+  it('từ chối dòng nói "human" mà không nói ai', async () => {
+    const { db, runner } = sqlite();
+    await migrate(runner, 'sqlite');
+    seedOrgUserRunnerDevice(db);
+
+    assert.throws(
+      () => db.exec(`INSERT INTO lease (id, device_id, org_id, holder_kind,
+        acquired_at, expires_at)
+        VALUES ('l', 'dev-1', 'org-1', 'human', '2026-09-21T00:00:00.000Z',
+                '2026-09-21T00:01:00.000Z')`),
+      /constraint|CHECK/i,
+    );
+  });
+
+  it('từ chối dòng nói "job" mà lại kèm người giữ', async () => {
+    const { db, runner } = sqlite();
+    await migrate(runner, 'sqlite');
+    seedOrgUserRunnerDevice(db);
+    insertJob(db, 'job-1');
+
+    assert.throws(
+      () => db.exec(`INSERT INTO lease (id, device_id, org_id, holder_kind, job_id,
+        holder_user_id, acquired_at, expires_at)
+        VALUES ('l', 'dev-1', 'org-1', 'job', 'job-1', 'user-1',
+                '2026-09-21T00:00:00.000Z', '2026-09-21T00:01:00.000Z')`),
+      /constraint|CHECK/i,
+    );
+  });
+
+  /**
+   * Bảng được DỰNG LẠI, nên câu hỏi thật là dữ liệu có đi cùng không.
+   *
+   * Một bản đã triển khai có thể đang giữ lease lúc migration chạy. Mất dòng ấy
+   * nghĩa là một chiếc máy đang chạy job bị coi là rỗi, và job thứ hai được cấp
+   * cùng máy — đúng kiểu hỏng mà 0002 tồn tại để chống.
+   */
+  it('mang lease của job cũ sang bảng mới, kèm tổ chức', async () => {
+    const { db, runner } = sqlite();
+    // Chạy TỪNG BƯỚC: 0001, cắm dữ liệu, rồi mới 0002 — đúng thứ tự một bản
+    // đang chạy sẽ gặp, chứ không phải dựng bảng mới trên DB rỗng. Dừng lại ở
+    // 0001 bằng một thư mục chỉ có 0001, thay vì thêm một tham số vào
+    // `migrate()` mà chỉ test dùng.
+    const onlyFirst = await mkdtemp(path.join(tmpdir(), 'testpilot-mig-'));
+    await copyFile(
+      path.join(MIGRATIONS_DIR, '0001_init.sql'),
+      path.join(onlyFirst, '0001_init.sql'),
+    );
+    await migrate(runner, 'sqlite', onlyFirst);
+    seedOrgUserRunnerDevice(db);
+    insertJob(db, 'job-1');
+    db.exec(`INSERT INTO lease (id, device_id, job_id, acquired_at, expires_at)
+      VALUES ('old-1', 'dev-1', 'job-1', '2026-09-20T00:00:00.000Z',
+              '2026-09-20T00:01:00.000Z')`);
+
+    const result = await migrate(runner, 'sqlite');
+    assert.deepEqual(result.applied, ['0002_human_lease.sql']);
+
+    const row = db.prepare('SELECT * FROM lease').get() as Record<string, unknown>;
+    assert.equal(row.id, 'old-1');
+    assert.equal(row.holder_kind, 'job');
+    assert.equal(row.job_id, 'job-1');
+    assert.equal(row.org_id, 'org-1', 'tổ chức phải suy ra từ thiết bị, không để rỗng');
+    assert.equal(row.acquired_at, '2026-09-20T00:00:00.000Z');
   });
 });
 
@@ -195,9 +321,18 @@ function insertJob(db: DatabaseSync, id: string): void {
 }
 
 function lease(id: string, deviceId: string, jobId: string): string {
-  return `INSERT INTO lease (id, device_id, job_id, acquired_at, expires_at)
-    VALUES ('${id}', '${deviceId}', '${jobId}', '2026-09-21T00:00:00.000Z',
-            '2026-09-21T00:01:00.000Z')`;
+  return `INSERT INTO lease (id, device_id, org_id, holder_kind, job_id,
+    acquired_at, expires_at)
+    VALUES ('${id}', '${deviceId}', 'org-1', 'job', '${jobId}',
+            '2026-09-21T00:00:00.000Z', '2026-09-21T00:01:00.000Z')`;
+}
+
+/** Lease do một con người giữ: điều khiển tay từ web, không có job nào. */
+function humanLease(id: string, deviceId: string, userId = 'user-1'): string {
+  return `INSERT INTO lease (id, device_id, org_id, holder_kind, holder_user_id,
+    acquired_at, expires_at)
+    VALUES ('${id}', '${deviceId}', 'org-1', 'human', '${userId}',
+            '2026-09-21T00:00:00.000Z', '2026-09-21T00:01:00.000Z')`;
 }
 
 function event(jobId: string, seq: number, type: string): string {

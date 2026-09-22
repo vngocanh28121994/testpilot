@@ -89,9 +89,81 @@ export interface RunRepo {
   find(id: string): Promise<RunMeta | undefined>;
 }
 
+
+/* ── Giữ chỗ thiết bị ─────────────────────────────────────────────────── */
+
+/**
+ * Ai đang giữ một chiếc máy, và tới khi nào.
+ *
+ * Một hợp đồng cho CẢ HAI loại người giữ: một job trong hàng đợi, và một con
+ * người đang điều khiển tay từ web. Tách làm hai loại lease là tạo ra hai câu
+ * trả lời cho "máy này có rỗi không" — xem migration 0002.
+ */
+export interface Lease {
+  id: string;
+  deviceId: string;
+  orgId: string;
+  holder: LeaseHolder;
+  acquiredAt: string;
+  expiresAt: string;
+  renewedAt?: string;
+}
+
+export type LeaseHolder =
+  | { kind: 'job'; jobId: string }
+  | { kind: 'human'; userId: string };
+
+/**
+ * Máy đã có người giữ.
+ *
+ * Lỗi riêng chứ không phải `false`: người bấm "điều khiển" cần biết máy đang
+ * bị AI giữ, và trong bao lâu nữa — "không lấy được" không trả lời được câu
+ * nào trong hai câu đó.
+ */
+export class LeaseTakenError extends Error {
+  constructor(readonly current: Lease) {
+    super(
+      `Thiết bị "${current.deviceId}" đang được `
+        + `${current.holder.kind === 'job' ? `job ${current.holder.jobId}` : current.holder.userId}`
+        + ` giữ tới ${current.expiresAt}.`,
+    );
+    this.name = 'LeaseTakenError';
+  }
+}
+
+/** Mỗi lease sống 60 giây, người giữ gia hạn mỗi 30 giây. */
+export const LEASE_TTL_MS = 60_000;
+
+export interface LeaseRepo {
+  /**
+   * Giữ một máy, hoặc ném `LeaseTakenError`.
+   *
+   * Phép loại trừ do KHO bảo đảm, không do người gọi kiểm trước rồi ghi sau:
+   * giữa "kiểm" và "ghi" luôn còn một khe, và hai người bấm cùng lúc là chuyện
+   * bình thường ở một màn hình có danh sách thiết bị.
+   */
+  acquire(deviceId: string, holder: LeaseHolder, now?: Date): Promise<Lease>;
+  /**
+   * Đẩy hạn về sau. Chỉ người đang giữ mới gia hạn được.
+   *
+   * Trả `undefined` khi lease không còn của họ — đã hết hạn và bị người khác
+   * lấy, hoặc bị admin cưỡng chế nhả. Người gọi thấy `undefined` thì phải
+   * DỪNG dùng máy, chứ không phải lấy lại.
+   */
+  renew(leaseId: string, holder: LeaseHolder, now?: Date): Promise<Lease | undefined>;
+  /** Nhả. `holder` là `undefined` nghĩa là cưỡng chế — chỉ `admin` gọi được. */
+  release(leaseId: string, holder?: LeaseHolder): Promise<boolean>;
+  /** Những lease còn hiệu lực của tổ chức này. Đã hết hạn thì không tính. */
+  list(now?: Date): Promise<Lease[]>;
+  find(deviceId: string, now?: Date): Promise<Lease | undefined>;
+  /** Xoá lease hết hạn. Trả về số đã xoá. */
+  reap(now?: Date): Promise<number>;
+}
+
 /** Bộ repo mà một route nhận được. P2.4 thay nguyên bộ bằng bản Postgres. */
 export interface Repos {
   registry: RegistryRepo;
   jobs: JobRepo;
   runs: RunRepo;
+  leases: LeaseRepo;
 }
