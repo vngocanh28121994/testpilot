@@ -82,10 +82,21 @@ const emptyDb = (): HealingDb => ({ version: 1, ingestedRuns: {}, entries: {} })
  * produced a proposal.
  */
 export class HealingStore {
+  /**
+   * Sổ đúng như lúc đọc từ đĩa.
+   *
+   * Giữ lại để lúc ghi biết được PHẦN MÌNH THÊM, thay vì ghi cả sổ. Khác biệt
+   * chỉ quan trọng khi có nhiều người ghi — và đó chính là nơi hệ thống này
+   * đang đi tới. Cùng cách `Registry.changesSinceLoad()` đã làm; xem `save()`.
+   */
+  private readonly baseline: HealingDb;
+
   private constructor(
     private readonly file: string,
     private readonly db: HealingDb,
-  ) {}
+  ) {
+    this.baseline = structuredClone(db);
+  }
 
   static async load(file: string): Promise<HealingStore> {
     if (!existsSync(file)) return new HealingStore(file, emptyDb());
@@ -249,10 +260,91 @@ export class HealingStore {
     return this.records().find((record) => record.id === id)!;
   }
 
+  /**
+   * Ghi bằng cách GỘP phần mình học được vào sổ đang có trên đĩa.
+   *
+   * Sổ healing là sổ ghi sự kiện: mỗi lượt chạy thêm bằng chứng vào đó, không
+   * bao giờ viết lại quá khứ. Bản cũ ghi đè cả tệp, nên hai lượt chạy song
+   * song — chuyện bình thường, và chính là điều cả hệ thống này hướng tới —
+   * thì lượt kết thúc sau xoá sạch bằng chứng của lượt kia. Không lỗi, không
+   * log; chỉ là một đề xuất healing lẽ ra đủ điều kiện thì mãi không đủ.
+   *
+   * Nên ghi theo DELTA: đọc lại sổ ngay trước khi ghi, rồi cộng phần mình thêm
+   * vào đó. Đọc-rồi-ghi vẫn còn một khe hở nhỏ trên cùng một máy; ở chế độ
+   * server phép gộp này là một transaction (P2.4), và hình dạng delta ở đây
+   * chính là thứ transaction ấy cần.
+   */
   async save(): Promise<void> {
     await mkdir(path.dirname(this.file), { recursive: true });
-    await writeFile(this.file, JSON.stringify(this.db, null, 2) + '\n', 'utf8');
+    const current = await HealingStore.load(this.file);
+    const merged = mergeHealing(current.db, this.baseline, this.db);
+    await writeFile(this.file, JSON.stringify(merged, null, 2) + '\n', 'utf8');
   }
+}
+
+/**
+ * Gộp ba bản: sổ đang có trên đĩa, sổ lúc ta đọc, và sổ ta đang giữ.
+ *
+ * Quy tắc theo từng loại trường, và mỗi quy tắc trả lời một câu hỏi khác nhau:
+ *
+ *  - `successes` là ĐẾM DỒN → cộng phần ta thêm (`mine - base`) vào bản đĩa.
+ *    Lấy giá trị lớn hơn sẽ mất bằng chứng: hai lượt mỗi bên thêm 1 vào một
+ *    con số 2 thì sự thật là 4, không phải 3.
+ *  - `runIds` và `devices` là TẬP HỢP → hợp nhất. Cùng một `runId` xuất hiện
+ *    hai lần không có nghĩa nó chạy hai lần.
+ *  - `firstSeen` lấy mốc sớm hơn, `lastSeen` lấy mốc muộn hơn — đó là định
+ *    nghĩa của hai trường ấy, không phải "bản nào ghi sau thì thắng".
+ *  - `decision`/`reviewedAt` là QUYẾT ĐỊNH CỦA NGƯỜI → bản nào có thì giữ, và
+ *    quyết định mới hơn thắng. Một lượt chạy tự động không được xoá nó.
+ */
+function mergeHealing(disk: HealingDb, base: HealingDb, mine: HealingDb): HealingDb {
+  const out: HealingDb = {
+    version: 1,
+    // Hợp nhất: `ingestedRuns` là thứ làm cho backfill chạy lại được nhiều lần
+    // mà không nhân đôi bằng chứng. Mất một khoá ở đây nghĩa là lần backfill
+    // sau nhập lại đúng report ấy.
+    ingestedRuns: { ...disk.ingestedRuns, ...mine.ingestedRuns },
+    entries: { ...disk.entries },
+  };
+
+  for (const [key, mineEntry] of Object.entries(mine.entries)) {
+    const baseEntry = base.entries[key];
+    const diskEntry = out.entries[key];
+
+    if (!diskEntry) {
+      out.entries[key] = mineEntry;
+      continue;
+    }
+
+    const added = mineEntry.successes - (baseEntry?.successes ?? 0);
+    const devices: Record<string, number> = { ...(diskEntry.devices ?? {}) };
+    for (const [device, count] of Object.entries(mineEntry.devices ?? {})) {
+      const addedHere = count - (baseEntry?.devices?.[device] ?? 0);
+      if (addedHere > 0) devices[device] = (devices[device] ?? 0) + addedHere;
+    }
+
+    const newer = (a?: string, b?: string): string | undefined =>
+      !a ? b : !b ? a : a > b ? a : b;
+
+    out.entries[key] = {
+      ...diskEntry,
+      successes: diskEntry.successes + Math.max(0, added),
+      runIds: [...new Set([...diskEntry.runIds, ...mineEntry.runIds])],
+      ...(Object.keys(devices).length > 0 ? { devices } : {}),
+      firstSeen: diskEntry.firstSeen < mineEntry.firstSeen ? diskEntry.firstSeen : mineEntry.firstSeen,
+      lastSeen: diskEntry.lastSeen > mineEntry.lastSeen ? diskEntry.lastSeen : mineEntry.lastSeen,
+      ...(() => {
+        // Quyết định của người: mốc `reviewedAt` muộn hơn thắng. Nếu chỉ một
+        // bên có quyết định thì giữ bên ấy — một lượt chạy tự động vừa ghi
+        // xong không được phép làm biến mất việc ai đó vừa bấm "từ chối".
+        const at = newer(diskEntry.reviewedAt, mineEntry.reviewedAt);
+        if (!at) return {};
+        const winner = diskEntry.reviewedAt === at ? diskEntry : mineEntry;
+        return { decision: winner.decision, reviewedAt: at };
+      })(),
+    };
+  }
+  return out;
 }
 
 function persisted(candidate: LocatorCandidate): LocatorCandidate {

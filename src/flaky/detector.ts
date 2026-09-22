@@ -53,11 +53,23 @@ export const DEFAULT_FLAKE_POLICY: FlakePolicy = {
 };
 
 export class FlakeDetector {
+  /**
+   * Sổ đúng như lúc đọc từ đĩa.
+   *
+   * `outcomes` là một vòng đệm: mỗi lượt chạy chèn kết quả vào ĐẦU và cắt đuôi
+   * theo `window`. Nên "phần ta thêm" chính là số phần tử ta chèn thêm so với
+   * bản này — và không có nó thì lúc ghi ta chỉ biết trạng thái cuối, không
+   * biết mình đã thêm gì.
+   */
+  private readonly baseline: FlakeDb;
+
   private constructor(
     private readonly path: string,
     private db: FlakeDb,
     private readonly policy: FlakePolicy,
-  ) {}
+  ) {
+    this.baseline = structuredClone(db);
+  }
 
   static async load(path: string, policy: FlakePolicy = DEFAULT_FLAKE_POLICY): Promise<FlakeDetector> {
     const db: FlakeDb = existsSync(path)
@@ -128,9 +140,69 @@ export class FlakeDetector {
     return Boolean(this.db.scenarios[`${scenarioId}::${platform}::${device}`]?.quarantinedSince);
   }
 
+  /**
+   * Ghi bằng cách CỘNG DỒN kết quả mới vào sổ đang có trên đĩa.
+   *
+   * Đây là số liệu, không phải một bản ghi có phiên bản. Bản cũ ghi đè cả tệp,
+   * nên hai lượt chạy song song thì lượt kết thúc sau xoá luôn kết quả của
+   * lượt kia — và hậu quả không phải một lỗi mà là một CÂU TRẢ LỜI SAI: tỷ lệ
+   * flaky tính trên một cửa sổ thiếu dữ liệu, rồi một kịch bản chập chờn được
+   * tuyên là ổn định. Không ai báo cáo chuyện đó, vì trông nó giống tin tốt.
+   */
   async save(): Promise<void> {
-    await writeFile(this.path, JSON.stringify(this.db, null, 2) + '\n', 'utf8');
+    const onDisk: FlakeDb = existsSync(this.path)
+      ? (JSON.parse(await readFile(this.path, 'utf8')) as FlakeDb)
+      : { version: 1, window: this.policy.window, scenarios: {} };
+    await writeFile(
+      this.path,
+      JSON.stringify(mergeFlake(onDisk, this.baseline, this.db, this.policy.window), null, 2) + '\n',
+      'utf8',
+    );
   }
+}
+
+/**
+ * Gộp ba bản sổ flaky: bản trên đĩa, bản lúc ta đọc, bản ta đang giữ.
+ *
+ * `outcomes` mới nhất nằm ở ĐẦU mảng, nên phần ta thêm là đoạn đầu dài
+ * `mine.length - base.length`. Đặt nó trước đoạn của bản đĩa rồi cắt theo
+ * `window`: thứ tự thời gian giữa hai lượt chạy song song không xác định được,
+ * và cũng không cần — cửa sổ chỉ hỏi "trong N lần gần đây có bao nhiêu lần
+ * hỏng", không hỏi thứ tự chính xác.
+ *
+ * `quarantinedSince` là thứ chỉ được ĐẶT chứ không tự mất: giữ mốc sớm hơn
+ * trong hai bên, vì đó là lúc kịch bản bắt đầu bị cách ly. Bản nào vừa gỡ cách
+ * ly thì nó không còn mốc, và lúc ấy kết quả cũng không còn mốc.
+ */
+function mergeFlake(disk: FlakeDb, base: FlakeDb, mine: FlakeDb, window: number): FlakeDb {
+  const out: FlakeDb = { version: 1, window, scenarios: { ...disk.scenarios } };
+
+  for (const [key, mineHist] of Object.entries(mine.scenarios)) {
+    const baseHist = base.scenarios[key];
+    const diskHist = out.scenarios[key];
+    const addedCount = Math.max(0, mineHist.outcomes.length - (baseHist?.outcomes.length ?? 0));
+    const added = mineHist.outcomes.slice(0, addedCount);
+
+    if (!diskHist) {
+      out.scenarios[key] = mineHist;
+      continue;
+    }
+
+    const outcomes = [...added, ...diskHist.outcomes].slice(0, window);
+    const bothCleared = !mineHist.quarantinedSince && !diskHist.quarantinedSince;
+    const since = bothCleared
+      ? undefined
+      : [mineHist.quarantinedSince, diskHist.quarantinedSince]
+          .filter((value): value is string => Boolean(value))
+          .sort()[0];
+
+    out.scenarios[key] = {
+      outcomes,
+      lastSeen: diskHist.lastSeen > mineHist.lastSeen ? diskHist.lastSeen : mineHist.lastSeen,
+      ...(since ? { quarantinedSince: since } : {}),
+    };
+  }
+  return out;
 }
 
 /**
