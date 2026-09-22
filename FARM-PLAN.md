@@ -281,10 +281,16 @@ WDA. Đầu vào thì không cần ai cho: Appium/WDA theo W3C, mà webdriverio 
   Trên server thật: bấm chạy → `[job] … đã vào hàng đợi` → `[job] runner local đã nhận` → log của
   lượt chạy → `done`, và `/api/jobs` ghi đủ `requestedAt`/`startedAt`/`finishedAt`/`runnerId`.
   **Và điều bản cũ không làm được: đóng tab sau 150ms thì job VẪN chạy xong** và vẫn nằm trong sổ.
-- **Chưa chạy được bản Postgres:** engine Docker trên máy này không phản hồi (`docker info` treo),
-  nên [pgQueue.integration.test.ts](src/server/queue/__tests__/pgQueue.integration.test.ts) — gồm
-  cả bài "mười runner đòi cùng lúc" — đã viết và biên dịch được nhưng chưa chạy lần nào. Chạy nó là
-  việc đầu tiên khi Docker trở lại.
+- **Bản Postgres đã chạy thật** (22/09/2026, sau khi khởi động lại engine Docker đang treo): 16 bài
+  xanh, gồm **"mười runner đòi cùng lúc: mỗi job chỉ một bên nhận"** — thứ mà bản bộ nhớ không
+  chứng minh được, vì hai tiến trình khác nhau không có `Map` nào dùng chung. Migration 0003 áp lên
+  một DB ĐANG CÓ 0001+0002, tức là đúng đường mà một bản đã triển khai sẽ đi. Cả nhóm tích hợp DB:
+  37 bài xanh.
+- Hai lỗi của giàn test, không phải của mã: bản bọc thêm tiền tố vào tên runner nên bộ khẳng định
+  đỏ ở đúng chỗ nó nên đỏ (nó kiểm hàng đợi ghi lại ĐÚNG tên runner đã đòi); và `after` xoá `runner`
+  trước khi xoá job của nó nên khoá ngoại từ chối, để lại dòng thừa làm mọi lần chạy sau đỏ vì
+  "duplicate key" — một câu không nói gì về nguyên nhân thật. Giàn test giờ tự dọn dấu vết lần
+  trước.
 
 ### P3.2 Lease manager
 - **Đã có sẵn từ P3.1:** hàng đợi, worker, và vòng đời job. Phần còn lại là buộc lease vào job —

@@ -34,6 +34,14 @@ before(async () => {
      ON CONFLICT DO NOTHING`,
     [at],
   );
+  // Dọn dấu vết của lần chạy TRƯỚC trước khi cắm dòng mới.
+  //
+  // Tên runner ở đây phải đúng từng chữ, vì bộ khẳng định kiểm rằng hàng đợi
+  // ghi lại đúng cái tên đã đòi — nên chúng là tên toàn cục và sẽ đụng nhau
+  // giữa hai lần chạy. Một lần `after` chết giữa chừng là đủ để mọi lần sau
+  // đỏ vì "duplicate key", một câu không nói gì về nguyên nhân thật.
+  await pool.query('DELETE FROM job WHERE runner_id = ANY($1)', [RUNNERS]);
+  await pool.query('DELETE FROM runner WHERE id = ANY($1)', [RUNNERS]);
   for (const id of RUNNERS) {
     await pool.query(
       `INSERT INTO runner (id, org_id, name, mode, os, arch, protocol_version, agent_version,
@@ -45,44 +53,35 @@ before(async () => {
 });
 
 after(async () => {
-  await pool.query('DELETE FROM job WHERE org_id = $1', [ORG]);
-  await pool.query('DELETE FROM runner WHERE org_id = $1', [ORG]);
-  await pool.query('DELETE FROM org WHERE id = $1', [ORG]);
+  // Dọn theo TIỀN TỐ, không theo đúng một tổ chức: mỗi bài tạo tổ chức riêng
+  // `${ORG}-n`, và job nằm trong chúng. Xoá `runner` trước khi xoá job của nó
+  // thì khoá ngoại `job_runner_id_fkey` từ chối — thứ tự ở đây là nội dung,
+  // không phải hình thức.
+  await pool.query('DELETE FROM job WHERE org_id LIKE $1', [`${ORG}%`]);
+  await pool.query('DELETE FROM runner WHERE id = ANY($1)', [RUNNERS]);
+  await pool.query('DELETE FROM runner WHERE org_id LIKE $1', [`${ORG}%`]);
+  await pool.query('DELETE FROM org WHERE id LIKE $1', [`${ORG}%`]);
   await pool.end();
 });
 
 describe('PgJobQueue', () => {
-  // Mỗi bài một "tổ chức" riêng: bộ khẳng định giả định kho rỗng lúc bắt đầu,
-  // mà xoá bảng giữa các bài thì hai bài chạy song song sẽ xoá của nhau.
+  /**
+   * Mỗi bài một "tổ chức" riêng, vì bộ khẳng định giả định kho rỗng lúc bắt
+   * đầu. Xoá bảng giữa các bài thì hai bài chạy song song sẽ xoá của nhau.
+   *
+   * Runner thì DÙNG CHUNG những dòng đã tạo ở `before`: `job.runner_id` chỉ
+   * đòi runner ấy tồn tại, không đòi nó cùng tổ chức. Bản đầu của giàn test
+   * này tạo runner riêng cho từng tổ chức rồi thêm tiền tố vào tên, và bộ
+   * khẳng định đỏ ở đúng chỗ nó nên đỏ: nó kiểm rằng lease ghi lại ĐÚNG tên
+   * runner đã đòi, mà cái tên đi vào lại khác cái tên đi ra.
+   */
   let n = 0;
   queueContract(it, async () => {
     n += 1;
     const org = `${ORG}-${n}`;
     await pool.query('INSERT INTO org (id, name, created_at) VALUES ($1, $2, $3)',
       [org, 'Queue', new Date().toISOString()]);
-    for (const id of RUNNERS) {
-      await pool.query(
-        `INSERT INTO runner (id, org_id, name, mode, os, arch, protocol_version, agent_version,
-           token_hash, visibility, state, created_at)
-         VALUES ($1, $2, $1, 'lab', 'darwin', 'arm64', '1.1.0', '0.1.0', 'h', 'shared', 'online', $3)`,
-        [`${org}-${id}`, org, new Date().toISOString()],
-      );
-    }
-    // Bọc lại để tên runner của bộ khẳng định khớp với dòng vừa tạo.
-    const queue = new PgJobQueue(pool, org);
-    return {
-      ...queue,
-      create: (job) => queue.create({ ...job, orgId: org }),
-      claim: (by) => queue.claim({ ...by, runnerId: `${org}-${by.runnerId}` }),
-      find: (id) => queue.find(id),
-      list: (filter) => queue.list(filter),
-      finish: (id, result) => queue.finish(id, result),
-      release: (id, reason) => queue.release(id, reason),
-      interruptStale: () => queue.interruptStale(),
-      appendLog: async () => {},
-      onLog: async () => () => {},
-      onState: async () => () => {},
-    };
+    return new PgJobQueue(pool, org);
   });
 
   /**
