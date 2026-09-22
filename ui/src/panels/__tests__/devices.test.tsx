@@ -162,16 +162,21 @@ describe('hàng đợi', () => {
     // Chờ DỮ LIỆU, không chờ tiêu đề: tiêu đề có sẵn từ lần render đầu, nên
     // `findByRole('heading')` trả về ngay khi bảng còn rỗng.
     await screen.findByText(/@smoke/);
-    const running = screen.getByRole('heading', { name: 'Đang chạy' }).closest('section')!;
-    expect(within(running).getByText(/@smoke/)).toBeInTheDocument();
+    // Mỗi khối là một `Card` dùng chung, gắn với tiêu đề bằng `aria-labelledby`.
+    // `CardTitle` của shadcn là một `div`, không phải thẻ heading — nên tìm
+    // theo CHỮ, không theo vai trò.
+    const cardOf = (title: string) =>
+      screen.getByText(title, { selector: '[data-slot="card-title"]' })
+        .closest('[aria-labelledby]')!;
 
-    const waitingList = screen.getByRole('heading', { name: 'Đang chờ' }).closest('section')!;
+    expect(within(cardOf('Đang chạy')).getByText(/@smoke/)).toBeInTheDocument();
+
+    const waitingList = cardOf('Đang chờ');
     expect(within(waitingList).getByText(/@p0/)).toBeInTheDocument();
     // Lý do chờ phải hiện ra: một job im lặng nhìn giống một job bị treo.
     expect(within(waitingList).getByText('Máy đang bận.')).toBeInTheDocument();
 
-    const done = screen.getByRole('heading', { name: 'Vừa xong' }).closest('section')!;
-    expect(within(done).getByText(/@cu/)).toBeInTheDocument();
+    expect(within(cardOf('Vừa xong')).getByText(/@cu/)).toBeInTheDocument();
   });
 
   it('job thử lại nhiều lần thì nói lần thứ mấy', async () => {

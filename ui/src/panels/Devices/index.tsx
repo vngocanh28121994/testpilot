@@ -14,7 +14,16 @@ import { api } from '@/api/client';
 import { ROUTES } from '@/api/routes';
 import { AppShell } from '@/components/layout/AppShell';
 import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
 import type {
   ControlTargetsResponse,
   DeviceLeasesResponse,
@@ -98,9 +107,15 @@ export default function DevicesPanel() {
       description="Máy nào đang bận vì ai, và việc gì đang xếp hàng."
     >
       <div className="flex flex-col gap-6">
-        <section className="flex flex-col gap-2" aria-labelledby="devices-title">
-          <div className="flex items-center gap-3">
-            <h2 id="devices-title" className="text-sm font-medium">Thiết bị</h2>
+        <Card aria-labelledby="devices-title">
+          <CardHeader className="flex flex-row items-center justify-between gap-3">
+            <div className="flex flex-col gap-1">
+              <CardTitle id="devices-title">Thiết bị</CardTitle>
+              <CardDescription>
+                Thu hồi lấy máy khỏi tay người đang dùng, nên nó bắt buộc có lý do — người bị lấy
+                sẽ hỏi, và câu trả lời phải có sẵn.
+              </CardDescription>
+            </div>
             <Button
               size="sm"
               variant="outline"
@@ -109,35 +124,35 @@ export default function DevicesPanel() {
             >
               {devices.isFetching ? 'Đang tìm…' : 'Tìm lại'}
             </Button>
-          </div>
-
+          </CardHeader>
+          <CardContent>
           {(devices.data ?? []).length === 0 ? (
             <p className="text-muted-foreground text-sm">
               Chưa máy nào cắm vào. Job cần thiết bị sẽ nằm chờ tới khi có máy — không hỏng.
             </p>
           ) : (
-            <div className="overflow-x-auto rounded-lg border">
-              <table className="w-full text-sm">
-                <thead className="bg-muted/50 text-left">
-                  <tr>
-                    <th className="p-2 font-medium">Máy</th>
-                    <th className="p-2 font-medium">Đang bận vì</th>
-                    <th className="p-2 font-medium">Còn lại</th>
-                    <th className="p-2 font-medium" />
-                  </tr>
-                </thead>
-                <tbody>
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Máy</TableHead>
+                    <TableHead>Đang bận vì</TableHead>
+                    <TableHead>Còn lại</TableHead>
+                    <TableHead />
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
                   {(devices.data ?? []).map((device) => {
                     const lease = leaseOf(device.udid);
                     const job = lease?.holder.kind === 'job'
                       ? jobById(lease.holder.jobId) : undefined;
                     return (
-                      <tr key={device.udid} className="border-t">
-                        <td className="p-2">
+                      <TableRow key={device.udid}>
+                        <TableCell>
                           <div>{device.label}</div>
                           <div className="text-muted-foreground text-xs">{device.udid}</div>
-                        </td>
-                        <td className="p-2">
+                        </TableCell>
+                        <TableCell>
                           {!lease && <span className="text-muted-foreground">rảnh</span>}
                           {lease?.holder.kind === 'human' && (
                             <span>người dùng <b>{lease.holder.userId}</b> đang điều khiển</span>
@@ -149,11 +164,11 @@ export default function DevicesPanel() {
                               {job?.platform ? ` · ${job.platform}` : ''}
                             </span>
                           )}
-                        </td>
-                        <td className="p-2">
+                        </TableCell>
+                        <TableCell>
                           {lease ? `${Math.max(0, secondsLeft(lease))}s` : '—'}
-                        </td>
-                        <td className="p-2 text-right">
+                        </TableCell>
+                        <TableCell className="text-right">
                           {lease && reclaiming !== lease.id && (
                             <Button
                               size="sm"
@@ -190,19 +205,16 @@ export default function DevicesPanel() {
                               </Button>
                             </div>
                           )}
-                        </td>
-                      </tr>
+                        </TableCell>
+                      </TableRow>
                     );
                   })}
-                </tbody>
-              </table>
+                </TableBody>
+              </Table>
             </div>
           )}
-          <p className="text-muted-foreground text-xs">
-            Thu hồi lấy máy khỏi tay người đang dùng, nên nó bắt buộc có lý do — người bị lấy sẽ
-            hỏi, và câu trả lời phải có sẵn.
-          </p>
-        </section>
+          </CardContent>
+        </Card>
 
         <JobList title="Đang chạy" jobs={active} empty="Không có job nào đang chạy." />
         <JobList
@@ -225,45 +237,49 @@ function JobList({ title, jobs, empty, note }: {
 }) {
   const id = `jobs-${title}`;
   return (
-    <section className="flex flex-col gap-2" aria-labelledby={id}>
-      <h2 id={id} className="text-sm font-medium">{title}</h2>
-      {jobs.length === 0 ? (
-        <p className="text-muted-foreground text-sm">{empty}</p>
-      ) : (
-        <div className="overflow-x-auto rounded-lg border">
-          <table className="w-full text-sm">
-            <thead className="bg-muted/50 text-left">
-              <tr>
-                <th className="p-2 font-medium">Việc</th>
-                <th className="p-2 font-medium">Trạng thái</th>
-                <th className="p-2 font-medium">Máy</th>
-                <th className="p-2 font-medium">Đặt lúc</th>
-              </tr>
-            </thead>
-            <tbody>
-              {jobs.map((job) => (
-                <tr key={job.id} className="border-t align-top">
-                  <td className="p-2">
-                    <div>{job.platform ?? job.kind}{job.tag ? ` · ${job.tag}` : ''}</div>
-                    {job.error && (
-                      <div className="text-muted-foreground text-xs">{job.error}</div>
-                    )}
-                  </td>
-                  <td className="p-2">
-                    {STATE_LABEL[job.state]}
-                    {job.attempt > 1 ? ` · lần ${job.attempt}` : ''}
-                  </td>
-                  <td className="p-2">
-                    {job.devices.length > 0 ? job.devices.join(', ') : '—'}
-                  </td>
-                  <td className="p-2">{when(job.requestedAt)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
-      {note && <p className="text-muted-foreground text-xs">{note}</p>}
-    </section>
+    <Card aria-labelledby={id}>
+      <CardHeader>
+        <CardTitle id={id}>{title}</CardTitle>
+        {note && <CardDescription>{note}</CardDescription>}
+      </CardHeader>
+      <CardContent>
+        {jobs.length === 0 ? (
+          <p className="text-muted-foreground text-sm">{empty}</p>
+        ) : (
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Việc</TableHead>
+                  <TableHead>Trạng thái</TableHead>
+                  <TableHead>Máy</TableHead>
+                  <TableHead>Đặt lúc</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {jobs.map((job) => (
+                  <TableRow key={job.id} className="align-top">
+                    <TableCell>
+                      <div>{job.platform ?? job.kind}{job.tag ? ` · ${job.tag}` : ''}</div>
+                      {job.error && (
+                        <div className="text-muted-foreground text-xs">{job.error}</div>
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      {STATE_LABEL[job.state]}
+                      {job.attempt > 1 ? ` · lần ${job.attempt}` : ''}
+                    </TableCell>
+                    <TableCell>
+                      {job.devices.length > 0 ? job.devices.join(', ') : '—'}
+                    </TableCell>
+                    <TableCell>{when(job.requestedAt)}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        )}
+      </CardContent>
+    </Card>
   );
 }

@@ -11,7 +11,9 @@ import { useQuery } from '@tanstack/react-query';
 import { api } from '@/api/client';
 import { ROUTES } from '@/api/routes';
 import { AppShell } from '@/components/layout/AppShell';
+import { Dropdown } from '@/components/Dropdown';
 import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { useDeviceControl, type ControlDevice } from '@/hooks/useDeviceControl';
 import { DRAG_THRESHOLD_PX, isDrag, toScreenPoint } from '@/lib/deviceScale';
@@ -91,18 +93,27 @@ export default function DeviceControlPanel() {
     >
       <div className="flex flex-col gap-4">
         <div className="flex flex-wrap items-center gap-2">
-          <select
+          {/* Dropdown dùng chung, không phải `<select>` trần: popup của hệ
+              điều hành không theo theme, và mũi tên do hệ điều hành vẽ nằm
+              lệch khỏi lề phải của ô. Xem components/Dropdown.tsx. */}
+          <Dropdown
             aria-label="Chọn máy"
-            className="border-input bg-background h-9 rounded-md border px-3 text-sm"
+            className="mt-0 w-72"
             value={chosen}
             disabled={state.phase === 'holding'}
-            onChange={(event) => setChosen(event.target.value)}
-          >
-            <option value="">— chọn máy —</option>
-            {(devices.data ?? []).map((device) => (
-              <option key={device.udid} value={device.udid}>{device.label}</option>
-            ))}
-          </select>
+            onChange={setChosen}
+            // Mục rỗng nằm TRONG danh sách, không phải `placeholder`:
+            // `placeholder` của Radix chỉ hiện khi chưa có giá trị nào, mà ở
+            // đây "chưa chọn" là một giá trị thật — chuỗi rỗng. Dropdown dùng
+            // chung đã quy đổi sẵn cho trường hợp ấy.
+            options={[
+              { value: '', label: '— chọn máy —' },
+              ...(devices.data ?? []).map((device) => ({
+                value: device.udid,
+                label: device.label,
+              })),
+            ]}
+          />
 
           <Button
             size="sm"
@@ -146,7 +157,11 @@ export default function DeviceControlPanel() {
         )}
 
         {state.phase === 'holding' && (
-          <div className="flex flex-wrap items-start gap-4">
+          <Card aria-labelledby="control-title">
+            <CardHeader>
+              <CardTitle id="control-title">Màn hình máy</CardTitle>
+            </CardHeader>
+            <CardContent className="flex flex-wrap items-start gap-4">
             <canvas
               ref={canvas}
               aria-label="Màn hình thiết bị"
@@ -200,7 +215,8 @@ export default function DeviceControlPanel() {
                 nút trên web khoá màn hình chiếc máy ở phòng khác là thứ không ai gỡ được từ xa.
               </p>
             </div>
-          </div>
+            </CardContent>
+          </Card>
         )}
       </div>
     </AppShell>
