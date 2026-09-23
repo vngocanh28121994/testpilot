@@ -66,6 +66,16 @@ export type ControlState =
       screen?: ControlScreen;
       codec?: StreamCodec;
       frames: number;
+      /**
+       * Cú chạm gần nhất hỏng, nhưng phiên VẪN đang giữ máy.
+       *
+       * Tách khỏi `phase: 'error'` vì hai chuyện khác hẳn nhau. Mất lease hay
+       * đứt luồng thì phiên kết thúc — không còn gì để xem. Một cú chạm hỏng
+       * thì màn hình vẫn đang chảy về và máy vẫn trong tay người dùng; hạ cả
+       * phiên vì nó là vứt đi một thứ đang chạy tốt, và tệ hơn: lease vẫn
+       * được giữ, nên chiếc máy bị khoá trong khi không ai xem được nó nữa.
+       */
+      lastActionError?: string;
     }
   | { phase: 'error'; message: string };
 
@@ -287,8 +297,20 @@ export function useDeviceControl(canvas: React.RefObject<HTMLCanvasElement | nul
         action,
       });
     } catch (err) {
-      setState({ phase: 'error', message: (err as Error).message });
+      // KHÔNG hạ phiên: xem `lastActionError`. Người dùng chạm lại được ngay,
+      // và lần chạm sau thành công thì câu lỗi tự biến mất.
+      setState((prev) => (
+        prev.phase === 'holding'
+          ? { ...prev, lastActionError: (err as Error).message }
+          : prev
+      ));
+      return;
     }
+    setState((prev) => {
+      if (prev.phase !== 'holding' || !prev.lastActionError) return prev;
+      const { lastActionError: _cleared, ...rest } = prev;
+      return rest;
+    });
   }, []);
 
   // Nhịp tim. Ngừng nhịp là mất máy sau 60 giây, nên lỗi gia hạn phải hiện ra

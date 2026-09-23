@@ -133,6 +133,58 @@ describe('useDeviceControl', () => {
   });
 
   /** Rời trang mà không nhả là khoá chiếc máy thêm 60 giây cho người tiếp theo. */
+  /**
+   * Một cú chạm hỏng KHÔNG được hạ cả phiên.
+   *
+   * Đã xảy ra thật: `adb` không trả lời trong tám giây khi ai đó đang thao tác
+   * với emulator, và cả màn hình biến mất kèm dòng "adb kết thúc với mã null".
+   * Hai thứ bị mất cùng lúc, và cái thứ hai tệ hơn: lease vẫn được giữ, nên
+   * chiếc máy bị khoá trong khi không còn ai xem được nó.
+   */
+  it('cú chạm hỏng thì báo, nhưng vẫn giữ máy và vẫn xem được', async () => {
+    server.use(
+      http.post(ROUTES.deviceLease, () => HttpResponse.json({
+        lease: { id: 'lease-1', deviceId: ANDROID.udid, expiresAt: '2026-09-22T10:01:00.000Z' },
+      })),
+      http.post(ROUTES.controlInput, () => HttpResponse.json(
+        { error: 'adb input tap không trả lời trong 8 giây.' }, { status: 500 },
+      )),
+    );
+
+    const { result } = setup();
+    await act(() => result.current.hold(ANDROID));
+    await act(() => result.current.send({ kind: 'tap', x: 10, y: 20 }));
+
+    expect(result.current.state.phase).toBe('holding');
+    expect((result.current.state as { lastActionError?: string }).lastActionError)
+      .toMatch(/không trả lời/);
+    expect(FakeEventSource.last?.closed).toBe(false);
+  });
+
+  it('cú chạm sau thành công thì câu lỗi tự biến mất', async () => {
+    let fail = true;
+    server.use(
+      http.post(ROUTES.deviceLease, () => HttpResponse.json({
+        lease: { id: 'lease-1', deviceId: ANDROID.udid, expiresAt: '2026-09-22T10:01:00.000Z' },
+      })),
+      http.post(ROUTES.controlInput, () => (fail
+        ? HttpResponse.json({ error: 'hỏng' }, { status: 500 })
+        : HttpResponse.json({ ok: true }))),
+    );
+
+    const { result } = setup();
+    await act(() => result.current.hold(ANDROID));
+    await act(() => result.current.send({ kind: 'tap', x: 1, y: 2 }));
+    expect((result.current.state as { lastActionError?: string }).lastActionError).toBeTruthy();
+
+    fail = false;
+    await act(() => result.current.send({ kind: 'tap', x: 1, y: 2 }));
+    // Để dòng lỗi nằm lại sau khi mọi thứ đã bình thường là dạy người dùng
+    // bỏ qua nó.
+    expect((result.current.state as { lastActionError?: string }).lastActionError)
+      .toBeUndefined();
+  });
+
   it('rời trang thì tự nhả máy', async () => {
     let released = false;
     server.use(

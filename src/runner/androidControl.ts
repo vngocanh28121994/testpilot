@@ -72,21 +72,56 @@ function adb(args: string[], udid: string): ChildProcess {
   return spawn('adb', [...target, ...args], { stdio: ['ignore', 'pipe', 'pipe'] });
 }
 
+/**
+ * Một lệnh adb ngắn, có hạn giờ.
+ *
+ * Câu lỗi phải nói được AI đã giết tiến trình. Bản đầu in `mã ${code}`, và khi
+ * chính hạn giờ ở đây bắn SIGTERM thì `code` là `null` — người dùng nhận đúng
+ * dòng "adb kết thúc với mã null", một câu không chỉ ra được gì. Nó đã xảy ra
+ * thật giữa lúc ai đó đang chạm vào màn hình điện thoại.
+ *
+ * `code === null` LUÔN nghĩa là bị tín hiệu giết, và có đúng hai khả năng:
+ * hạn giờ của ta, hoặc một tín hiệu từ bên ngoài. Hai câu trả lời khác nhau,
+ * nên phân biệt chúng.
+ */
 function run(args: string[], udid: string, timeoutMs = 8_000): Promise<string> {
   return new Promise((resolve, reject) => {
     let stdout = '';
     let stderr = '';
+    let timedOut = false;
     const child = adb(args, udid);
-    const timer = setTimeout(() => child.kill('SIGTERM'), timeoutMs);
+    const timer = setTimeout(() => {
+      timedOut = true;
+      child.kill('SIGTERM');
+    }, timeoutMs);
     child.stdout?.on('data', (buf: Buffer) => { stdout += buf.toString(); });
     child.stderr?.on('data', (buf: Buffer) => { stderr += buf.toString(); });
     child.on('error', (err) => { clearTimeout(timer); reject(err); });
-    child.on('close', (code) => {
+    child.on('close', (code, signal) => {
       clearTimeout(timer);
-      if (code === 0) resolve(stdout);
-      else reject(new Error(stderr.trim() || stdout.trim() || `adb kết thúc với mã ${code}`));
+      if (code === 0) return resolve(stdout);
+      reject(new Error(
+        stderr.trim() || stdout.trim() || describeExit(args, code, signal, timedOut, timeoutMs),
+      ));
     });
   });
+}
+
+/** Câu nói ra chuyện gì đã xảy ra với tiến trình adb, cho người sẽ đi sửa nó. */
+export function describeExit(
+  args: string[],
+  code: number | null,
+  signal: NodeJS.Signals | null,
+  timedOut: boolean,
+  timeoutMs: number,
+): string {
+  const what = `adb ${args.join(' ')}`;
+  if (timedOut) {
+    return `${what} không trả lời trong ${Math.round(timeoutMs / 1000)} giây. `
+      + 'Máy có thể đang bận, hoặc adb đã mất kết nối tới nó — thử `adb devices`.';
+  }
+  if (signal) return `${what} bị dừng bởi tín hiệu ${signal}.`;
+  return `${what} kết thúc với mã ${code}.`;
 }
 
 /** `wm size` → số mà `input tap` thật sự dùng. Xem `ScreenSize.overridden`. */

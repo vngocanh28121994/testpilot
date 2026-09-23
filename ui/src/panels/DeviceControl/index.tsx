@@ -171,9 +171,21 @@ export default function DeviceControlPanel() {
         {state.phase === 'error' && (
           <div
             role="alert"
-            className="border-destructive text-destructive rounded-md border p-3 text-sm"
+            className="border-destructive text-destructive bg-card rounded-md border p-3 text-sm"
           >
             {state.message}
+          </div>
+        )}
+
+        {/* Cú chạm hỏng, nhưng phiên vẫn sống: báo NGAY TRÊN màn hình máy, và
+            đừng gỡ màn hình đi. Người dùng chạm lại được ngay, và lần chạm sau
+            thành công thì dòng này tự biến mất. */}
+        {state.phase === 'holding' && state.lastActionError && (
+          <div
+            role="status"
+            className="border-destructive/40 text-destructive bg-card rounded-md border p-3 text-sm"
+          >
+            Thao tác vừa rồi không tới được máy: {state.lastActionError}
           </div>
         )}
 
