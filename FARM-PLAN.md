@@ -882,8 +882,18 @@ Cộng thêm một bài kiểm tra tay, ghi lại kết quả:
 - ~~`package.json` liệt kê tay hơn 150 file test.~~ **Xong ở P0 (2026-09-21).** Hoá ra 29 file test
   trên đĩa chưa bao giờ được chạy: 24 file xanh mà không ai biết còn xanh hay không, 5 file
   `*.integration.test.ts` cần máy Android thật (giờ có `npm run test:integration` riêng).
-- `registry/*.json` đang nằm trong git và bị UI ghi vào. Sau P2.4 thì bỏ khỏi git, giữ DB làm nguồn
-  sự thật và có đường export ra file cho CI.
-- `src/ui/server.ts` 5.200 dòng và `src/ui/contracts.ts` 26KB: P1 sẽ tự giải quyết `server.ts`;
-  `contracts.ts` nên chia theo miền đúng lúc chia route.
+- ~~`registry/*.json` đang nằm trong git và bị UI ghi vào.~~ **Giải quyết khác cách đã viết
+  (2026-09-23), và nói rõ vì sao.** File Ở LẠI trong git: ở chế độ `embedded` nó CHÍNH LÀ nguồn sự
+  thật, và bản local là thứ người dùng chạy hằng ngày — bỏ nó đi là lấy mất dữ liệu của họ để đổi
+  lấy sự gọn gàng của một chế độ họ chưa dùng. Ở chế độ `server` thì Postgres là nguồn sự thật và
+  file kia không được đọc. Đường đi lại giữa hai bên là `registry pull/push` của P4.4b — đúng cái
+  "export ra file cho CI" mà dòng này muốn, chỉ là nó đi cả hai chiều.
+- ~~`src/ui/server.ts` 5.200 dòng~~ **xong: còn 290 dòng** sau khi P1 chuyển hết route ra
+  `routes/`. `src/ui/contracts.ts` vẫn 897 dòng và **chưa chia** — việc chia đụng vào import của
+  khoảng tám mươi file mà không đổi một hành vi nào, nên nó chờ một lần sửa có lý do thật đi ngang
+  qua, thay vì một lần đổi tên hàng loạt tự nó là rủi ro.
 - `.testpilot.secrets.json` chỉ còn hợp lệ ở chế độ embedded — ghi rõ điều đó trong file khi làm P2.3.
+- **Còn nợ, phát hiện 2026-09-23:** hai runner trên CÙNG một máy báo cùng một udid thì thiết bị ấy
+  hiện hai dòng, và `devices.find(udid)` lấy dòng đầu. Lease khoá theo udid nên không có hai job
+  chạy đè, nhưng danh tính thiết bị vẫn nhập nhằng. Sửa đúng là để danh tính thiết bị là cặp
+  (runner, udid) — đụng vào cả lease, nên chưa làm.

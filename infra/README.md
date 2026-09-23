@@ -56,6 +56,31 @@ trình từ chối khởi động**. Đó là chủ ý: quay về file JSON ở 
 là mọi tổ chức đọc ghi cùng một chỗ trên đĩa máy chủ — một đường rò dữ liệu
 không báo lỗi và không sửa được sau khi đã xảy ra. Thà chết lúc deploy.
 
+Cùng luật ấy áp cho **phiên đăng nhập**: ở chế độ server chúng nằm trong bảng
+`session`, không nằm trong RAM. Giữ trong RAM thì một lần deploy bình thường
+đăng xuất toàn bộ người đang dùng, và chạy hai instance thì người đăng nhập ở
+instance này gọi API rơi vào instance kia sẽ nhận 401 — không phải thỉnh
+thoảng, mà là một nửa số request.
+
+## Artifact: report, ảnh, video
+
+Ở chế độ `server`, bằng chứng của một lượt chạy **không ở lại trên máy runner**
+— người đọc report ngồi ở chỗ khác với chiếc máy đã chạy test. Đặt
+`TESTPILOT_S3_BUCKET` (và ba biến `TESTPILOT_S3_*` còn lại) là bật đường ấy;
+không đặt thì server in một cảnh báo lúc khởi động và file nằm lại chỗ cũ.
+
+**Runner không cầm khoá bucket.** Nó xin server một link có chữ ký cho từng
+file rồi ghi thẳng lên S3. Lý do rất cụ thể: runner chạy trên laptop của một
+người, và hai mươi bản sao của một khoá ghi được vào kho của cả tổ chức là hai
+mươi chỗ để mất nó — không thu lại được cái nào khi một máy bị mất cắp.
+
+Đường đọc cũng không đi qua server: `GET /api/artifact?key=…` trả 302 sang một
+link có hạn. Một video hàng chục MB đi qua server là trả tiền băng thông hai
+lần rồi giữ một kết nối mở suốt thời gian đó.
+
+Dọn theo tuổi chạy một giờ một lần, lấy số ngày từ `retention.keepFailedDays`
+trong `testpilot.config.json`.
+
 ## Đưa dữ liệu hiện có vào Postgres
 
 ```bash
