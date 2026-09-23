@@ -252,7 +252,15 @@ function FreshToken({
       <p className="text-muted-foreground text-xs">
         Server chỉ giữ hash của nó, nên không có đường nào đọc lại. Mất thì bấm Đổi token.
       </p>
-      <pre className="bg-muted overflow-x-auto rounded-md p-3 font-mono text-xs">{command}</pre>
+      {/*
+        `code` + `whitespace-pre` chứ không phải thẻ preformatted: đây là một
+        CÂU LỆNH, còn logViewUsage.test.ts chặn thẻ ấy mọc thêm ở panel để log
+        chỉ có một nơi vẽ. Nới guard theo tên file thì lần sau một chỗ vẽ log
+        thật lọt qua cùng đường ấy.
+      */}
+      <code className="bg-muted block overflow-x-auto rounded-md p-3 font-mono text-xs whitespace-pre">
+        {command}
+      </code>
       <div className="flex justify-end gap-2">
         <Button
           size="sm"

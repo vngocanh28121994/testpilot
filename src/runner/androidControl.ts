@@ -18,17 +18,31 @@
  * `adb` mà runner vốn đã cần — không thêm nhị phân nào lên máy người dùng, và
  * đó là điều đáng giữ khi runner chạy trên máy cá nhân của người khác.
  *
- * Giới hạn đã biết, nói ra chứ không giấu: `screenrecord` tự dừng ở mốc
- * `--time-limit` (tối đa 180 giây) nên stream tự khởi động lại, và mỗi lần khởi
- * động lại có một khoảng hở khoảng một giây. Nó cũng không chụp được surface
- * bảo mật (màn nhập mật khẩu, DRM) — vùng ấy ra khung đen, đúng như khi quay
- * phim bằng tay.
+ * Giới hạn đã biết, nói ra chứ không giấu: `screenrecord` không chụp được
+ * surface bảo mật (màn nhập mật khẩu, DRM) — vùng ấy ra khung đen, đúng như khi
+ * quay phim bằng tay. Và tốc độ khung là tốc độ MÁY dựng hình, không phải tốc
+ * độ ta xin: một emulator chạy không cửa sổ (`-no-window`) dựng hình ~10
+ * khung/giây, nên stream cũng chỉ ra chừng ấy dù đặt `--size` hay `--bit-rate`
+ * thế nào. Cùng chiếc AVD ấy bật kèm cửa sổ và `-gpu host` cho 23 khung/giây.
+ * Đo bằng `dumpsys gfxinfo`: 101ms/khung khi không cửa sổ, 42ms khi có.
  */
 import { spawn, type ChildProcess } from 'node:child_process';
 import { CONTROL_KEYS, isControlKey, type ControlKey } from '../protocol/control.js';
 
-/** Mỗi lần khởi động lại `screenrecord` là một khoảng hở, nên lấy mốc cao nhất. */
-const TIME_LIMIT_SECONDS = 180;
+/**
+ * Mốc thời gian của `screenrecord`. `0` là "không giới hạn" — có từ bản 1.4 của
+ * lệnh này, và là thứ ta muốn: mỗi lần hết mốc rồi khởi động lại là một khoảng
+ * hở khoảng một giây ngay giữa lúc người ta đang thao tác.
+ *
+ * Bản cũ hơn từ chối `0` và chấp nhận tối đa 180. Không có đường nào hỏi trước
+ * xem máy này thuộc bên nào, nên ta thử `0`, và nếu nó chết trước khi ra được
+ * byte nào thì hạ xuống 180 rồi nhớ lấy cho những lần sau của chiếc máy ấy.
+ */
+const NO_TIME_LIMIT = 0;
+const MAX_TIME_LIMIT_SECONDS = 180;
+
+/** Những máy đã từ chối `--time-limit=0`. Hỏi một lần, nhớ cả phiên. */
+const needsTimeLimit = new Set<string>();
 
 /** Chiều rộng đích. Cao hơn nữa thì băng thông tăng mà chữ trên máy không rõ thêm. */
 const TARGET_WIDTH = 720;
@@ -188,28 +202,32 @@ export async function startScreenStream(
 
   const screen = await screenSize(udid);
   const frame = frameSizeFor(screen);
-  const state = { sinks: new Set([sink]), frame, stopped: false } as {
+  const state = { sinks: new Set([sink]), frame, stopped: false, sawBytes: false } as {
     child?: ChildProcess;
     sinks: Set<ScreenStreamSink>;
     frame: { width: number; height: number };
     stopped: boolean;
+    sawBytes: boolean;
   };
   streams.set(udid, state);
 
   const launch = (first: boolean): void => {
     if (state.stopped) return;
+    const limit = needsTimeLimit.has(udid) ? MAX_TIME_LIMIT_SECONDS : NO_TIME_LIMIT;
+    state.sawBytes = false;
     const child = adb([
       'exec-out', 'screenrecord',
       '--output-format=h264',
       `--size=${frame.width}x${frame.height}`,
       '--bit-rate=2000000',
-      `--time-limit=${TIME_LIMIT_SECONDS}`,
+      `--time-limit=${limit}`,
       '-',
     ], udid);
     state.child = child;
     if (!first) for (const each of state.sinks) each.restart();
 
     child.stdout?.on('data', (buf: Buffer) => {
+      state.sawBytes = true;
       for (const each of state.sinks) each.chunk(buf);
     });
     let stderr = '';
@@ -220,6 +238,15 @@ export async function startScreenStream(
     });
     child.on('close', (code) => {
       if (state.stopped) return;
+      // Chết mà chưa ra được byte nào, trong khi ta vừa xin "không giới hạn":
+      // đây là bản `screenrecord` cũ không hiểu `0`. Hạ xuống 180 và chạy lại.
+      // Điều kiện "chưa ra byte nào" là thứ phân biệt nó với một chiếc máy bị
+      // rút ra giữa chừng — máy rút ra thì đã kịp phát hình rồi.
+      if (code !== 0 && !state.sawBytes && !needsTimeLimit.has(udid)) {
+        needsTimeLimit.add(udid);
+        launch(false);
+        return;
+      }
       // Mã 0 là hết mốc thời gian — chuyện bình thường, chạy lại ngay. Mã khác
       // là máy rút ra hoặc bộ mã hoá từ chối, và im lặng chạy lại một thứ chắc
       // chắn hỏng sẽ thành một vòng lặp sinh tiến trình.

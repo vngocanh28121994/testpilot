@@ -24,6 +24,15 @@ describe('Runner — Native Regression', () => {
   it('gửi @native+@regression và platform mobile xuống runner', async () => {
     let started: Record<string, unknown> | undefined;
     server.use(
+      // Nút chạy native bị chặn khi SỔ MÁY trống, chứ không chỉ khi preflight
+      // đỏ: một lượt native không có máy nào để chạy thì chặn ngay trên màn
+      // hình rẻ hơn là để nó rơi vào hàng đợi rồi chết ở runner.
+      http.get(ROUTES.deviceTargets, () =>
+        HttpResponse.json({
+          devices: [{
+            platform: 'android', udid: 'emulator-5554', label: 'pixel', ready: true,
+          }],
+        })),
       http.get(ROUTES.preflight, ({ request }) => {
         const platform = new URL(request.url).searchParams.get('platform') ?? 'web';
         return HttpResponse.json({
