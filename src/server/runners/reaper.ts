@@ -19,6 +19,7 @@ import type { JobQueue } from '../queue/queue.js';
 import type { LeaseRepo } from '../db/repo.js';
 import type { DeviceRegistry } from '../devices/registry.js';
 import type { RunnerRegistry } from '../runners/registry.js';
+import type { SessionStore } from '../auth/session.js';
 
 export interface ReaperDeps {
   runners: RunnerRegistry;
@@ -33,6 +34,15 @@ export interface ReaperDeps {
    * dài. Quá ngắn thì một runner đang bận tải bundle bị coi là chết.
    */
   silentMs?: number;
+  /**
+   * Dọn phiên đăng nhập đã hết hạn.
+   *
+   * Không bắt buộc: ở chế độ embedded không có phiên nào, và bản RAM tự quên
+   * khi tiến trình chết. Ở chế độ server thì bảng `session` chỉ lớn lên —
+   * `find()` xoá dòng hết hạn khi có ai hỏi tới nó, nhưng phiên bị BỎ QUÊN thì
+   * không ai hỏi tới bao giờ, và đó đúng là loại chiếm phần lớn số dòng.
+   */
+  sessions?: Pick<SessionStore, 'reapExpired'>;
 }
 
 export const DEFAULT_SILENT_MS = 90_000;
@@ -54,6 +64,13 @@ export async function reapOnce(deps: ReaperDeps, now = new Date()): Promise<Reap
   const online = new Set(
     before.filter((runner) => runner.state === 'online').map((runner) => runner.id),
   );
+
+  // Dọn phiên TRƯỚC khi thoát sớm ở dưới: nó không liên quan gì tới runner,
+  // và đặt nó sau câu `return` nghĩa là nó chỉ chạy vào những vòng tình cờ có
+  // một chiếc máy vừa tắt.
+  if (deps.sessions?.reapExpired) {
+    await deps.sessions.reapExpired(now.getTime()).catch(() => 0);
+  }
 
   const changed = await deps.runners.reapSilent(silentMs, now);
   if (changed === 0) return { runners: 0, jobs: 0 };

@@ -17,6 +17,7 @@ import { deviceRoutes } from '../devices.js';
 import { controlRoutes } from '../control.js';
 import { MemoryDeviceRegistry } from '../../devices/memoryRegistry.js';
 import { MemoryDeviceGrants } from '../../devices/memoryGrants.js';
+import { MemorySessionStore } from '../../auth/session.js';
 import { MemoryRunnerRegistry } from '../../runners/memoryRegistry.js';
 import type { Identity, Role } from '../../auth/roles.js';
 import type { Repos } from '../../db/repo.js';
@@ -52,6 +53,7 @@ describe('chia sẻ máy riêng', () => {
       runners: new MemoryRunnerRegistry(),
       devices,
       grants,
+      sessions: new MemorySessionStore(),
     };
   }
 

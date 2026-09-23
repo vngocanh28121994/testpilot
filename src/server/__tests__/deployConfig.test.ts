@@ -20,6 +20,7 @@ import { PUBLIC_ROUTES, requiredRole } from '../auth/policy.js';
 import { ANONYMOUS, LOCAL_IDENTITY } from '../auth/roles.js';
 import { MemoryRunnerRegistry } from '../runners/memoryRegistry.js';
 import { MemoryDeviceGrants } from '../devices/memoryGrants.js';
+import { MemorySessionStore } from '../auth/session.js';
 import { MemoryDeviceRegistry } from '../devices/memoryRegistry.js';
 
 const dockerfile = readFileSync('Dockerfile', 'utf8');
@@ -53,6 +54,7 @@ const ctx = (identity: typeof ANONYMOUS) => ({
   runners: new MemoryRunnerRegistry(),
     devices: new MemoryDeviceRegistry(),
       grants: new MemoryDeviceGrants(),
+      sessions: new MemorySessionStore(),
 });
 
 async function callHealth(query: string, identity = ANONYMOUS) {

@@ -13,6 +13,7 @@
  */
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import type { Identity } from '../auth/roles.js';
+import type { SessionStore } from '../auth/session.js';
 import type { Repos } from '../db/repo.js';
 import type { DeviceRegistry } from '../devices/registry.js';
 import type { DeviceGrants } from '../devices/grants.js';
@@ -76,6 +77,15 @@ export interface RouteContext {
    * đang mượn máy bỗng thôi nhìn thấy nó, giữa buổi làm việc.
    */
   grants: DeviceGrants;
+  /**
+   * Kho phiên đăng nhập.
+   *
+   * Route đăng nhập TẠO phiên, cửa quyền ĐỌC phiên, và hai bên phải nhìn vào
+   * cùng một kho. Trước đây `routes/auth.ts` import thẳng một singleton, nên
+   * "kho nào" là một quyết định nằm trong một file mà không route nào khác
+   * biết tới — và nó im lặng dùng RAM kể cả ở chế độ server.
+   */
+  sessions: SessionStore;
 }
 
 export type RouteHandler = (

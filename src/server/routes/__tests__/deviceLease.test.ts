@@ -18,6 +18,7 @@ import type { Identity } from '../../auth/roles.js';
 import type { RouteContext } from '../types.js';
 import { MemoryRunnerRegistry } from '../../runners/memoryRegistry.js';
 import { MemoryDeviceGrants } from '../../devices/memoryGrants.js';
+import { MemorySessionStore } from '../../auth/session.js';
 import { MemoryDeviceRegistry } from '../../devices/memoryRegistry.js';
 
 function fakeRes(): { res: ServerResponse; out: { status?: number; body: unknown } } {
@@ -46,6 +47,7 @@ function context(identity: Identity, leases: MemoryLeaseRepo): RouteContext {
     runners: new MemoryRunnerRegistry(),
     devices: new MemoryDeviceRegistry(),
       grants: new MemoryDeviceGrants(),
+      sessions: new MemorySessionStore(),
   };
 }
 

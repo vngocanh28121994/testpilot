@@ -17,6 +17,7 @@ import type { RouteContext } from './routes/types.js';
 import type { RunnerRegistry } from './runners/registry.js';
 import type { DeviceRegistry } from './devices/registry.js';
 import type { DeviceGrants } from './devices/grants.js';
+import type { SessionStore } from './auth/session.js';
 
 /**
  * Sổ rỗng cho host chưa dựng sổ nào.
@@ -39,6 +40,20 @@ const emptyGrants: DeviceGrants = {
   revoke: async () => false,
   forUser: async () => new Set<string>(),
   forDevice: async () => [],
+};
+
+/**
+ * Kho phiên rỗng — chỉ gặp khi host không dựng phiên (bài test, chế độ lạ).
+ *
+ * `create` NÉM thay vì trả một phiên giả: một phiên không lưu được ở đâu là
+ * một lần đăng nhập trông như thành công rồi 401 ở request kế tiếp, và người
+ * dùng sẽ báo lỗi "đăng nhập không được" mà log không có gì.
+ */
+const emptySessions: SessionStore = {
+  create: () => Promise.reject(new Error('Host này chưa dựng kho phiên đăng nhập.')),
+  find: async () => undefined,
+  revoke: async () => {},
+  revokeUser: async () => {},
 };
 
 const emptyRunners: RunnerRegistry = {
@@ -99,6 +114,10 @@ export async function dispatch(
       // bị là ảnh chụp mười giây một lần, còn một quyết định cho mượn thì phải
       // sống qua một lần khởi động lại. Xem `devices/grants.ts`.
       grants: deps.grants ?? emptyGrants,
+      // CÙNG kho mà `authorize()` vừa đọc, không phải một bản thứ hai: route
+      // đăng nhập tạo phiên và cửa quyền đọc phiên, và hai kho riêng cho ra
+      // một hệ thống đăng nhập xong vẫn báo chưa đăng nhập.
+      sessions: deps.sessions ?? emptySessions,
     };
     return handler(req, res, url, ctx);
   }

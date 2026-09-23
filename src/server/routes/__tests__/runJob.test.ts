@@ -24,6 +24,7 @@ import type { Runner } from '../../../runner/index.js';
 import type { RouteContext } from '../types.js';
 import { MemoryRunnerRegistry } from '../../runners/memoryRegistry.js';
 import { MemoryDeviceGrants } from '../../devices/memoryGrants.js';
+import { MemorySessionStore } from '../../auth/session.js';
 import { MemoryDeviceRegistry } from '../../devices/memoryRegistry.js';
 
 function fakeRes(): {
@@ -85,6 +86,7 @@ function context(queue: MemoryJobQueue, devices = defaultDevices, who = 'u1'): R
     runners: new MemoryRunnerRegistry(),
     devices,
     grants: new MemoryDeviceGrants(),
+      sessions: new MemorySessionStore(),
   };
 }
 

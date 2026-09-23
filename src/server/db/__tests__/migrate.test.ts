@@ -54,7 +54,7 @@ describe('migration trên SQLite thật', () => {
       'org', 'app_user', 'membership', 'runner', 'runner_capability',
       'device', 'device_tag', 'job', 'job_device', 'job_event',
       'lease', 'artifact', 'registry_object', 'registry_proposal', 'device_grant',
-      'secret_ref', 'audit_log',
+      'secret_ref', 'audit_log', 'session',
     ]) {
       assert.ok(tables(db).includes(table), `thiếu bảng ${table}`);
     }

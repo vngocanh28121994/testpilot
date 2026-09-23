@@ -14,7 +14,6 @@ import { FileMemberDirectory, type MemberDirectory } from '../auth/members.js';
 import { LoginAttempts, OidcClient, oidcConfigFromEnv } from '../auth/oidc.js';
 import type { Identity } from '../auth/roles.js';
 import { clearedSessionCookie, sessionCookie, sessionIdFromCookie } from '../auth/session.js';
-import { sessions } from '../auth/state.js';
 import type { RouteTable } from './types.js';
 
 const attempts = new LoginAttempts();
@@ -55,12 +54,12 @@ function redirect(res: Parameters<RouteTable[string]>[1], to: string, cookie?: s
 
 export const authRoutes: RouteTable = {
   /** Ai đang đăng nhập. Giao diện gọi nó để biết nên vẽ gì. */
-  'GET /api/auth/me': async (req, res) => {
+  'GET /api/auth/me': async (req, res, _url, ctx) => {
     if (serverMode() === 'embedded') {
       return json(res, 200, { mode: 'embedded', authenticated: true, identity: null });
     }
     const id = sessionIdFromCookie(req.headers.cookie);
-    const session = id ? await sessions.find(id) : undefined;
+    const session = id ? await ctx.sessions.find(id) : undefined;
     if (!session) return json(res, 200, { mode: 'server', authenticated: false, identity: null });
     const { userId, email, role, orgId } = session.identity;
     return json(res, 200, {
@@ -88,7 +87,7 @@ export const authRoutes: RouteTable = {
     }
   },
 
-  'GET /api/auth/callback': async (_req, res, url) => {
+  'GET /api/auth/callback': async (_req, res, url, ctx) => {
     const oidc = client();
     if (!oidc) return json(res, 501, { error: 'Chưa cấu hình OIDC.' });
 
@@ -132,7 +131,7 @@ export const authRoutes: RouteTable = {
         email,
         role,
       };
-      const session = await sessions.create(identity);
+      const session = await ctx.sessions.create(identity);
       const secure = new URL(oidcConfigFromEnv()!.redirectUri).protocol === 'https:';
       return redirect(res, attempt.returnTo, sessionCookie(session.id, { secure }));
     } catch (err) {
@@ -151,11 +150,11 @@ export const authRoutes: RouteTable = {
    * Hệ quả cần biết: đăng nhập lại ngay sau đó sẽ KHÔNG hỏi mật khẩu, vì phiên
    * SSO còn sống. Đó là hành vi đúng của SSO, không phải lỗi.
    */
-  'POST /api/auth/logout': async (req, res) => {
+  'POST /api/auth/logout': async (req, res, _url, ctx) => {
     const id = sessionIdFromCookie(req.headers.cookie);
     // Thu hồi ở PHÍA SERVER, không chỉ xoá cookie. Xoá cookie là bảo trình
     // duyệt quên đi; bản sao mã phiên ở đâu đó vẫn đăng nhập được.
-    if (id) await sessions.revoke(id);
+    if (id) await ctx.sessions.revoke(id);
     res.writeHead(200, {
       'content-type': 'application/json; charset=utf-8',
       'set-cookie': clearedSessionCookie(),

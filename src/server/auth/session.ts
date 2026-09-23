@@ -31,6 +31,15 @@ export interface SessionStore {
   revoke(id: string): Promise<void>;
   /** Đuổi mọi phiên của một người — dùng khi họ rời tổ chức hoặc lộ máy. */
   revokeUser(userId: string): Promise<void>;
+  /**
+   * Dọn phiên đã hết hạn. Trả về số dòng đã xoá.
+   *
+   * Tuỳ chọn, vì nó chỉ có nghĩa với một kho BỀN. Bản trong RAM tự quên khi
+   * tiến trình chết, còn một bảng thì chỉ lớn lên: `find()` xoá dòng hết hạn
+   * khi có ai hỏi tới nó, nhưng phiên bị BỎ QUÊN thì không ai hỏi tới bao
+   * giờ — và đó đúng là loại chiếm phần lớn số dòng.
+   */
+  reapExpired?(now?: number): Promise<number>;
 }
 
 /**

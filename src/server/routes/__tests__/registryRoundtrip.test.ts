@@ -21,6 +21,7 @@ import { registryRoutes } from '../registry.js';
 import { fileRepos } from '../../db/fileRepo.js';
 import { MemoryRunnerRegistry } from '../../runners/memoryRegistry.js';
 import { MemoryDeviceGrants } from '../../devices/memoryGrants.js';
+import { MemorySessionStore } from '../../auth/session.js';
 import { MemoryDeviceRegistry } from '../../devices/memoryRegistry.js';
 import type { ElementDef, ElementRegistry } from '../../../core/types.js';
 import type { Identity } from '../../auth/roles.js';
@@ -70,6 +71,7 @@ describe('vòng tròn pull → sửa → push → duyệt', () => {
       runners: new MemoryRunnerRegistry(),
       devices: new MemoryDeviceRegistry(),
       grants: new MemoryDeviceGrants(),
+      sessions: new MemorySessionStore(),
     };
     await registryRoutes[route]!(req, res, new URL(`http://x${route.split(' ')[1]}`), ctx);
     return out;

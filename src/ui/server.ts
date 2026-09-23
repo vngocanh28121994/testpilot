@@ -37,9 +37,10 @@ import { dispatch } from '../server/dispatch.js';
 // Cùng MỘT kho phiên mà route đăng nhập ghi vào. Hai bản riêng sẽ cho ra một
 // hệ thống đăng nhập xong vẫn báo chưa đăng nhập — và đó đúng là thứ đã xảy ra
 // khi `dispatch` được gọi mà quên truyền kho này vào.
-import { sessions } from '../server/auth/state.js';
+import { sessionStore } from '../server/auth/state.js';
 import { dbOptionsFromEnv } from '../server/db/connect.js';
 import { repoFactory } from '../server/db/wiring.js';
+import { poolProvider } from '../server/db/pool.js';
 
 const CONFIG_PROFILE = await ensurePersonalConfig(personalConfigProfile());
 const CONFIG_FILE = CONFIG_PROFILE.file;
@@ -129,17 +130,32 @@ const MODE = serverMode();
 // một đường tra. Không đặt biến ấy thì sổ rỗng và đường runner đóng.
 localRunners.seedFromEnv();
 
+// MỘT pool cho cả tiến trình: kho dữ liệu và kho phiên cùng dùng. Hai bên mỗi
+// bên một pool là nhân đôi số kết nối tới Postgres mà không ai quyết định.
+const DB = dbOptionsFromEnv();
+const POOL = DB ? poolProvider(DB) : undefined;
+
 const REPOS = repoFactory({
   mode: MODE,
-  db: dbOptionsFromEnv(),
+  db: DB,
+  ...(POOL ? { pool: POOL } : {}),
   paths: async () => (await loadConfig(CONFIG_FILE)).paths,
 });
+
+/**
+ * Kho phiên: Postgres ở chế độ server, RAM ở embedded.
+ *
+ * Dựng ở đây chứ không phải một singleton trong `auth/state.ts`: "kho nào" là
+ * một quyết định của bản triển khai, và để nó nằm trong một module mà không ai
+ * nhìn tới nghĩa là nó im lặng dùng RAM kể cả khi chạy nhiều instance.
+ */
+const SESSIONS = sessionStore({ mode: MODE, ...(POOL ? { pool: POOL } : {}) });
 
 async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> {
   const url = new URL(req.url ?? '/', `http://localhost:${PORT}`);
   return dispatch(req, res, url, {
     mode: MODE,
-    sessions,
+    sessions: SESSIONS,
     devices: localDevices,
     // Bảng quyền mượn máy. Ở embedded nó nằm trong bộ nhớ như mọi thứ khác;
     // ở chế độ server nó phải là Postgres, vì một quyết định cho mượn không
@@ -214,6 +230,9 @@ if (MODE === 'embedded') {
  * và lúc ấy nó tắt đúng như mọi laptop khác.
  */
 startReaper({
+  // Kho phiên: chỉ bản bền mới có gì để dọn. Bản RAM không khai `reapExpired`
+  // nên vòng dọn bỏ qua nó — quyết định nằm ở kiểu, không ở một nhánh `if`.
+  sessions: SESSIONS,
   runners: localRunners,
   devices: localDevices,
   queue: localQueue,

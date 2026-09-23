@@ -7,7 +7,8 @@
  * ra. Một hàm thuần thì viết được test cho cả ba nhánh mà không cần dựng DB.
  */
 import type { Pool } from 'pg';
-import { connect, type DbOptions } from './connect.js';
+import type { DbOptions } from './connect.js';
+import { poolProvider, type PoolProvider } from './pool.js';
 import { fileRepos } from './fileRepo.js';
 import { pgRepos } from './pgRepo.js';
 import type { Repos } from './repo.js';
@@ -22,6 +23,14 @@ export interface WiringOptions {
   paths: () => Promise<{ registry: string; runs: string }>;
   /** Mở kết nối. Tham số hoá để test được nhánh server mà không cần DB thật. */
   open?: (db: DbOptions) => Promise<Pool>;
+  /**
+   * Pool dùng chung của tiến trình.
+   *
+   * Truyền vào thay vì tự giữ một biến đóng: phiên đăng nhập cũng nói chuyện
+   * với DB, và hai bên mỗi bên một pool là nhân đôi số kết nối tới Postgres mà
+   * không ai quyết định điều đó. Xem `db/pool.ts`.
+   */
+  pool?: PoolProvider;
 }
 
 /**
@@ -45,14 +54,9 @@ export function repoFactory(opts: WiringOptions): (identity: Identity) => Promis
     return async () => fileRepos(await opts.paths());
   }
 
-  const db = opts.db;
-  const open = opts.open ?? connect;
   // Một pool cho cả tiến trình, mở ở lần dùng đầu. `lazyRepos` trong
   // `dispatch` hoãn tới lời gọi đầu tiên, nên một route không đọc dữ liệu —
   // `GET /api/health` — vẫn trả lời được khi DB còn chưa lên.
-  let pool: Promise<Pool> | undefined;
-  return async (identity) => {
-    pool ??= open(db);
-    return pgRepos(await pool, identity.orgId);
-  };
+  const pool = opts.pool ?? poolProvider(opts.db, opts.open);
+  return async (identity) => pgRepos(await pool(), identity.orgId);
 }

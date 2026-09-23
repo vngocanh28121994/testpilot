@@ -159,13 +159,32 @@ Chia `handle()` thành các file trong `src/server/routes/`, mỗi file dưới 
 
 Sau giai đoạn này mới được phép mở ra domain.
 
-### P2.1 Xác thực
+### P2.1 Xác thực — ✅ xong 2026-09-23
 - `src/server/auth/oidc.ts`: OIDC authorization code + PKCE (Google Workspace hoặc Azure AD).
 - Session cookie `HttpOnly` `Secure` `SameSite=Lax`, lưu trong DB, có hạn và có đường thu hồi.
 - Middleware chặn **toàn bộ** `/api/*` trừ `/api/health` và đường dẫn đăng nhập.
 - Chế độ `embedded` bỏ qua middleware, người dùng là `local`.
 - **Xong khi:** `src/server/auth/__tests__/allRoutesGuarded.test.ts` liệt kê bảng route và fail nếu
   có route mới nào không khai báo quyền. Bài test này là cái chặn hồi quy quan trọng nhất của P2.
+  (Tên thật: [policyGuard.test.ts](src/server/auth/__tests__/policyGuard.test.ts) — route chưa khai
+  quyền nhận 501, không phải 403.)
+- **Phiên vào Postgres, xong 2026-09-23.** Bản trong RAM hỏng theo hai cách mà không cấu hình nào
+  sửa được: một lần deploy bình thường đăng xuất toàn bộ người đang dùng, và chạy hai instance thì
+  người đăng nhập ở instance này gọi API rơi vào instance kia nhận 401 — không phải thỉnh thoảng,
+  mà là một nửa số request.
+- **Kho phiên chọn theo chế độ, và server thiếu DB thì DỪNG** — cùng luật với `repoFactory`. Quay
+  về RAM ở chế độ server là dựng một hệ thống đăng nhập chạy được trên máy người deploy rồi hỏng
+  ngay khi có instance thứ hai.
+- **MỘT pool cho cả tiến trình** (`db/pool.ts`): kho dữ liệu và kho phiên dùng chung. Trước đó
+  `repoFactory` giữ pool trong một biến đóng, và thêm một bên nói chuyện với DB là nhân đôi số kết
+  nối mà không ai quyết định điều đó.
+- **`sessions` vào `RouteContext`**, thôi là singleton: trước đây `routes/auth.ts` import thẳng một
+  bản trong RAM, nên "kho nào" là quyết định nằm trong một file mà không route nào khác biết tới.
+- **Vòng dọn xoá phiên hết hạn.** `find()` đã xoá dòng hết hạn khi có ai hỏi tới, nhưng phiên bị BỎ
+  QUÊN thì không ai hỏi tới bao giờ — và đó đúng là loại chiếm phần lớn số dòng.
+- **Đo thật:** dựng một phiên trong DB → gọi API được; **giết tiến trình rồi dựng lại** → cùng
+  cookie vẫn đăng nhập, `GET /api/state` trả 200; **instance thứ hai ở cổng khác** → cùng cookie
+  vẫn nhận; **logout ở instance này** → instance kia lập tức báo chưa đăng nhập.
 
 ### P2.2 RBAC
 - Bốn vai: `admin`, `maintainer`, `runner_user`, `viewer`.
