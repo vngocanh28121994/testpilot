@@ -272,7 +272,13 @@ async function attachScrcpy(udid: string, state: StreamState): Promise<boolean> 
       bitRate: BIT_RATE,
       maxFps: MAX_FPS,
     });
-  } catch {
+  } catch (err) {
+    // NÓI RA vì sao. Bản đầu nuốt lỗi ở đây, và hậu quả đúng như đáng ra phải
+    // đoán được: hệ thống chạy tiếp bằng đường chậm, không ai biết, và khi đi
+    // tìm thì không có một dòng nào để đọc. Tụt về đường lui là chuyện bình
+    // thường; tụt về mà im lặng thì không.
+    console.error(`[control] scrcpy không mở được trên ${udid}, dùng screenrecord: `
+      + (err as Error).message);
     return false;
   }
 
