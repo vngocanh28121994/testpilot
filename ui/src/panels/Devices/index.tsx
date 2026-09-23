@@ -9,8 +9,8 @@
  */
 import { useState } from 'react';
 import { navTitle } from '@/lib/nav';
+import { RunnerAdmin } from './RunnerAdmin';
 import { RunnerHealth } from './RunnerHealth';
-import { ShareDevice } from './ShareDevice';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { api } from '@/api/client';
@@ -113,6 +113,8 @@ export default function DevicesPanel() {
         {/* Máy chạy đứng TRƯỚC thiết bị: một chiếc điện thoại chỉ dùng được
             khi chiếc máy tính nó cắm vào còn sống và còn đủ Appium. Xếp ngược
             lại thì người đọc thấy "máy rảnh" rồi mới biết nó không chạy được. */}
+        <RunnerAdmin />
+
         <RunnerHealth />
 
         <Card aria-labelledby="devices-title">
@@ -181,11 +183,6 @@ export default function DevicesPanel() {
                           {lease ? `${Math.max(0, secondsLeft(lease))}s` : '—'}
                         </TableCell>
                         <TableCell className="text-right">
-                          {/* Chỉ chủ máy mới cho mượn được, nên chỉ chủ máy
-                              mới thấy nút. Server vẫn kiểm lại — nút ẩn là
-                              phép lịch sự với người dùng, không phải phép
-                              kiểm quyền. */}
-                          {device.mine && !lease && <ShareDevice udid={device.udid} />}
                           {lease && reclaiming !== lease.id && (
                             <Button
                               size="sm"

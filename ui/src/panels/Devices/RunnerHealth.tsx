@@ -58,7 +58,7 @@ export function RunnerHealth() {
   return (
     <Card aria-labelledby="runners-title">
       <CardHeader>
-        <CardTitle id="runners-title">Máy chạy test</CardTitle>
+        <CardTitle id="runners-title">Môi trường từng máy</CardTitle>
         <CardDescription>
           Mỗi máy tự đo môi trường của nó rồi báo lên — không ai đo hộ được. Ô trống nghĩa
           là máy ấy chưa đo, không phải là nó hỏng.

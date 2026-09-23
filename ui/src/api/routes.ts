@@ -19,6 +19,8 @@ export const ROUTES = {
   registry: '/api/registry',
   registryPush: '/api/registry/push',
   runners: '/api/runners',
+  runnersRotate: '/api/runners/rotate',
+  runnersRevoke: '/api/runners/revoke',
   deviceShare: '/api/device/share',
   deviceUnshare: '/api/device/unshare',
   deviceShares: '/api/device/shares',

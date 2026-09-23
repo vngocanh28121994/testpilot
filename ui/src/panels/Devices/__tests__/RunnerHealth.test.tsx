@@ -72,7 +72,7 @@ describe('Máy chạy test', () => {
     const { container } = await renderWithRouter(<RunnerHealth />);
 
     await waitFor(() => {
-      expect(screen.queryByText('Máy chạy test')).not.toBeInTheDocument();
+      expect(screen.queryByText('Môi trường từng máy')).not.toBeInTheDocument();
     });
     expect(container.querySelector('[data-slot="card"]')).toBeNull();
   });
