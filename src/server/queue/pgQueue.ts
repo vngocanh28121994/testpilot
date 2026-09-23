@@ -98,7 +98,10 @@ export class PgJobQueue implements JobQueue {
   async claim(by: ClaimBy): Promise<JobRecord | undefined> {
     const platforms = by.platforms ?? null;
     const { rows } = await this.pool.query<JobRow>(
-      `UPDATE job SET state = 'running', runner_id = $2, started_at = $3
+      // `error = NULL`: cột ấy giữ lý do lần trước chưa chạy được, và nhận
+      // được job nghĩa là lý do ấy đã hết. Xem chú thích cùng nội dung ở
+      // `memoryQueue.claim`.
+      `UPDATE job SET state = 'running', runner_id = $2, started_at = $3, error = NULL
        WHERE id = (
          SELECT j.id FROM job j
          WHERE j.org_id = $1 AND j.state = 'queued' AND j.payload ? 'spec'

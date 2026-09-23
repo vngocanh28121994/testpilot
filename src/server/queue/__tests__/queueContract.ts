@@ -254,6 +254,26 @@ export function queueContract(
     assert.equal((await queue.claim({ runnerId: 'b' }))?.id, job.id);
   });
 
+  /**
+   * Nhận được job thì lý do chờ PHẢI biến mất.
+   *
+   * `error` giữ câu "vì sao lần trước chưa chạy được" — "máy đang có người
+   * giữ". Nhận được nghĩa là lý do ấy đã hết. Để nó nằm lại thì màn hình hiện
+   * một job "đang chạy" kèm câu giải thích vì sao nó chưa chạy, và người đọc
+   * không biết tin vế nào. Đã thấy đúng như thế trên màn Thiết bị.
+   */
+  it('nhận được job thì xoá lý do chờ của lần trước', async () => {
+    const queue = await fresh();
+    const job = await queue.create(androidJob());
+    await queue.claim({ runnerId: 'a' });
+    await queue.defer(job.id, 'Máy đang có người giữ.', 0);
+    assert.equal((await queue.find(job.id))?.error, 'Máy đang có người giữ.');
+
+    const again = await queue.claim({ runnerId: 'b' });
+    assert.equal(again?.error, undefined, 'job đang chạy không mang lý do chờ');
+    assert.equal((await queue.find(job.id))?.error, undefined);
+  });
+
   /** Trả lại hàng đợi vì lỗi THẬT thì xoá mốc hoãn: nó là một lần thử mới. */
   it('trả lại hàng đợi xoá mốc hoãn', async () => {
     const queue = await fresh();

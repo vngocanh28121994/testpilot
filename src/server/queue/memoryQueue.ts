@@ -88,8 +88,13 @@ export class MemoryJobQueue implements JobQueue {
 
     for (const record of ready) {
       const id = record.id;
+      // `error` là LÝ DO LẦN TRƯỚC CHƯA CHẠY ĐƯỢC — "máy đang có người giữ".
+      // Nhận được job nghĩa là lý do ấy đã hết, nên phải xoá đi: để nó nằm lại
+      // thì màn hình hiện một job "đang chạy" kèm câu giải thích vì sao nó
+      // chưa chạy, và người đọc không biết tin vế nào.
+      const { error: _stale, ...rest } = record;
       const claimed: JobRecord = {
-        ...record,
+        ...rest,
         state: 'running',
         runnerId: by.runnerId,
         startedAt: new Date().toISOString(),
