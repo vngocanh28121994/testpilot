@@ -8,7 +8,7 @@
  */
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { StreamPrimer } from '../h264.js';
+import { StreamPrimer, spsSize } from '../h264.js';
 
 const SPS = 7; const PPS = 8; const IDR = 5; const SLICE = 1;
 
@@ -98,3 +98,31 @@ function types(data: Buffer): number[] {
   }
   return out;
 }
+
+describe('kích thước ảnh đọc từ SPS', () => {
+  /**
+   * SPS thật, lấy từ `screenrecord` trên emulator API 36 ở 720x1600.
+   *
+   * Một chuỗi byte thật chứ không phải chuỗi tự dựng: phép đọc này có đúng một
+   * người dùng — quyết định toạ độ chạm khai theo kích thước nào — và sai một
+   * bit ở đây thì mọi cú chạm rơi vào hư không mà HTTP vẫn trả 200.
+   */
+  it('đọc đúng 720x1600 từ SPS thật', () => {
+    // Bắt trực tiếp từ luồng scrcpy trên emulator API 36 (màn 1080x2400, xin
+    // `max_size=1600`). Một chuỗi THẬT chứ không phải chuỗi tự dựng: 720x1600
+    // là con số scrcpy tự chọn sau khi làm tròn theo luật riêng của nó, và
+    // chính con số ấy là thứ ta không đoán được nên mới phải đọc.
+    const sps = Buffer.from('000000016742c02a8d680b40c9a420202020f08846a0', 'hex');
+    assert.deepEqual(spsSize(sps), { width: 720, height: 1600 });
+  });
+
+  it('không phải SPS thì trả undefined, không đoán', () => {
+    assert.equal(spsSize(nal(IDR)), undefined);
+  });
+
+  it('SPS cắt dở thì trả undefined thay vì ném', () => {
+    // Biên gói cắt giữa một SPS là chuyện thường; ném ra ở đây là làm hỏng cả
+    // luồng vì một mảnh sẽ được ghép lại ngay sau đó.
+    assert.equal(spsSize(Buffer.from([0, 0, 0, 1, 0x67, 0x64])), undefined);
+  });
+});

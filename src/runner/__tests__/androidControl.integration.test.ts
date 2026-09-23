@@ -13,6 +13,7 @@
 import { describe, it, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import {
   frameSizeFor,
   parseScreenSize,
@@ -20,6 +21,7 @@ import {
   screenSize,
   startScreenStream,
   stopAllScreenStreams,
+  swipe,
   tap,
   typeText,
 } from '../androidControl.js';
@@ -248,6 +250,52 @@ describe('đầu vào trên máy thật', () => {
     await pressKey(udid!, 'home');
     const size = await screenSize(udid!);
     assert.ok(size.width > 0 && size.height > 0);
+  });
+
+  /**
+   * Cú chạm phải THẬT SỰ tới màn hình, không chỉ "không ném".
+   *
+   * scrcpy so kích thước ta khai trong mỗi sự kiện với kích thước VIDEO đang
+   * phát, và bỏ IM LẶNG mọi sự kiện khai khác — `PositionMapper.map()` trả
+   * `null`, không lỗi, không log ở mức thường. Bản đầu khai kích thước MÀN HÌNH
+   * (1080x2400) trong khi video là 720x1600, nên mọi cú chạm rơi vào hư không
+   * trong khi HTTP vẫn trả 200 và mọi bài test "không ném" vẫn xanh.
+   *
+   * Nên bài này đo bằng ẢNH MÀN HÌNH THẬT trước và sau, không đo rằng lời gọi
+   * trả về êm.
+   */
+  it('cú quét làm ĐỔI màn hình thật, không chỉ trả về êm', async () => {
+    const shot = (): string => createHash('md5')
+      .update(spawnSync('adb', ['-s', udid!, 'shell', 'screencap', '-p'], { maxBuffer: 1 << 28 }).stdout)
+      .digest('hex');
+
+    const handle = await startScreenStream(udid!, {
+      chunk: () => {}, restart: () => {}, fail: () => {},
+    });
+    try {
+      spawnSync('adb', ['-s', udid!, 'shell', 'input', 'keyevent', 'KEYCODE_HOME']);
+      // Đóng rèm TRƯỚC khi đo: rèm đang mở sẵn từ một lượt chạy trước thì kéo
+      // nữa không đổi gì, và bài test đỏ vì điều kiện đầu vào chứ không vì
+      // điều nó muốn đo.
+      spawnSync('adb', ['-s', udid!, 'shell', 'cmd', 'statusbar', 'collapse']);
+      await new Promise((resolve) => setTimeout(resolve, 2_000));
+      const before = shot();
+      // Kéo rèm thông báo từ mép trên: làm được từ BẤT KỲ màn hình nào, nên bài
+      // test không phụ thuộc vào biểu tượng nào đang nằm ở đâu.
+      const screen = await screenSize(udid!);
+      await swipe(
+        udid!,
+        { x: Math.round(screen.width / 2), y: 10 },
+        { x: Math.round(screen.width / 2), y: Math.round(screen.height * 0.6) },
+        300,
+      );
+      await new Promise((resolve) => setTimeout(resolve, 2_500));
+      assert.notEqual(shot(), before, 'màn hình không đổi — cú quét không tới được máy');
+    } finally {
+      handle.stop();
+      spawnSync('adb', ['-s', udid!, 'shell', 'cmd', 'statusbar', 'collapse']);
+      spawnSync('adb', ['-s', udid!, 'shell', 'input', 'keyevent', 'KEYCODE_HOME']);
+    }
   });
 
   it('chạm giữa màn hình không ném', async () => {

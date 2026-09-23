@@ -252,9 +252,40 @@ const streams = new Map<string, StreamState>();
  * `adb shell` dựng một cái shell trên máy. Đó là phần lớn độ trễ của một cú
  * chạm ở đường cũ.
  */
-function sessionFor(udid: string): { session: ScrcpySession; screen: ScreenSize } | undefined {
+function sessionFor(udid: string): StreamState | undefined {
   const state = streams.get(udid);
-  return state?.scrcpy ? { session: state.scrcpy, screen: state.screen } : undefined;
+  return state?.scrcpy ? state : undefined;
+}
+
+/**
+ * Toạ độ theo hệ MÀN HÌNH → toạ độ theo hệ KHUNG VIDEO.
+ *
+ * scrcpy từ chối mọi sự kiện có kích thước khai báo khác kích thước video đang
+ * phát — `PositionMapper.map()` trả `null` và sự kiện bị bỏ IM LẶNG, không lỗi,
+ * không log ở mức thường. Đó chính xác là điều đã xảy ra: gửi 1080x2400 trong
+ * khi video là 720x1600, và mọi cú chạm rơi vào hư không trong khi HTTP vẫn
+ * trả 200.
+ *
+ * Phép kiểm ấy có lý do: máy có thể vừa xoay kể từ lúc sự kiện được sinh ra,
+ * và một cú chạm tính theo khung cũ sẽ rơi sai chỗ. Nó thà bỏ còn hơn đoán.
+ *
+ * Giao diện đo theo hệ màn hình (`toScreenPoint`) nên phép quy đổi nằm ở đây,
+ * sát chỗ biết cả hai con số.
+ */
+function toFrame(state: StreamState, x: number, y: number): {
+  x: number; y: number; width: number; height: number;
+} {
+  // Kích thước ĐỌC TỪ LUỒNG khi có, không phải kích thước ta tự tính: scrcpy
+  // làm tròn theo luật riêng của nó, và một chênh lệch một pixel cũng làm mọi
+  // cú chạm bị bỏ. Con số tự tính chỉ dùng trong khoảnh khắc trước khi SPS đầu
+  // tiên về.
+  const frame = state.primer.videoSize() ?? state.frame;
+  return {
+    x: (x * frame.width) / state.screen.width,
+    y: (y * frame.height) / state.screen.height,
+    width: frame.width,
+    height: frame.height,
+  };
 }
 
 /**
@@ -464,13 +495,9 @@ export async function tap(udid: string, x: number, y: number): Promise<void> {
   const ay = coord('y', y);
   const live = sessionFor(udid);
   if (live) {
-    // Toạ độ đi thẳng theo hệ MÀN HÌNH, vì đó là hệ giao diện đo theo
-    // (`toScreenPoint`), và scrcpy tự quy đổi sang kích thước thật. Không có
-    // phép nhân chia nào ở đây — chỗ nhân chia bằng tay là chỗ sinh ra lỗi
-    // "chạm lệch đều" trong bản đầu.
-    const at = { x, y, width: live.screen.width, height: live.screen.height };
-    live.session.send(touchMessage({ ...at, action: ACTION_DOWN }));
-    live.session.send(touchMessage({ ...at, action: ACTION_UP }));
+    const at = toFrame(live, x, y);
+    live.scrcpy!.send(touchMessage({ ...at, action: ACTION_DOWN }));
+    live.scrcpy!.send(touchMessage({ ...at, action: ACTION_UP }));
     return;
   }
   await run(['shell', 'input', 'tap', ax, ay], udid);
@@ -500,20 +527,21 @@ export async function swipe(
     // nhận từng điểm, nên ta phải tự rải. Điều đổi lại là cuộn theo ngón tay
     // thật sự — ứng dụng nhận được các điểm giữa và tính được vận tốc, thứ
     // quyết định nó có trôi tiếp sau khi nhấc tay hay không.
-    const size = { width: live.screen.width, height: live.screen.height };
     const steps = Math.max(1, Math.round(durationMs / SWIPE_STEP_MS));
-    live.session.send(touchMessage({ ...from, ...size, action: ACTION_DOWN }));
+    live.scrcpy!.send(touchMessage({ ...toFrame(live, from.x, from.y), action: ACTION_DOWN }));
     for (let step = 1; step <= steps; step += 1) {
       await sleep(SWIPE_STEP_MS);
       const ratio = step / steps;
-      live.session.send(touchMessage({
-        ...size,
+      live.scrcpy!.send(touchMessage({
+        ...toFrame(
+          live,
+          from.x + (to.x - from.x) * ratio,
+          from.y + (to.y - from.y) * ratio,
+        ),
         action: ACTION_MOVE,
-        x: from.x + (to.x - from.x) * ratio,
-        y: from.y + (to.y - from.y) * ratio,
       }));
     }
-    live.session.send(touchMessage({ ...to, ...size, action: ACTION_UP }));
+    live.scrcpy!.send(touchMessage({ ...toFrame(live, to.x, to.y), action: ACTION_UP }));
     return;
   }
   await run([
@@ -552,7 +580,7 @@ export async function typeText(udid: string, text: string): Promise<void> {
     if (CONTROL_CHARS.test(text)) {
       throw new Error('Chuỗi có ký tự điều khiển; dùng phím Enter/Delete thay vì gõ chúng.');
     }
-    live.session.send(textMessage(text));
+    live.scrcpy!.send(textMessage(text));
     return;
   }
   await run(['shell', 'input', 'text', encodeText(text)], udid);
@@ -571,8 +599,8 @@ export async function pressKey(udid: string, key: string): Promise<void> {
   }
   const live = sessionFor(udid);
   if (live) {
-    live.session.send(keyMessage(KEY_DOWN, KEYCODES[key]));
-    live.session.send(keyMessage(KEY_UP, KEYCODES[key]));
+    live.scrcpy!.send(keyMessage(KEY_DOWN, KEYCODES[key]));
+    live.scrcpy!.send(keyMessage(KEY_UP, KEYCODES[key]));
     return;
   }
   await run(['shell', 'input', 'keyevent', KEYS[key]], udid);
