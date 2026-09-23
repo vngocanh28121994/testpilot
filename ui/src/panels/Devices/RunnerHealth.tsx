@@ -56,7 +56,13 @@ export function RunnerHealth() {
       <CardContent>
         {list.length === 0 ? (
           <p className="text-muted-foreground text-sm">
-            Chưa máy nào đăng ký. Thêm máy ở màn Personal Settings, rồi chạy runner trên máy ấy.
+            {/* Nói đúng thứ ĐANG có. Câu cũ chỉ người dùng sang màn Personal
+                Settings, nơi không có nút thêm máy nào — một chỉ dẫn sai còn
+                tệ hơn không chỉ dẫn gì, vì người ta đi tìm rồi tưởng mình
+                nhìn sót. */}
+            Chưa máy nào đăng ký. Màn thêm máy chưa dựng; hôm nay đăng ký bằng{' '}
+            <code>POST /api/runners</code>, rồi chạy <code>testpilot-runner</code> trên máy ấy —
+            xem <code>packaging/README.md</code>.
           </p>
         ) : (
           <Table>

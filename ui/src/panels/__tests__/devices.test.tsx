@@ -57,12 +57,12 @@ function mock(options: { devices?: unknown[]; leases?: unknown[]; jobs?: unknown
 const show = () => renderWithRouter(<DevicesPanel />, { path: '/devices' });
 
 describe('màn thiết bị', () => {
-  it('máy không ai giữ thì nói là rảnh', async () => {
+  it('máy không ai giữ thì nói là không ai', async () => {
     mock({ devices: [DEVICE] });
     await show();
 
     const row = await screen.findByText(DEVICE.label);
-    expect(within(row.closest('tr')!).getByText('rảnh')).toBeInTheDocument();
+    expect(within(row.closest('tr')!).getByText('không ai')).toBeInTheDocument();
   });
 
   /** Phép ghép thứ nhất: lease → người. */
@@ -72,7 +72,7 @@ describe('màn thiết bị', () => {
 
     const row = (await screen.findByText(DEVICE.label)).closest('tr')!;
     expect(within(row).getByText('an')).toBeInTheDocument();
-    expect(within(row).queryByText('rảnh')).not.toBeInTheDocument();
+    expect(within(row).queryByText('không ai')).not.toBeInTheDocument();
   });
 
   /** Phép ghép thứ hai: lease → job → tag của job. */

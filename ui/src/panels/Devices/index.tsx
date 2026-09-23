@@ -144,7 +144,11 @@ export default function DevicesPanel() {
                 <TableHeader>
                   <TableRow>
                     <TableHead>Máy</TableHead>
-                    <TableHead>Đang bận vì</TableHead>
+                    {/* "Ai đang giữ" chứ không phải "Đang bận vì": cột này
+                        trả lời cả khi máy KHÔNG bận, và tiêu đề cũ biến câu
+                        trả lời "rảnh" thành một câu vô nghĩa — "đang bận vì
+                        rảnh". Tiêu đề phải hỏi được câu mà mọi ô đều trả lời. */}
+                    <TableHead>Ai đang giữ</TableHead>
                     <TableHead>Còn lại</TableHead>
                     <TableHead />
                   </TableRow>
@@ -161,7 +165,7 @@ export default function DevicesPanel() {
                           <div className="text-muted-foreground text-xs">{device.udid}</div>
                         </TableCell>
                         <TableCell>
-                          {!lease && <span className="text-muted-foreground">rảnh</span>}
+                          {!lease && <span className="text-muted-foreground">không ai</span>}
                           {lease?.holder.kind === 'human' && (
                             <span>người dùng <b>{lease.holder.userId}</b> đang điều khiển</span>
                           )}

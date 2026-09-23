@@ -14,7 +14,13 @@ import { AppShell } from '@/components/layout/AppShell';
 import { navTitle } from '@/lib/nav';
 import { Dropdown } from '@/components/Dropdown';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { useDeviceControl, type ControlDevice } from '@/hooks/useDeviceControl';
 import { DRAG_THRESHOLD_PX, isDrag, toScreenPoint } from '@/lib/deviceScale';
@@ -93,7 +99,20 @@ export default function DeviceControlPanel() {
       }
     >
       <div className="flex flex-col gap-4">
-        <div className="flex flex-wrap items-center gap-2">
+        {/* Thanh công cụ nằm TRONG Card, như mọi panel khác. Không phải để
+            cho đẹp: nền chấm động của AppShell vẽ xuyên qua bất cứ gì không
+            có màu nền riêng, và ô chọn máy có nền trong suốt — nên trước đây
+            nó nổi lơ lửng trên nền chấm, nhạt hơn hẳn mọi dropdown còn lại
+            của app dù cùng một component. */}
+        <Card aria-labelledby="pick-title">
+          <CardHeader>
+            <CardTitle id="pick-title">Chọn máy</CardTitle>
+            <CardDescription>
+              Giữ chỗ trước khi xem màn hình. Máy đang có người giữ hoặc đang chạy job thì
+              không giữ được — chờ tới lượt.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="flex flex-wrap items-center gap-2">
           {/* Dropdown dùng chung, không phải `<select>` trần: popup của hệ
               điều hành không theo theme, và mũi tên do hệ điều hành vẽ nằm
               lệch khỏi lề phải của ô. Xem components/Dropdown.tsx. */}
@@ -146,7 +165,8 @@ export default function DeviceControlPanel() {
                   : 'Đang mở luồng màn hình…'}
             </span>
           )}
-        </div>
+          </CardContent>
+        </Card>
 
         {state.phase === 'error' && (
           <div
