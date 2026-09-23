@@ -8,6 +8,8 @@ import { promisify } from 'node:util';
 
 import type { TestPilotConfig } from '../config.js';
 import { devicesOf } from '../config.js';
+import { attachedDevices } from './attachedDevices.js';
+import { unregisteredDevices, uniqueId } from './deviceSync.js';
 import type { Platform } from './types.js';
 
 /**
@@ -67,6 +69,24 @@ export interface PreflightResult {
    * to decide anything.
    */
   candidates?: DeviceCandidate[];
+  /**
+   * Máy đang cắm mà config chưa biết.
+   *
+   * Có mặt để màn hình hỏi được "thêm máy này chứ?" ngay tại chỗ. Trước đây
+   * một chiếc máy như thế chỉ hiện ở dòng "2 máy sẵn sàng" rồi biến mất khỏi
+   * mọi lựa chọn, và cách thêm nó nằm trong một lệnh dòng lệnh mà người đang
+   * nhìn màn hình không có lý do gì để biết.
+   */
+  unregistered?: UnregisteredDevice[];
+}
+
+/** Một chiếc máy đang cắm mà config chưa khai. */
+export interface UnregisteredDevice {
+  udid: string;
+  /** Model thô, ví dụ `SM_S918B`. Dùng để đặt tên gợi ý. */
+  model?: string;
+  /** `id` mà nó SẼ nhận nếu được thêm — hiện trước để người bấm biết mình nhận gì. */
+  suggestedId: string;
 }
 
 /** A device the run could be pinned to, as offered to whoever must choose. */
@@ -87,11 +107,40 @@ interface DeviceResolution {
   candidates?: DeviceCandidate[];
 }
 
+/**
+ * Máy đang cắm mà config chưa khai, kèm `id` mà nó sẽ nhận.
+ *
+ * Hỏi `attachedDevices` chứ không dùng lại danh sách của phép kiểm bên trên:
+ * lệnh ở đây là `adb devices -l`, có kèm model, và model là thứ dựng ra một
+ * `id` đọc được. Dò hỏng thì trả rỗng — không dò được KHÔNG phải bằng chứng
+ * rằng có máy chưa khai, và một nút "thêm máy" mọc ra từ một phép dò hỏng là
+ * thứ tệ hơn không có nút nào.
+ */
+async function suggestRegistrations(
+  cfg: TestPilotConfig,
+  platform: 'android' | 'ios',
+): Promise<UnregisteredDevice[]> {
+  const probe = await attachedDevices(platform);
+  if (!probe.ok) return [];
+
+  const existing = (platform === 'android' ? cfg.android : cfg.ios).devices ?? [];
+  const taken = [...existing];
+  return unregisteredDevices(cfg, platform, probe.devices).map((found) => {
+    // Dựng `id` gợi ý theo đúng thứ tự mà `registerDevices` sẽ dựng, kể cả
+    // phần tránh trùng — hai chiếc máy cùng model thì cái thứ hai phải hiện
+    // sẵn là "-2", chứ không phải đổi tên sau khi người ta đã bấm.
+    const suggestedId = uniqueId(found, taken);
+    taken.push({ id: suggestedId, deviceName: found.model ?? found.udid, udid: found.udid });
+    return { udid: found.udid, ...(found.model ? { model: found.model } : {}), suggestedId };
+  });
+}
+
 /** What one platform's probes found, plus the device they settled on. */
 interface PlatformChecks {
   checks: PreflightCheck[];
   device?: string;
   candidates?: DeviceCandidate[];
+  unregistered?: UnregisteredDevice[];
 }
 
 const exec = promisify(execFile);
@@ -327,6 +376,7 @@ async function androidPreflight(cfg: TestPilotConfig, override?: string): Promis
   const checks: PreflightCheck[] = [];
   let device: string | undefined;
   let candidates: DeviceCandidate[] | undefined;
+  let unregistered: UnregisteredDevice[] | undefined;
 
   const adb = await tryRun('adb', ['devices']);
   if (!adb.ok) {
@@ -370,12 +420,17 @@ async function androidPreflight(cfg: TestPilotConfig, override?: string): Promis
       checks.push(resolved.check);
       device = resolved.device;
       candidates = resolved.candidates;
+      // Hỏi `attachedDevices` riêng cho phần này, không dùng lại `usable`:
+      // nó chạy `adb devices -l` nên có cả MODEL, và model là thứ dựng ra một
+      // `id` đọc được ("sm-s918b"). `usable` ở trên chỉ có serial, và một `id`
+      // dựng từ serial là đúng thứ ta đang đi sửa.
+      unregistered = await suggestRegistrations(cfg, 'android');
     }
   }
 
   checks.push(await checkAppium());
   checks.push(checkAppPath(cfg.android.app, Boolean(cfg.android.appPackage), 'android.app'));
-  return { checks, device, candidates };
+  return { checks, device, candidates, unregistered };
 }
 
 /**
@@ -499,12 +554,17 @@ async function iosPreflight(cfg: TestPilotConfig, override?: string): Promise<Pl
   const present = [...booted, ...physicalNames];
   let device: string | undefined;
   let candidates: DeviceCandidate[] | undefined;
+  let unregistered: UnregisteredDevice[] | undefined;
   if (present.length > 0) {
     // Khớp bằng `present` (tên/udid thật), nhưng câu hiện ra dùng nhãn giống chip.
     const resolved = resolveDevice(cfg, 'ios', present, [...booted, ...physicalLabels].join(', '), override);
     checks.push(resolved.check);
     device = resolved.device;
     candidates = resolved.candidates;
+    // Chỉ MÁY THẬT: `attachedDevices('ios')` không liệt kê simulator, và đó là
+    // đúng — một simulator không phải chiếc máy của đội, nó dựng lại được bằng
+    // một lệnh, và khai nó vào config là ghim một udid đổi theo từng máy tính.
+    unregistered = await suggestRegistrations(cfg, 'ios');
   }
 
   checks.push(await checkAppium());
@@ -545,7 +605,7 @@ async function iosPreflight(cfg: TestPilotConfig, override?: string): Promise<Pl
     checks.push(await iosWdaCheck(cfg, udid));
   }
 
-  return { checks, device, candidates };
+  return { checks, device, candidates, unregistered };
 }
 
 /** Lệnh duy nhất dựng được tunnel; cần sudo nên tool không tự chạy thay được. */
@@ -808,18 +868,22 @@ export async function preflight(
   /** An unsaved device choice from the Studio; see `resolveDevice`. */
   deviceOverride?: string,
 ): Promise<PreflightResult> {
-  const { checks, device, candidates } =
+  const { checks, device, candidates, unregistered } =
     platform === 'android'
       ? await androidPreflight(cfg, deviceOverride)
       : platform === 'ios'
         ? await iosPreflight(cfg, deviceOverride)
-        : { checks: webPreflight(cfg), device: undefined, candidates: undefined };
+        : {
+          checks: webPreflight(cfg), device: undefined,
+          candidates: undefined, unregistered: undefined,
+        };
   return {
     platform,
     ok: checks.every((c) => c.ok),
     checks,
     ...(device ? { device } : {}),
     ...(candidates ? { candidates } : {}),
+    ...(unregistered?.length ? { unregistered } : {}),
   };
 }
 

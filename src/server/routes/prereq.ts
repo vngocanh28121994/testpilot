@@ -11,7 +11,9 @@
  * và app Cài đặt trên chính chiếc máy đang chạy. Ở chế độ `server` chúng phải
  * biến mất; FARM-ROUTE-MAP.md xếp chúng vào nhóm LOCAL.
  */
-import { applyEnv, loadConfig } from '../../config.js';
+import { applyEnv, loadConfig, saveConfig } from '../../config.js';
+import { attachedDevices } from '../../core/attachedDevices.js';
+import { registerDevices } from '../../core/deviceSync.js';
 import { preflight } from '../../core/preflight.js';
 import { localRunner } from '../../runner/index.js';
 import { json, readJson, stream } from '../http.js';
@@ -91,5 +93,45 @@ export const prereqRoutes: RouteTable = {
       200,
       await preflight(platform, cfg, url.searchParams.get('device') ?? undefined),
     );
+  },
+
+  /**
+   * Thêm máy đang cắm vào danh sách máy của config.
+   *
+   * Việc này vốn chỉ làm được bằng `npm run devices:sync`, và người cắm máy
+   * vào rồi mở web lên không có đường nào tới nó: họ thấy màn hình nói "2 máy
+   * sẵn sàng" rồi chỉ chạy được một máy, còn cách sửa nằm trong một terminal.
+   *
+   * Phần quyết định — đặt `id`, chọn cổng — nằm ở `core/deviceSync.ts`, dùng
+   * chung với CLI. Hai bản chép tay của cùng một luật đặt tên sẽ lệch, và lúc
+   * ấy cùng một chiếc máy có hai `id` khác nhau tuỳ người thêm nó bằng đường
+   * nào — mà `id` thì đi vào tên thư mục lượt chạy và khoá gộp của healing.
+   */
+  'POST /api/devices/register': async (req, res, _url, ctx) => {
+    const body = await readJson<{ platform?: string; udids?: string[] }>(req);
+    const platform = body.platform === 'ios' ? 'ios' : 'android';
+    const wanted = new Set((body.udids ?? []).filter((udid) => typeof udid === 'string'));
+    if (wanted.size === 0) return json(res, 400, { error: 'Cần `udids`.' });
+
+    const probe = await attachedDevices(platform);
+    if (!probe.ok) {
+      return json(res, 409, {
+        error: `Không dò được máy đang cắm: ${probe.reason}`,
+      });
+    }
+    // Chỉ thêm máy ĐANG CẮM THẬT, và chỉ những cái người dùng vừa bấm. Nhận
+    // thẳng udid từ thân yêu cầu là cho phép ghi một dòng thiết bị không tồn
+    // tại vào config — một chiếc máy ma mà mọi lượt chạy sau đó phải bỏ qua.
+    const picked = probe.devices.filter((device) => wanted.has(device.udid));
+    if (picked.length === 0) {
+      return json(res, 404, { error: 'Không có máy nào trong số đó đang cắm.' });
+    }
+
+    const cfg = await loadConfig(ctx.configFile);
+    const { added } = registerDevices(cfg, platform, picked);
+    if (added.length === 0) return json(res, 200, { added: [] });
+
+    await saveConfig(cfg, ctx.configFile);
+    return json(res, 200, { added });
   },
 };

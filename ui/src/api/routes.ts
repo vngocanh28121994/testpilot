@@ -26,6 +26,7 @@ export const ROUTES = {
   proposalReview: '/api/proposals/review',
   runLog: '/api/run/log',
   preflight: '/api/preflight',
+  devicesRegister: '/api/devices/register',
   vocabulary: '/api/vocabulary',
   actions: '/api/actions',
   actionsReview: '/api/actions/review',

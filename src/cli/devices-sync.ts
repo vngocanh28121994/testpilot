@@ -14,7 +14,8 @@
  *   npm run devices:sync -- [--platform android,ios] [--dry-run]
  */
 import { attachedDevices, type AttachedDevice } from '../core/attachedDevices.js';
-import { loadConfig, saveConfig, type DeviceSpec, type TestPilotConfig } from '../config.js';
+import { loadConfig, saveConfig, type TestPilotConfig } from '../config.js';
+import { registerDevices } from '../core/deviceSync.js';
 
 /** First port of each range. Appium's own defaults, offset to leave them free. */
 const FIRST_PORT: Record<'android' | 'ios', number> = { android: 8200, ios: 8100 };
@@ -65,64 +66,29 @@ function syncPlatform(
   platform: 'android' | 'ios',
   attached: AttachedDevice[],
 ): { added: number; renamed: number } {
-  const section = platform === 'android' ? cfg.android : cfg.ios;
-  // A platform with no list has been running through `deviceName` alone, which
-  // names no particular handset — there is no identity there worth preserving,
-  // so the list starts from the phones actually found rather than from a
-  // placeholder that would need a udid and a port it can never be given.
-  section.devices ??= [];
-  const devices = section.devices;
-
-  let added = 0;
-  let renamed = 0;
+  // Phần quyết định nằm ở `core/deviceSync.ts`, dùng chung với route web —
+  // hai bản chép tay của cùng một luật đặt tên sẽ lệch, và lúc ấy cùng một
+  // chiếc máy có hai `id` khác nhau tuỳ người thêm nó bằng đường nào.
+  const before = new Set(
+    ((platform === 'android' ? cfg.android : cfg.ios).devices ?? []).map((d) => d.udid),
+  );
   for (const found of attached) {
-    const existing = devices.find((d) => d.udid === found.udid);
-    if (existing) {
-      console.log(`[devices] ${platform}: ${found.udid} đã có (id "${existing.id}").`);
-      continue;
+    if (before.has(found.udid)) {
+      const existing = (platform === 'android' ? cfg.android : cfg.ios).devices
+        ?.find((d) => d.udid === found.udid);
+      console.log(`[devices] ${platform}: ${found.udid} đã có (id "${existing?.id}").`);
     }
-    const device: DeviceSpec = {
-      id: uniqueId(found, devices),
-      deviceName: found.model ?? (platform === 'android' ? 'Android Device' : 'iPhone'),
-      udid: found.udid,
-    };
-    assignPort(platform, device, devices);
-    devices.push(device);
+  }
+
+  const { added } = registerDevices(cfg, platform, attached);
+  for (const device of added) {
+    const found = attached.find((a) => a.udid === device.udid);
     console.log(
-      `[devices] ${platform}: + "${device.id}" (${found.udid}` +
-      `${found.model ? `, ${found.model}` : ''}).`,
+      `[devices] ${platform}: + "${device.id}" (${device.udid}` +
+      `${found?.model ? `, ${found.model}` : ''}).`,
     );
-    added += 1;
   }
-  return { added, renamed };
-}
-
-/** Ports must be unique per platform; concurrent sessions collide otherwise. */
-function assignPort(platform: 'android' | 'ios', device: DeviceSpec, all: DeviceSpec[]): void {
-  const field = platform === 'android' ? 'systemPort' : 'wdaLocalPort';
-  if (device[field] !== undefined) return;
-  const taken = new Set(all.map((d) => d[field]).filter((p): p is number => p !== undefined));
-  let port = FIRST_PORT[platform];
-  while (taken.has(port)) port += 1;
-  device[field] = port;
-}
-
-/**
- * A readable id derived from the model, since that is how anyone reading a run
- * directory name will recognise the phone. Falls back to the serial's tail when
- * the platform gave no model, and always ends up unique.
- */
-function uniqueId(found: AttachedDevice, existing: DeviceSpec[]): string {
-  const base = (found.model ?? found.udid.slice(-6))
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-|-$/g, '') || 'device';
-  const taken = new Set(existing.map((d) => d.id));
-  if (!taken.has(base)) return base;
-  for (let n = 2; ; n += 1) {
-    const candidate = `${base}-${n}`;
-    if (!taken.has(candidate)) return candidate;
-  }
+  return { added: added.length, renamed: 0 };
 }
 
 function parseArgs(argv: string[]): Args {

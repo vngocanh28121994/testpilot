@@ -1,6 +1,7 @@
 import { useQueries } from '@tanstack/react-query';
 import { DevicePicker } from '@/components/DevicePicker';
 import { PreflightChecks } from '@/components/PreflightChecks';
+import { RegisterDevices } from '@/components/RegisterDevices';
 import { api } from '@/api/client';
 import { ROUTES } from '@/api/routes';
 import type { PreflightResponse } from '@core/ui/contracts.js';
@@ -75,6 +76,13 @@ export function WorkflowPreflight({
               {LABEL[platform]} — {result.ok ? 'sẵn sàng' : 'chưa chạy được'}
             </div>
             <PreflightChecks checks={result.checks} />
+            {/* Cùng một lý do với ô chọn máy ngay dưới: câu hỏi được hỏi ngay
+                tại chỗ phát hiện ra nó. Workflow dùng chung `resolveDevice`
+                với màn Local Runner, nên máy chưa khai làm hỏng cả hai chỗ
+                theo đúng một kiểu — và được sửa ở cả hai bằng cùng một nút. */}
+            {(result.unregistered?.length ?? 0) > 0 && (
+              <RegisterDevices platform={platform} devices={result.unregistered!} />
+            )}
             {/* Câu hỏi được hỏi ngay tại chỗ phát hiện ra nó. Đẩy người dùng đi
                 sửa file config để trả lời một câu mà màn hình đã biết là cách
                 giữ cho một lượt chạy bị chặn cứ bị chặn mãi. */}

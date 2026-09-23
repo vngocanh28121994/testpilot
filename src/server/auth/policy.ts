@@ -188,6 +188,10 @@ export const ROUTE_POLICY: Record<string, Role> = {
 
   /* ── Quản trị ────────────────────────────────────────────────────────── */
   'PUT /api/config': 'admin',
+  // Thêm máy là GHI vào config, nên cùng vai với việc sửa config. Ở chế độ
+  // embedded mọi người là `local` nên nút luôn bấm được; ở chế độ server thì
+  // một chiếc máy thêm vào là máy của cả tổ chức.
+  'POST /api/devices/register': 'admin',
   'POST /api/model-key': 'admin',
   'POST /api/confluence-auth': 'admin',
   'POST /api/farm/pool': 'admin',

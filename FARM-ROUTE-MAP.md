@@ -13,7 +13,7 @@ file nào. Kiến trúc: [FARM-ARCHITECTURE.md](FARM-ARCHITECTURE.md) · Kế ho
 | **R** | Runner. Chạm thiết bị hoặc tiến trình cục bộ; **không** được tồn tại trên control plane |
 | **LOCAL** | Chỉ còn ở chế độ `embedded`. Chế độ server phải trả 404 |
 
-Đếm: **CP 65 · JOB 8 · R 12 · LOCAL 1** — tổng 86. (P3.5 không thêm route nào; P3.4 thêm năm route `/api/runner/*`; P4.4b thêm bốn route registry/proposal; P4.2 thêm ba route chia sẻ máy; P2.5 thêm ba route artifact.)
+Đếm: **CP 66 · JOB 8 · R 12 · LOCAL 1** — tổng 87. (P3.5 không thêm route nào; P3.4 thêm năm route `/api/runner/*`; P4.4b thêm bốn route registry/proposal; P4.2 thêm ba route chia sẻ máy; P2.5 thêm ba route artifact; `POST /api/devices/register` thêm máy đang cắm vào config.)
 
 > **Thêm ngày 2026-09-21 (P2.1b).** Bốn route đăng nhập, và chúng là những route DUY NHẤT gọi được
 > khi chưa có phiên: `GET /api/auth/login`, `GET /api/auth/callback`, `POST /api/auth/logout`,

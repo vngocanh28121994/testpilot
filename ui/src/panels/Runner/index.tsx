@@ -18,6 +18,7 @@ import { CheckRow } from '@/components/CheckRow';
 import { CheckedAt } from '@/components/CheckedAt';
 import { Dropdown } from '@/components/Dropdown';
 import { PreflightChecks } from '@/components/PreflightChecks';
+import { RegisterDevices } from '@/components/RegisterDevices';
 import type { DateRange } from 'react-day-picker';
 import { DateRangePicker } from '@/components/DateRangePicker';
 import { Pagination } from '@/components/Pagination';
@@ -582,6 +583,13 @@ function PreflightCard({
             </div>
 
             <PreflightChecks checks={result.checks} />
+
+            {/* Máy đang cắm mà config chưa khai. Đặt NGAY DƯỚI bảng kiểm, vì
+                đó là chỗ người dùng vừa đọc dòng "2 máy sẵn sàng" rồi không
+                tìm thấy máy thứ hai ở bất kỳ ô chọn nào. */}
+            {platform !== 'web' && (result.unregistered?.length ?? 0) > 0 && (
+              <RegisterDevices platform={platform} devices={result.unregistered!} />
+            )}
 
             {/* Nhiều máy cùng cắm thì phải hỏi, chứ không phải im lặng chặn
                 lượt chạy rồi bắt người dùng đi sửa file config. */}

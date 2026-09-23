@@ -17,7 +17,7 @@
 import { existsSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
-import { loadConfig } from '../../config.js';
+import { devicesOf, loadConfig } from '../../config.js';
 import { localRunner } from '../../runner/index.js';
 import { allows } from '../auth/roles.js';
 import { activeRuns, findActiveRun } from '../../ui/activeRuns.js';
@@ -171,9 +171,24 @@ export const runRoutes: RouteTable = {
     const granted = (body.devices ?? []).length > 0
       ? await ctx.grants.forUser(ctx.identity.orgId, ctx.identity.userId)
       : undefined;
+    // Config đọc MỘT lần, và chỉ khi có máy được nêu tên.
+    const cfgForDevices = (body.devices ?? []).length > 0
+      ? await loadConfig(ctx.configFile)
+      : undefined;
     for (const token of body.devices ?? []) {
-      const udid = token.split(':').slice(1).join(':');
-      if (!udid) continue;
+      const [tokenPlatform, ...rest] = token.split(':');
+      const named = rest.join(':');
+      if (!named) continue;
+      // Màn hình gửi `id` TRONG CONFIG, không gửi udid — "android:sm-s918b".
+      // Sổ thiết bị thì khoá theo udid, vì đó là thứ runner báo lên. Thiếu
+      // phép quy đổi này, mọi lượt chạy Android đặt từ giao diện đều bị từ
+      // chối bằng câu "không có trong danh sách máy của bạn", kể cả với chiếc
+      // máy đang cắm ngay trước mặt. Cùng phép quy đổi mà scheduler dùng —
+      // xem `udidOf` trong `scheduler/match.ts`.
+      const configured = cfgForDevices && (tokenPlatform === 'android' || tokenPlatform === 'ios')
+        ? devicesOf(cfgForDevices, tokenPlatform).find((device) => device.id === named)
+        : undefined;
+      const udid = configured?.udid ?? named;
       const seen = await ctx.devices.find(udid, {
         userId: ctx.identity.userId,
         orgId: ctx.identity.orgId,
@@ -184,7 +199,7 @@ export const runRoutes: RouteTable = {
       // cho người lạ biết máy nào có thật.
       if (!seen) {
         return json(res, 403, {
-          error: `Không dùng được thiết bị "${udid}": nó không có trong danh sách máy của bạn.`,
+          error: `Không dùng được thiết bị "${named}": nó không có trong danh sách máy của bạn.`,
         });
       }
     }

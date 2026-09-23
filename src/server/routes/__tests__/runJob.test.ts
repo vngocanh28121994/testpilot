@@ -13,6 +13,9 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { Readable } from 'node:stream';
+import { mkdtemp, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { runRoutes } from '../run.js';
 import { MemoryJobQueue } from '../../queue/memoryQueue.js';
@@ -77,9 +80,14 @@ await defaultDevices.report(
   [{ platform: 'android', udid: 'emulator-5554', label: 'emulator' }],
 );
 
-function context(queue: MemoryJobQueue, devices = defaultDevices, who = 'u1'): RouteContext {
+function context(
+  queue: MemoryJobQueue,
+  devices = defaultDevices,
+  who = 'u1',
+  configFile = 'testpilot.config.json',
+): RouteContext {
   return {
-    configFile: 'testpilot.config.json',
+    configFile,
     configProfile: { owner: 't', source: 'personal' },
     identity: { userId: who, orgId: 'org-1', email: `${who}@x.dev`, role: 'runner_user' },
     repos: { queue } as unknown as Repos,
@@ -121,6 +129,7 @@ async function postRun(
   body: unknown,
   devices = defaultDevices,
   who = 'u1',
+  configFile = 'testpilot.config.json',
 ) {
   const { res, events, out } = fakeRes();
   const req = Readable.from([Buffer.from(JSON.stringify(body), 'utf8')]) as IncomingMessage;
@@ -133,7 +142,7 @@ async function postRun(
   const keepAlive = setInterval(() => {}, 20);
   try {
     await runRoutes['POST /api/run']!(
-      req, res, new URL('http://x/api/run'), context(queue, devices, who),
+      req, res, new URL('http://x/api/run'), context(queue, devices, who, configFile),
     );
   } finally {
     clearInterval(keepAlive);
@@ -294,6 +303,55 @@ describe('quyền dùng thiết bị khi tạo job', () => {
     // Không nói máy ấy CÓ THẬT hay không: phân biệt hai trường hợp là nói cho
     // người lạ biết máy nào tồn tại.
     assert.ok(!text.includes('An'), 'không được rò tên chủ máy');
+  });
+
+  /**
+   * Màn hình gửi `id` TRONG CONFIG, sổ thiết bị khoá theo udid.
+   *
+   * Đã hỏng thật: mọi lượt chạy Android đặt từ giao diện đều bị từ chối bằng
+   * câu "không có trong danh sách máy của bạn", kể cả với chiếc máy đang cắm
+   * ngay trước mặt — vì `android:sm-s918b` bị đem đi tra như thể nó là một
+   * udid. Cùng phép quy đổi mà scheduler dùng.
+   */
+  it('mã máy trong config được quy đổi sang udid trước khi kiểm quyền', async () => {
+    const dir = await mkdtemp(path.join(tmpdir(), 'tp-run-cfg-'));
+    const configFile = path.join(dir, 'testpilot.config.json');
+    // Đúng hình dạng config của một đội có khai máy: `id` để người đọc nhận
+    // ra, `udid` là thứ adb và runner nói.
+    await writeFile(configFile, JSON.stringify({
+      web: { baseUrl: 'https://x.dev' },
+      android: {
+        devices: [{ id: 'may-lab', deviceName: 'Pixel', udid: 'emulator-5554' }],
+      },
+    }), 'utf8');
+
+    // Worker đọc config của MÁY CHẠY, không phải của server — nên nó cũng
+    // phải thấy `may-lab`, nếu không job vào hàng đợi rồi nằm chờ một chiếc
+    // máy nó không biết tên.
+    const runnerConfig = ConfigSchema.parse({
+      web: { baseUrl: 'https://x.dev' },
+      android: { devices: [{ id: 'may-lab', deviceName: 'Pixel', udid: 'emulator-5554' }] },
+    });
+
+    const queue = new MemoryJobQueue();
+    const worker = startWorker({
+      queue, leases: new MemoryLeaseRepo(), runnerId: 'local', configFile: 'x.json',
+      config: async () => runnerConfig,
+      pollMs: 5, runner: runner({ code: 0 }),
+    });
+    try {
+      // Sổ thiết bị chỉ biết `emulator-5554`; màn hình gửi `may-lab`.
+      const events = await postRun(
+        queue, { platform: 'android', devices: ['android:may-lab'] },
+        defaultDevices, 'u1', configFile,
+      );
+      // 200 chứ không 403: `refused` ở đây chỉ là lần `writeHead` đầu tiên,
+      // và với một lượt chạy thành công nó là đầu luồng SSE.
+      assert.notEqual(events.refused?.status, 403, 'không được từ chối chiếc máy đang cắm');
+      assert.equal((await queue.list()).length, 1);
+    } finally {
+      worker.stop();
+    }
   });
 
   it('chủ máy thì đặt được job lên chính máy mình', async () => {
