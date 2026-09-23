@@ -7,7 +7,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import { http, HttpResponse } from 'msw';
-import { screen, within } from '@testing-library/react';
+import { screen, waitFor, within } from '@testing-library/react';
 import { server } from '@/test/mocks/server';
 import { renderWithRouter } from '@/test/utils';
 import { ROUTES } from '@/api/routes';
@@ -63,9 +63,17 @@ describe('Máy chạy test', () => {
     expect(within(row).getByText('đang tắt')).toBeInTheDocument();
   });
 
-  it('chưa có máy nào thì chỉ đường, không để bảng trống', async () => {
+  it('không có máy nào thì KHÔNG hiện gì cả', async () => {
+    // Trường hợp thường gặp nhất: bản local chạy một mình không đăng ký
+    // runner nào. Một cái card rỗng nằm trên đầu màn hình mỗi ngày, nói về
+    // những chiếc máy không tồn tại, là thứ người ta học cách nhìn xuyên qua —
+    // rồi nhìn xuyên qua luôn cả lúc nó có tin thật.
     withRunners();
-    await renderWithRouter(<RunnerHealth />);
-    expect(await screen.findByText(/Chưa máy nào đăng ký/)).toBeInTheDocument();
+    const { container } = await renderWithRouter(<RunnerHealth />);
+
+    await waitFor(() => {
+      expect(screen.queryByText('Máy chạy test')).not.toBeInTheDocument();
+    });
+    expect(container.querySelector('[data-slot="card"]')).toBeNull();
   });
 });

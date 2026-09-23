@@ -35,6 +35,13 @@ const PLATFORMS = ['web', 'android', 'ios'] as const;
  *
  * Nên bảng này trả lời một câu hỏi rất cụ thể: "máy nào trong đội đang không
  * chạy được iOS, và vì sao". Trước khi ai đó đặt job, không phải sau.
+ *
+ * **Không có máy nào thì KHÔNG hiện gì cả** — và đó là trường hợp thường gặp
+ * nhất, vì bản local chạy một mình không đăng ký runner nào: nó vừa là server
+ * vừa là máy cắm thiết bị, và tình trạng môi trường của chính nó đã có chỗ
+ * riêng ở màn Local Runner. Một cái card rỗng nằm trên đầu màn hình mỗi ngày,
+ * nói về những chiếc máy không tồn tại, là thứ người ta học cách nhìn xuyên
+ * qua — rồi nhìn xuyên qua luôn cả lúc nó có tin thật.
  */
 export function RunnerHealth() {
   const runners = useQuery({
@@ -44,28 +51,21 @@ export function RunnerHealth() {
   });
   const list = runners.data?.runners ?? [];
 
+  // Chưa tải xong cũng không hiện: nhấp nháy một cái card rồi bỏ đi còn khó
+  // chịu hơn là đợi thêm một nhịp.
+  if (list.length === 0) return null;
+
   return (
     <Card aria-labelledby="runners-title">
       <CardHeader>
         <CardTitle id="runners-title">Máy chạy test</CardTitle>
         <CardDescription>
-          Mỗi máy tự đo môi trường của nó — server không cắm thiết bị nào và không có Appium.
-          Ô trống nghĩa là máy ấy chưa đo, không phải là nó hỏng.
+          Mỗi máy tự đo môi trường của nó rồi báo lên — không ai đo hộ được. Ô trống nghĩa
+          là máy ấy chưa đo, không phải là nó hỏng.
         </CardDescription>
       </CardHeader>
       <CardContent>
-        {list.length === 0 ? (
-          <p className="text-muted-foreground text-sm">
-            {/* Nói đúng thứ ĐANG có. Câu cũ chỉ người dùng sang màn Personal
-                Settings, nơi không có nút thêm máy nào — một chỉ dẫn sai còn
-                tệ hơn không chỉ dẫn gì, vì người ta đi tìm rồi tưởng mình
-                nhìn sót. */}
-            Chưa máy nào đăng ký. Màn thêm máy chưa dựng; hôm nay đăng ký bằng{' '}
-            <code>POST /api/runners</code>, rồi chạy <code>testpilot-runner</code> trên máy ấy —
-            xem <code>packaging/README.md</code>.
-          </p>
-        ) : (
-          <Table>
+        <Table>
             <TableHeader>
               <TableRow>
                 <TableHead>Máy</TableHead>
@@ -101,8 +101,7 @@ export function RunnerHealth() {
                 </TableRow>
               ))}
             </TableBody>
-          </Table>
-        )}
+        </Table>
       </CardContent>
     </Card>
   );
