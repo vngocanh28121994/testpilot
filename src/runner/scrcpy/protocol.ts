@@ -86,6 +86,15 @@ export function serverArgs(options: {
     `max_size=${options.maxSize}`,
     `video_bit_rate=${options.bitRate}`,
     `max_fps=${options.maxFps}`,
+    // Xin khung khoá lặp lại. KHÔNG có nó thì bộ mã hoá phát đúng MỘT khung
+    // khoá lúc mở rồi thôi — đã đo: ba mươi giây vuốt liên tục, một khung khoá
+    // duy nhất ở mili giây thứ nhất. Một luồng như thế thì người vào sau không
+    // bao giờ có điểm bắt đầu.
+    //
+    // Con số 2 là điều ta XIN, không phải điều ta nhận: cùng phép đo ấy, bộ mã
+    // hoá của emulator trả về khung khoá mỗi khoảng mười hai giây. Băng thông
+    // gần như không đổi (40 so với 41 KB/s), nên xin dày là rẻ.
+    'video_codec_options=i-frame-interval:int=2',
     // Không tự tắt màn hình, không tự bật nguồn: người dùng đang NHÌN chiếc
     // máy ấy trên bàn, và một cái máy tự sáng lên vì ai đó mở tab là chuyện
     // khó hiểu. `cleanup=true` để server trả lại mọi thứ nó đổi khi thoát.

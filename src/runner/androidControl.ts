@@ -44,6 +44,7 @@ import {
   touchMessage,
 } from './scrcpy/protocol.js';
 import { startScrcpy, type ScrcpySession } from './scrcpy/session.js';
+import { StreamPrimer } from './h264.js';
 
 /**
  * Mốc thời gian của `screenrecord`. `0` là "không giới hạn" — có từ bản 1.4 của
@@ -223,6 +224,8 @@ export function frameSizeFor(screen: { width: number; height: number }): {
  */
 interface StreamState {
   child?: ChildProcess;
+  /** Giữ SPS/PPS và khung khoá gần nhất, cho người xem vào sau. */
+  primer: StreamPrimer;
   sinks: Set<ScreenStreamSink>;
   frame: { width: number; height: number };
   stopped: boolean;
@@ -252,6 +255,22 @@ const streams = new Map<string, StreamState>();
 function sessionFor(udid: string): { session: ScrcpySession; screen: ScreenSize } | undefined {
   const state = streams.get(udid);
   return state?.scrcpy ? { session: state.scrcpy, screen: state.screen } : undefined;
+}
+
+/**
+ * Đưa người vừa vào phần đầu luồng, để họ dựng được hình ngay.
+ *
+ * Chi tiết vì sao cần và hai cách đã thử rồi bỏ: xem [h264.ts](./h264.ts).
+ * Điều đáng giữ ở đây là nó KHÔNG đụng gì tới phiên đang chạy — người đang xem
+ * không hề biết có ai vừa vào.
+ */
+function prime(state: StreamState, sink: ScreenStreamSink): void {
+  const held = state.primer.primer();
+  if (!held) return;
+  // `restart` trước: nó bảo bộ giải mã phía trình duyệt dựng lại từ đầu, và
+  // phần gửi ngay sau đây đúng là một khởi đầu mới.
+  sink.restart();
+  sink.chunk(held);
 }
 
 /**
@@ -285,7 +304,10 @@ async function attachScrcpy(udid: string, state: StreamState): Promise<boolean> 
   state.scrcpy = session;
   session.video.on('data', (buf: Buffer) => {
     state.sawBytes = true;
+    // Người đang xem nhận TRƯỚC; bộ giữ ăn theo một bản sao và không nằm trên
+    // đường đi của dữ liệu.
     for (const each of state.sinks) each.chunk(buf);
+    state.primer.push(buf);
   });
   // scrcpy không tự hết giờ như `screenrecord`, nên một lần đóng ở đây LUÔN là
   // chuyện bất thường: máy rút ra, hoặc server chết. Không chạy lại ngầm.
@@ -305,6 +327,9 @@ export async function startScreenStream(
   const existing = streams.get(udid);
   if (existing) {
     existing.sinks.add(sink);
+    // Người vào SAU chỉ nhận được khung P từ đây trở đi, và bộ giải mã không
+    // dựng được gì từ chúng: trắng màn, không báo lỗi, không tự hết.
+    prime(existing, sink);
     return { frame: existing.frame, stop: () => detach(udid, sink) };
   }
 
@@ -312,6 +337,7 @@ export async function startScreenStream(
   const frame = frameSizeFor(screen);
   const state: StreamState = {
     sinks: new Set([sink]), frame, stopped: false, sawBytes: false, screen,
+    primer: new StreamPrimer(),
   };
   streams.set(udid, state);
 
@@ -340,6 +366,7 @@ export async function startScreenStream(
     child.stdout?.on('data', (buf: Buffer) => {
       state.sawBytes = true;
       for (const each of state.sinks) each.chunk(buf);
+      state.primer.push(buf);
     });
     let stderr = '';
     child.stderr?.on('data', (buf: Buffer) => { stderr += buf.toString(); });

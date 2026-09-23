@@ -22,6 +22,9 @@ import { REMOTE_JAR, SCRCPY_VERSION, serverArgs, socketName } from './protocol.j
 /** Chờ server gọi ra bao lâu thì thôi. */
 const HANDSHAKE_TIMEOUT_MS = 10_000;
 
+/** Chờ server tự thoát sau khi đóng socket, trước khi cắt bằng tín hiệu. */
+const EXIT_GRACE_MS = 1_500;
+
 /**
  * Đường tới file jar đã nhúng.
  *
@@ -88,8 +91,33 @@ export async function startScrcpy(
 
   let server: ChildProcess | undefined;
   const cleanup = async (): Promise<void> => {
-    server?.kill('SIGTERM');
+    // ĐÓNG SOCKET TRƯỚC, giết tiến trình sau — thứ tự này chịu lực.
+    //
+    // Giết `adb shell` không giết `app_process` đang chạy TRÊN máy Android:
+    // adb không chuyển tín hiệu qua. Thứ làm server bên kia tự thoát là nhìn
+    // thấy socket đóng (nó có `cleanup=true` để trả lại mọi thứ đã đổi). Làm
+    // ngược thứ tự thì server ở lại, và phiên MỞ TIẾP THEO trên cùng chiếc máy
+    // không giành được bộ mã hoá — hỏng dưới dạng "không mở lại được luồng
+    // hình", cách chỗ gây ra nó vài giây.
     for (const socket of sockets) socket.destroy();
+    if (server && server.exitCode === null) {
+      await Promise.race([
+        once(server, 'close'),
+        new Promise((resolve) => { setTimeout(resolve, EXIT_GRACE_MS); }),
+      ]);
+    }
+    // Còn sống sau chừng ấy thì mới cắt: đây là lưới đỡ, không phải đường
+    // chính.
+    server?.kill('SIGTERM');
+    // Và cắt cả bên KIA. Giết `adb shell` chỉ giết đầu này của đường ống; nếu
+    // server bên máy chưa tự thoát thì nó ở lại giữ bộ mã hoá, và phiên mở
+    // tiếp theo chết bằng một dòng "Aborted" không nói nó là chuyện của phiên
+    // trước. Đã xảy ra thật, và mất một lúc mới lần ra.
+    //
+    // Giết theo tên file là an toàn ở đây vì một chiếc máy chỉ cắm vào MỘT máy
+    // tính, và lease cho nó là độc quyền — không có phiên nào khác của người
+    // khác để giết nhầm.
+    await adbOk(adb, ['shell', 'pkill', '-f', 'scrcpy-server.jar']).catch(() => {});
     listener.close();
     // Gỡ đường về dù có hỏng hay không: một `reverse` bỏ quên nằm lại trên máy
     // cho tới lần rút dây tiếp theo, và phiên sau mang `scid` khác nên không ai

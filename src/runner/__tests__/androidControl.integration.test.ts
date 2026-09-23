@@ -40,7 +40,10 @@ before(() => {
   if (!udid) {
     throw new Error(
       'Không có máy Android nào đang cắm. Bật emulator rồi chạy lại: '
-        + '$ANDROID_HOME/emulator/emulator -avd <tên> -no-window',
+        // KHÔNG dùng `-no-window`: đo bằng `dumpsys gfxinfo` thì một emulator
+        // chạy không cửa sổ mất 101ms mỗi khung, có cửa sổ và `-gpu host` thì
+        // 42ms — và luồng hình ra 9 khung/giây so với 23.
+        + '$ANDROID_HOME/emulator/emulator -avd <tên> -gpu host',
     );
   }
 });
@@ -120,6 +123,58 @@ describe('luồng video trên máy thật', () => {
   });
 
   /**
+   * Người xem VÀO SAU cũng phải dựng được hình.
+   *
+   * Một luồng H.264 đang chảy giữa chừng chỉ còn khung P; chúng mô tả thay đổi
+   * so với khung trước, nên một bộ giải mã vừa mở không dựng được gì và chỉ
+   * hiện một ô trắng — không lỗi, không hết. Người vào sau phải nhận được
+   * SPS/PPS và một khung khoá.
+   *
+   * Chuyện này từng tự khỏi mà không ai định thế: `screenrecord` hết mốc 180
+   * giây rồi khởi động lại và phát lại phần đầu. Bỏ mốc ấy đi và chuyển sang
+   * scrcpy là bỏ luôn cái vá tình cờ đó — và ô trắng thành vĩnh viễn.
+   */
+  it('người xem vào sau nhận được SPS và khung khoá, không chỉ khung P', async () => {
+    const kinds = (chunks: Buffer[]): Set<number> => {
+      const all = Buffer.concat(chunks);
+      const out = new Set<number>();
+      for (let i = 0; i + 4 < all.length; i += 1) {
+        if (all[i] === 0 && all[i + 1] === 0 && all[i + 2] === 0 && all[i + 3] === 1) {
+          out.add(all[i + 4]! & 0x1f);
+        }
+      }
+      return out;
+    };
+
+    const late: Buffer[] = [];
+    const quiet = { chunk: () => {}, restart: () => {}, fail: () => {} };
+    const first = await startScreenStream(udid!, quiet);
+
+    // Màn hình phải ĐỔI thì mới có khung nào được mã hoá. Không có chuyển động
+    // thì bài này đo một ảnh tĩnh và xanh vì không đo gì cả.
+    const moving = setInterval(() => {
+      spawnSync('adb', ['-s', udid!, 'shell', 'input', 'swipe', '540', '1500', '540', '700', '120']);
+    }, 400);
+    try {
+      await new Promise((resolve) => setTimeout(resolve, 2_000));
+      const second = await startScreenStream(udid!, {
+        chunk: (d: Buffer) => late.push(d), restart: () => {}, fail: () => {},
+      });
+      // Phần giữ đưa ngay, không phải chờ bộ mã hoá làm gì cả — một giây là
+      // thừa để nó đi qua.
+      await new Promise((resolve) => setTimeout(resolve, 1_000));
+      second.stop();
+    } finally {
+      clearInterval(moving);
+      first.stop();
+    }
+
+    const seen = kinds(late);
+    assert.ok(seen.has(7), 'thiếu SPS — bộ giải mã không có tham số để dựng');
+    assert.ok(seen.has(5), 'thiếu khung khoá — bộ giải mã không có điểm bắt đầu');
+  });
+
+  /**
    * Nhiều người xem dùng CHUNG một tiến trình.
    *
    * Hai `screenrecord` trên một máy là hai bộ mã hoá tranh nhau, và kết quả là
@@ -147,7 +202,21 @@ describe('luồng video trên máy thật', () => {
       const out = spawnSync('pgrep', ['-f', pattern], { encoding: 'utf8' }).stdout ?? '';
       return total + out.split('\n').filter((line) => line.trim().length > 0).length;
     }, 0);
-    const before = running();
+    /** Chờ số tiến trình về một con số và ĐỨNG YÊN ở đó. */
+    const settle = async (want: number, label: string): Promise<void> => {
+      // Teardown của scrcpy không tức thời: nó đóng socket, chờ server bên máy
+      // tự thoát, rồi mới cắt. Một phép đếm ngay sau `stop()` đo đúng vào giữa
+      // quãng ấy — và bản trước của bài này lấy `before` làm mốc rồi cộng trừ,
+      // nên một tiến trình còn sót từ bài TRƯỚC làm nó đỏ vì lý do không phải
+      // điều nó muốn đo.
+      for (let tries = 0; tries < 40; tries += 1) {
+        if (running() === want) return;
+        await new Promise((resolve) => setTimeout(resolve, 250));
+      }
+      assert.equal(running(), want, label);
+    };
+
+    await settle(0, 'bài test bắt đầu khi không còn tiến trình bắt hình nào');
 
     const a: Buffer[] = [];
     const b: Buffer[] = [];
@@ -162,16 +231,15 @@ describe('luồng video trên máy thật', () => {
     await new Promise((resolve) => setTimeout(resolve, 3_000));
     assert.equal(failed, undefined);
     assert.ok(a.length > 0 && b.length > 0, 'cả hai người xem đều phải nhận được khung');
-    assert.equal(running(), before + 1, 'hai người xem chỉ được sinh MỘT tiến trình');
+    assert.equal(running(), 1, 'hai người xem chỉ được sinh MỘT tiến trình');
 
     first.stop();
     await new Promise((resolve) => setTimeout(resolve, 500));
-    assert.equal(running(), before + 1, 'người xem còn lại vẫn cần tiến trình ấy');
+    assert.equal(running(), 1, 'người xem còn lại vẫn cần tiến trình ấy');
     assert.equal(failed, undefined, 'người rời đi không được làm hỏng luồng của người còn lại');
 
     second.stop();
-    await new Promise((resolve) => setTimeout(resolve, 1_000));
-    assert.equal(running(), before, 'người cuối rời đi thì tiến trình phải tắt');
+    await settle(0, 'người cuối rời đi thì tiến trình phải tắt');
   });
 });
 

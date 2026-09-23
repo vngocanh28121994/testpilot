@@ -180,6 +180,15 @@ export const controlRoutes: RouteTable = {
         restart: () => { if (!closed) send('restart', { at: new Date().toISOString() }); },
         fail: (message) => finish(message),
       });
+      // Người xem có thể đã bỏ đi TRONG lúc mở luồng. Cửa sổ ấy từng gần như
+      // bằng không với `screenrecord`; với scrcpy nó là khoảng hai giây rưỡi,
+      // vì phải dựng một tiến trình Java trên máy Android.
+      //
+      // `finish` chạy trong cửa sổ đó gọi `stop` khi nó CÒN LÀ HÀM RỖNG, rồi
+      // luồng mở xong và đăng ký một sink không bao giờ được gỡ. Luồng ấy sống
+      // mãi không người xem — và lần giữ máy sau dùng lại nó, nhận giữa chừng
+      // một luồng H.264 không có khung khoá, nên trắng màn không báo lỗi.
+      if (closed) return handle.stop();
       stop = handle.stop;
       send('meta', {
         deviceId,
