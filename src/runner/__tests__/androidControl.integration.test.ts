@@ -87,6 +87,15 @@ describe('frameSizeFor', () => {
   it('màn nhỏ hơn mức đích thì không phóng to', () => {
     assert.deepEqual(frameSizeFor({ width: 480, height: 800 }), { width: 480, height: 800 });
   });
+
+  it('nhận mức đích khác, cho máy giả lập', () => {
+    // Máy giả lập mã hoá H.264 bằng CPU, không có mạch riêng như máy thật. Đo
+    // trên AVD API 36: cạnh dài 1600 cho 9,7 khung/giây, 960 cho 17,7. Bảng đo
+    // đầy đủ nằm cạnh `EMULATOR_TARGET_WIDTH`.
+    assert.deepEqual(frameSizeFor({ width: 1080, height: 2400 }, 432), {
+      width: 432, height: 960,
+    });
+  });
 });
 
 describe('luồng video trên máy thật', () => {

@@ -64,6 +64,41 @@ const needsTimeLimit = new Set<string>();
 /** Chiều rộng đích. Cao hơn nữa thì băng thông tăng mà chữ trên máy không rõ thêm. */
 const TARGET_WIDTH = 720;
 
+/**
+ * Chiều rộng đích cho MÁY GIẢ LẬP — nhỏ hơn hẳn, và đây là con số đắt nhất
+ * trong file này nên nó có cả một bảng đo đi kèm.
+ *
+ * Máy giả lập không có bộ mã hoá phần cứng: H.264 chạy bằng CPU của máy tính,
+ * và `qemu` ăn trọn một lõi trong lúc quay. Máy thật thì có mạch mã hoá riêng
+ * và không quan tâm tới cỡ ảnh ở mức này.
+ *
+ * Đo trên AVD Medium_Phone_API_36.0 (màn 1080x2400, chạy có cửa sổ, `-gpu
+ * host`), vuốt liên tục trong mười lăm giây:
+ *
+ * | cạnh dài | khung/giây |
+ * |---|---|
+ * | 1600 | 9,7 |
+ * | 1280 | 11-13 |
+ * | 1100 | 16,5 |
+ * | **960** | **17,7** |
+ * | 800 | 25,5 |
+ * | 640 | 29,9 (chạm trần `MAX_FPS`) |
+ *
+ * Không có điểm gãy — nó tỉ lệ nghịch với số điểm ảnh. Nên đây là một lựa
+ * chọn giữa hai thứ đều thật: 960 gần gấp đôi tốc độ so với 1600 mà chữ vẫn
+ * đọc được; 800 mượt hơn nữa nhưng chữ nhỏ bắt đầu nhoè.
+ *
+ * Và nói rõ điều KHÔNG phải nguyên nhân, vì tôi đã đo nhầm nó một lần: máy ảo
+ * dựng hình 27 khung/giây (`dumpsys gfxinfo`, p50 26ms, kẹt 18%). Phần dựng
+ * hình không nghẽn — chỉ phần mã hoá nghẽn.
+ */
+const EMULATOR_TARGET_WIDTH = 432;
+
+/** Máy giả lập: adb đặt tên chúng là `emulator-<cổng>`, không trừ trường hợp nào. */
+function isEmulator(udid: string): boolean {
+  return udid.startsWith('emulator-');
+}
+
 const BIT_RATE = 2_000_000;
 
 /**
@@ -213,16 +248,17 @@ export async function screenSize(udid: string): Promise<ScreenSize> {
  * Bộ mã hoá H.264 trên Android từ chối kích thước lẻ, và nó từ chối bằng cách
  * chết ngay lúc khởi động với một câu khó hiểu.
  */
-export function frameSizeFor(screen: { width: number; height: number }): {
-  width: number; height: number;
-} {
+export function frameSizeFor(
+  screen: { width: number; height: number },
+  target = TARGET_WIDTH,
+): { width: number; height: number } {
   const even = (n: number) => Math.max(2, Math.round(n / 2) * 2);
-  if (screen.width <= TARGET_WIDTH) {
+  if (screen.width <= target) {
     return { width: even(screen.width), height: even(screen.height) };
   }
   return {
-    width: even(TARGET_WIDTH),
-    height: even((TARGET_WIDTH * screen.height) / screen.width),
+    width: even(target),
+    height: even((target * screen.height) / screen.width),
   };
 }
 
@@ -363,7 +399,10 @@ export async function startScreenStream(
   }
 
   const screen = await screenSize(udid);
-  const frame = frameSizeFor(screen);
+  const frame = frameSizeFor(
+    screen,
+    isEmulator(udid) ? EMULATOR_TARGET_WIDTH : TARGET_WIDTH,
+  );
   const state: StreamState = {
     sinks: new Set([sink]), frame, stopped: false, sawBytes: false, screen,
     primer: new StreamPrimer(),
