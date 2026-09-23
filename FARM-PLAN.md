@@ -100,7 +100,10 @@ chưa bao giờ được chạy. Số test mỗi lần chạy: 1281 → 1412.
 
 ---
 
-# P1 — Tách control plane và runner (8–12 ngày)
+# P1 — Tách control plane và runner — ✅ XONG (8–12 ngày)
+
+`src/ui/server.ts` từ 5.200 dòng còn 290: mọi route đã ở `src/server/routes/`, và
+`routeTable.test.ts` canh không còn `case` nào sót lại trong `switch` cũ.
 
 Đây là giai đoạn nặng nhất và cũng là giai đoạn ít rủi ro nhất nếu làm đúng: **không thêm tính
 năng nào**. Kết thúc P1, `npm run ui` vẫn cho ra trải nghiệm y như hôm nay, nhưng bên trong đã là
@@ -155,7 +158,7 @@ Chia `handle()` thành các file trong `src/server/routes/`, mỗi file dưới 
 
 ---
 
-# P2 — Đăng nhập, nhiều người dùng, lưu trữ (8–12 ngày)
+# P2 — Đăng nhập, nhiều người dùng, lưu trữ — ✅ XONG 2026-09-23 (8–12 ngày)
 
 Sau giai đoạn này mới được phép mở ra domain.
 
@@ -186,13 +189,16 @@ Sau giai đoạn này mới được phép mở ra domain.
   cookie vẫn đăng nhập, `GET /api/state` trả 200; **instance thứ hai ở cổng khác** → cùng cookie
   vẫn nhận; **logout ở instance này** → instance kia lập tức báo chưa đăng nhập.
 
-### P2.2 RBAC
+### P2.2 RBAC — ✅ xong 2026-09-22
 - Bốn vai: `admin`, `maintainer`, `runner_user`, `viewer`.
 - Khai báo quyền ngay cạnh định nghĩa route, không nằm ở file rời.
 - **Xong khi:** `viewer` bị 403 khi gọi `POST /api/run`; `runner_user` bị 403 khi gọi
-  `POST /api/feature/review`.
+  `POST /api/feature/review`. Cả hai nằm trong
+  [policyGuard.test.ts](src/server/auth/__tests__/policyGuard.test.ts), cùng bài canh "mọi route
+  đều khai quyền" — route chưa khai nhận **501**, không phải 403: một route mới lọt ra ngoài mà
+  không ai nhận ra là kiểu hỏng đắt nhất ở đây, và 501 nói đúng chuyện gì đang xảy ra.
 
-### P2.3 Secrets
+### P2.3 Secrets — ✅ xong 2026-09-22
 - `src/server/auth/secrets.ts` đọc secret theo tổ chức từ backend (AWS Secrets Manager, hoặc
   Postgres có mã hoá cho bản tự host).
 - API không bao giờ trả secret; chỉ trả boolean "đã có" như `src/core/secrets.ts` đang làm.
@@ -200,6 +206,9 @@ Sau giai đoạn này mới được phép mở ra domain.
   `process.env` của web server là biến một token của một người thành token của cả hệ thống.
 - **Xong khi:** hai tổ chức cấu hình hai key khác nhau, log và SSE không chứa key nào. Viết test
   quét toàn bộ khung SSE của một job tìm chuỗi bí mật.
+  ([secretScope.test.ts](src/server/auth/__tests__/secretScope.test.ts).) `process.env` không còn
+  bị ghi đè: một token của một người biến thành token của cả hệ thống là thứ không ai phát hiện
+  được từ hành vi — mọi thứ vẫn chạy, chỉ là chạy bằng khoá của người khác.
 
 ### P2.4 Chuyển dữ liệu sang DB — ✅ xong 2026-09-23
 - Hiện thực `pgRepo.ts` cho các interface ở P0.2.
@@ -224,13 +233,14 @@ Sau giai đoạn này mới được phép mở ra domain.
   quyền gọi đúng hàm `maySee` mà bản bộ nhớ dùng, không viết lại thành SQL: hai bản chép tay của
   một luật quyền sẽ lệch, và bên lỏng hơn là bên quyết định.
 
-### P2.4b Sổ sự kiện thay cho ghi đè
+### P2.4b Sổ sự kiện thay cho ghi đè — ✅ xong 2026-09-22
 - `healing.json` → bảng append-only theo `org_id`; không còn thao tác ghi đè cả tệp.
 - `flake.json` → **cộng dồn delta**, không ghi đè. Hai runner ghi đè lẫn nhau là mất số liệu và
   tính năng phát hiện flaky sẽ nói sai.
 - `runtime-registry.json`, `device-env.json` ở lại máy runner, không lên DB.
 - **Xong khi:** `flakeConcurrentMerge.test.ts` — hai runner báo kết quả cùng lúc, tổng số lần chạy
   bằng tổng thật, không bên nào mất số.
+  (Tên thật: [concurrentLedgers.test.ts](src/healing/__tests__/concurrentLedgers.test.ts).)
 
 ### P2.5 Artifact lên object storage — ✅ xong 2026-09-23
 - `src/server/storage/s3.ts` (dùng MinIO khi tự host), upload bằng link có chữ ký do server phát.
@@ -620,7 +630,7 @@ hình dạng `udid`.
 
 ---
 
-# P4 — Runner cá nhân từ xa (6–8 ngày)
+# P4 — Runner cá nhân từ xa — ✅ XONG 2026-09-23 (6–8 ngày)
 
 Mục tiêu: người dùng cắm điện thoại vào laptop của mình và dùng được như hôm nay, nhưng dữ liệu về
 server chung.
@@ -828,7 +838,19 @@ server chung.
 
 ---
 
-# P5 — Nhiều tổ chức (5–8 ngày)
+# P5 — Nhiều tổ chức (5–8 ngày) — ⏸ HOÃN 2026-09-23
+
+Hoãn có chủ ý, không phải bỏ sót: hôm nay TestPilot phục vụ MỘT đội, và mọi thứ P5 cần —
+quota, audit, dọn máy giữa hai tổ chức — chỉ có nghĩa khi đã có tổ chức thứ hai. Làm trước
+là dựng hàng rào giữa những căn phòng chưa ai ở.
+
+Nền móng thì đã sẵn và KHÔNG cần làm lại: `org_id` có trong mọi bảng và mọi truy vấn, kho dữ
+liệu bị giới hạn theo tổ chức ngay từ lúc dựng (`repoFactory`), khoá artifact bắt đầu bằng
+`orgId`, và bảng `audit_log` đã có sẵn. Thứ còn thiếu là phần DÙNG chúng.
+
+**Một chỗ phải sửa trước khi bật P5**, ghi ra đây để không ai quên: `PgRunnerRegistry` bị giới
+hạn theo tổ chức lúc DỰNG, còn `dispatch` thì dựng một sổ cho cả tiến trình — xem `stores.ts`.
+Với một tổ chức thì đúng; với nhiều tổ chức thì sổ phải dựng theo từng request như `repoFactory`.
 
 - `org_id` xuyên suốt mọi truy vấn; bài test chặn hồi quy: quét mọi hàm repo, hàm nào thiếu điều
   kiện `org_id` thì fail.
