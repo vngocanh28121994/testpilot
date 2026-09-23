@@ -47,6 +47,36 @@ export class MemoryRunnerRegistry implements RunnerRegistry {
     this.tokens.set(hashToken(token), id);
   }
 
+  /**
+   * Ghi chính CHIẾC MÁY NÀY vào sổ, ở chế độ embedded.
+   *
+   * Ở bản chạy một mình, máy chủ cũng là máy cắm thiết bị — nhưng nó báo máy
+   * lên dưới cái tên `runner:local`, một cái tên không có dòng nào trong sổ.
+   * Hậu quả: mọi chiếc máy đều hiện "đang tắt" và không có trạng thái môi
+   * trường, vì cả hai câu ấy đều tra sổ runner.
+   *
+   * Để mô hình chỉ có MỘT hình dạng — thiết bị nào cũng thuộc về một runner —
+   * thay vì một nhánh `if (là máy chủ)` rải khắp nơi.
+   *
+   * KHÔNG có token: không ai nối vào nó qua mạng, và một token cho chính tiến
+   * trình đang chạy là một bí mật thừa.
+   */
+  seedLocalHost(id: string, name: string, orgId = 'local'): void {
+    const existing = this.runners.get(id);
+    this.runners.set(id, {
+      ...(existing ?? {
+        id,
+        orgId,
+        mode: 'lab' as const,
+        visibility: 'shared' as const,
+        createdAt: new Date().toISOString(),
+      }),
+      name,
+      state: 'online',
+      lastSeenAt: new Date().toISOString(),
+    });
+  }
+
   async create(runner: NewRunner): Promise<{ runner: RunnerRecord; token: string }> {
     const token = mintToken();
     const record: RunnerRecord = {

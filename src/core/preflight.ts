@@ -359,7 +359,10 @@ export function resolveDevice(
   // A stored choice is a preference, not a command: honouring it when the
   // device is absent would mean silently running somewhere else, and running on
   // the wrong phone is the failure nobody catches.
-  const chosen = here.find((d) => d.id === picked);
+  // Khớp cả `id` lẫn udid: màn hình mới chọn máy từ SỔ THIẾT BỊ, và sổ ấy nói
+  // bằng udid vì đó là thứ runner báo lên. Chỉ khớp `id` thì mọi lựa chọn từ
+  // màn hình mới đều rơi vào nhánh "không nằm trong số đang cắm".
+  const chosen = here.find((d) => d.id === picked || d.udid === picked);
   return chosen
     ? { device: chosen.id, candidates, check: { name, ok: true, detail: `${label(chosen)}.` } }
     : {

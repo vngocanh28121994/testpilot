@@ -15,6 +15,7 @@
  * `src/runner/` sống ở máy khác. Xem [FARM-ARCHITECTURE.md](../../FARM-ARCHITECTURE.md).
  */
 import type { IncomingMessage, ServerResponse } from 'node:http';
+import os from 'node:os';
 import { loadConfig } from '../config.js';
 import { History } from '../core/history.js';
 import { recoverInterruptedRunReports } from '../core/interruptedReport.js';
@@ -231,8 +232,14 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
 const DEVICE_REPORT_MS = 10_000;
 
 if (MODE === 'embedded') {
+  // Chính chiếc máy này cũng là một runner trong sổ. Không có dòng ấy thì mọi
+  // thiết bị của nó hiện "đang tắt" và không có trạng thái môi trường — cả
+  // hai câu đều tra sổ runner. Xem `seedLocalHost`.
+  localRunners.seedLocalHost('runner:local', `Máy này (${os.hostname()})`);
+
   const reportDevices = async (): Promise<void> => {
     const devices = await localRunner.control.devices().catch(() => []);
+    localRunners.seedLocalHost('runner:local', `Máy này (${os.hostname()})`);
     await STORES.devices.report(
       { id: 'runner:local', orgId: 'local', visibility: 'shared' },
       devices
@@ -251,7 +258,7 @@ if (MODE === 'embedded') {
   // Dọn job treo TRƯỚC khi nhận job mới: một job còn `running` sau khi tiến
   // trình chết là một dòng nói dối, và nó nằm đó mãi.
   void localQueue.interruptStale();
-  startWorker({
+  const worker = startWorker({
     queue: localQueue,
     // CÙNG kho lease mà màn Điều khiển dùng. Hai kho riêng nghĩa là job chạy
     // đè lên tay người đang cầm máy — xem FARM-ARCHITECTURE mục 6b.
@@ -259,6 +266,17 @@ if (MODE === 'embedded') {
     runnerId: 'local',
     configFile: CONFIG_FILE,
   });
+
+  // Máy chủ cũng báo môi trường của chính nó, y như một runner ở xa. MỘT phép
+  // đo, hai nơi đọc: chính phép đo mà worker dùng để từ chối job. Đo lần thứ
+  // hai ở đây thì hai bên sẽ lệch, và lúc ấy màn hình nói "sẵn sàng" trong
+  // khi worker vừa từ chối một job vì thiếu Appium.
+  const reportPrereq = (): void => {
+    void localRunners.reportPrereq('runner:local', worker.environment());
+  };
+  reportPrereq();
+  const prereqTimer = setInterval(reportPrereq, DEVICE_REPORT_MS);
+  prereqTimer.unref?.();
 }
 
 /**

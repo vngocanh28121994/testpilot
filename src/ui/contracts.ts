@@ -782,13 +782,32 @@ export interface ControlDeviceView {
   /** Tên máy, phiên bản hệ điều hành, thật hay giả lập — dựng sẵn để hiển thị. */
   label: string;
   /**
-   * Máy này có phải của người đang xem không — quyết định họ có cho mượn được.
+   * Máy này có phải của người đang xem không.
    *
-   * `true`/`false` chứ không phải `ownerUserId`: màn hình chỉ cần biết có hiện
-   * nút "Chia sẻ" hay không, và mã người dùng của chủ máy là một thứ không cần
-   * đi ra ngoài để trả lời câu ấy.
+   * `true`/`false` chứ không phải `ownerUserId`: mã người dùng của chủ máy là
+   * một thứ không cần đi ra ngoài để trả lời câu ấy.
    */
   mine?: boolean;
+  /**
+   * Tên chiếc MÁY TÍNH mà nó cắm vào.
+   *
+   * Cần vì một danh sách gộp máy của nhiều nơi thì "Pixel 7" một mình không
+   * nói được nó nằm ở phòng máy hay trên laptop của ai — mà đó chính là câu
+   * hỏi người dùng có khi cần trả lời trước khi chạy.
+   */
+  runnerName?: string;
+  /** Máy đang tắt, hoặc máy tính nó cắm vào đang tắt. */
+  offline?: boolean;
+  /**
+   * Máy tính ấy chạy được nền tảng này không, theo phép đo CỦA CHÍNH NÓ.
+   *
+   * Vắng mặt nghĩa là CHƯA ĐO — một runner vừa khởi động thì chưa kịp, và
+   * runner farm thì không đo gì cả. Khác hẳn `false`, và màn hình phải nói
+   * hai chuyện ấy khác nhau.
+   */
+  ready?: boolean;
+  /** Vì sao chưa chạy được, viết cho người sẽ đi sửa chiếc máy ấy. */
+  reason?: string;
 }
 
 export interface ControlTargetsResponse {

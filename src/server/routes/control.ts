@@ -91,18 +91,32 @@ export const controlRoutes: RouteTable = {
       // rồi truyền vào, để phép lọc trong sổ vẫn là một hàm thuần.
       await ctx.grants.forUser(ctx.identity.orgId, ctx.identity.userId),
     );
+    // Sổ runner tra MỘT lần rồi ghép vào: mỗi chiếc máy cần biết nó nằm ở máy
+    // tính nào, và máy tính ấy có chạy được nền tảng của nó không. Hỏi từng
+    // chiếc là N lời gọi cho một câu trả lời không đổi trong cùng một request.
+    const runners = new Map((await ctx.runners.list()).map((runner) => [runner.id, runner]));
+
     const body: ControlTargetsResponse = {
-      devices: devices.map((device) => ({
-        platform: device.platform,
-        udid: device.udid,
-        // Máy đang tắt vẫn hiện, kèm lý do: biến mất khỏi danh sách và đang
-        // tắt là hai câu khác nhau, và người dùng cần câu thứ hai.
-        label: device.state === 'offline' ? `${device.label} · đang tắt` : device.label,
-        // Chủ máy là người duy nhất cho mượn được nó. Gửi ra một câu trả lời
-        // có/không thay vì mã người dùng của chủ: màn hình chỉ cần biết có
-        // hiện nút "Chia sẻ" hay không.
-        ...(device.ownerUserId === ctx.identity.userId ? { mine: true } : {}),
-      })),
+      devices: devices.map((device) => {
+        const owner = runners.get(device.runnerId);
+        // Môi trường do CHÍNH máy chạy đo và báo lên. Máy chủ không đo hộ
+        // được: ở chế độ server nó không cắm thiết bị nào và không có Appium.
+        const prereq = owner?.prereq?.[device.platform];
+        return {
+          platform: device.platform,
+          udid: device.udid,
+          // Máy đang tắt vẫn hiện, kèm lý do: biến mất khỏi danh sách và đang
+          // tắt là hai câu khác nhau, và người dùng cần câu thứ hai.
+          label: device.state === 'offline' ? `${device.label} · đang tắt` : device.label,
+          ...(device.ownerUserId === ctx.identity.userId ? { mine: true } : {}),
+          ...(owner ? { runnerName: owner.name } : {}),
+          offline: device.state === 'offline' || owner?.state !== 'online',
+          // `undefined` nghĩa là CHƯA ĐO, khác hẳn với "đo rồi, hỏng". Màn
+          // hình phải nói hai chuyện ấy khác nhau, nếu không người ta sẽ đi
+          // sửa một chiếc máy hoàn toàn tốt vừa khởi động xong.
+          ...(prereq ? { ready: prereq.ok, ...(prereq.reason ? { reason: prereq.reason } : {}) } : {}),
+        };
+      }),
     };
     return json(res, 200, body);
   },

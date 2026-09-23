@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "pids": [
+    {
+      "pid": 26343,
+      "signature": "src/cli/run.ts",
+      "startedAt": "2026-09-23T09:28:50.596Z",
+      "label": "run android · sdk-gphone64-arm64"
+    }
+  ]
+}

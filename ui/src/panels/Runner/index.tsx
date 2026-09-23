@@ -49,6 +49,8 @@ import { useStreamJob } from '@/hooks/useStreamJob';
 import { when } from '@/lib/datetime';
 import { cn } from '@/lib/utils';
 import type {
+  ControlDeviceView,
+  ControlTargetsResponse,
   PreflightResponse,
   PrereqIosNamesResponse,
   PrereqAdbResponse,
@@ -57,6 +59,31 @@ import type {
 } from '@core/ui/contracts.js';
 
 const PAGE_DESCRIPTION = 'Chạy bộ test ngay trên máy này, trước khi đẩy lên farm.';
+
+/**
+ * Vì sao chưa chạy được trên chiếc máy đã chọn — hoặc `undefined` khi chạy được.
+ *
+ * Hàm thuần để câu trả lời này nói được thành lời ở hai chỗ: lúc bấm nút và
+ * lúc vẽ dòng giải thích bên cạnh nó. Hai bản chép tay sẽ lệch, và người dùng
+ * sẽ thấy một nút bấm được kèm một dòng nói không chạy được.
+ */
+export function notRunnable(
+  device: ControlDeviceView | undefined,
+  available: number,
+): string | undefined {
+  if (!device) {
+    return available === 0
+      ? 'Chưa có máy nào để chạy. Cắm máy vào rồi chạy runner trên chiếc máy tính ấy.'
+      : 'Chọn một máy để chạy.';
+  }
+  if (device.offline) return `Máy "${device.label}" đang tắt.`;
+  // `ready === undefined` là CHƯA ĐO, không phải hỏng: một runner vừa khởi
+  // động thì chưa kịp đo. Chặn nó lại là chặn một chiếc máy hoàn toàn tốt.
+  if (device.ready === false) {
+    return device.reason ?? `Máy tính giữ "${device.label}" chưa chạy được nền tảng này.`;
+  }
+  return undefined;
+}
 
 export default function RunnerPanel() {
   const state = useAppState((s) => ({ config: s.config, features: s.features, reports: s.reports }));
@@ -153,6 +180,32 @@ export default function RunnerPanel() {
     // đúng phần thiếu; tab vừa tải lại có lastSeq = 0 và nhận trọn lịch sử.
     job.attach(`${ROUTES.runAttach}?id=${encodeURIComponent(liveRun.id)}&since=${job.lastSeq}`);
   }, [liveRun, job]);
+  /**
+   * Máy chạy được, lấy từ SỔ THIẾT BỊ chứ không từ `adb` của máy chủ.
+   *
+   * Đây là điểm đổi của bước này. Preflight hỏi chính chiếc máy đang chạy tiến
+   * trình web — đúng ở bản chạy một mình, và vô nghĩa sau khi lên server: ở đó
+   * máy chủ không cắm thiết bị nào, còn điện thoại nằm trên laptop của từng
+   * người. Sổ thiết bị gom máy từ MỌI runner và đã lọc theo quyền nhìn.
+   */
+  const registry = useQuery({
+    queryKey: ['device-targets'],
+    queryFn: () => api.get<ControlTargetsResponse>(ROUTES.deviceTargets),
+    refetchInterval: 10_000,
+  });
+  const runnable = useMemo(
+    () => (registry.data?.devices ?? []).filter((device) => device.platform === platform),
+    [registry.data, platform],
+  );
+  const chosenDevice = useMemo(
+    // Đúng một máy thì không có gì để chọn — nó LÀ máy sẽ chạy. Bắt bấm chọn
+    // một lựa chọn duy nhất là một bước không trả lời câu hỏi nào.
+    () => runnable.find((item) => item.udid === device) ?? (runnable.length === 1
+      ? runnable[0]
+      : undefined),
+    [runnable, device],
+  );
+
   const preflight = useQuery({
     // Máy đang chọn nằm trong khoá cache: chọn máy khác là một câu hỏi khác,
     // và câu trả lời cũ không được phép ghi đè câu trả lời mới.
@@ -180,8 +233,13 @@ export default function RunnerPanel() {
 
   const start = () => {
     if (job.status === 'running') return;
-    if (!preflight.data?.ok)
-      return toast.error('Chưa qua kiểm tra trước khi chạy. Hãy xử lý các mục đỏ rồi thử lại.');
+    // Web thì hỏi preflight như cũ — nó nói về trình duyệt và địa chỉ, không
+    // về điện thoại. Android/iOS thì hỏi CHÍNH chiếc máy đã chọn: môi trường
+    // cần kiểm là của máy tính mà nó cắm vào, không phải của máy chủ.
+    const blocked = platform === 'web'
+      ? (preflight.data?.ok ? undefined : 'Chưa qua kiểm tra trước khi chạy. Hãy xử lý các mục đỏ rồi thử lại.')
+      : notRunnable(chosenDevice, runnable.length);
+    if (blocked) return toast.error(blocked);
     job.start({
       platform,
       tag: runMode === 'native'
@@ -198,7 +256,13 @@ export default function RunnerPanel() {
         // là rẽ sang run-parallel.ts. Trước đây chỗ này luôn gửi đúng một phần
         // tử, nên giao diện không có cách nào khởi động một lượt song song.
         if (multi.length > 0) return { devices: multi };
-        const picked = device || preflight.data.device;
+        // Máy đã chọn từ sổ (udid), hoặc — khi chỉ có một máy và không phải
+        // chọn gì — chiếc duy nhất trong sổ. Không rơi về `preflight.device`
+        // nữa: nó là `id` trong config của MÁY CHỦ, thứ vô nghĩa với một
+        // chiếc điện thoại cắm ở laptop người khác.
+        const picked = device
+          || (runnable.length === 1 ? runnable[0]!.udid : undefined)
+          || preflight.data?.device;
         return picked ? { devices: [`${platform}:${picked}`] } : {};
       })(),
     });
@@ -417,7 +481,15 @@ export default function RunnerPanel() {
 
               <div className="flex flex-wrap gap-2">
                 <Button
-                  disabled={job.status === 'running' || preflight.isPending || !preflight.data?.ok}
+                  // Web hỏi preflight (trình duyệt, địa chỉ); android/iOS hỏi
+                  // CHÍNH chiếc máy đã chọn, vì môi trường cần kiểm là của máy
+                  // tính mà nó cắm vào — không phải của máy chủ.
+                  disabled={
+                    job.status === 'running'
+                    || (platform === 'web'
+                      ? preflight.isPending || !preflight.data?.ok
+                      : Boolean(notRunnable(chosenDevice, runnable.length)))
+                  }
                   onClick={start}
                 >
                   <Play className="size-4" />
@@ -462,6 +534,8 @@ export default function RunnerPanel() {
             platform={platform}
             chosen={device}
             onPick={setDevice}
+            runnable={runnable}
+            chosenDevice={chosenDevice}
           />
         </div>
 
@@ -518,6 +592,8 @@ function PreflightCard({
   platform,
   chosen,
   onPick,
+  runnable,
+  chosenDevice,
 }: {
   result: PreflightResponse | undefined;
   pending: boolean;
@@ -530,6 +606,10 @@ function PreflightCard({
   platform: 'web' | 'android' | 'ios';
   chosen: string;
   onPick: (id: string) => void;
+  /** Máy chạy được của nền tảng này, từ sổ thiết bị. */
+  runnable: ControlDeviceView[];
+  /** Chiếc đang chọn trong số đó, nếu có. */
+  chosenDevice: ControlDeviceView | undefined;
 }) {
   return (
     <Card className="h-full" aria-labelledby="preflight-title">
@@ -591,22 +671,36 @@ function PreflightCard({
               <RegisterDevices platform={platform} devices={result.unregistered!} />
             )}
 
-            {/* Nhiều máy cùng cắm thì phải hỏi, chứ không phải im lặng chặn
-                lượt chạy rồi bắt người dùng đi sửa file config. */}
-            {(result.candidates?.length ?? 0) > 1 ? (
+            {/* Máy để chạy, lấy từ SỔ THIẾT BỊ — gồm cả máy cắm ở máy chủ lẫn
+                máy cắm ở laptop của từng người. Nhãn mang tên chiếc máy tính
+                giữ nó, vì "Pixel 7" một mình không nói được nó nằm ở đâu, mà
+                đó là câu người dùng cần trả lời trước khi bấm chạy. */}
+            {platform !== 'web' && runnable.length > 1 && (
               <DevicePicker
                 name="runner"
-                candidates={result.candidates!}
-                chosen={chosen || result.device}
+                candidates={runnable.map((item) => ({
+                  id: item.udid,
+                  label: item.runnerName ? `${item.label} — ${item.runnerName}` : item.label,
+                }))}
+                chosen={chosen}
                 onPick={onPick}
               />
-            ) : (
-              result.device && (
-                <div className="bg-muted/50 flex items-center gap-2 rounded-lg border px-3 py-2 text-sm">
-                  <Smartphone className="text-muted-foreground size-4 shrink-0" />
-                  <span className="min-w-0 truncate">Sẽ dùng thiết bị: {result.device}</span>
-                </div>
-              )
+            )}
+            {platform !== 'web' && runnable.length === 1 && (
+              <div className="bg-muted/50 flex items-center gap-2 rounded-lg border px-3 py-2 text-sm">
+                <Smartphone className="text-muted-foreground size-4 shrink-0" />
+                <span className="min-w-0 truncate">
+                  Sẽ dùng thiết bị: {runnable[0]!.label}
+                  {runnable[0]!.runnerName ? ` — ${runnable[0]!.runnerName}` : ''}
+                </span>
+              </div>
+            )}
+            {/* Vì sao chưa bấm chạy được, nói ngay cạnh chỗ chọn máy. Cùng một
+                hàm với phép chặn ở nút, nên hai bên không thể nói khác nhau. */}
+            {platform !== 'web' && notRunnable(chosenDevice, runnable.length) && (
+              <p className="text-destructive text-sm">
+                {notRunnable(chosenDevice, runnable.length)}
+              </p>
             )}
 
             {/* Web chỉ cần một URL nên không có gì để sửa ở đây. */}
