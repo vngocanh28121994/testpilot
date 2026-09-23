@@ -166,6 +166,11 @@ export const runRoutes: RouteTable = {
      * Cùng luật với `maySee` ở sổ thiết bị, gọi qua sổ chứ không chép lại:
      * hai bản chép tay của một luật quyền sẽ lệch, và bên lỏng hơn thắng.
      */
+    // Tra MỘT lần cho cả vòng lặp: một job nhắm ba chiếc máy thì ba lời gọi
+    // giống hệt nhau vào cùng một bảng.
+    const granted = (body.devices ?? []).length > 0
+      ? await ctx.grants.forUser(ctx.identity.orgId, ctx.identity.userId)
+      : undefined;
     for (const token of body.devices ?? []) {
       const udid = token.split(':').slice(1).join(':');
       if (!udid) continue;
@@ -173,7 +178,7 @@ export const runRoutes: RouteTable = {
         userId: ctx.identity.userId,
         orgId: ctx.identity.orgId,
         isAdmin: allows(ctx.identity.role, 'admin'),
-      });
+      }, granted);
       // Không thấy có thể là "máy của người khác" hoặc "máy chưa báo cáo bao
       // giờ". Câu trả lời giống nhau cho cả hai, cố ý: phân biệt chúng là nói
       // cho người lạ biết máy nào có thật.

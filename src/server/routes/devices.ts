@@ -15,9 +15,30 @@
  */
 import { LeaseTakenError, type Lease, type LeaseHolder } from '../db/repo.js';
 import type { DeviceLeasesResponse, DeviceLeaseView } from '../../ui/contracts.js';
+import { allows } from '../auth/roles.js';
 import { json, readJson } from '../http.js';
 import type { RouteTable } from './types.js';
 import type { RouteContext } from './types.js';
+
+/** Người đang gọi, dưới dạng một người đang nhìn danh sách máy. */
+function viewer(ctx: RouteContext) {
+  return {
+    userId: ctx.identity.userId,
+    orgId: ctx.identity.orgId,
+    isAdmin: allows(ctx.identity.role, 'admin'),
+  };
+}
+
+/**
+ * Ai cho mượn được chiếc máy này.
+ *
+ * Máy KHÔNG có chủ là máy của một runner dùng chung — nó vốn đã hiện với cả
+ * tổ chức, nên "cho mượn" không có nghĩa gì ở đó, và chỉ `admin` mới đụng tới.
+ */
+function mayShare(ctx: RouteContext, ownerUserId: string | undefined): boolean {
+  if (allows(ctx.identity.role, 'admin')) return true;
+  return Boolean(ownerUserId) && ownerUserId === ctx.identity.userId;
+}
 
 /** Người đang gọi, dưới dạng một người giữ máy. */
 function me(ctx: RouteContext): LeaseHolder {
@@ -43,6 +64,80 @@ function view(lease: Lease): DeviceLeaseView {
 }
 
 export const deviceRoutes: RouteTable = {
+  /**
+   * Cho một người cụ thể mượn một chiếc máy riêng.
+   *
+   * Ai được cho mượn: CHỦ chiếc máy, hoặc `admin`. Cùng hình dạng phân quyền
+   * với lease và với token runner — vai ở cửa, quyền sở hữu trong handler. Hai
+   * người cùng vai `runner_user` không được cho mượn máy của nhau, vì vai
+   * không trả lời được câu "chiếc máy này của ai".
+   *
+   * Và chỉ cho mượn được thứ mình ĐANG THẤY: một người không nhìn thấy chiếc
+   * máy ấy thì cũng không được làm nó hiện ra cho người khác.
+   */
+  'POST /api/device/share': async (req, res, _url, ctx) => {
+    const body = await readJson<{ udid?: string; userId?: string }>(req);
+    const udid = body.udid?.trim();
+    const userId = body.userId?.trim();
+    if (!udid || !userId) return json(res, 400, { error: 'Cần `udid` và `userId`.' });
+
+    const device = await ctx.devices.find(udid, viewer(ctx),
+      await ctx.grants.forUser(ctx.identity.orgId, ctx.identity.userId));
+    // Không thấy và không có thật trả lời giống nhau, cố ý — cùng lý do với
+    // chỗ tạo job: phân biệt chúng là nói cho người lạ biết máy nào có thật.
+    if (!device) return json(res, 404, { error: 'Không có máy này trong danh sách của bạn.' });
+
+    if (!mayShare(ctx, device.ownerUserId)) {
+      return json(res, 403, { error: 'Chỉ chủ máy (hoặc admin) cho người khác mượn được.' });
+    }
+    if (userId === device.ownerUserId) {
+      return json(res, 400, { error: 'Máy đã là của người này rồi.' });
+    }
+
+    const grant = await ctx.grants.grant({
+      orgId: ctx.identity.orgId, udid, userId, grantedBy: ctx.identity.userId,
+    });
+    return json(res, 200, { grant });
+  },
+
+  /**
+   * Thu lại.
+   *
+   * KHÔNG đụng tới lease: nếu người mượn đang cầm máy trong tay, họ giữ tới
+   * hết lượt — cắt ngang giữa một thao tác trên điện thoại thật là cách làm
+   * hỏng thứ họ đang làm mà không nói gì. Hết lease thì họ không lấy lại được
+   * nữa, và đó là lúc việc thu hồi có hiệu lực.
+   */
+  'POST /api/device/unshare': async (req, res, _url, ctx) => {
+    const body = await readJson<{ udid?: string; userId?: string }>(req);
+    const udid = body.udid?.trim();
+    const userId = body.userId?.trim();
+    if (!udid || !userId) return json(res, 400, { error: 'Cần `udid` và `userId`.' });
+
+    const device = await ctx.devices.find(udid, viewer(ctx),
+      await ctx.grants.forUser(ctx.identity.orgId, ctx.identity.userId));
+    if (!device) return json(res, 404, { error: 'Không có máy này trong danh sách của bạn.' });
+    if (!mayShare(ctx, device.ownerUserId)) {
+      return json(res, 403, { error: 'Chỉ chủ máy (hoặc admin) thu lại được.' });
+    }
+
+    const gone = await ctx.grants.revoke(ctx.identity.orgId, udid, userId);
+    return json(res, 200, { revoked: gone });
+  },
+
+  /** Ai đang được mượn máy nào — để chủ máy soát lại thứ mình đã cho mượn. */
+  'GET /api/device/shares': async (_req, res, url, ctx) => {
+    const udid = url.searchParams.get('udid')?.trim();
+    if (!udid) return json(res, 400, { error: 'Cần `udid`.' });
+
+    const device = await ctx.devices.find(udid, viewer(ctx),
+      await ctx.grants.forUser(ctx.identity.orgId, ctx.identity.userId));
+    if (!device) return json(res, 404, { error: 'Không có máy này trong danh sách của bạn.' });
+
+    const grants = await ctx.grants.forDevice(ctx.identity.orgId, udid);
+    return json(res, 200, { grants });
+  },
+
   /** Ai đang giữ máy nào. Đọc thì vô hại, và người đang chờ máy cần thấy. */
   'GET /api/device/leases': async (_req, res, _url, ctx) => {
     const leases = await ctx.repos.leases.list();

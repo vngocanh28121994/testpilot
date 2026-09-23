@@ -30,21 +30,24 @@ export class MemoryDeviceRegistry implements DeviceRegistry {
       orgId: runner.orgId,
       ...(runner.ownerUserId ? { ownerUserId: runner.ownerUserId } : {}),
       // Máy thừa hưởng quyền nhìn của runner: một chiếc điện thoại cắm vào
-      // laptop riêng thì cũng riêng. Chia sẻ lẻ từng máy là việc của P4.2 phần
-      // sau, và nó cần một bảng quyền riêng.
+      // laptop riêng thì cũng riêng. Cho một người cụ thể mượn là một bảng
+      // quyền RIÊNG chồng lên trên — xem `grants.ts`; nó chỉ thêm quyền, và
+      // không đổi dòng này.
       visibility: runner.visibility,
       state: 'idle' as const,
       updatedAt: now.toISOString(),
     })));
   }
 
-  async list(viewer: Viewer): Promise<DeviceRecord[]> {
+  async list(viewer: Viewer, granted?: Set<string>): Promise<DeviceRecord[]> {
     const all = [...this.byRunner.values()].flat();
-    return all.filter((device) => maySee(device, viewer));
+    return all.filter((device) => maySee(device, viewer, granted));
   }
 
-  async find(udid: string, viewer: Viewer): Promise<DeviceRecord | undefined> {
-    return (await this.list(viewer)).find((device) => device.udid === udid);
+  async find(
+    udid: string, viewer: Viewer, granted?: Set<string>,
+  ): Promise<DeviceRecord | undefined> {
+    return (await this.list(viewer, granted)).find((device) => device.udid === udid);
   }
 
   async markRunnerOffline(runnerId: string, now = new Date()): Promise<number> {

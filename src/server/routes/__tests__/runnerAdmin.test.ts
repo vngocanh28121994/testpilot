@@ -12,6 +12,7 @@ import { Readable } from 'node:stream';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { runnerAdminRoutes } from '../runnerAdmin.js';
 import { MemoryRunnerRegistry } from '../../runners/memoryRegistry.js';
+import { MemoryDeviceGrants } from '../../devices/memoryGrants.js';
 import type { Repos } from '../../db/repo.js';
 import type { Identity } from '../../auth/roles.js';
 import type { RouteContext } from '../types.js';
@@ -42,6 +43,7 @@ function context(identity: Identity, runners: MemoryRunnerRegistry): RouteContex
     repos: {} as unknown as Repos,
     runners,
     devices: new MemoryDeviceRegistry(),
+      grants: new MemoryDeviceGrants(),
   };
 }
 

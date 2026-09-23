@@ -52,11 +52,16 @@ export interface Viewer {
  * danh sách, và lúc ai đó nhắm một chiếc máy cụ thể bằng tên. Hai bản chép tay
  * của cùng một luật sẽ lệch nhau, và bên lỏng hơn là bên quyết định.
  */
-export function maySee(device: DeviceRecord, viewer: Viewer): boolean {
+export function maySee(device: DeviceRecord, viewer: Viewer, granted?: Set<string>): boolean {
+  // Ranh giới tổ chức là thứ DUY NHẤT không có ngoại lệ ở đây. Mọi luật phía
+  // dưới đều nới thêm quyền; dòng này thì không, và nó đứng đầu để không luật
+  // nào ở dưới vượt qua được nó — kể cả một quyền mượn được ghi nhầm.
   if (device.orgId !== viewer.orgId) return false;
   if (device.visibility === 'shared') return true;
   if (viewer.isAdmin) return true;
-  return device.ownerUserId === viewer.userId;
+  if (device.ownerUserId === viewer.userId) return true;
+  // Được mượn: chỉ THÊM quyền, và thu lại được bất cứ lúc nào. Xem `grants.ts`.
+  return granted?.has(device.udid) ?? false;
 }
 
 export interface DeviceRegistry {
@@ -73,11 +78,17 @@ export interface DeviceRegistry {
     now?: Date,
   ): Promise<void>;
 
-  /** Máy mà người này được thấy. */
-  list(viewer: Viewer): Promise<DeviceRecord[]>;
+  /**
+   * Máy mà người này được thấy.
+   *
+   * `granted` là những udid người ấy được MƯỢN — tra ở `DeviceGrants` rồi
+   * truyền vào, không tra bên trong. Kho thiết bị không biết gì về bảng quyền,
+   * và giữ nó như thế nghĩa là phép lọc vẫn là một hàm thuần kiểm được.
+   */
+  list(viewer: Viewer, granted?: Set<string>): Promise<DeviceRecord[]>;
 
   /** Một chiếc máy theo udid, nếu người này được thấy nó. */
-  find(udid: string, viewer: Viewer): Promise<DeviceRecord | undefined>;
+  find(udid: string, viewer: Viewer, granted?: Set<string>): Promise<DeviceRecord | undefined>;
 
   /** Runner tắt hoặc mất liên lạc: máy của nó thành `offline`, không biến mất. */
   markRunnerOffline(runnerId: string, now?: Date): Promise<number>;

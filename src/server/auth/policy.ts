@@ -67,6 +67,7 @@ export const ROUTE_POLICY: Record<string, Role> = {
   'GET /api/history': 'viewer',
   'GET /api/healing': 'viewer',
   'GET /api/registry': 'viewer',
+  'GET /api/device/shares': 'viewer',
   'GET /api/proposals': 'viewer',
   'GET /api/vocabulary': 'viewer',
   'GET /api/actions': 'viewer',
@@ -172,6 +173,10 @@ export const ROUTE_POLICY: Record<string, Role> = {
   // Đẩy lên chỉ tạo ĐỀ XUẤT, nên nó không phải quyền sửa: một người chạy test
   // học được điều gì đó thì gửi được điều ấy đi.
   'POST /api/registry/push': 'runner_user',
+  // Cho mượn máy CỦA MÌNH: vai thấp nhất có máy là `runner_user`. Quyền sở
+  // hữu kiểm trong handler — vai không trả lời được "chiếc máy này của ai".
+  'POST /api/device/share': 'runner_user',
+  'POST /api/device/unshare': 'runner_user',
   'POST /api/proposals/review': 'maintainer',
 
   /* ── Quản trị ────────────────────────────────────────────────────────── */

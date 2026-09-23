@@ -20,6 +20,7 @@ import type { IncomingMessage, ServerResponse } from 'node:http';
 import { registryRoutes } from '../registry.js';
 import { fileRepos } from '../../db/fileRepo.js';
 import { MemoryRunnerRegistry } from '../../runners/memoryRegistry.js';
+import { MemoryDeviceGrants } from '../../devices/memoryGrants.js';
 import { MemoryDeviceRegistry } from '../../devices/memoryRegistry.js';
 import type { ElementDef, ElementRegistry } from '../../../core/types.js';
 import type { Identity } from '../../auth/roles.js';
@@ -68,6 +69,7 @@ describe('vòng tròn pull → sửa → push → duyệt', () => {
       repos,
       runners: new MemoryRunnerRegistry(),
       devices: new MemoryDeviceRegistry(),
+      grants: new MemoryDeviceGrants(),
     };
     await registryRoutes[route]!(req, res, new URL(`http://x${route.split(' ')[1]}`), ctx);
     return out;

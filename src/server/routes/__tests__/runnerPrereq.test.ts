@@ -12,6 +12,7 @@ import { Readable } from 'node:stream';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { runnerRoutes } from '../runner.js';
 import { MemoryRunnerRegistry } from '../../runners/memoryRegistry.js';
+import { MemoryDeviceGrants } from '../../devices/memoryGrants.js';
 import { MemoryDeviceRegistry } from '../../devices/memoryRegistry.js';
 import type { Repos } from '../../db/repo.js';
 import type { RouteContext } from '../types.js';
@@ -34,6 +35,7 @@ describe('runner báo môi trường của máy nó', () => {
       repos: {} as unknown as Repos,
       runners,
       devices: new MemoryDeviceRegistry(),
+      grants: new MemoryDeviceGrants(),
     };
     await runnerRoutes['POST /api/runner/devices']!(
       req, res, new URL('http://x/api/runner/devices'), ctx,

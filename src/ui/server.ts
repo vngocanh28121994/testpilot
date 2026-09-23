@@ -26,6 +26,7 @@ import { startWorker } from '../runner/worker.js';
 import { localQueue } from '../server/queue/memoryQueue.js';
 import { localLeases } from '../server/db/leaseRepo.js';
 import { localRunners } from '../server/runners/memoryRegistry.js';
+import { localDeviceGrants } from '../server/devices/memoryGrants.js';
 import { localDevices } from '../server/devices/memoryRegistry.js';
 import { startReaper } from '../server/runners/reaper.js';
 import { localRunner } from '../runner/index.js';
@@ -140,6 +141,10 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
     mode: MODE,
     sessions,
     devices: localDevices,
+    // Bảng quyền mượn máy. Ở embedded nó nằm trong bộ nhớ như mọi thứ khác;
+    // ở chế độ server nó phải là Postgres, vì một quyết định cho mượn không
+    // dựng lại được từ báo cáo của runner như danh sách máy.
+    grants: localDeviceGrants,
     // Sổ runner: cửa của đường runner tra ở đây. Ở chế độ embedded nó là sổ
     // trong bộ nhớ, đã nạp sẵn token dùng chung nếu có.
     runners: localRunners,

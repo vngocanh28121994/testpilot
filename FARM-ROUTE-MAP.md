@@ -13,7 +13,7 @@ file nào. Kiến trúc: [FARM-ARCHITECTURE.md](FARM-ARCHITECTURE.md) · Kế ho
 | **R** | Runner. Chạm thiết bị hoặc tiến trình cục bộ; **không** được tồn tại trên control plane |
 | **LOCAL** | Chỉ còn ở chế độ `embedded`. Chế độ server phải trả 404 |
 
-Đếm: **CP 61 · JOB 8 · R 10 · LOCAL 1** — tổng 80. (P3.5 không thêm route nào; P3.4 thêm năm route `/api/runner/*`; P4.4b thêm bốn route registry/proposal.)
+Đếm: **CP 64 · JOB 8 · R 10 · LOCAL 1** — tổng 83. (P3.5 không thêm route nào; P3.4 thêm năm route `/api/runner/*`; P4.4b thêm bốn route registry/proposal; P4.2 thêm ba route chia sẻ máy.)
 
 > **Thêm ngày 2026-09-21 (P2.1b).** Bốn route đăng nhập, và chúng là những route DUY NHẤT gọi được
 > khi chưa có phiên: `GET /api/auth/login`, `GET /api/auth/callback`, `POST /api/auth/logout`,
@@ -90,6 +90,13 @@ file nào. Kiến trúc: [FARM-ARCHITECTURE.md](FARM-ARCHITECTURE.md) · Kế ho
 | `POST /api/registry/push` | `runner_user` | Tạo ĐỀ XUẤT, không ghi. `baseRevision` lệch → 409 kèm diff |
 | `GET /api/proposals` | `viewer` | Mặc định chỉ `pending`; `?state=all` cho cả lịch sử |
 | `POST /api/proposals/review` | `maintainer` | Đường ghi DUY NHẤT vào registry từ đề xuất; vẫn đối chiếu `baseRevision` |
+
+### `devices.ts` — chia sẻ máy (P4.2, đã có)
+| Route | Quyền | Ghi chú |
+|---|---|---|
+| `POST /api/device/share` | `runner_user` | Cho một người cụ thể mượn máy RIÊNG của mình; quyền sở hữu kiểm trong handler |
+| `POST /api/device/unshare` | `runner_user` | Thu lại. KHÔNG cắt lease đang chạy |
+| `GET /api/device/shares` | `viewer` | Ai đang mượn chiếc máy này |
 
 ### `healing.ts`
 | Dòng | Route | Ghi chú |

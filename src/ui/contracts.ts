@@ -781,6 +781,14 @@ export interface ControlDeviceView {
   udid: string;
   /** Tên máy, phiên bản hệ điều hành, thật hay giả lập — dựng sẵn để hiển thị. */
   label: string;
+  /**
+   * Máy này có phải của người đang xem không — quyết định họ có cho mượn được.
+   *
+   * `true`/`false` chứ không phải `ownerUserId`: màn hình chỉ cần biết có hiện
+   * nút "Chia sẻ" hay không, và mã người dùng của chủ máy là một thứ không cần
+   * đi ra ngoài để trả lời câu ấy.
+   */
+  mine?: boolean;
 }
 
 export interface ControlTargetsResponse {

@@ -21,6 +21,7 @@ import type { IncomingMessage, ServerResponse } from 'node:http';
 import { runnerRoutes } from '../runner.js';
 import { fileRepos } from '../../db/fileRepo.js';
 import { MemoryRunnerRegistry } from '../../runners/memoryRegistry.js';
+import { MemoryDeviceGrants } from '../../devices/memoryGrants.js';
 import { MemoryDeviceRegistry } from '../../devices/memoryRegistry.js';
 import { AUTO_ACCEPT_WINS } from '../../proposals/policy.js';
 import type { ElementDef, ElementRegistry } from '../../../core/types.js';
@@ -70,6 +71,7 @@ describe('runner báo xong kèm phần học được', () => {
       repos,
       runners: new MemoryRunnerRegistry(),
       devices: new MemoryDeviceRegistry(),
+      grants: new MemoryDeviceGrants(),
     };
     await runnerRoutes['POST /api/runner/result']!(
       req, res, new URL('http://x/api/runner/result'), ctx,

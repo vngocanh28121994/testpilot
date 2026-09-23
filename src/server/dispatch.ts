@@ -16,6 +16,7 @@ import type { Identity } from './auth/roles.js';
 import type { RouteContext } from './routes/types.js';
 import type { RunnerRegistry } from './runners/registry.js';
 import type { DeviceRegistry } from './devices/registry.js';
+import type { DeviceGrants } from './devices/grants.js';
 
 /**
  * Sổ rỗng cho host chưa dựng sổ nào.
@@ -30,6 +31,14 @@ const emptyDevices: DeviceRegistry = {
   list: async () => [],
   find: async () => undefined,
   markRunnerOffline: async () => 0,
+};
+
+/** Bảng quyền rỗng — không ai mượn được gì, và đó là câu trả lời an toàn. */
+const emptyGrants: DeviceGrants = {
+  grant: () => Promise.reject(new Error('Host này chưa dựng bảng quyền mượn máy.')),
+  revoke: async () => false,
+  forUser: async () => new Set<string>(),
+  forDevice: async () => [],
 };
 
 const emptyRunners: RunnerRegistry = {
@@ -59,6 +68,8 @@ export interface DispatchDeps extends GuardDeps {
    * thứ nó trả về là dữ liệu của người khác.
    */
   repos: (identity: Identity) => Repos | Promise<Repos>;
+  /** Ai được mượn máy của ai. Thiếu nó thì không ai mượn được gì. */
+  grants?: DeviceGrants;
 }
 
 export async function dispatch(
@@ -84,6 +95,10 @@ export async function dispatch(
       // được phép". Hai bản sao sẽ lệch nhau đúng lúc một token bị thu hồi.
       runners: deps.runners ?? emptyRunners,
       devices: deps.devices ?? emptyDevices,
+      // Bảng quyền mượn máy đứng RIÊNG, không nằm trong sổ thiết bị: sổ thiết
+      // bị là ảnh chụp mười giây một lần, còn một quyết định cho mượn thì phải
+      // sống qua một lần khởi động lại. Xem `devices/grants.ts`.
+      grants: deps.grants ?? emptyGrants,
     };
     return handler(req, res, url, ctx);
   }

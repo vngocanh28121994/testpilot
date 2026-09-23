@@ -23,6 +23,7 @@ import type { Repos } from '../../db/repo.js';
 import type { Runner } from '../../../runner/index.js';
 import type { RouteContext } from '../types.js';
 import { MemoryRunnerRegistry } from '../../runners/memoryRegistry.js';
+import { MemoryDeviceGrants } from '../../devices/memoryGrants.js';
 import { MemoryDeviceRegistry } from '../../devices/memoryRegistry.js';
 
 function fakeRes(): {
@@ -83,6 +84,7 @@ function context(queue: MemoryJobQueue, devices = defaultDevices, who = 'u1'): R
     repos: { queue } as unknown as Repos,
     runners: new MemoryRunnerRegistry(),
     devices,
+    grants: new MemoryDeviceGrants(),
   };
 }
 

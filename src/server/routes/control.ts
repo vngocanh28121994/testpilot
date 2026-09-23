@@ -81,11 +81,16 @@ export const controlRoutes: RouteTable = {
      * theo người đang nhìn — máy riêng của người khác không hiện — và phép lọc
      * ấy chỉ đúng nếu mọi đường đọc đều đi qua cùng một chỗ.
      */
-    const devices = await ctx.devices.list({
-      userId: ctx.identity.userId,
-      orgId: ctx.identity.orgId,
-      isAdmin: allows(ctx.identity.role, 'admin'),
-    });
+    const devices = await ctx.devices.list(
+      {
+        userId: ctx.identity.userId,
+        orgId: ctx.identity.orgId,
+        isAdmin: allows(ctx.identity.role, 'admin'),
+      },
+      // Máy được người khác cho mượn cũng phải hiện ra. Tra bảng quyền ở đây
+      // rồi truyền vào, để phép lọc trong sổ vẫn là một hàm thuần.
+      await ctx.grants.forUser(ctx.identity.orgId, ctx.identity.userId),
+    );
     const body: ControlTargetsResponse = {
       devices: devices.map((device) => ({
         platform: device.platform,
@@ -93,6 +98,10 @@ export const controlRoutes: RouteTable = {
         // Máy đang tắt vẫn hiện, kèm lý do: biến mất khỏi danh sách và đang
         // tắt là hai câu khác nhau, và người dùng cần câu thứ hai.
         label: device.state === 'offline' ? `${device.label} · đang tắt` : device.label,
+        // Chủ máy là người duy nhất cho mượn được nó. Gửi ra một câu trả lời
+        // có/không thay vì mã người dùng của chủ: màn hình chỉ cần biết có
+        // hiện nút "Chia sẻ" hay không.
+        ...(device.ownerUserId === ctx.identity.userId ? { mine: true } : {}),
       })),
     };
     return json(res, 200, body);

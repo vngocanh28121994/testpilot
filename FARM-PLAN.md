@@ -625,8 +625,25 @@ server chung.
 - **Chưa đo được trên server thật:** phần "người B không thấy máy của A" cần hai phiên đăng nhập
   khác nhau, tức là Keycloak — ảnh của nó đã bị xoá lúc dọn đĩa. Luật lọc thì đã đo ở tầng đơn vị
   và ở tầng route.
-- **Chưa làm:** đường chia sẻ một chiếc máy riêng cho một người cụ thể. Hôm nay chỉ có hai mức
-  `private`/`shared` thừa hưởng từ runner; chia sẻ lẻ cần một bảng quyền riêng.
+- **Xong nốt 2026-09-23:** cho một người cụ thể mượn một chiếc máy riêng. Hai mức `private`/`shared`
+  trả lời sai câu hỏi hay gặp nhất — "riêng" là chỉ mình tôi, "chung" là cả tổ chức, còn việc thật
+  nằm ở giữa: chiếc iPhone 12 duy nhất của đội đang cắm ở máy tôi, và người sửa bug iOS 15 cần nó
+  trong hai tiếng. Không có mức giữa thì người ta chọn "chung" rồi để nguyên như thế mãi.
+- **Bảng quyền RIÊNG, không phải mức thứ ba của `visibility`:** cho mượn không giống với đổi bản
+  chất chiếc máy, và thứ phải thu lại được thì phải có tên người trong đó. Quyền chỉ THÊM — nó
+  không lấy máy khỏi tay chủ, và ranh giới tổ chức đứng ĐẦU trong `maySee` nên không luật nào ở
+  dưới vượt qua được, kể cả một quyền ghi nhầm.
+- **Hình dạng phân quyền lặp lại lần thứ ba** (sau lease ở P3.7 và token runner ở P4.1): vai ở cửa,
+  quyền sở hữu trong handler. Người ĐANG MƯỢN không cho mượn tiếp được — đó là đường để một quyền
+  lan ra cả tổ chức mà chủ máy không hề biết.
+- **Thu lại KHÔNG cắt lease đang chạy:** người mượn đang cầm máy thì giữ tới hết lượt. Cắt ngang
+  giữa một thao tác trên điện thoại thật là làm hỏng thứ họ đang làm mà không nói gì.
+- **Nằm trong Postgres** trong khi chính sổ THIẾT BỊ chỉ nằm trong bộ nhớ, và lý do là tuổi thọ:
+  danh sách máy dựng lại được từ báo cáo của runner sau mười giây, còn một quyết định cho mượn thì
+  không dựng lại được từ đâu — mất nó nghĩa là người đang mượn bỗng thôi thấy máy, giữa buổi làm.
+- **Đo thật:** 9 bài route (phần lớn là những lần TỪ CHỐI), 8 bài kho chạy với cả hai hiện thực
+  gồm cả ca hai tổ chức trùng chuỗi udid, 6 bài giao diện. Trên server đang sống: bấm Chia sẻ →
+  cho `binh` mượn → tên hiện trong danh sách → thu lại → "Chưa cho ai mượn".
 
 ### P4.3 Đóng gói và tự cập nhật — ✅ cơ chế xong 2026-09-23, chưa phát hành
 - Phát hành runner lên npm (nội bộ) hoặc bản cài `.pkg` cho macOS.

@@ -15,6 +15,7 @@ import type { IncomingMessage, ServerResponse } from 'node:http';
 import type { Identity } from '../auth/roles.js';
 import type { Repos } from '../db/repo.js';
 import type { DeviceRegistry } from '../devices/registry.js';
+import type { DeviceGrants } from '../devices/grants.js';
 import type { RunnerRegistry } from '../runners/registry.js';
 
 /**
@@ -66,6 +67,15 @@ export interface RouteContext {
    * server máy chủ web không cắm thiết bị nào.
    */
   devices: DeviceRegistry;
+  /**
+   * Ai được mượn chiếc máy riêng của ai.
+   *
+   * Đứng cạnh `devices` chứ không nằm trong, và lý do là tuổi thọ: sổ thiết bị
+   * là ảnh chụp mười giây một lần, dựng lại được từ báo cáo của runner. Một
+   * quyết định cho mượn thì không dựng lại được từ đâu — mất nó nghĩa là người
+   * đang mượn máy bỗng thôi nhìn thấy nó, giữa buổi làm việc.
+   */
+  grants: DeviceGrants;
 }
 
 export type RouteHandler = (
