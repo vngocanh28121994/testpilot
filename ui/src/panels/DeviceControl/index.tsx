@@ -6,7 +6,7 @@
  * một hạn chế kỹ thuật mà là cả mô hình: chừng nào bạn còn cầm chiếc máy, hàng
  * đợi job không được giao nó cho ai.
  */
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '@/api/client';
 import { ROUTES } from '@/api/routes';
@@ -24,6 +24,7 @@ import {
 import { Input } from '@/components/ui/input';
 import {
   ChevronLeft,
+  Loader2,
   Circle,
   CornerDownLeft,
   Delete,
@@ -40,6 +41,9 @@ import { DRAG_THRESHOLD_PX, isDrag, toScreenPoint } from '@/lib/deviceScale';
  * WebDriverAgent. Vẽ những nút ấy rồi để chúng báo lỗi khi bấm là đẩy một sự
  * thật của nền tảng thành một lỗi của người dùng.
  */
+/** Chờ lâu hơn thế này thì không còn là "đang mở" nữa, mà là có gì đó hỏng. */
+const SLOW_AFTER_MS = 12_000;
+
 const KEYS: Record<'android' | 'ios', Array<{
   key: string; label: string; Icon: LucideIcon;
 }>> = {
@@ -232,19 +236,22 @@ export default function DeviceControlPanel() {
               <CardTitle id="control-title">Màn hình máy</CardTitle>
             </CardHeader>
             <CardContent className="flex flex-wrap items-start gap-4">
-            <canvas
-              ref={canvas}
-              aria-label="Màn hình thiết bị"
-              // `touch-none`: trên màn cảm ứng, thao tác cuộn của trình duyệt
-              // sẽ nuốt mất cú kéo trước khi nó tới đây.
-              className="bg-muted max-h-[70vh] w-auto touch-none rounded-md border"
-              onPointerDown={(event) => {
-                const at = pointAt(event);
-                if (at) down.current = { ...at, at: Date.now() };
-                event.currentTarget.setPointerCapture(event.pointerId);
-              }}
-              onPointerUp={onUp}
-            />
+            <div className="relative">
+              <canvas
+                ref={canvas}
+                aria-label="Màn hình thiết bị"
+                // `touch-none`: trên màn cảm ứng, thao tác cuộn của trình duyệt
+                // sẽ nuốt mất cú kéo trước khi nó tới đây.
+                className="bg-muted max-h-[70vh] w-auto touch-none rounded-md border"
+                onPointerDown={(event) => {
+                  const at = pointAt(event);
+                  if (at) down.current = { ...at, at: Date.now() };
+                  event.currentTarget.setPointerCapture(event.pointerId);
+                }}
+                onPointerUp={onUp}
+              />
+              {state.frames === 0 && <WaitingForFrames />}
+            </div>
 
             {/* Cột thao tác, sát ngay cạnh màn hình máy.
                 Xếp DỌC chứ không cuộn ngang: đây là những nút bấm đi bấm lại
@@ -301,5 +308,45 @@ export default function DeviceControlPanel() {
         )}
       </div>
     </AppShell>
+  );
+}
+
+/**
+ * Nói ra rằng luồng đang mở, thay vì để một ô trống.
+ *
+ * Một ô trống trông GIỐNG HỆT nhau ở hai tình huống khác hẳn: scrcpy đang dựng
+ * tiến trình trên máy (mất vài giây, nhất là lần đầu vì phải đẩy file lên), và
+ * luồng đã chết. Người dùng ngồi trước ô ấy không biết nên chờ hay nên bấm
+ * lại, và "treo" là chữ họ dùng cho cả hai.
+ *
+ * Sau `SLOW_AFTER_MS` thì đổi giọng: chờ lâu hơn thế là bất thường, và lúc ấy
+ * điều hữu ích không phải là trấn an mà là nói cho họ biết làm gì.
+ */
+export function WaitingForFrames() {
+  const [slow, setSlow] = useState(false);
+  useEffect(() => {
+    const timer = setTimeout(() => setSlow(true), SLOW_AFTER_MS);
+    return () => clearTimeout(timer);
+  }, []);
+
+  return (
+    <div
+      role="status"
+      className="text-muted-foreground absolute inset-0 flex flex-col items-center
+        justify-center gap-2 px-4 text-center text-xs"
+    >
+      <Loader2 className="size-5 animate-spin" aria-hidden />
+      {slow ? (
+        <>
+          <span className="font-medium">Chưa nhận được khung hình nào.</span>
+          <span>
+            Bấm <b>Nhả máy</b> rồi <b>Giữ máy</b> lại. Còn nữa thì máy có thể đang khoá màn
+            hình, hoặc chiếc máy tính nó cắm vào đã mất kết nối.
+          </span>
+        </>
+      ) : (
+        <span>Đang mở luồng hình — máy đang dựng bộ mã hoá, mất vài giây.</span>
+      )}
+    </div>
   );
 }

@@ -98,6 +98,18 @@ export function useDeviceControl(canvas: React.RefObject<HTMLCanvasElement | nul
   const decoderRef = useRef<VideoDecoder | undefined>(undefined);
   const assemblerRef = useRef(new AnnexBAssembler());
   const framesRef = useRef(0);
+  /**
+   * Đưa "đã có khung đầu tiên" LÊN STATE, chứ không chỉ giữ trong ref.
+   *
+   * Không có tín hiệu này thì màn hình vẽ một ô trống y hệt nhau cho hai tình
+   * huống khác hẳn: luồng đang mở (scrcpy mất vài giây dựng tiến trình trên
+   * máy), và luồng đã chết. Người dùng ngồi trước ô trống ấy không biết nên
+   * chờ hay nên bấm lại — và "treo" là chữ họ dùng cho cả hai.
+   *
+   * Chỉ báo MỘT lần: một `setState` cho mỗi khung là một lần dựng lại React
+   * sáu mươi lần một giây.
+   */
+  const toldRef = useRef(false);
   /** Số khung đã GỬI ĐI giải mã. Khác `framesRef` — xem chú thích ở `decode`. */
   const decodeSeq = useRef(0);
   /** Khung mới nhất chưa vẽ, và nhịp vẽ đang chờ. Xem `draw`. */
@@ -113,6 +125,7 @@ export function useDeviceControl(canvas: React.RefObject<HTMLCanvasElement | nul
     decoderRef.current = undefined;
     assemblerRef.current.reset();
     framesRef.current = 0;
+    toldRef.current = false;
     decodeSeq.current = 0;
     // Khung chưa vẽ cũng phải đóng: nó giữ bộ nhớ ngoài vùng thu gom rác.
     if (paintRef.current !== undefined) cancelAnimationFrame(paintRef.current);
@@ -141,6 +154,12 @@ export function useDeviceControl(canvas: React.RefObject<HTMLCanvasElement | nul
    * bộ giải mã dừng lại sau vài chục khung với một lỗi về hàng đợi đầy — và
    * triệu chứng là video đứng hình chứ không phải một ngoại lệ.
    */
+  const noteFirstFrame = useCallback(() => {
+    if (toldRef.current) return;
+    toldRef.current = true;
+    setState((prev) => (prev.phase === 'holding' ? { ...prev, frames: 1 } : prev));
+  }, []);
+
   const draw = useCallback((frame: VideoFrame) => {
     pendingFrame.current?.close();
     pendingFrame.current = frame;
@@ -161,8 +180,9 @@ export function useDeviceControl(canvas: React.RefObject<HTMLCanvasElement | nul
       node.getContext('2d')?.drawImage(next, 0, 0);
       next.close();
       framesRef.current += 1;
+      noteFirstFrame();
     });
-  }, [canvas]);
+  }, [canvas, noteFirstFrame]);
 
   /**
    * Vẽ một khung JPEG (iOS).
@@ -188,7 +208,8 @@ export function useDeviceControl(canvas: React.RefObject<HTMLCanvasElement | nul
     node.getContext('2d')?.drawImage(bitmap, 0, 0);
     bitmap.close();
     framesRef.current += 1;
-  }, [canvas]);
+    noteFirstFrame();
+  }, [canvas, noteFirstFrame]);
 
   /**
    * Giải mã một đơn vị truy cập và vẽ nó.
@@ -309,6 +330,7 @@ export function useDeviceControl(canvas: React.RefObject<HTMLCanvasElement | nul
       );
       leaseRef.current = lease;
       platformRef.current = device.platform;
+      toldRef.current = false;
       setState({ phase: 'holding', lease, platform: device.platform, frames: 0 });
       open(lease, device.platform);
     } catch (err) {
