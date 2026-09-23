@@ -86,11 +86,11 @@ function contract(name: string, make: () => DeviceGrants) {
 }
 
 contract('bộ nhớ', () => new MemoryDeviceGrants());
-contract('postgres', () => new PgDeviceGrants(pool));
+contract('postgres', () => new PgDeviceGrants(async () => pool));
 
 describe('PgDeviceGrants giới hạn theo tổ chức', () => {
   it('quyền của tổ chức này không hiện ở tổ chức kia', async () => {
-    const grants = new PgDeviceGrants(pool);
+    const grants = new PgDeviceGrants(async () => pool);
     const udid = 'iphone-chung-ten';
     // Cùng một chuỗi udid ở hai tổ chức: udid do thiết bị đặt tên, nên hai tổ
     // chức trùng chuỗi là chuyện có thật, không phải một ca dựng cho vui.
@@ -106,9 +106,9 @@ describe('PgDeviceGrants giới hạn theo tổ chức', () => {
     // Chính là lý do bảng này nằm trong DB: mất nó nghĩa là người đang mượn
     // máy bỗng thôi nhìn thấy nó, giữa buổi làm việc, mà không ai đụng gì.
     const udid = `iphone-ben-${Date.now()}`;
-    await new PgDeviceGrants(pool).grant({
+    await new PgDeviceGrants(async () => pool).grant({
       orgId: ORG, udid, userId: 'binh', grantedBy: 'an',
     });
-    assert.ok((await new PgDeviceGrants(pool).forUser(ORG, 'binh')).has(udid));
+    assert.ok((await new PgDeviceGrants(async () => pool).forUser(ORG, 'binh')).has(udid));
   });
 });

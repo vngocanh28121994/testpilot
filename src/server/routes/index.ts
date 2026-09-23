@@ -7,6 +7,7 @@
  * không có thật. Một danh sách, hai nơi đọc.
  */
 import { actionsRoutes } from './actions.js';
+import { artifactRoutes } from './artifacts.js';
 import { authRoutes } from './auth.js';
 import { buildsRoutes } from './builds.js';
 import { catalogRoutes } from './catalog.js';
@@ -30,6 +31,7 @@ import { mergeTables, type RouteTable } from './types.js';
 
 export const allRoutes: RouteTable = mergeTables(
   actionsRoutes,
+  artifactRoutes,
   authRoutes,
   buildsRoutes,
   catalogRoutes,

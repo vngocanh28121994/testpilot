@@ -13,7 +13,7 @@ file nào. Kiến trúc: [FARM-ARCHITECTURE.md](FARM-ARCHITECTURE.md) · Kế ho
 | **R** | Runner. Chạm thiết bị hoặc tiến trình cục bộ; **không** được tồn tại trên control plane |
 | **LOCAL** | Chỉ còn ở chế độ `embedded`. Chế độ server phải trả 404 |
 
-Đếm: **CP 64 · JOB 8 · R 10 · LOCAL 1** — tổng 83. (P3.5 không thêm route nào; P3.4 thêm năm route `/api/runner/*`; P4.4b thêm bốn route registry/proposal; P4.2 thêm ba route chia sẻ máy.)
+Đếm: **CP 65 · JOB 8 · R 12 · LOCAL 1** — tổng 86. (P3.5 không thêm route nào; P3.4 thêm năm route `/api/runner/*`; P4.4b thêm bốn route registry/proposal; P4.2 thêm ba route chia sẻ máy; P2.5 thêm ba route artifact.)
 
 > **Thêm ngày 2026-09-21 (P2.1b).** Bốn route đăng nhập, và chúng là những route DUY NHẤT gọi được
 > khi chưa có phiên: `GET /api/auth/login`, `GET /api/auth/callback`, `POST /api/auth/logout`,
@@ -97,6 +97,13 @@ file nào. Kiến trúc: [FARM-ARCHITECTURE.md](FARM-ARCHITECTURE.md) · Kế ho
 | `POST /api/device/share` | `runner_user` | Cho một người cụ thể mượn máy RIÊNG của mình; quyền sở hữu kiểm trong handler |
 | `POST /api/device/unshare` | `runner_user` | Thu lại. KHÔNG cắt lease đang chạy |
 | `GET /api/device/shares` | `viewer` | Ai đang mượn chiếc máy này |
+
+### `artifacts.ts` (P2.5 — đã có)
+| Route | Quyền | Ghi chú |
+|---|---|---|
+| `POST /api/runner/artifacts/sign` | token runner | Server DỰNG khoá, không nhận khoá; link PUT có hạn 30 phút |
+| `POST /api/runner/artifacts/done` | token runner | Ghi sổ những file ĐÃ tải lên được |
+| `GET /api/artifact` | `viewer` | 302 sang link đọc có chữ ký; `viewer` nhận hạn ngắn hơn `maintainer` |
 
 ### `healing.ts`
 | Dòng | Route | Ghi chú |

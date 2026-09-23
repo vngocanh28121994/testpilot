@@ -21,6 +21,7 @@ import { localLeases } from '../server/db/leaseRepo.js';
 import { runnerPlatforms } from '../server/scheduler/match.js';
 import { farmReadiness, farmRunner } from './farmRunner.js';
 import { localRunner } from './index.js';
+import { uploadRuns } from './artifacts.js';
 import { readToken } from './credentials.js';
 import { ProtocolMismatchError, RemoteJobQueue } from './remote.js';
 import { applyUpdate, EXIT_UPDATED, planUpdate } from './update.js';
@@ -153,6 +154,14 @@ async function main(): Promise<void> {
     // và server quyết định gộp hay treo lại chờ duyệt — runner không ghi thẳng
     // vào dữ liệu dùng chung. Xem mục 4b của tài liệu kiến trúc.
     deferSharedWrites: true,
+    // Bằng chứng đi lên kho dùng chung: người đọc report ngồi ở chỗ khác với
+    // chiếc máy đã chạy test. Server chưa cấu hình kho thì lời gọi đầu tiên
+    // trả 501 và `uploadRuns` biến nó thành một dòng log — lượt chạy vẫn xong.
+    artifacts: (jobId, runDirs, log) => uploadRuns(runDirs, jobId, {
+      sign: (id, files) => queue.signArtifacts(id, files),
+      done: (id, files) => queue.doneArtifacts(id, files),
+      log,
+    }).then(() => undefined),
     // Nền tảng KHAI TAY cho farm, vì `control.devices()` của nó rỗng theo đúng
     // nghĩa đen — máy nằm ở AWS. Không truyền thì worker tự đo và ra `['web']`,
     // rồi không bao giờ nhận job Android: nó nằm chờ mãi mà không ai hiểu vì

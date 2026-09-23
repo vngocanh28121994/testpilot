@@ -82,6 +82,7 @@ describe('đẩy thư mục lượt chạy', () => {
         return { key };
       },
       signedUrl: async () => '',
+      signedPutUrl: async () => '',
       list: async () => [],
       get: async () => Buffer.alloc(0),
       remove: async () => {},
@@ -96,7 +97,8 @@ describe('đẩy thư mục lượt chạy', () => {
   it('thư mục không tồn tại thì báo lỗi, không ném', async () => {
     const store = {
       put: async (key: string) => ({ key }),
-      signedUrl: async () => '', list: async () => [], get: async () => Buffer.alloc(0),
+      signedUrl: async () => '',
+      signedPutUrl: async () => '', list: async () => [], get: async () => Buffer.alloc(0),
       remove: async () => {},
     } as ArtifactStore;
     const result = await uploadRunDirectory(store, 'khong-co-thu-muc-nay', { orgId: 'o', jobId: 'j' });

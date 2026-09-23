@@ -31,8 +31,28 @@ const TOKENS: Record<Dialect, Record<string, string>> = {
   },
 };
 
-/** Thay `{{json}}`, `{{timestamp}}`, `{{bool}}`. Token lạ là lỗi, không phải bỏ qua. */
+/**
+ * Thay `{{json}}`, `{{timestamp}}`, `{{bool}}`. Token lạ là lỗi, không phải bỏ qua.
+ *
+ * KHÔNG thay bên trong bình luận `--`. Nghe như một chi tiết nhỏ, và nó đã
+ * chặn một migration thật: một dòng bình luận GIẢI THÍCH vì sao không nên thêm
+ * token mới đã tự biến thành một token lạ, và migration chết trước khi chạy
+ * câu SQL nào. Bình luận là chỗ người ta viết về token — đó là lý do duy nhất
+ * cần, và nó đủ.
+ */
 export function renderSql(sql: string, dialect: Dialect): string {
+  return sql
+    .split('\n')
+    .map((line) => {
+      const at = line.indexOf('--');
+      const code = at >= 0 ? line.slice(0, at) : line;
+      const comment = at >= 0 ? line.slice(at) : '';
+      return replaceTokens(code, dialect) + comment;
+    })
+    .join('\n');
+}
+
+function replaceTokens(sql: string, dialect: Dialect): string {
   return sql.replace(/\{\{(\w+)\}\}/g, (_match, token: string) => {
     const value = TOKENS[dialect][token];
     if (!value) {

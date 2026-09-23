@@ -134,11 +134,22 @@ describe('migration trên SQLite thật', () => {
 });
 
 describe('dịch cú pháp hai dialect', () => {
+  /**
+   * Bỏ phần bình luận trước khi soi.
+   *
+   * `renderSql` cố ý KHÔNG thay token bên trong bình luận `--`: bình luận là
+   * chỗ người ta VIẾT VỀ token, và dòng đầu của `0001_init.sql` liệt kê đúng
+   * ba token ấy để giải thích chúng. Soi cả bình luận thì bài test này bắt
+   * nhầm chính câu giải thích.
+   */
+  const codeOnly = (sql: string): string =>
+    sql.split('\n').map((line) => line.split('--')[0] ?? '').join('\n');
+
   it('Postgres không còn token nào sót lại', async () => {
     const raw = await readFile(path.join(MIGRATIONS_DIR, '0001_init.sql'), 'utf8');
     const rendered = renderSql(raw, 'postgres');
 
-    assert.doesNotMatch(rendered, /\{\{/, 'còn token chưa thay');
+    assert.doesNotMatch(codeOnly(rendered), /\{\{/, 'còn token chưa thay');
     assert.match(rendered, /JSONB/, 'Postgres phải dùng JSONB cho cột json');
   });
 
@@ -146,8 +157,18 @@ describe('dịch cú pháp hai dialect', () => {
     const raw = await readFile(path.join(MIGRATIONS_DIR, '0001_init.sql'), 'utf8');
     const rendered = renderSql(raw, 'sqlite');
 
-    assert.doesNotMatch(rendered, /\{\{/);
-    assert.doesNotMatch(rendered, /JSONB/, 'SQLite không có JSONB');
+    assert.doesNotMatch(codeOnly(rendered), /\{\{/);
+    assert.doesNotMatch(codeOnly(rendered), /JSONB/, 'SQLite không có JSONB');
+  });
+
+  it('token trong bình luận KHÔNG bị thay, và không làm migration chết', () => {
+    // Đã xảy ra thật: một dòng bình luận giải thích vì sao không nên thêm
+    // token mới tự biến thành một token lạ, và migration chết trước khi chạy
+    // câu SQL nào.
+    const sql = '-- đừng thêm {{khong_co}} nữa\nCREATE TABLE t (a {{json}});';
+    const rendered = renderSql(sql, 'sqlite');
+    assert.match(rendered, /đừng thêm \{\{khong_co\}\} nữa/);
+    assert.match(rendered, /a TEXT/);
   });
 
   /** Token lạ là lỗi chính tả trong migration. Bỏ qua nó là tạo ra một cột kiểu rỗng. */

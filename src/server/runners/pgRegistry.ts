@@ -5,7 +5,7 @@
  * nói cùng một câu. Khác biệt thật: ở đây token phải sống qua restart, và
  * nhiều control plane cùng đọc một sổ.
  */
-import type { Pool } from 'pg';
+import type { PoolProvider } from '../db/pool.js';
 import type { PrereqByPlatform } from '../../runner/prereqReport.js';
 import { randomUUID } from 'node:crypto';
 import {
@@ -69,14 +69,14 @@ function withPrereq(record: RunnerRecord, raw: string | null): RunnerRecord {
 
 export class PgRunnerRegistry implements RunnerRegistry {
   constructor(
-    private readonly pool: Pool,
+    private readonly pool: PoolProvider,
     private readonly orgId: string,
   ) {}
 
   async create(runner: NewRunner): Promise<{ runner: RunnerRecord; token: string }> {
     const token = mintToken();
     const at = new Date().toISOString();
-    const { rows } = await this.pool.query<RunnerRow>(
+    const { rows } = await (await this.pool()).query<RunnerRow>(
       `INSERT INTO runner (id, org_id, name, mode, owner_user_id, os, arch,
                            protocol_version, agent_version, token_hash,
                            visibility, state, created_at)
@@ -94,7 +94,7 @@ export class PgRunnerRegistry implements RunnerRegistry {
   async findByToken(token: string): Promise<RunnerRecord | undefined> {
     // Tra theo HASH, và không lọc theo tổ chức: lúc này ta còn chưa biết runner
     // thuộc tổ chức nào — chính dòng tìm được mới nói ra điều đó.
-    const { rows } = await this.pool.query<RunnerRow>(
+    const { rows } = await (await this.pool()).query<RunnerRow>(
       'SELECT * FROM runner WHERE token_hash = $1',
       [hashToken(token)],
     );
@@ -102,7 +102,7 @@ export class PgRunnerRegistry implements RunnerRegistry {
   }
 
   async find(id: string): Promise<RunnerRecord | undefined> {
-    const { rows } = await this.pool.query<RunnerRow & { prereq: string | null }>(
+    const { rows } = await (await this.pool()).query<RunnerRow & { prereq: string | null }>(
       `SELECT runner.*, cap.value AS prereq FROM runner
        LEFT JOIN runner_capability cap ON cap.runner_id = runner.id AND cap.key = $3
        WHERE runner.org_id = $1 AND runner.id = $2`,
@@ -112,7 +112,7 @@ export class PgRunnerRegistry implements RunnerRegistry {
   }
 
   async list(): Promise<RunnerRecord[]> {
-    const { rows } = await this.pool.query<RunnerRow & { prereq: string | null }>(
+    const { rows } = await (await this.pool()).query<RunnerRow & { prereq: string | null }>(
       `SELECT runner.*, cap.value AS prereq FROM runner
        LEFT JOIN runner_capability cap ON cap.runner_id = runner.id AND cap.key = $2
        WHERE runner.org_id = $1 ORDER BY runner.created_at DESC`,
@@ -130,7 +130,7 @@ export class PgRunnerRegistry implements RunnerRegistry {
    * của nó, chỉ cần đọc nguyên khối theo `runner_id`.
    */
   async reportPrereq(id: string, prereq: PrereqByPlatform): Promise<void> {
-    await this.pool.query(
+    await (await this.pool()).query(
       `INSERT INTO runner_capability (runner_id, key, value) VALUES ($1, $2, $3)
        ON CONFLICT (runner_id, key) DO UPDATE SET value = EXCLUDED.value`,
       [id, PREREQ_KEY, JSON.stringify(prereq)],
@@ -139,7 +139,7 @@ export class PgRunnerRegistry implements RunnerRegistry {
 
   async rotate(id: string): Promise<string | undefined> {
     const token = mintToken();
-    const { rowCount } = await this.pool.query(
+    const { rowCount } = await (await this.pool()).query(
       'UPDATE runner SET token_hash = $3 WHERE org_id = $1 AND id = $2',
       [this.orgId, id, hashToken(token)],
     );
@@ -147,7 +147,7 @@ export class PgRunnerRegistry implements RunnerRegistry {
   }
 
   async revoke(id: string): Promise<boolean> {
-    const { rowCount } = await this.pool.query(
+    const { rowCount } = await (await this.pool()).query(
       `UPDATE runner SET token_hash = $3, state = 'offline' WHERE org_id = $1 AND id = $2`,
       [this.orgId, id, REVOKED],
     );
@@ -155,7 +155,7 @@ export class PgRunnerRegistry implements RunnerRegistry {
   }
 
   async touch(id: string, at = new Date()): Promise<void> {
-    await this.pool.query(
+    await (await this.pool()).query(
       `UPDATE runner SET last_seen_at = $3, state = 'online' WHERE org_id = $1 AND id = $2`,
       [this.orgId, id, at.toISOString()],
     );
@@ -163,7 +163,7 @@ export class PgRunnerRegistry implements RunnerRegistry {
 
   async reapSilent(olderThanMs: number, now = new Date()): Promise<number> {
     const cutoff = new Date(now.getTime() - olderThanMs).toISOString();
-    const { rowCount } = await this.pool.query(
+    const { rowCount } = await (await this.pool()).query(
       `UPDATE runner SET state = 'offline'
        WHERE org_id = $1 AND state = 'online'
          AND (last_seen_at IS NULL OR last_seen_at < $2)`,

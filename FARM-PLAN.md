@@ -201,7 +201,7 @@ Sau giai đoạn này mới được phép mở ra domain.
 - **Xong khi:** hai tổ chức cấu hình hai key khác nhau, log và SSE không chứa key nào. Viết test
   quét toàn bộ khung SSE của một job tìm chuỗi bí mật.
 
-### P2.4 Chuyển dữ liệu sang DB
+### P2.4 Chuyển dữ liệu sang DB — ✅ xong 2026-09-23
 - Hiện thực `pgRepo.ts` cho các interface ở P0.2.
 - Script `scripts/migrate-json-to-db.ts` nhập `registry/*.json`, `registry/history.json`,
   `runs/*/meta.json` vào DB, chạy lại được nhiều lần (idempotent).
@@ -209,6 +209,20 @@ Sau giai đoạn này mới được phép mở ra domain.
   `PUT /api/feature` đã làm.
 - **Xong khi:** `src/server/db/__tests__/concurrentWrite.test.ts` — hai lệnh ghi song song vào cùng
   một element: một thành công, một nhận 409. Hôm nay bản thua bị mất im lặng.
+  (Tên thật: [pgRepoParity.integration.test.ts](src/server/db/__tests__/pgRepoParity.integration.test.ts).)
+- **Nối nốt ba sổ còn lại, 2026-09-23.** `repoFactory` chọn đúng kho từ P0, nhưng ba sổ của P3–P4 —
+  runner, thiết bị, quyền mượn máy — thì `server.ts` nối thẳng vào bản BỘ NHỚ ở CẢ HAI chế độ. Bản
+  Postgres đã viết, đã có test, và chưa bao giờ chạy: kiểu nợ tệ nhất, vì mọi thứ đều xanh.
+- **Nó hỏng ở đâu thì chỉ chạy thật mới thấy, và nó đã hỏng thật:** `job.runner_id` có khoá ngoại
+  tới bảng `runner`, nên một runner sống trong RAM làm mọi lệnh nhận job chết bằng
+  `job_runner_id_fkey`. Triệu chứng nói về khoá ngoại; nguyên nhân là một dòng nối dây.
+- **Và một thứ nữa không ai chèn:** không dòng mã nào TẠO ra một dòng `org` hay `app_user`. Ở chế
+  độ server, đăng nhập được, GET được, rồi lệnh GHI đầu tiên chết vì khoá ngoại. Nay migration
+  `0008` gieo tổ chức `default`, và đăng nhập ghi người dùng vào sổ TRƯỚC khi phát phiên.
+- **`PgDeviceRegistry` mới:** báo cáo thiết bị THAY THẾ toàn bộ phần của một runner trong một
+  transaction, không upsert từng dòng — upsert thì chiếc máy đã rút vẫn nằm lại mãi. Phép lọc
+  quyền gọi đúng hàm `maySee` mà bản bộ nhớ dùng, không viết lại thành SQL: hai bản chép tay của
+  một luật quyền sẽ lệch, và bên lỏng hơn là bên quyết định.
 
 ### P2.4b Sổ sự kiện thay cho ghi đè
 - `healing.json` → bảng append-only theo `org_id`; không còn thao tác ghi đè cả tệp.
@@ -218,13 +232,34 @@ Sau giai đoạn này mới được phép mở ra domain.
 - **Xong khi:** `flakeConcurrentMerge.test.ts` — hai runner báo kết quả cùng lúc, tổng số lần chạy
   bằng tổng thật, không bên nào mất số.
 
-### P2.5 Artifact lên object storage
+### P2.5 Artifact lên object storage — ✅ xong 2026-09-23
 - `src/server/storage/s3.ts` (dùng MinIO khi tự host), upload bằng link có chữ ký do server phát.
 - Report, ảnh, video, trace đi lên S3; DB chỉ giữ metadata. Bỏ giới hạn `MAX_REPORTS = 50`
   ([src/ui/server.ts:1645](src/ui/server.ts)), thay bằng retention theo tổ chức.
 - Kiểm tra chống path traversal ở mọi endpoint phục vụ file.
 - **Xong khi:** `src/server/storage/__tests__/pathTraversal.test.ts` xanh, và report mở được qua
-  link có chữ ký hết hạn được.
+  link có chữ ký hết hạn được. (Tên thật: `artifactKeys.test.ts`.)
+- **Runner KHÔNG cầm khoá bucket.** Nó chạy trên laptop của một người, và hai mươi bản sao của một
+  khoá ghi được vào kho của cả tổ chức là hai mươi chỗ để mất nó. Server phát link có chữ ký cho
+  ĐÚNG những khoá nó tự dựng: runner gửi đường dẫn tương đối, `artifactKey()` gắn `orgId`+`jobId`
+  vào đầu. Nhận khoá do runner tự đặt nghĩa là một runner bị chiếm ghi đè được report của tổ chức
+  khác.
+- **Đường đọc cũng không đi qua server:** 302 sang link có chữ ký. Video một lượt chạy dài hàng
+  chục MB, và đẩy nó qua server là trả tiền băng thông hai lần rồi giữ một kết nối mở suốt thời
+  gian đó. `viewer` nhận link hạn ngắn hơn `maintainer` — link càng sống lâu càng dễ rời khỏi tay
+  người được cấp.
+- **Đẩy lên KHÔNG bao giờ làm hỏng job.** Artifact là bằng chứng, không phải kết quả: suite đã
+  chạy, verdict đã có. Một lượt chạy báo "thất bại" vì mạng rớt lúc tải ảnh lên là nói dối về thứ
+  đắt hơn nhiều, và người đọc sẽ đi chạy lại một bộ test vốn đã pass.
+- **Một chỗ làm khác kế hoạch, nói rõ:** `MAX_REPORTS = 50` ở lại. Nó KHÔNG phải retention — nó là
+  hạn kích thước của gói `state` được gửi lại sau MỖI thao tác trên trang, và bỏ nó mà không có
+  phân trang phía server là để gói ấy lớn mãi. Cái kế hoạch thật sự muốn — dọn theo tuổi — nay có
+  ở `storage/retention.ts`, chạy một giờ một lần: xoá FILE trước rồi mới xoá DÒNG, vì thứ tự
+  ngược lại để lại file mồ côi trong kho mà không ai biết nó tồn tại.
+- **Đo thật, đầu tới cuối:** server chế độ `server` + Postgres + MinIO, một runner đứng riêng chạy
+  một job web. 5 file lên bucket (report, log, meta, video…), 5 dòng trong bảng `artifact` với
+  `bytes` đúng; `GET /api/artifact` trả 302 và tải về đúng `<!doctype html>`; khoá của tổ chức
+  khác trả 404; chưa đăng nhập trả 401.
 
 ### P2.6 Hạ tầng — ✅ xong 2026-09-22
 - `docker-compose.yml`: Keycloak + Postgres + MinIO, một lệnh là có đủ. Realm nhập tự động từ

@@ -84,6 +84,14 @@ export interface WorkerDeps {
    * thẳng là đúng và gửi đề xuất cho chính mình là thừa.
    */
   deferSharedWrites?: boolean;
+  /**
+   * Đẩy bằng chứng của lượt chạy lên kho dùng chung.
+   *
+   * Bỏ trống thì không đẩy, và đó là đúng ở chế độ embedded: file đã nằm trên
+   * chính chiếc máy đang phục vụ trang web, nên đẩy lên một kho ở localhost để
+   * đọc lại từ đó là chép dữ liệu qua lại không vì gì cả.
+   */
+  artifacts?: (jobId: string, runDirs: string[], log: (line: string) => void) => Promise<void>;
   /** Tiêm bản giả trong test. Mặc định là runner thật của máy này. */
   runner?: Runner;
 }
@@ -345,6 +353,10 @@ async function run(
     );
 
     const learned = await harvest(deps, runner, outcome.runDirs, log);
+    // TRƯỚC khi đóng job: người mở kết quả ngay lúc nó chuyển sang "xong" phải
+    // thấy được report. Đẩy sau khi đóng nghĩa là có một khoảng thời gian màn
+    // hình nói đã xong mà bấm vào thì chưa có gì.
+    await deps.artifacts?.(job.id, outcome.runDirs, log);
 
     await close(deps, job, lost
       // Mất lease rồi mới kết thúc: lượt chạy ấy đã bị dừng giữa chừng, nên

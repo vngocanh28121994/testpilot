@@ -26,8 +26,7 @@ import { startWorker } from '../runner/worker.js';
 import { localQueue } from '../server/queue/memoryQueue.js';
 import { localLeases } from '../server/db/leaseRepo.js';
 import { localRunners } from '../server/runners/memoryRegistry.js';
-import { localDeviceGrants } from '../server/devices/memoryGrants.js';
-import { localDevices } from '../server/devices/memoryRegistry.js';
+import { storesFor } from '../server/stores.js';
 import { startReaper } from '../server/runners/reaper.js';
 import { localRunner } from '../runner/index.js';
 import { orphans, runChildren } from '../runner/execute.js';
@@ -38,9 +37,13 @@ import { dispatch } from '../server/dispatch.js';
 // hệ thống đăng nhập xong vẫn báo chưa đăng nhập — và đó đúng là thứ đã xảy ra
 // khi `dispatch` được gọi mà quên truyền kho này vào.
 import { sessionStore } from '../server/auth/state.js';
+import { bootstrapUser } from '../server/auth/bootstrapUser.js';
 import { dbOptionsFromEnv } from '../server/db/connect.js';
 import { repoFactory } from '../server/db/wiring.js';
 import { poolProvider } from '../server/db/pool.js';
+import { s3OptionsFromEnv, S3ArtifactStore } from '../server/storage/artifacts.js';
+import { PgArtifactRepo } from '../server/storage/artifactRepo.js';
+import { sweepArtifacts } from '../server/storage/retention.js';
 
 const CONFIG_PROFILE = await ensurePersonalConfig(personalConfigProfile());
 const CONFIG_FILE = CONFIG_PROFILE.file;
@@ -130,6 +133,7 @@ const MODE = serverMode();
 // một đường tra. Không đặt biến ấy thì sổ rỗng và đường runner đóng.
 localRunners.seedFromEnv();
 
+
 // MỘT pool cho cả tiến trình: kho dữ liệu và kho phiên cùng dùng. Hai bên mỗi
 // bên một pool là nhân đôi số kết nối tới Postgres mà không ai quyết định.
 const DB = dbOptionsFromEnv();
@@ -150,20 +154,55 @@ const REPOS = repoFactory({
  * nhìn tới nghĩa là nó im lặng dùng RAM kể cả khi chạy nhiều instance.
  */
 const SESSIONS = sessionStore({ mode: MODE, ...(POOL ? { pool: POOL } : {}) });
+/**
+ * Ba sổ của P3–P4: runner, thiết bị, quyền mượn máy.
+ *
+ * Trước đây `server.ts` nối thẳng vào bản BỘ NHỚ ở cả hai chế độ, kể cả khi
+ * bản Postgres đã có và đã có test. Hậu quả chỉ lộ ra khi chạy thật: một
+ * runner sống trong RAM làm mọi lệnh nhận job chết bằng `job_runner_id_fkey`,
+ * vì `job.runner_id` trỏ vào một bảng mà runner ấy không có mặt.
+ */
+const STORES = storesFor({ mode: MODE, ...(POOL ? { pool: POOL } : {}) });
+
+/**
+ * Kho artifact: chỉ dựng khi có CẢ bucket lẫn DB.
+ *
+ * Sổ artifact là một bảng, nên một bucket không có DB thì không ghi nổi dòng
+ * nào — và một hệ thống đẩy file lên S3 rồi quên mất nó ở đâu còn tệ hơn là
+ * không đẩy. Ở chế độ embedded thì không dựng: file đã nằm trên chính chiếc
+ * máy đang phục vụ trang web.
+ */
+const S3 = MODE === 'server' ? s3OptionsFromEnv() : undefined;
+const ARTIFACTS = S3 && POOL
+  ? {
+    store: new S3ArtifactStore(S3),
+    repo: new PgArtifactRepo(POOL),
+  }
+  : undefined;
+if (MODE === 'server' && !S3) {
+  // Nói ra chứ đừng im lặng chạy tiếp: thiếu bucket nghĩa là report của mọi
+  // lượt chạy nằm trên đĩa của runner và không ai khác mở được.
+  console.warn(
+    '[server] Chưa đặt TESTPILOT_S3_BUCKET. Artifact sẽ không rời khỏi máy runner, '
+    + 'nên người khác không xem được report của lượt chạy. Xem infra/README.md.',
+  );
+}
 
 async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> {
   const url = new URL(req.url ?? '/', `http://localhost:${PORT}`);
   return dispatch(req, res, url, {
     mode: MODE,
     sessions: SESSIONS,
-    devices: localDevices,
+    ...(ARTIFACTS ? { artifacts: ARTIFACTS } : {}),
+    ...(POOL ? { bootstrapUser: (identity) => bootstrapUser(POOL, identity) } : {}),
+    devices: STORES.devices,
     // Bảng quyền mượn máy. Ở embedded nó nằm trong bộ nhớ như mọi thứ khác;
     // ở chế độ server nó phải là Postgres, vì một quyết định cho mượn không
     // dựng lại được từ báo cáo của runner như danh sách máy.
-    grants: localDeviceGrants,
+    grants: STORES.grants,
     // Sổ runner: cửa của đường runner tra ở đây. Ở chế độ embedded nó là sổ
     // trong bộ nhớ, đã nạp sẵn token dùng chung nếu có.
-    runners: localRunners,
+    runners: STORES.runners,
     // Embedded: file JSON trong `registry/`. Server: Postgres của ĐÚNG tổ chức
     // người gọi. Quyết định nằm trong `repoFactory` để đo được — xem wiring.ts.
     repos: REPOS,
@@ -194,7 +233,7 @@ const DEVICE_REPORT_MS = 10_000;
 if (MODE === 'embedded') {
   const reportDevices = async (): Promise<void> => {
     const devices = await localRunner.control.devices().catch(() => []);
-    await localDevices.report(
+    await STORES.devices.report(
       { id: 'runner:local', orgId: 'local', visibility: 'shared' },
       devices
         .filter((device) => device.platform === 'android' || device.platform === 'ios')
@@ -229,12 +268,40 @@ if (MODE === 'embedded') {
  * thiết bị. Nhưng một runner cá nhân nối vào bản local là chuyện P4 cho phép,
  * và lúc ấy nó tắt đúng như mọi laptop khác.
  */
+/**
+ * Dọn artifact cũ, một lần mỗi giờ.
+ *
+ * Không nằm trong `startReaper`: vòng ấy chạy mỗi 30 giây để bắt máy vừa tắt,
+ * còn dọn kho là việc của hàng giờ. Gộp chung nghĩa là hoặc dọn kho 120 lần
+ * mỗi giờ, hoặc máy tắt mất một giờ mới bị phát hiện.
+ */
+if (ARTIFACTS) {
+  const sweep = async (): Promise<void> => {
+    const cfg = await loadConfig(CONFIG_FILE).catch(() => undefined);
+    const keepDays = cfg?.retention.keepFailedDays ?? 30;
+    const swept = await sweepArtifacts({ ...ARTIFACTS, orgId: 'default', keepDays })
+      .catch((err: Error) => {
+        console.error('[retention] dọn artifact hỏng:', err.message);
+        return undefined;
+      });
+    if (swept && swept.removed > 0) {
+      console.log(
+        `[retention] đã xoá ${swept.removed} artifact quá ${keepDays} ngày `
+        + `(${(swept.bytes / 1024 / 1024).toFixed(1)} MB).`,
+      );
+    }
+  };
+  void sweep();
+  const sweepTimer = setInterval(() => void sweep(), 60 * 60 * 1000);
+  sweepTimer.unref?.();
+}
+
 startReaper({
   // Kho phiên: chỉ bản bền mới có gì để dọn. Bản RAM không khai `reapExpired`
   // nên vòng dọn bỏ qua nó — quyết định nằm ở kiểu, không ở một nhánh `if`.
   sessions: SESSIONS,
-  runners: localRunners,
-  devices: localDevices,
+  runners: STORES.runners,
+  devices: STORES.devices,
   queue: localQueue,
   leases: localLeases,
   // Hạn im lặng chỉnh được: một phòng máy có mạng chập cần hạn dài hơn, còn

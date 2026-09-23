@@ -124,6 +124,21 @@ export class RemoteJobQueue implements JobQueue {
     await this.post('/api/runner/devices', { devices, ...(prereq ? { prereq } : {}) });
   }
 
+  /** Xin link ghi cho một lô file. Xem `runner/artifacts.ts`. */
+  async signArtifacts(jobId: string, files: string[]): Promise<Array<{
+    file: string; key: string; url: string; contentType: string;
+  }>> {
+    const answer = await this.post<{
+      uploads: Array<{ file: string; key: string; url: string; contentType: string }>;
+    }>('/api/runner/artifacts/sign', { jobId, files });
+    return answer.uploads;
+  }
+
+  /** Báo đã ghi xong những gì. */
+  async doneArtifacts(jobId: string, files: Array<{ key: string; bytes: number }>): Promise<void> {
+    await this.post('/api/runner/artifacts/done', { jobId, files });
+  }
+
   async claim(by: ClaimBy): Promise<JobRecord | undefined> {
     const answer = await this.post<{ job: { id: string; spec: JobSpec } | null }>(
       '/api/runner/claim',

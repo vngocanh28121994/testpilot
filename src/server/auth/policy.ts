@@ -50,6 +50,8 @@ export const RUNNER_ROUTES: ReadonlySet<string> = new Set([
   'POST /api/runner/events',
   'POST /api/runner/reject',
   'POST /api/runner/result',
+  'POST /api/runner/artifacts/sign',
+  'POST /api/runner/artifacts/done',
 ]);
 
 export const ROUTE_POLICY: Record<string, Role> = {
@@ -68,6 +70,9 @@ export const ROUTE_POLICY: Record<string, Role> = {
   'GET /api/healing': 'viewer',
   'GET /api/registry': 'viewer',
   'GET /api/device/shares': 'viewer',
+  // Mở một artifact: ai trong tổ chức cũng đọc được bằng chứng của lượt chạy.
+  // Phép kiểm thật là tiền tố `orgId` của khoá, kiểm trong handler.
+  'GET /api/artifact': 'viewer',
   'GET /api/proposals': 'viewer',
   'GET /api/vocabulary': 'viewer',
   'GET /api/actions': 'viewer',
@@ -137,6 +142,8 @@ export const ROUTE_POLICY: Record<string, Role> = {
   'POST /api/runner/events': 'runner_user',
   'POST /api/runner/reject': 'runner_user',
   'POST /api/runner/result': 'runner_user',
+  'POST /api/runner/artifacts/sign': 'runner_user',
+  'POST /api/runner/artifacts/done': 'runner_user',
 
   /* ── Chạy test: tiêu tiền, nhưng không đổi thứ người khác dựa vào ────── */
   'POST /api/run': 'runner_user',

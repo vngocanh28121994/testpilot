@@ -131,6 +131,10 @@ export const authRoutes: RouteTable = {
         email,
         role,
       };
+      // Ghi vào sổ người dùng TRƯỚC khi phát phiên: những bảng khác trỏ vào
+      // `app_user`, và một người có phiên hợp lệ mà không có dòng trong sổ sẽ
+      // gặp lỗi khoá ngoại ở lệnh ghi đầu tiên — rất xa chỗ nguyên nhân.
+      await ctx.bootstrapUser?.(identity);
       const session = await ctx.sessions.create(identity);
       const secure = new URL(oidcConfigFromEnv()!.redirectUri).protocol === 'https:';
       return redirect(res, attempt.returnTo, sessionCookie(session.id, { secure }));

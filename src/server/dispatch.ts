@@ -18,6 +18,8 @@ import type { RunnerRegistry } from './runners/registry.js';
 import type { DeviceRegistry } from './devices/registry.js';
 import type { DeviceGrants } from './devices/grants.js';
 import type { SessionStore } from './auth/session.js';
+import type { ArtifactStore } from './storage/artifacts.js';
+import type { ArtifactRepo } from './storage/artifactRepo.js';
 
 /**
  * Sổ rỗng cho host chưa dựng sổ nào.
@@ -85,6 +87,12 @@ export interface DispatchDeps extends GuardDeps {
   repos: (identity: Identity) => Repos | Promise<Repos>;
   /** Ai được mượn máy của ai. Thiếu nó thì không ai mượn được gì. */
   grants?: DeviceGrants;
+  /** Kho phiên. Thiếu nó thì không ai đăng nhập được. */
+  sessions?: SessionStore;
+  /** Kho artifact. Thiếu nó thì route artifact trả 501. */
+  artifacts?: { store: ArtifactStore; repo: ArtifactRepo };
+  /** Ghi người vừa đăng nhập vào sổ. Chỉ có ở chế độ server. */
+  bootstrapUser?: (identity: Identity) => Promise<void>;
 }
 
 export async function dispatch(
@@ -118,6 +126,10 @@ export async function dispatch(
       // đăng nhập tạo phiên và cửa quyền đọc phiên, và hai kho riêng cho ra
       // một hệ thống đăng nhập xong vẫn báo chưa đăng nhập.
       sessions: deps.sessions ?? emptySessions,
+      // Không có kho thì KHÔNG truyền một bản giả: route artifact trả 501, và
+      // đó là cách duy nhất người deploy biết mình quên TESTPILOT_S3_BUCKET.
+      ...(deps.artifacts ? { artifacts: deps.artifacts } : {}),
+      ...(deps.bootstrapUser ? { bootstrapUser: deps.bootstrapUser } : {}),
     };
     return handler(req, res, url, ctx);
   }

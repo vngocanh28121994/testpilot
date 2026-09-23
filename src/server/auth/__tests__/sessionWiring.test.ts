@@ -17,7 +17,7 @@ describe('kho phiên theo chế độ', () => {
     assert.ok(store instanceof MemorySessionStore);
     // Bản RAM KHÔNG khai `reapExpired`: nó tự quên khi tiến trình chết, và
     // vòng dọn nhìn vào chính điều đó để biết có việc gì phải làm không.
-    assert.equal(store.reapExpired, undefined);
+    assert.equal((store as { reapExpired?: unknown }).reapExpired, undefined);
   });
 
   it('server mà thiếu DB thì ném, kèm câu nói rõ vì sao', () => {

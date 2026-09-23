@@ -8,7 +8,7 @@
  * nghĩa là người đang mượn máy bỗng thôi nhìn thấy nó, giữa buổi làm việc, mà
  * không ai đụng vào cái gì.
  */
-import type { Pool } from 'pg';
+import type { PoolProvider } from '../db/pool.js';
 import type { DeviceGrant, DeviceGrants } from './grants.js';
 
 interface Row {
@@ -30,19 +30,24 @@ function hydrate(row: Row): DeviceGrant {
 }
 
 export class PgDeviceGrants implements DeviceGrants {
-  constructor(private readonly pool: Pool) {}
+  /**
+   * Nhận một NGUỒN pool, không phải một pool đã mở — cùng lý do với
+   * `lazyRepos`: dựng kho không được mở kết nối, vì `GET /api/health` phải
+   * trả lời được khi DB còn chưa lên.
+   */
+  constructor(private readonly pool: PoolProvider) {}
 
   async grant(grant: Omit<DeviceGrant, 'createdAt'>, now = new Date()): Promise<DeviceGrant> {
     // `DO NOTHING` rồi đọc lại, chứ không `DO UPDATE`: cho mượn lần thứ hai
     // không được đổi `createdAt`, vì "từ bao giờ" là thứ người ta hỏi khi soát
     // lại quyền, và một lần bấm nhầm không được làm mới cái mốc ấy.
-    await this.pool.query(
+    await (await this.pool()).query(
       `INSERT INTO device_grant (org_id, udid, user_id, granted_by, created_at)
        VALUES ($1, $2, $3, $4, $5)
        ON CONFLICT (org_id, udid, user_id) DO NOTHING`,
       [grant.orgId, grant.udid, grant.userId, grant.grantedBy, now.toISOString()],
     );
-    const { rows } = await this.pool.query<Row>(
+    const { rows } = await (await this.pool()).query<Row>(
       `SELECT * FROM device_grant WHERE org_id = $1 AND udid = $2 AND user_id = $3`,
       [grant.orgId, grant.udid, grant.userId],
     );
@@ -50,7 +55,7 @@ export class PgDeviceGrants implements DeviceGrants {
   }
 
   async revoke(orgId: string, udid: string, userId: string): Promise<boolean> {
-    const { rowCount } = await this.pool.query(
+    const { rowCount } = await (await this.pool()).query(
       `DELETE FROM device_grant WHERE org_id = $1 AND udid = $2 AND user_id = $3`,
       [orgId, udid, userId],
     );
@@ -58,7 +63,7 @@ export class PgDeviceGrants implements DeviceGrants {
   }
 
   async forUser(orgId: string, userId: string): Promise<Set<string>> {
-    const { rows } = await this.pool.query<{ udid: string }>(
+    const { rows } = await (await this.pool()).query<{ udid: string }>(
       `SELECT udid FROM device_grant WHERE org_id = $1 AND user_id = $2`,
       [orgId, userId],
     );
@@ -66,7 +71,7 @@ export class PgDeviceGrants implements DeviceGrants {
   }
 
   async forDevice(orgId: string, udid: string): Promise<DeviceGrant[]> {
-    const { rows } = await this.pool.query<Row>(
+    const { rows } = await (await this.pool()).query<Row>(
       `SELECT * FROM device_grant WHERE org_id = $1 AND udid = $2 ORDER BY created_at`,
       [orgId, udid],
     );

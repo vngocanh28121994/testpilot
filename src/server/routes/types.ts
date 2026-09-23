@@ -14,6 +14,8 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import type { Identity } from '../auth/roles.js';
 import type { SessionStore } from '../auth/session.js';
+import type { ArtifactStore } from '../storage/artifacts.js';
+import type { ArtifactRepo } from '../storage/artifactRepo.js';
 import type { Repos } from '../db/repo.js';
 import type { DeviceRegistry } from '../devices/registry.js';
 import type { DeviceGrants } from '../devices/grants.js';
@@ -86,6 +88,22 @@ export interface RouteContext {
    * biết tới — và nó im lặng dùng RAM kể cả ở chế độ server.
    */
   sessions: SessionStore;
+  /**
+   * Kho artifact và sổ của nó. `undefined` khi host chưa cấu hình S3.
+   *
+   * Tuỳ chọn chứ không phải một bản giả rỗng: "chưa cấu hình" và "cấu hình
+   * rồi mà không có file nào" là hai câu khác nhau, và route trả 501 cho câu
+   * đầu là cách duy nhất người deploy biết mình quên một biến môi trường.
+   */
+  artifacts?: { store: ArtifactStore; repo: ArtifactRepo };
+  /**
+   * Ghi người vừa đăng nhập vào sổ người dùng.
+   *
+   * `undefined` ở chế độ embedded: không có đăng nhập, và không có bảng nào để
+   * ghi. Ở chế độ server thì thiếu nó nghĩa là lệnh ghi đầu tiên chạm vào một
+   * khoá ngoại tới `app_user` sẽ chết — xem `auth/bootstrapUser.ts`.
+   */
+  bootstrapUser?: (identity: Identity) => Promise<void>;
 }
 
 export type RouteHandler = (

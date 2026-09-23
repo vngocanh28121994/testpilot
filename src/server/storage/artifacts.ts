@@ -39,6 +39,16 @@ export interface ArtifactStore {
   put(key: string, body: Buffer | Readable, contentType?: string): Promise<ArtifactRef>;
   /** Link đọc trực tiếp, hết hạn sau `ttlSeconds`. */
   signedUrl(key: string, ttlSeconds?: number): Promise<string>;
+  /**
+   * Link GHI trực tiếp, hết hạn sau `ttlSeconds`.
+   *
+   * Đây là đường mà runner dùng, và nó tồn tại vì một lý do cụ thể: runner
+   * chạy trên laptop của một người, và đưa khoá bucket cho từng chiếc laptop
+   * nghĩa là hai mươi bản sao của một bí mật ghi được vào kho của cả tổ chức.
+   * Link có chữ ký thì chỉ mở đúng MỘT khoá, trong đúng một khoảng thời gian,
+   * và server là bên quyết định khoá ấy trông thế nào.
+   */
+  signedPutUrl(key: string, contentType?: string, ttlSeconds?: number): Promise<string>;
   list(prefix: string): Promise<ArtifactRef[]>;
   get(key: string): Promise<Buffer>;
   remove(key: string): Promise<void>;
@@ -67,6 +77,13 @@ export function s3OptionsFromEnv(env = process.env): S3Options | undefined {
 
 /** Hạn mặc định của link đọc: đủ xem một video dài, không đủ để phát tán. */
 export const DEFAULT_URL_TTL_SECONDS = 15 * 60;
+
+/**
+ * Hạn của link GHI: dài hơn link đọc, vì nó phải sống qua một lần tải lên
+ * chậm — một video 80 MB qua mạng văn phòng buổi chiều. Vẫn có hạn, vì một
+ * link ghi không hết hạn là một chỗ ghi vĩnh viễn vào kho của tổ chức.
+ */
+export const DEFAULT_UPLOAD_TTL_SECONDS = 30 * 60;
 
 export class S3ArtifactStore implements ArtifactStore {
   private readonly client: S3Client;
@@ -100,6 +117,22 @@ export class S3ArtifactStore implements ArtifactStore {
     return getSignedUrl(
       this.client,
       new GetObjectCommand({ Bucket: this.opts.bucket, Key: key }),
+      { expiresIn: ttlSeconds },
+    );
+  }
+
+  async signedPutUrl(
+    key: string,
+    contentType?: string,
+    ttlSeconds = DEFAULT_UPLOAD_TTL_SECONDS,
+  ): Promise<string> {
+    return getSignedUrl(
+      this.client,
+      new PutObjectCommand({
+        Bucket: this.opts.bucket,
+        Key: key,
+        ...(contentType ? { ContentType: contentType } : {}),
+      }),
       { expiresIn: ttlSeconds },
     );
   }
