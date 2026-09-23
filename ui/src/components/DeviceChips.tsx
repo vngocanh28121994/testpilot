@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
+import { groupByMachine } from '@/lib/deviceGroups';
 
 /**
  * Chọn máy để chạy — nhiều máy một lúc.
@@ -85,46 +86,6 @@ export function matchesQuery(target: DeviceTarget, query: string): boolean {
   return [target.id, target.friendlyName, target.deviceName, target.udid]
     .filter(Boolean)
     .some((value) => value!.toLowerCase().includes(q));
-}
-
-/**
- * Gom máy theo CHIẾC MÁY TÍNH nó cắm vào, máy của mình lên trước.
- *
- * Vì sao nhóm theo máy tính chứ không theo nền tảng như bản cũ: nền tảng đã
- * được chọn ở ô phía trên và hiện ra trên từng chip, còn câu chưa ai trả lời
- * là "chiếc này ở bàn tôi hay ở phòng máy". Hai thứ ấy khác nhau về hệ quả:
- * máy ở bàn mình thì cắm rút tuỳ ý, máy phòng máy thì người khác cũng đang
- * chờ.
- *
- * Vì sao KHÔNG phải hai tab: ô này chọn NHIỀU máy và chạy song song, nên chọn
- * một máy của mình cùng một máy phòng máy là chuyện có thật — tab thì chỉ cho
- * thấy một nửa, và dòng "2 máy — chạy song song" ở dưới sẽ nói về thứ đang bị
- * giấu. Số máy ở đây cũng chỉ vài chiếc, chưa tới mức cần giấu bớt.
- *
- * Máy chưa biết nằm ở đâu (`runnerName` vắng) gom vào cuối chứ không bỏ đi:
- * chúng vẫn chạy được, và giấu một chiếc máy dùng được là cách chắc chắn để
- * người ta tưởng nó hỏng.
- */
-export function groupByMachine(targets: DeviceTarget[]): Array<{
-  key: string; title: string; mine: boolean; list: DeviceTarget[];
-}> {
-  const order: string[] = [];
-  const byKey = new Map<string, DeviceTarget[]>();
-  for (const target of targets) {
-    const key = target.runnerName ?? '';
-    if (!byKey.has(key)) { byKey.set(key, []); order.push(key); }
-    byKey.get(key)!.push(target);
-  }
-  return order
-    .map((key) => ({
-      key: key || 'chưa-rõ',
-      title: key || 'chưa rõ máy',
-      list: byKey.get(key)!,
-      mine: byKey.get(key)!.some((t) => t.mine),
-    }))
-    // Máy của mình lên đầu: đó là chiếc người ta vừa cắm và đang định chạy.
-    // Giữ nguyên thứ tự còn lại, để danh sách không nhảy giữa hai lần dò.
-    .sort((a, b) => Number(b.mine) - Number(a.mine));
 }
 
 export function DeviceChips({

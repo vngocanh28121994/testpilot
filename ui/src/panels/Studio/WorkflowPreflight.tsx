@@ -1,10 +1,10 @@
-import { useQueries } from '@tanstack/react-query';
+import { useQueries, useQuery } from '@tanstack/react-query';
 import { DevicePicker } from '@/components/DevicePicker';
 import { PreflightChecks } from '@/components/PreflightChecks';
 import { RegisterDevices } from '@/components/RegisterDevices';
 import { api } from '@/api/client';
 import { ROUTES } from '@/api/routes';
-import type { PreflightResponse } from '@core/ui/contracts.js';
+import type { ControlTargetsResponse, PreflightResponse } from '@core/ui/contracts.js';
 
 export type NativePlatform = 'android' | 'ios';
 
@@ -31,6 +31,31 @@ export function WorkflowPreflight({
   devices: Partial<Record<NativePlatform, string>>;
   onPick: (platform: NativePlatform, id: string) => void;
 }) {
+  /**
+   * Sổ máy, chỉ để BIẾT MÁY NÀO Ở ĐÂU.
+   *
+   * Không dùng làm danh sách ứng viên: `result.candidates` tới từ phép dò của
+   * chính máy chủ, nên nó là tập máy workflow này thật sự chạy được. Đưa vào
+   * đây một chiếc cắm ở laptop người khác là mời người ta chọn một thứ rồi
+   * nhận lại "máy đó không nằm trong số đang cắm".
+   *
+   * Nhưng cái tên thì sổ máy nói được còn preflight thì không — và "Pixel 7"
+   * một mình không cho biết nó nằm ở đâu, đúng câu màn Local Runner đã trả
+   * lời. Hai màn hỏi cùng một câu thì phải trả lời giống nhau.
+   */
+  const registry = useQuery({
+    queryKey: ['device-targets'],
+    queryFn: () => api.get<ControlTargetsResponse>(ROUTES.deviceTargets),
+    refetchInterval: 10_000,
+  });
+  const whereIs = (candidate: { id: string; udid?: string }) =>
+    (registry.data?.devices ?? []).find(
+      // Nối theo udid trước — sổ máy khoá theo nó. `id` chỉ khớp khi config
+      // tình cờ đặt tên trùng serial, nên nó là đường lui chứ không phải
+      // đường chính.
+      (device) => device.udid === (candidate.udid ?? candidate.id),
+    );
+
   // useQueries thay vì tự đếm token chống đua: khoá cache đã gồm cả máy đang
   // chọn, nên câu trả lời của lần dò cũ không thể ghi đè lần mới, và tick hai ô
   // thật nhanh cũng chỉ ra hai truy vấn độc lập.
@@ -89,7 +114,14 @@ export function WorkflowPreflight({
             {(result.candidates?.length ?? 0) > 1 && (
               <DevicePicker
                 name={platform}
-                candidates={result.candidates!}
+                candidates={result.candidates!.map((candidate) => {
+                  const seen = whereIs(candidate);
+                  return {
+                    ...candidate,
+                    ...(seen?.runnerName ? { runnerName: seen.runnerName } : {}),
+                    ...(seen?.mine !== undefined ? { mine: seen.mine } : {}),
+                  };
+                })}
                 chosen={devices[platform]}
                 onPick={(id) => onPick(platform, id)}
               />

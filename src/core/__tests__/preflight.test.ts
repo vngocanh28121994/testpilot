@@ -178,6 +178,11 @@ test('with two attached and no choice, both are offered rather than one guessed'
   assert.deepEqual(r.candidates?.map((c) => c.id), ['sm-s918b', 'sm-s938b']);
   // The label carries the serial too, so the list matches what `adb` shows.
   assert.match(r.candidates![0]!.label, /R5CW525G35Y/);
+  // Và udid đi riêng thành một trường, không chỉ nằm trong câu chữ của nhãn:
+  // màn hình NỐI ứng viên với sổ thiết bị theo udid — sổ khoá theo nó vì đó là
+  // thứ runner báo lên. Moi udid ra từ nhãn bằng regex là buộc một phép nối
+  // vào cách viết một câu tiếng Việt.
+  assert.deepEqual(r.candidates?.map((c) => c.udid), bothSerials);
 });
 
 test('a saved choice settles it and pins that device', () => {

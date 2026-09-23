@@ -95,6 +95,16 @@ export interface DeviceCandidate {
   id: string;
   /** id plus serial, so the list on screen matches what `adb` shows. */
   label: string;
+  /**
+   * Serial mà adb/simulator gọi chiếc máy này.
+   *
+   * Có ở đây để màn hình NỐI được ứng viên với sổ thiết bị: sổ khoá theo udid
+   * vì đó là thứ runner báo lên, còn `id` là tên trong config. Thiếu nó, màn
+   * App Automation Studio không có cách nào nói "chiếc này nằm ở laptop của
+   * Bình" — nó chỉ có một cái tên trong config và không biết tên ấy chỉ vào
+   * chiếc máy nào ngoài đời.
+   */
+  udid?: string;
 }
 
 interface DeviceResolution {
@@ -343,7 +353,11 @@ export function resolveDevice(
   // Several rostered devices are present, so someone has to say which. The
   // candidates travel back with the result so the choice can be offered where
   // it is discovered, rather than as a flag on a command nobody is running.
-  const candidates = here.map((d) => ({ id: d.id, label: label(d) }));
+  const candidates = here.map((d) => ({
+    id: d.id,
+    label: label(d),
+    ...(d.udid ? { udid: d.udid } : {}),
+  }));
   const picked = override ?? (platform === 'web' ? undefined : cfg.workflow.devices?.[platform]);
 
   if (!picked) {
