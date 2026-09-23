@@ -337,14 +337,32 @@ async function run(
     }
 
     const one = picked[0];
-    const named = one ? await runner.run.isNamedDevice(one, deps.configFile) : false;
+    // `id` trong config của chiếc máy job nhắm tới — job có thể gọi tên nó
+    // bằng `id` hoặc bằng udid, và chỉ `id` mới truyền được cho `--device`.
+    const pinned = one ? await runner.run.configIdFor(one, deps.configFile) : undefined;
+
+    // Job có nêu tên máy mà KHÔNG ghim được, trong khi còn máy khác cùng nền
+    // tảng đang cắm: dừng lại. Chạy tiếp nghĩa là để Appium tự chọn một chiếc
+    // trong số ấy — người dùng chọn emulator, lượt chạy diễn ra trên chiếc
+    // điện thoại thật bên cạnh, và report trả về trông hoàn toàn bình thường.
+    // Đây đúng là kiểu hỏng không ai bắt được từ kết quả.
+    const sharing = attached.filter((device) => device.platform === one?.platform).length;
+    if (one && !pinned && sharing > 1) {
+      await close(deps, job, {
+        type: 'job.result', jobId: job.id, state: 'failed',
+        error: `Máy "${one.id}" chưa có trong cấu hình của máy chạy này, mà đang có nhiều `
+          + 'máy cùng cắm — không ghim được thì lượt chạy có thể rơi vào nhầm máy. '
+          + 'Thêm nó vào cấu hình rồi chạy lại.',
+      });
+      return;
+    }
     const outcome = await runner.run.startSuite(
       one?.platform ?? params.platform,
       params.tag,
       Boolean(params.headed),
       Boolean(params.includeQuarantined),
       log,
-      named && one ? one.id : undefined,
+      pinned,
       params.env,
       undefined,
       undefined,

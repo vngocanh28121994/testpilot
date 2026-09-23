@@ -193,12 +193,35 @@ export function parseDeviceToken(token: string): PickedDevice | null {
 }
 
 export async function isNamedDevice(picked: PickedDevice, configFile: string): Promise<boolean> {
+  return Boolean(await configIdFor(picked, configFile));
+}
+
+/**
+ * `id` trong config của chiếc máy mà job nhắm tới — hoặc `undefined`.
+ *
+ * Job có thể gọi tên máy bằng `id` trong config ("sm-s918b") hoặc bằng udid
+ * ("R5CW525G35Y"): màn hình cũ gửi cái thứ nhất, sổ thiết bị thì khoá theo
+ * cái thứ hai. Cả hai đều phải dẫn về `--device <id>`, vì đó là thứ duy nhất
+ * `run.ts` nhận.
+ *
+ * Vì sao quan trọng: thiếu phép quy đổi này, một job nhắm udid sẽ chạy KHÔNG
+ * ghim máy — Appium tự chọn lấy một chiếc trong số đang cắm. Người dùng chọn
+ * emulator, lượt chạy diễn ra trên chiếc điện thoại thật bên cạnh, và report
+ * trả về trông hoàn toàn bình thường.
+ */
+export async function configIdFor(
+  picked: PickedDevice,
+  configFile: string,
+): Promise<string | undefined> {
   try {
     const cfg = await loadConfig(configFile);
     const listed = picked.platform === 'android' ? cfg.android.devices : cfg.ios.devices;
-    return Boolean(listed?.some((d) => d.id === picked.id));
+    if (!listed?.length) return undefined;
+    const found = listed.find((device) =>
+      device.id === picked.id || device.udid === picked.id || device.deviceName === picked.id);
+    return found?.id;
   } catch {
-    return false;
+    return undefined;
   }
 }
 

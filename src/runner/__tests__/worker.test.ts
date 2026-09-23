@@ -46,6 +46,10 @@ function fakeRunner(
         return { platform, id } as { platform: 'android' | 'ios'; id: string };
       },
       isNamedDevice: async () => true,
+      // Runner giả coi mọi máy job nêu tên là máy có trong config của nó, nên
+      // `--device` nhận đúng cái tên ấy — cùng hành vi mà `isNamedDevice: true`
+      // mô tả trước đây.
+      configIdFor: async (picked: { id: string }) => picked.id,
       startSuite: async (
         platform: string, tag: string | undefined, _headed: boolean,
         _quarantined: boolean, log: (line: string) => void, device?: string,
@@ -283,6 +287,70 @@ describe('worker và chỗ giữ thiết bị', () => {
     }
   });
 
+  /**
+   * Job gọi tên máy bằng udid thì lượt chạy vẫn phải GHIM đúng máy ấy.
+   *
+   * Trước đây `--device` chỉ nhận `id` trong config, nên một job nhắm udid
+   * chạy KHÔNG ghim: Appium tự chọn lấy một chiếc trong số đang cắm. Người
+   * dùng chọn emulator, lượt chạy diễn ra trên chiếc điện thoại thật bên
+   * cạnh, và report trả về trông hoàn toàn bình thường — kiểu hỏng không ai
+   * bắt được từ kết quả.
+   */
+  it('job nêu udid thì lượt chạy ghim đúng máy ấy', async () => {
+    const queue = new MemoryJobQueue();
+    const job = await queue.create(androidJob(['android:emulator-5554']));
+    const { runner, seen } = fakeRunner({ code: 0 });
+    const wrapped = {
+      ...runner,
+      run: {
+        ...runner.run,
+        // Config của máy chạy: udid `emulator-5554` mang `id` là `may-lab`.
+        configIdFor: async (picked: { id: string }) =>
+          (picked.id === 'emulator-5554' ? 'may-lab' : undefined),
+      },
+    } as typeof runner;
+
+    const worker = startWorker({
+      queue, leases: new MemoryLeaseRepo(), runnerId: 'local', configFile: 'x.json',
+      config, pollMs: 5, runner: wrapped,
+    });
+    try {
+      assert.equal(await settled(queue, job.id), 'succeeded');
+      assert.equal(seen.calls[0]?.device, 'may-lab', '`--device` phải nhận id trong config');
+    } finally {
+      worker.stop();
+    }
+  });
+
+  /**
+   * Không ghim được, mà lại nhiều máy cùng cắm: DỪNG.
+   *
+   * Chạy tiếp là để Appium tự chọn giữa những chiếc đang cắm — tức là có thể
+   * chạy trên đúng chiếc máy mà người dùng vừa cố ý không chọn.
+   */
+  it('không ghim được và nhiều máy cùng cắm thì từ chối, không đoán', async () => {
+    const queue = new MemoryJobQueue();
+    const job = await queue.create(androidJob(['android:emulator-5554']));
+    const { runner, seen } = fakeRunner({ code: 0 }, ['emulator-5554', 'emulator-5556']);
+    const wrapped = {
+      ...runner,
+      run: { ...runner.run, configIdFor: async () => undefined },
+    } as typeof runner;
+
+    const worker = startWorker({
+      queue, leases: new MemoryLeaseRepo(), runnerId: 'local', configFile: 'x.json',
+      config, pollMs: 5, runner: wrapped,
+    });
+    try {
+      assert.equal(await settled(queue, job.id), 'failed');
+      assert.equal(seen.calls.length, 0, 'không được chạm vào máy nào');
+      const closed = await queue.find(job.id);
+      assert.match(String(closed?.error), /chưa có trong cấu hình/);
+    } finally {
+      worker.stop();
+    }
+  });
+
   it('máy rảnh thì job giữ chỗ trước khi chạy, và nhả sau khi xong', async () => {
     const queue = new MemoryJobQueue();
     const leases = new MemoryLeaseRepo();
@@ -381,6 +449,10 @@ describe('worker và chỗ giữ thiết bị', () => {
           return { platform, id } as { platform: 'android' | 'ios'; id: string };
         },
         isNamedDevice: async () => true,
+      // Runner giả coi mọi máy job nêu tên là máy có trong config của nó, nên
+      // `--device` nhận đúng cái tên ấy — cùng hành vi mà `isNamedDevice: true`
+      // mô tả trước đây.
+      configIdFor: async (picked: { id: string }) => picked.id,
         startSuite: async () => {
           await slow;
           return { code: 0, stopped: true, reportPaths: [], runDirs: [] };

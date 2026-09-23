@@ -20,6 +20,7 @@ import type { TestPilotConfig } from '../config.js';
 import { readAppVersion } from './appInfo.js';
 import { runOnFarm } from './farm.js';
 import {
+  configIdFor,
   isNamedDevice,
   parseDeviceToken,
   runSuite,
@@ -101,6 +102,11 @@ export interface RunnerRunApi {
   stop(): ReturnType<typeof stopSuite>;
   /** Thiết bị này có tên trong config không — quyết định thư mục lượt chạy. */
   isNamedDevice(picked: PickedDevice, configFile: string): Promise<boolean>;
+  /**
+   * `id` trong config của chiếc máy job nhắm tới, dù job gọi nó bằng `id` hay
+   * bằng udid. `undefined` nghĩa là không ghim được — xem `configIdFor`.
+   */
+  configIdFor(picked: PickedDevice, configFile: string): ReturnType<typeof configIdFor>;
   /**
    * Phần các lượt chạy vừa rồi học được, đọc ra để GỬI ĐI.
    *
@@ -199,6 +205,7 @@ export const localRunner: Runner = {
     startParallel: (...args) => runSuiteParallel(...args),
     stop: () => stopSuite(),
     isNamedDevice: (picked, configFile) => isNamedDevice(picked, configFile),
+    configIdFor: (picked, configFile) => configIdFor(picked, configFile),
     learnings: (runDirs) => readLearned(runDirs),
     parseDeviceToken: (token) => parseDeviceToken(token),
   },
