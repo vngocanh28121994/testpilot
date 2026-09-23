@@ -40,7 +40,6 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { api, qs } from '@/api/client';
 import { ROUTES, STREAM_ROUTES } from '@/api/routes';
-import { DevicePicker } from '@/components/DevicePicker';
 import { TagFilter } from '@/components/TagFilter';
 import { DeviceChips, deviceToken, type DeviceTarget } from '@/components/DeviceChips';
 import { PrereqTools } from './PrereqTools';
@@ -67,7 +66,16 @@ const PAGE_DESCRIPTION = 'Chạy bộ test ngay trên máy này, trước khi đ
 export function notRunnable(
   device: ControlDeviceView | undefined,
   available: number,
+  /**
+   * Số máy của nền tảng này đang được tích.
+   *
+   * Từ hai máy trở lên là một lượt chạy SONG SONG, và nó hợp lệ — bản trước
+   * không nhận tham số này nên nó đòi "chọn một máy" trong khi người dùng vừa
+   * tích hai, tức là chặn đúng thứ người ta cố làm.
+   */
+  selected = 0,
 ): string | undefined {
+  if (selected > 1) return undefined;
   if (!device) {
     return available === 0
       ? 'Chưa có máy nào để chạy. Cắm máy vào rồi chạy runner trên chiếc máy tính ấy.'
@@ -102,17 +110,28 @@ export default function RunnerPanel() {
    */
   const [appSource, setAppSource] = useState<'device' | 'upload'>('device');
   /**
-   * Máy đã chọn, khi nhiều máy cùng cắm. Rỗng nghĩa là để preflight tự quyết —
-   * đúng đường cũ, vì một máy duy nhất thì không có gì phải hỏi.
-   */
-  const [device, setDevice] = useState('');
-  /**
    * Máy được tích để chạy song song.
    *
    * Tách khỏi `device` (lựa chọn MỘT máy của preflight): hai câu hỏi khác nhau
    * — "máy nào khi có nhiều máy cùng cắm" và "chạy trên mấy máy cùng lúc".
    */
   const [multi, setMulti] = useState<string[]>([]);
+  /**
+   * Máy đang chọn cho nền tảng này — SUY RA từ ô chip, không phải một state riêng.
+   *
+   * Trước đây màn này có HAI ô chọn máy cùng tên "Chạy trên máy": bộ chip ở
+   * thẻ cấu hình (chọn nhiều, chạy song song) và một bộ radio ở thẻ preflight
+   * (chọn một). Hai ô hỏi cùng một câu, trả lời khác nhau, và khi lệch thì bộ
+   * chip thắng im lặng — người dùng bấm radio rồi chạy trên một máy khác.
+   */
+  const selectedHere = useMemo(
+    () => multi
+      .map((token) => token.split(':'))
+      .filter(([tokenPlatform]) => tokenPlatform === platform)
+      .map(([, udid]) => udid ?? ''),
+    [multi, platform],
+  );
+  const device = selectedHere.length === 1 ? selectedHere[0]! : '';
   const [detecting, setDetecting] = useState(false);
   const job = useStreamJob('local-run', STREAM_ROUTES.run);
 
@@ -209,7 +228,7 @@ export default function RunnerPanel() {
     // cần kiểm là của máy tính mà nó cắm vào, không phải của máy chủ.
     const blocked = platform === 'web'
       ? (preflight.data?.ok ? undefined : 'Chưa qua kiểm tra trước khi chạy. Hãy xử lý các mục đỏ rồi thử lại.')
-      : notRunnable(chosenDevice, runnable.length);
+      : notRunnable(chosenDevice, runnable.length, selectedHere.length);
     if (blocked) return toast.error(blocked);
     job.start({
       platform,
@@ -436,7 +455,7 @@ export default function RunnerPanel() {
                     job.status === 'running'
                     || (platform === 'web'
                       ? preflight.isPending || !preflight.data?.ok
-                      : Boolean(notRunnable(chosenDevice, runnable.length)))
+                      : Boolean(notRunnable(chosenDevice, runnable.length, selectedHere.length)))
                   }
                   onClick={start}
                 >
@@ -480,10 +499,9 @@ export default function RunnerPanel() {
             error={preflight.error}
             onRefresh={() => void preflight.refetch()}
             platform={platform}
-            chosen={device}
-            onPick={setDevice}
             runnable={runnable}
             chosenDevice={chosenDevice}
+            selected={selectedHere.length}
           />
         </div>
 
@@ -538,10 +556,9 @@ function PreflightCard({
   error,
   onRefresh,
   platform,
-  chosen,
-  onPick,
   runnable,
   chosenDevice,
+  selected,
 }: {
   result: PreflightResponse | undefined;
   pending: boolean;
@@ -552,9 +569,9 @@ function PreflightCard({
   error: Error | null;
   onRefresh: () => void;
   platform: 'web' | 'android' | 'ios';
-  chosen: string;
-  onPick: (id: string) => void;
   /** Máy chạy được của nền tảng này, từ sổ thiết bị. */
+  /** Số máy của nền tảng này đang được tích ở ô chip. */
+  selected: number;
   runnable: ControlDeviceView[];
   /** Chiếc đang chọn trong số đó, nếu có. */
   chosenDevice: ControlDeviceView | undefined;
@@ -619,21 +636,13 @@ function PreflightCard({
               <RegisterDevices platform={platform} devices={result.unregistered!} />
             )}
 
-            {/* Máy để chạy, lấy từ SỔ THIẾT BỊ — gồm cả máy cắm ở máy chủ lẫn
-                máy cắm ở laptop của từng người. Nhãn mang tên chiếc máy tính
-                giữ nó, vì "Pixel 7" một mình không nói được nó nằm ở đâu, mà
-                đó là câu người dùng cần trả lời trước khi bấm chạy. */}
-            {platform !== 'web' && runnable.length > 1 && (
-              <DevicePicker
-                name="runner"
-                candidates={runnable.map((item) => ({
-                  id: item.udid,
-                  label: item.runnerName ? `${item.label} — ${item.runnerName}` : item.label,
-                }))}
-                chosen={chosen}
-                onPick={onPick}
-              />
-            )}
+            {/* KHÔNG có ô chọn máy ở đây nữa.
+                Màn này từng có hai ô cùng tên "Chạy trên máy": bộ chip ở thẻ
+                cấu hình và một bộ radio ở đây. Hai ô hỏi cùng một câu và trả
+                lời khác nhau, mà khi lệch thì bộ chip thắng im lặng — người
+                dùng bấm radio ở đây rồi lượt chạy đi trên một máy khác. Bộ
+                chip làm được cả hai việc (một máy là tuần tự, nhiều máy là
+                song song) và có ô tìm kiếm, nên nó ở lại. */}
             {platform !== 'web' && runnable.length === 1 && (
               <div className="bg-muted/50 flex items-center gap-2 rounded-lg border px-3 py-2 text-sm">
                 <Smartphone className="text-muted-foreground size-4 shrink-0" />
@@ -645,9 +654,9 @@ function PreflightCard({
             )}
             {/* Vì sao chưa bấm chạy được, nói ngay cạnh chỗ chọn máy. Cùng một
                 hàm với phép chặn ở nút, nên hai bên không thể nói khác nhau. */}
-            {platform !== 'web' && notRunnable(chosenDevice, runnable.length) && (
+            {platform !== 'web' && notRunnable(chosenDevice, runnable.length, selected) && (
               <p className="text-destructive text-sm">
-                {notRunnable(chosenDevice, runnable.length)}
+                {notRunnable(chosenDevice, runnable.length, selected)}
               </p>
             )}
 

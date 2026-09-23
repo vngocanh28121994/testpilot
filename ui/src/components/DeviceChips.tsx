@@ -178,6 +178,13 @@ export function DeviceChips({
       {groups.length === 0 && (
         <span className="text-muted-foreground text-xs">Không có thiết bị nào khớp.</span>
       )}
+      {/* Vùng chip cuộn RIÊNG, không đẩy dài cả thẻ.
+          Một phòng máy cắm hai ba chục chiếc thì danh sách phẳng đẩy nút "Chạy
+          test" và phần preflight xuống dưới màn hình — tức là để chọn máy thì
+          phải cuộn, rồi để chạy lại phải cuộn ngược lên. Ô tìm kiếm ở trên nằm
+          NGOÀI vùng cuộn, vì nó là thứ đầu tiên người ta với tới khi danh sách
+          dài. */}
+      <div className="flex max-h-52 flex-col gap-2.5 overflow-y-auto">
       {groups.map(({ key, title, mine, list }) => (
         // Tiêu đề đứng RIÊNG một dòng, không phải một cột hẹp bên trái: tên máy
         // tính là thứ người ta tự đặt, và "MacBook-Air-cua-Tuoi.local" vỡ thành
@@ -238,6 +245,7 @@ export function DeviceChips({
           </div>
         </div>
       ))}
+      </div>
       <span className="text-muted-foreground text-xs">{selectionHint(selected, fallbackPlatform)}</span>
     </div>
   );

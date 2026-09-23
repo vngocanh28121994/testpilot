@@ -46,16 +46,22 @@ async function chooseAndroid() {
  * Runner mắc đúng lỗi Studio đã mắc: đọc `device` mà preflight tự suy ra, rồi
  * bỏ qua danh sách máy. Cắm hai máy là preflight từ chối đoán, và không có ô nào
  * để trả lời — lượt chạy bị chặn cứng ngay trên màn hình biết rõ câu hỏi là gì.
+ *
+ * Màn này từng có HAI ô chọn máy cùng tên "Chạy trên máy" — bộ chip ở thẻ cấu
+ * hình và một bộ radio ở thẻ preflight. Khi hai bên lệch nhau thì bộ chip
+ * thắng im lặng, nên người dùng bấm radio rồi lượt chạy đi trên một máy khác.
+ * Nay chỉ còn bộ chip, và bài này bám vào nó.
  */
 describe('Runner — chọn máy', () => {
   it('hiện ô chọn máy khi nhiều máy cùng cắm', async () => {
     server.use(...twoDevices());
     await renderWithRouter(<RunnerPanel />, { path: '/runner' });
     await chooseAndroid();
-    // Kèm tên máy tính: "samsung" một mình không nói được nó nằm ở đâu, mà đó
-    // là câu phải trả lời trước khi bấm chạy.
-    expect(await screen.findByRole('radio', { name: 'samsung — laptop của Bình' }))
-      .toBeInTheDocument();
+    // Tên máy tính là TIÊU ĐỀ NHÓM, không phải một phần tên chip: "samsung"
+    // một mình không nói được nó nằm ở đâu, mà đó là câu phải trả lời trước khi
+    // bấm chạy.
+    expect(await screen.findByRole('button', { name: /samsung/ })).toBeInTheDocument();
+    expect(screen.getByText(/laptop của Bình/)).toBeInTheDocument();
   });
 
   it('lượt chạy đi đúng máy vừa chọn, gọi theo udid', async () => {
@@ -69,9 +75,7 @@ describe('Runner — chọn máy', () => {
     );
     await renderWithRouter(<RunnerPanel />, { path: '/runner' });
     await chooseAndroid();
-    await userEvent.click(
-      await screen.findByRole('radio', { name: 'samsung — laptop của Bình' }),
-    );
+    await userEvent.click(await screen.findByRole('button', { name: /samsung/ }));
     const run = screen.getByRole('button', { name: 'Chạy test' });
     await waitFor(() => expect(run).toBeEnabled());
     await userEvent.click(run);
