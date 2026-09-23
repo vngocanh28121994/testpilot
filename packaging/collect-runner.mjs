@@ -20,6 +20,18 @@ import path from 'node:path';
 const EXTRA = [];
 
 /**
+ * File KHÔNG PHẢI mã nguồn mà runner đọc lúc chạy.
+ *
+ * Đồ thị import không thấy chúng — không ai `import` một file .jar — nên
+ * chúng phải được khai ở đây. Bỏ sót thì gói cài được, khởi động được, và chỉ
+ * hỏng lúc ai đó mở màn hình điều khiển đầu tiên.
+ *
+ * Đường dẫn giữ nguyên tương đối với gốc repo, vì `session.ts` tìm file jar
+ * theo vị trí của chính nó (`../../../vendor/scrcpy`).
+ */
+const ASSETS = ['vendor/scrcpy'];
+
+/**
  * Điểm vào — số nhiều, và đó là điểm dễ bỏ sót nhất ở đây.
  *
  * `main.js` không `import` hai CLI chạy test; nó SINH TIẾN TRÌNH cho chúng
@@ -122,6 +134,15 @@ for (const file of files) {
   fs.copyFileSync(file, target);
 }
 
+for (const asset of ASSETS) {
+  const from = path.join(root, asset);
+  if (!fs.existsSync(from)) {
+    console.error(`⚠ thiếu tài nguyên "${asset}" — gói sẽ hỏng lúc mở màn hình điều khiển`);
+    continue;
+  }
+  fs.cpSync(from, path.join(out, asset), { recursive: true });
+}
+
 fs.writeFileSync(
   path.join(out, 'package.json'),
   JSON.stringify({
@@ -133,7 +154,7 @@ fs.writeFileSync(
       'testpilot-runner': 'dist/runner/main.js',
       'testpilot-runner-login': 'dist/cli/runner-login.js',
     },
-    files: ['dist'],
+    files: ['dist', ...ASSETS],
     engines: manifest.engines,
     dependencies,
   }, null, 2) + '\n',

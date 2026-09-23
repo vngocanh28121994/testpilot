@@ -136,10 +136,17 @@ describe('luồng video trên máy thật', () => {
     // `pgrep -f` in ra PID, mỗi dòng một cái. Bản đầu dùng `-fa` để in cả dòng
     // lệnh rồi lọc theo chữ "screenrecord" — `-a` không phải cờ của pgrep trên
     // macOS, nên nó in PID trần và phép lọc ra 0 mãi mãi.
-    const running = (): number => {
-      const out = spawnSync('pgrep', ['-f', 'screenrecord'], { encoding: 'utf8' }).stdout ?? '';
-      return out.split('\n').filter((line) => line.trim().length > 0).length;
-    };
+    //
+    // Đếm CẢ HAI đường bắt hình: hôm nay scrcpy đi trước và `screenrecord` là
+    // đường lui, nên đếm mỗi một cái tên là ra 0 và bài này xanh vì đo nhầm
+    // thứ. Điều cần giữ không đổi theo đường nào đang chạy: một chiếc máy,
+    // một tiến trình bắt hình.
+    const running = (): number => [
+      'screenrecord', 'com.genymobile.scrcpy.Server',
+    ].reduce((total, pattern) => {
+      const out = spawnSync('pgrep', ['-f', pattern], { encoding: 'utf8' }).stdout ?? '';
+      return total + out.split('\n').filter((line) => line.trim().length > 0).length;
+    }, 0);
     const before = running();
 
     const a: Buffer[] = [];

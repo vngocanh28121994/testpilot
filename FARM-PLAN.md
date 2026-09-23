@@ -551,18 +551,23 @@ hình dạng `udid`.
   điều khiển ở bước 2.
 
 **Bước 2 — Android: xem và chạm — ✅ phần server + runner xong 2026-09-22**
-- Nguồn video là `adb exec-out screenrecord --output-format=h264`, **không phải scrcpy**. Đo trên
-  emulator API 36: một khung `screencap -p` mất 1,9–2,6 giây và nặng 1,39 MB, còn năm giây
-  `screenrecord` ở 720x1600 nặng 37 KB — hai mươi lần băng thông cho một phần tư số khung. Và
-  `screenrecord` có sẵn trong Android, nên không phải đẩy jar nào lên máy người dùng. scrcpy là
-  bước sau, nếu độ trễ thành vấn đề.
+- Nguồn video ban đầu là `adb exec-out screenrecord --output-format=h264`, **không phải scrcpy**.
+  Đo trên emulator API 36: một khung `screencap -p` mất 1,9–2,6 giây và nặng 1,39 MB, còn năm giây
+  `screenrecord` ở 720x1600 nặng 37 KB — hai mươi lần băng thông cho một phần tư số khung.
+- **23/09/2026 — đã đổi: scrcpy đi trước, `screenrecord` là đường lui.** Độ trễ đã thành vấn đề,
+  đúng như dự liệu ở trên. Phần đắt nhất hoá ra là đầu vào chứ không phải hình: một cú chạm qua
+  `adb shell input` mất p50 74 ms vì phải dựng một cái shell trên máy; qua socket scrcpy là 0–1 ms.
+  Jar nằm trong repo ([vendor/scrcpy](vendor/scrcpy/README.md)), đẩy lên máy mỗi phiên — đã đo, đẩy
+  rẻ hơn đi hỏi xem máy đã có bản đúng chưa. `screenrecord` ở lại vì scrcpy cần `adb reverse` và
+  quyền `app_process`, hai thứ có môi trường chặn.
 - Kênh là **SSE, không WebSocket**: 6 KB/s đo được → 8 KB/s sau base64, không thêm phụ thuộc `ws`,
   và đi qua đúng cấu hình nginx đã kiểm ở P2.6. Hai header `Upgrade`/`Connection` vẫn được thêm vào
   [testpilot.conf](infra/nginx/testpilot.conf) kèm hai phép đo, để khi đổi sang scrcpy thì không
   phải đi tìm vì sao nginx trả 400.
-- `src/runner/control.ts`: một tiến trình `screenrecord` cho một chiếc máy, nhiều người xem dùng
-  chung (một người mở hai tab là đủ), tự khởi động lại ở mốc 180 giây kèm sự kiện `restart` để bộ
-  giải mã dựng lại. Facade lên **năm nhóm**: `RunnerControlApi` với đúng sáu việc, và
+- `src/runner/control.ts`: một tiến trình bắt hình cho một chiếc máy, nhiều người xem dùng
+  chung (một người mở hai tab là đủ). Đường `screenrecord` từng tự khởi động lại ở mốc 180 giây kèm
+  sự kiện `restart`; nay nó chạy với `--time-limit=0` nên không còn khoảng hở ấy, và scrcpy vốn
+  không có mốc nào. Facade lên **năm nhóm**: `RunnerControlApi` với đúng sáu việc, và
   `noDeviceAccess.test.ts` canh danh sách ấy đóng.
 - Protocol lên **1.1.0** (thêm, tương thích). Danh sách phím nằm ở `src/protocol/control.ts` chứ
   không ở runner: nó là HỢP ĐỒNG, control plane kiểm để từ chối sớm và runner kiểm lại để không tin

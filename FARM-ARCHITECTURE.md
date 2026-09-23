@@ -338,10 +338,25 @@ nhịp:
 | `screenrecord` H.264 720x1600 | — | **37 KB** | tốc độ khung của máy |
 
 Tức là chụp ảnh liên tục không phải "chậm hơn một chút" mà là một thứ khác hẳn: hai mươi lần băng
-thông cho một phần tư số khung. Và `screenrecord` là lệnh CÓ SẴN trong Android, nên không phải đẩy
-nhị phân nào lên máy người dùng — điều đáng giữ khi runner chạy trên máy cá nhân của người khác.
-scrcpy cho độ trễ thấp hơn và là bước sau nếu độ trễ thành vấn đề; giá của nó là một jar phải đẩy
-lên máy và một giao thức socket riêng.
+thông cho một phần tư số khung.
+
+**Cập nhật 23/09/2026: scrcpy đi trước, `screenrecord` thành đường lui.** Độ trễ đã thành vấn đề, và
+phần đắt nhất không phải hình mà là ĐẦU VÀO: mỗi cú chạm ở đường cũ là một lần `adb shell input`,
+tức dựng cả một cái shell trên máy. Đo trên emulator API 36:
+
+| | `adb shell input` | socket scrcpy |
+|---|---|---|
+| một cú chạm | p50 **74 ms**, p90 85 ms | p50 **0 ms**, p90 1 ms |
+| tốc độ khung lúc vuốt | 3,6–5,9 /giây | 4,8–7,5 /giây |
+
+Một cú quét ở đường cũ là MỘT lệnh rồi máy tự nội suy; ở đường mới là một chuỗi điểm cách nhau
+16 ms, nên ứng dụng nhận được vận tốc thật và tính được quán tính sau khi nhấc tay.
+
+Giá phải trả, nói thẳng: một file jar 717 KB nằm trong repo
+([vendor/scrcpy](vendor/scrcpy/README.md)) và được đẩy lên `/data/local/tmp` mỗi phiên. Đó là điều
+trước đây ta tránh — "không đẩy nhị phân nào lên máy người dùng". Nó vẫn là một sự đánh đổi thật,
+nên `screenrecord` KHÔNG bị gỡ: scrcpy cần `adb reverse` và quyền chạy `app_process`, và khi một
+trong hai thứ ấy bị chặn thì hệ thống tụt về đường cũ chứ không báo lỗi không xem được màn hình.
 
 Kênh truyền là **SSE, không WebSocket**, và đó là lựa chọn theo con số: 6 KB/s đo được, base64 làm
 nó thành 8 KB/s — SSE tải thoải mái, không thêm phụ thuộc `ws` nào, và đi qua đúng cấu hình nginx đã

@@ -12,11 +12,16 @@
  * khung/giây với băng thông gấp hai mươi lần video — không phải chậm hơn một
  * chút, mà là một thứ khác hẳn.
  *
- * Vì sao không phải scrcpy: scrcpy cần đẩy `scrcpy-server.jar` lên máy rồi nói
- * giao thức socket riêng của nó. Nó cho độ trễ thấp hơn, và sẽ là bước sau nếu
- * độ trễ thành vấn đề. `screenrecord` là lệnh CÓ SẴN trong Android, đi qua đúng
- * `adb` mà runner vốn đã cần — không thêm nhị phân nào lên máy người dùng, và
- * đó là điều đáng giữ khi runner chạy trên máy cá nhân của người khác.
+ * Hôm nay có HAI đường, và `screenrecord` là đường lui:
+ *
+ * - **scrcpy** ([scrcpy/](./scrcpy/)) khi mở được. Hình đi qua một socket đã
+ *   mở sẵn thay vì stdout của một tiến trình, và quan trọng hơn: mỗi cú chạm
+ *   là một gói 32 byte trên socket ấy, thay vì một lần `adb shell input` phải
+ *   dựng cả một cái shell trên máy.
+ * - **`screenrecord`** khi không. scrcpy cần `adb reverse` và quyền chạy
+ *   `app_process`; cả hai đều có môi trường chặn. Một lần hỏng ở đó phải thành
+ *   "chậm hơn", không thành "không xem được màn hình" — nên đường cũ ở lại
+ *   nguyên vẹn chứ không bị rút xuống thành mã chết.
  *
  * Giới hạn đã biết, nói ra chứ không giấu: `screenrecord` không chụp được
  * surface bảo mật (màn nhập mật khẩu, DRM) — vùng ấy ra khung đen, đúng như khi
@@ -28,6 +33,17 @@
  */
 import { spawn, type ChildProcess } from 'node:child_process';
 import { CONTROL_KEYS, isControlKey, type ControlKey } from '../protocol/control.js';
+import {
+  ACTION_DOWN,
+  ACTION_MOVE,
+  ACTION_UP,
+  KEY_DOWN,
+  KEY_UP,
+  keyMessage,
+  textMessage,
+  touchMessage,
+} from './scrcpy/protocol.js';
+import { startScrcpy, type ScrcpySession } from './scrcpy/session.js';
 
 /**
  * Mốc thời gian của `screenrecord`. `0` là "không giới hạn" — có từ bản 1.4 của
@@ -46,6 +62,28 @@ const needsTimeLimit = new Set<string>();
 
 /** Chiều rộng đích. Cao hơn nữa thì băng thông tăng mà chữ trên máy không rõ thêm. */
 const TARGET_WIDTH = 720;
+
+const BIT_RATE = 2_000_000;
+
+/**
+ * Trần tốc độ khung xin scrcpy.
+ *
+ * Cao hơn số này thì bộ mã hoá của máy làm việc nhiều hơn mà mắt không thấy
+ * khác — một chiếc máy 120Hz sẽ cố mã hoá 120 khung/giây nếu không ai chặn.
+ * `screenrecord` không có cờ nào tương đương, nên đây là thứ chỉ đường scrcpy
+ * mới có.
+ */
+const MAX_FPS = 30;
+
+/** Mã phím Android, cho đường scrcpy — nó nhận số, không nhận tên. */
+const KEYCODES: Record<ControlKey, number> = {
+  back: 4,
+  home: 3,
+  enter: 66,
+  delete: 67,
+  tab: 61,
+  recents: 187,
+};
 
 export interface ScreenSize {
   width: number;
@@ -183,12 +221,76 @@ export function frameSizeFor(screen: { width: number; height: number }): {
  * quả là cả hai giật. Nên nhiều người xem — cùng một người mở hai tab là đủ —
  * dùng chung một tiến trình, và tiến trình tắt khi người xem cuối cùng rời đi.
  */
-const streams = new Map<string, {
+interface StreamState {
   child?: ChildProcess;
   sinks: Set<ScreenStreamSink>;
   frame: { width: number; height: number };
   stopped: boolean;
-}>();
+  sawBytes: boolean;
+  /**
+   * Phiên scrcpy, khi mở được.
+   *
+   * Vắng mặt nghĩa là đang đi đường `screenrecord`. Các lệnh chạm đọc trường
+   * này để biết gửi qua socket hay gọi `adb shell input` — và đó là lý do nó
+   * nằm ở state của LUỒNG HÌNH chứ không ở một bản đồ riêng: hai thứ ấy sống
+   * chết cùng nhau, và tách ra là mời một trạng thái lệch.
+   */
+  scrcpy?: ScrcpySession;
+  /** Kích thước màn hình mà giao diện đo toạ độ theo. */
+  screen: ScreenSize;
+}
+
+const streams = new Map<string, StreamState>();
+
+/**
+ * Máy này đang có phiên scrcpy không.
+ *
+ * Nếu có thì chạm đi qua socket đã mở sẵn — không sinh tiến trình, không chờ
+ * `adb shell` dựng một cái shell trên máy. Đó là phần lớn độ trễ của một cú
+ * chạm ở đường cũ.
+ */
+function sessionFor(udid: string): { session: ScrcpySession; screen: ScreenSize } | undefined {
+  const state = streams.get(udid);
+  return state?.scrcpy ? { session: state.scrcpy, screen: state.screen } : undefined;
+}
+
+/**
+ * Thử mở phiên scrcpy và nối luồng của nó vào các sink.
+ *
+ * Trả về `false` thay vì ném: gọi được scrcpy hay không là chuyện của môi
+ * trường, không phải lỗi của người dùng, và câu trả lời đúng khi không được là
+ * đi đường cũ chứ không phải một màn hình lỗi.
+ */
+async function attachScrcpy(udid: string, state: StreamState): Promise<boolean> {
+  let session: ScrcpySession;
+  try {
+    session = await startScrcpy(udid, {
+      // `max_size` của scrcpy chặn CẠNH DÀI, không phải bề rộng. Đưa bề rộng
+      // vào đây là thu một màn hình dọc xuống còn 324x720 — nhỏ hơn hẳn thứ
+      // `screenrecord` vẫn gửi, và không ai đọc được chữ trên đó nữa.
+      maxSize: Math.max(state.frame.width, state.frame.height),
+      bitRate: BIT_RATE,
+      maxFps: MAX_FPS,
+    });
+  } catch {
+    return false;
+  }
+
+  state.scrcpy = session;
+  session.video.on('data', (buf: Buffer) => {
+    state.sawBytes = true;
+    for (const each of state.sinks) each.chunk(buf);
+  });
+  // scrcpy không tự hết giờ như `screenrecord`, nên một lần đóng ở đây LUÔN là
+  // chuyện bất thường: máy rút ra, hoặc server chết. Không chạy lại ngầm.
+  session.video.on('close', () => {
+    if (state.stopped) return;
+    for (const each of state.sinks) each.fail('scrcpy đóng luồng hình');
+    void session.stop();
+    streams.delete(udid);
+  });
+  return true;
+}
 
 export async function startScreenStream(
   udid: string,
@@ -202,14 +304,17 @@ export async function startScreenStream(
 
   const screen = await screenSize(udid);
   const frame = frameSizeFor(screen);
-  const state = { sinks: new Set([sink]), frame, stopped: false, sawBytes: false } as {
-    child?: ChildProcess;
-    sinks: Set<ScreenStreamSink>;
-    frame: { width: number; height: number };
-    stopped: boolean;
-    sawBytes: boolean;
+  const state: StreamState = {
+    sinks: new Set([sink]), frame, stopped: false, sawBytes: false, screen,
   };
   streams.set(udid, state);
+
+  // scrcpy trước, `screenrecord` làm đường lui. scrcpy cần `adb reverse` và
+  // quyền chạy `app_process` — hai thứ có môi trường chặn — nên một lần hỏng ở
+  // đây phải thành "chậm hơn", không thành "không xem được màn hình".
+  if (await attachScrcpy(udid, state)) {
+    return { frame: state.frame, stop: () => detach(udid, sink) };
+  }
 
   const launch = (first: boolean): void => {
     if (state.stopped) return;
@@ -272,6 +377,9 @@ function detach(udid: string, sink: ScreenStreamSink): void {
   if (state.sinks.size > 0) return;
   state.stopped = true;
   state.child?.kill('SIGTERM');
+  // `void`: người xem cuối cùng vừa rời đi và không ai chờ câu trả lời, nhưng
+  // `stop()` còn phải gỡ `adb reverse` trên máy — bỏ qua nó là để lại rác.
+  void state.scrcpy?.stop();
   streams.delete(udid);
 }
 
@@ -280,6 +388,7 @@ export function stopAllScreenStreams(): void {
   for (const [udid, state] of streams) {
     state.stopped = true;
     state.child?.kill('SIGTERM');
+    void state.scrcpy?.stop();
     streams.delete(udid);
   }
 }
@@ -315,7 +424,30 @@ function coord(name: string, value: number): string {
 }
 
 export async function tap(udid: string, x: number, y: number): Promise<void> {
-  await run(['shell', 'input', 'tap', coord('x', x), coord('y', y)], udid);
+  // Kiểm TRƯỚC khi rẽ đường, dù scrcpy không cần: người gọi không được thấy
+  // luật khác nhau tuỳ đường nào tình cờ đang mở. Một toạ độ âm hay lớn vô lý
+  // là một lỗi ở phía gọi, và nó phải bị từ chối như nhau ở cả hai bên.
+  const ax = coord('x', x);
+  const ay = coord('y', y);
+  const live = sessionFor(udid);
+  if (live) {
+    // Toạ độ đi thẳng theo hệ MÀN HÌNH, vì đó là hệ giao diện đo theo
+    // (`toScreenPoint`), và scrcpy tự quy đổi sang kích thước thật. Không có
+    // phép nhân chia nào ở đây — chỗ nhân chia bằng tay là chỗ sinh ra lỗi
+    // "chạm lệch đều" trong bản đầu.
+    const at = { x, y, width: live.screen.width, height: live.screen.height };
+    live.session.send(touchMessage({ ...at, action: ACTION_DOWN }));
+    live.session.send(touchMessage({ ...at, action: ACTION_UP }));
+    return;
+  }
+  await run(['shell', 'input', 'tap', ax, ay], udid);
+}
+
+/** Một cú quét mượt cần nhiều điểm giữa; ~60 điểm/giây là đủ để không thấy giật. */
+const SWIPE_STEP_MS = 16;
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => { setTimeout(resolve, ms); });
 }
 
 export async function swipe(
@@ -324,10 +456,35 @@ export async function swipe(
   to: { x: number; y: number },
   durationMs = 200,
 ): Promise<void> {
+  // Như `tap`: cùng một luật cho cả hai đường.
+  const x1 = coord('x1', from.x);
+  const y1 = coord('y1', from.y);
+  const x2 = coord('x2', to.x);
+  const y2 = coord('y2', to.y);
+  const live = sessionFor(udid);
+  if (live) {
+    // `input swipe` gửi cả cử chỉ như MỘT lệnh và máy tự nội suy; scrcpy thì
+    // nhận từng điểm, nên ta phải tự rải. Điều đổi lại là cuộn theo ngón tay
+    // thật sự — ứng dụng nhận được các điểm giữa và tính được vận tốc, thứ
+    // quyết định nó có trôi tiếp sau khi nhấc tay hay không.
+    const size = { width: live.screen.width, height: live.screen.height };
+    const steps = Math.max(1, Math.round(durationMs / SWIPE_STEP_MS));
+    live.session.send(touchMessage({ ...from, ...size, action: ACTION_DOWN }));
+    for (let step = 1; step <= steps; step += 1) {
+      await sleep(SWIPE_STEP_MS);
+      const ratio = step / steps;
+      live.session.send(touchMessage({
+        ...size,
+        action: ACTION_MOVE,
+        x: from.x + (to.x - from.x) * ratio,
+        y: from.y + (to.y - from.y) * ratio,
+      }));
+    }
+    live.session.send(touchMessage({ ...to, ...size, action: ACTION_UP }));
+    return;
+  }
   await run([
-    'shell', 'input', 'swipe',
-    coord('x1', from.x), coord('y1', from.y),
-    coord('x2', to.x), coord('y2', to.y),
+    'shell', 'input', 'swipe', x1, y1, x2, y2,
     coord('duration', Math.min(10_000, Math.max(1, Math.round(durationMs)))),
   ], udid);
 }
@@ -354,6 +511,17 @@ const CONTROL_CHARS = new RegExp(
 
 export async function typeText(udid: string, text: string): Promise<void> {
   if (text.length === 0) return;
+  const live = sessionFor(udid);
+  if (live) {
+    // Đường scrcpy KHÔNG cần `encodeText`: chuỗi đi ở dạng UTF-8 có độ dài
+    // kèm theo, nên dấu cách không phải trốn thành `%s`. Nhưng vẫn từ chối ký
+    // tự điều khiển, vì lý do từ chối chúng không phải là chuyện mã hoá.
+    if (CONTROL_CHARS.test(text)) {
+      throw new Error('Chuỗi có ký tự điều khiển; dùng phím Enter/Delete thay vì gõ chúng.');
+    }
+    live.session.send(textMessage(text));
+    return;
+  }
   await run(['shell', 'input', 'text', encodeText(text)], udid);
 }
 
@@ -367,6 +535,12 @@ export async function typeText(udid: string, text: string): Promise<void> {
 export async function pressKey(udid: string, key: string): Promise<void> {
   if (!isControlKey(key)) {
     throw new Error(`Phím "${key}" không có trong danh sách cho phép.`);
+  }
+  const live = sessionFor(udid);
+  if (live) {
+    live.session.send(keyMessage(KEY_DOWN, KEYCODES[key]));
+    live.session.send(keyMessage(KEY_UP, KEYCODES[key]));
+    return;
   }
   await run(['shell', 'input', 'keyevent', KEYS[key]], udid);
 }

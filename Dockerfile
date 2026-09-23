@@ -43,6 +43,11 @@ COPY --from=build /app/dist ./dist
 COPY tsconfig*.json ./
 COPY src ./src
 
+# scrcpy-server, thứ `src/runner/scrcpy/session.ts` đẩy lên máy Android. Không
+# có nó thì container vẫn chạy — nó tụt về `screenrecord` — nhưng tụt lặng lẽ,
+# và một chiếc máy cắm thẳng vào host này sẽ chậm hơn mà không ai biết vì sao.
+COPY vendor ./vendor
+
 # Những thư mục mà server GHI vào, tạo sẵn và giao cho `node`.
 #
 # `/app` thuộc root, nên một tiến trình chạy bằng `node` không tạo được thư mục
