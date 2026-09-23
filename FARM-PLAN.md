@@ -571,7 +571,7 @@ hình dạng `udid`.
 Mục tiêu: người dùng cắm điện thoại vào laptop của mình và dùng được như hôm nay, nhưng dữ liệu về
 server chung.
 
-### P4.1 Đăng ký runner — ✅ phần server xong 2026-09-22
+### P4.1 Đăng ký runner — ✅ xong 2026-09-23 (phần server 2026-09-22)
 - **Vì sao phải bỏ token dùng chung của P3.4:** nó đủ cho một phòng lab mà người quản trị tự cắm
   máy, và hỏng ngay khi tới việc của P4 — người dùng cắm điện thoại vào laptop CỦA HỌ. Một bí mật
   dùng chung nghĩa là không thu hồi được một máy mà không làm chết mọi máy khác, và không biết job
