@@ -2264,6 +2264,48 @@
         "p"
       ],
       "lastSeen": "2026-09-16T08:45:01.234Z"
+    },
+    "chuyen-tien-noi-bo-chuyen-tien-thanh-cong-tu-tieu-khoan-thuong-sang-ky-quy::android::sdk_gphone64_arm64": {
+      "outcomes": [
+        "f"
+      ],
+      "lastSeen": "2026-09-23T09:40:29.887Z"
+    },
+    "chuyen-tien-noi-bo-chuyen-tien-thanh-cong-tu-tieu-khoan-ky-quy-sang-thuong::android::sdk_gphone64_arm64": {
+      "outcomes": [
+        "f"
+      ],
+      "lastSeen": "2026-09-23T09:40:29.887Z"
+    },
+    "chuyen-tien-noi-bo-chon-tieu-khoan-nguon-va-tieu-khoan-ich-thanh-cong::android::sdk_gphone64_arm64": {
+      "outcomes": [
+        "f"
+      ],
+      "lastSeen": "2026-09-23T09:40:29.887Z"
+    },
+    "chuyen-tien-noi-bo-tieu-khoan-a-chon-o-nguon-khong-xuat-hien-o-dropdown-ich::android::sdk_gphone64_arm64": {
+      "outcomes": [
+        "f"
+      ],
+      "lastSeen": "2026-09-23T09:40:29.887Z"
+    },
+    "chuyen-tien-noi-bo-tieu-khoan-a-chon-o-ich-khong-xuat-hien-o-dropdown-nguon::android::sdk_gphone64_arm64": {
+      "outcomes": [
+        "f"
+      ],
+      "lastSeen": "2026-09-23T09:40:29.887Z"
+    },
+    "chuyen-tien-noi-bo-so-tien-uoc-chuyen-thay-oi-theo-tieu-khoan-nguon-uoc-chon::android::sdk_gphone64_arm64": {
+      "outcomes": [
+        "f"
+      ],
+      "lastSeen": "2026-09-23T09:40:29.887Z"
+    },
+    "chuyen-tien-noi-bo-nhap-so-tien-vuot-qua-so-tien-uoc-chuyen-thi-khong-cho-chuyen::android::sdk_gphone64_arm64": {
+      "outcomes": [
+        "f"
+      ],
+      "lastSeen": "2026-09-23T09:40:29.887Z"
     }
   }
 }

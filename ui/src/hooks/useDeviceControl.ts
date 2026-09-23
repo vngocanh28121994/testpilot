@@ -98,6 +98,11 @@ export function useDeviceControl(canvas: React.RefObject<HTMLCanvasElement | nul
   const decoderRef = useRef<VideoDecoder | undefined>(undefined);
   const assemblerRef = useRef(new AnnexBAssembler());
   const framesRef = useRef(0);
+  /** Số khung đã GỬI ĐI giải mã. Khác `framesRef` — xem chú thích ở `decode`. */
+  const decodeSeq = useRef(0);
+  /** Khung mới nhất chưa vẽ, và nhịp vẽ đang chờ. Xem `draw`. */
+  const pendingFrame = useRef<VideoFrame | undefined>(undefined);
+  const paintRef = useRef<number | undefined>(undefined);
   const codecRef = useRef<StreamCodec>('h264');
   const idleRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
@@ -108,26 +113,55 @@ export function useDeviceControl(canvas: React.RefObject<HTMLCanvasElement | nul
     decoderRef.current = undefined;
     assemblerRef.current.reset();
     framesRef.current = 0;
+    decodeSeq.current = 0;
+    // Khung chưa vẽ cũng phải đóng: nó giữ bộ nhớ ngoài vùng thu gom rác.
+    if (paintRef.current !== undefined) cancelAnimationFrame(paintRef.current);
+    paintRef.current = undefined;
+    pendingFrame.current?.close();
+    pendingFrame.current = undefined;
     clearTimeout(idleRef.current);
   }, []);
 
   /**
-   * Vẽ một khung đã giải mã, rồi đóng nó lại.
+   * Nhận một khung đã giải mã, và vẽ NHIỀU NHẤT một khung cho mỗi nhịp màn hình.
+   *
+   * Vì sao không vẽ ngay: hàm này chạy trong luồng chính, và bộ giải mã chỉ
+   * đẩy khung tiếp theo ra sau khi nó trả về. Vẽ thẳng ở đây biến tốc độ vẽ
+   * thành trần của tốc độ GIẢI MÃ — đo được trên máy thật: điện thoại gửi 17
+   * khung mỗi giây, màn hình chỉ ra 9, hàng đợi dồn tới 48 khung và mỗi khung
+   * chờ 761 ms trước khi hiện. Người dùng thấy máy phản hồi ngay mà hình thì
+   * chạy sau vài giây.
+   *
+   * Khung đến trong lúc khung trước chưa kịp vẽ thì BỎ khung trước. Bỏ ở đây
+   * an toàn, khác hẳn với bỏ trước khi giải mã: mọi khung vẫn được giải mã
+   * nên chuỗi tham chiếu H.264 còn nguyên — chỉ có ảnh cũ không bao giờ lên
+   * màn hình, và nó vốn đã lỗi thời.
    *
    * `VideoFrame` giữ bộ nhớ ngoài vùng thu gom rác của JS. Quên `close()` thì
    * bộ giải mã dừng lại sau vài chục khung với một lỗi về hàng đợi đầy — và
    * triệu chứng là video đứng hình chứ không phải một ngoại lệ.
    */
   const draw = useCallback((frame: VideoFrame) => {
-    const node = canvas.current;
-    if (!node) { frame.close(); return; }
-    if (node.width !== frame.displayWidth || node.height !== frame.displayHeight) {
-      node.width = frame.displayWidth;
-      node.height = frame.displayHeight;
-    }
-    node.getContext('2d')?.drawImage(frame, 0, 0);
-    frame.close();
-    framesRef.current += 1;
+    pendingFrame.current?.close();
+    pendingFrame.current = frame;
+    if (paintRef.current !== undefined) return;
+
+    paintRef.current = requestAnimationFrame(() => {
+      paintRef.current = undefined;
+      const next = pendingFrame.current;
+      pendingFrame.current = undefined;
+      if (!next) return;
+
+      const node = canvas.current;
+      if (!node) { next.close(); return; }
+      if (node.width !== next.displayWidth || node.height !== next.displayHeight) {
+        node.width = next.displayWidth;
+        node.height = next.displayHeight;
+      }
+      node.getContext('2d')?.drawImage(next, 0, 0);
+      next.close();
+      framesRef.current += 1;
+    });
   }, [canvas]);
 
   /**
@@ -184,9 +218,15 @@ export function useDeviceControl(canvas: React.RefObject<HTMLCanvasElement | nul
     if (!unit.key && framesRef.current === 0 && decoder.decodeQueueSize === 0) return;
     decoder.decode(new EncodedVideoChunk({
       type: unit.key ? 'key' : 'delta',
-      // Mốc thời gian phải tăng dần; giá trị thật không quan trọng vì ta vẽ
-      // ngay chứ không đồng bộ với âm thanh.
-      timestamp: framesRef.current * 16_667,
+      // Mốc thời gian phải TĂNG DẦN, và đếm theo khung đã GỬI ĐI giải mã.
+      //
+      // Bản đầu đếm theo `framesRef` — số khung đã VẼ XONG. Hai con số ấy
+      // bằng nhau khi mọi thứ thong thả, và lệch hẳn khi có một loạt khung
+      // dồn tới: cả loạt nhận CÙNG một mốc thời gian, vì chưa khung nào kịp
+      // vẽ. Bộ giải mã gặp mốc không tăng thì giữ khung lại để sắp xếp, và độ
+      // trễ dồn lên. Đo được trên máy thật: hàng đợi sâu 32 khung, mỗi khung
+      // chờ 745 ms — màn hình giật và chậm trong khi điện thoại phản hồi ngay.
+      timestamp: (decodeSeq.current += 1) * 16_667,
       data: unit.data,
     }));
   }, [draw]);

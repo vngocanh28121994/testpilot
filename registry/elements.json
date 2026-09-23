@@ -153,10 +153,10 @@
         ]
       },
       "health": {
-        "resolutions": 704,
+        "resolutions": 709,
         "heals": 26,
         "winners": {
-          "placeholder:Email / Số tài khoản / Điện thoại": 668,
+          "placeholder:Email / Số tài khoản / Điện thoại": 673,
           "predicate:new UiSelector().className(\"android.widget.EditText\").instance(0)": 10,
           "css:input[type='text']": 25,
           "testId:username": 1
@@ -194,10 +194,10 @@
         ]
       },
       "health": {
-        "resolutions": 668,
+        "resolutions": 673,
         "heals": 0,
         "winners": {
-          "placeholder:Mật khẩu": 660,
+          "placeholder:Mật khẩu": 665,
           "predicate:new UiSelector().className(\"android.widget.EditText\").instance(1)": 8
         }
       }

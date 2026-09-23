@@ -91,6 +91,13 @@ export function sse(res: ServerResponse): {
     // có nó thì log và video đọng lại thành một cục sau hai phút.
     'x-accel-buffering': 'no',
   });
+  // Tắt Nagle. Thuật toán ấy gom những lần ghi nhỏ lại rồi gửi một thể — đúng
+  // cho việc tải file, sai cho một luồng thời gian thực: khung hình đi thành
+  // từng cụm thay vì đều đặn, và người xem thấy giật dù tổng băng thông thừa.
+  // Luồng màn hình đo được 100 gói mỗi giây, mỗi gói vài KB — đúng hình dạng
+  // mà Nagle gom lại nhiều nhất.
+  res.socket?.setNoDelay(true);
+
   return {
     send: (event, data) => res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`),
     end: () => res.end(),
