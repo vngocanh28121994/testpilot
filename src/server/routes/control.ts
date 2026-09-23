@@ -199,6 +199,10 @@ export const controlRoutes: RouteTable = {
         screen: await localRunner.control.screenSize(target),
         frame: handle.frame,
       });
+      // SAU `meta`, không trước: người xem dựng bộ giải mã từ `meta`, nên mọi
+      // mảnh tới trước nó đều bị vứt. Đây là phần đầu luồng dành cho người vào
+      // giữa chừng — thiếu nó thì họ chỉ nhận khung P và ảnh đứng im.
+      if (handle.primer) send('video', handle.primer.toString('base64'));
     } catch (err) {
       finish((err as Error).message);
     }

@@ -22,6 +22,14 @@ import {
   CardTitle,
 } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
+import {
+  ChevronLeft,
+  Circle,
+  CornerDownLeft,
+  Delete,
+  Square,
+  type LucideIcon,
+} from 'lucide-react';
 import { useDeviceControl, type ControlDevice } from '@/hooks/useDeviceControl';
 import { DRAG_THRESHOLD_PX, isDrag, toScreenPoint } from '@/lib/deviceScale';
 
@@ -32,18 +40,23 @@ import { DRAG_THRESHOLD_PX, isDrag, toScreenPoint } from '@/lib/deviceScale';
  * WebDriverAgent. Vẽ những nút ấy rồi để chúng báo lỗi khi bấm là đẩy một sự
  * thật của nền tảng thành một lỗi của người dùng.
  */
-const KEYS: Record<'android' | 'ios', Array<{ key: string; label: string }>> = {
+const KEYS: Record<'android' | 'ios', Array<{
+  key: string; label: string; Icon: LucideIcon;
+}>> = {
   android: [
-    { key: 'back', label: 'Quay lại' },
-    { key: 'home', label: 'Home' },
-    { key: 'recents', label: 'Gần đây' },
-    { key: 'enter', label: 'Enter' },
-    { key: 'delete', label: 'Xoá' },
+    // Biểu tượng theo đúng ba nút điều hướng của Android — tam giác, tròn,
+    // vuông — vì đó là hình người dùng đã quen trên chính chiếc máy họ đang
+    // nhìn, không phải một bộ hình do ta nghĩ ra.
+    { key: 'back', label: 'Quay lại', Icon: ChevronLeft },
+    { key: 'home', label: 'Home', Icon: Circle },
+    { key: 'recents', label: 'Gần đây', Icon: Square },
+    { key: 'enter', label: 'Enter', Icon: CornerDownLeft },
+    { key: 'delete', label: 'Xoá', Icon: Delete },
   ],
   ios: [
-    { key: 'home', label: 'Home' },
-    { key: 'enter', label: 'Enter' },
-    { key: 'delete', label: 'Xoá' },
+    { key: 'home', label: 'Home', Icon: Circle },
+    { key: 'enter', label: 'Enter', Icon: CornerDownLeft },
+    { key: 'delete', label: 'Xoá', Icon: Delete },
   ],
 };
 
@@ -233,20 +246,31 @@ export default function DeviceControlPanel() {
               onPointerUp={onUp}
             />
 
-            <div className="flex min-w-56 flex-1 flex-col gap-2">
-              <div className="flex flex-wrap gap-2">
-                {KEYS[state.platform].map((item) => (
-                  <Button
-                    key={item.key}
-                    size="sm"
-                    variant="outline"
-                    onClick={() => void send({ kind: 'key', key: item.key })}
-                  >
-                    {item.label}
-                  </Button>
-                ))}
-              </div>
+            {/* Cột thao tác, sát ngay cạnh màn hình máy.
+                Xếp DỌC chứ không cuộn ngang: đây là những nút bấm đi bấm lại
+                trong lúc mắt vẫn đang nhìn màn hình bên trái, nên chúng cần một
+                chỗ cố định, và một hàng ngang tự xuống dòng thì thứ tự nút đổi
+                theo bề rộng cửa sổ. */}
+            <div
+              aria-label="Thao tác"
+              role="group"
+              className="flex w-40 shrink-0 flex-col gap-1.5"
+            >
+              {KEYS[state.platform].map((item) => (
+                <Button
+                  key={item.key}
+                  size="sm"
+                  variant="outline"
+                  className="justify-start gap-2"
+                  onClick={() => void send({ kind: 'key', key: item.key })}
+                >
+                  <item.Icon className="size-4 shrink-0" aria-hidden />
+                  {item.label}
+                </Button>
+              ))}
+            </div>
 
+            <div className="flex min-w-56 flex-1 flex-col gap-2">
               <div className="flex gap-2">
                 <Input
                   value={text}

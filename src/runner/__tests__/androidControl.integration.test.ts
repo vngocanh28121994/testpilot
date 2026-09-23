@@ -148,7 +148,6 @@ describe('luồng video trên máy thật', () => {
       return out;
     };
 
-    const late: Buffer[] = [];
     const quiet = { chunk: () => {}, restart: () => {}, fail: () => {} };
     const first = await startScreenStream(udid!, quiet);
 
@@ -159,21 +158,20 @@ describe('luồng video trên máy thật', () => {
     }, 400);
     try {
       await new Promise((resolve) => setTimeout(resolve, 2_000));
-      const second = await startScreenStream(udid!, {
-        chunk: (d: Buffer) => late.push(d), restart: () => {}, fail: () => {},
-      });
-      // Phần giữ đưa ngay, không phải chờ bộ mã hoá làm gì cả — một giây là
-      // thừa để nó đi qua.
-      await new Promise((resolve) => setTimeout(resolve, 1_000));
+      const second = await startScreenStream(udid!, quiet);
+      // Phần giữ đi kèm handle chứ không tự đẩy vào sink: người xem phải nhận
+      // `meta` rồi mới dựng được bộ giải mã, nên THỨ TỰ do phía gọi quyết định.
+      // Bản đầu đẩy thẳng vào sink và nó tới trước `meta`, bị vứt sạch — ảnh
+      // đứng im, không một lỗi nào.
+      assert.ok(second.primer, 'người vào sau phải nhận được phần đầu luồng');
+      const seen = kinds([second.primer!]);
+      assert.ok(seen.has(7), 'thiếu SPS — bộ giải mã không có tham số để dựng');
+      assert.ok(seen.has(5), 'thiếu khung khoá — bộ giải mã không có điểm bắt đầu');
       second.stop();
     } finally {
       clearInterval(moving);
       first.stop();
     }
-
-    const seen = kinds(late);
-    assert.ok(seen.has(7), 'thiếu SPS — bộ giải mã không có tham số để dựng');
-    assert.ok(seen.has(5), 'thiếu khung khoá — bộ giải mã không có điểm bắt đầu');
   });
 
   /**
@@ -273,27 +271,32 @@ describe('đầu vào trên máy thật', () => {
       chunk: () => {}, restart: () => {}, fail: () => {},
     });
     try {
-      spawnSync('adb', ['-s', udid!, 'shell', 'input', 'keyevent', 'KEYCODE_HOME']);
-      // Đóng rèm TRƯỚC khi đo: rèm đang mở sẵn từ một lượt chạy trước thì kéo
-      // nữa không đổi gì, và bài test đỏ vì điều kiện đầu vào chứ không vì
-      // điều nó muốn đo.
-      spawnSync('adb', ['-s', udid!, 'shell', 'cmd', 'statusbar', 'collapse']);
-      await new Promise((resolve) => setTimeout(resolve, 2_000));
+      // Cuộn một danh sách trong Cài đặt, KHÔNG kéo rèm thông báo từ mép trên:
+      // cú kéo từ mép là một cử chỉ của hệ thống, đi qua đường khác và chập
+      // chờn. Thứ cần đo là một cú chạm thường rơi đúng chỗ.
+      spawnSync('adb', ['-s', udid!, 'shell', 'am', 'force-stop', 'com.android.settings']);
+      // `--activity-clear-task`: không có cờ này, Cài đặt mở LẠI đúng trang con
+      // mà lần trước để dở. Một trang con ngắn thì cuộn không đổi gì, và bài
+      // test đỏ vì trang nó gặp chứ không vì cú quét.
+      spawnSync('adb', [
+        '-s', udid!, 'shell', 'am', 'start',
+        '-a', 'android.settings.SETTINGS', '--activity-clear-task',
+      ]);
+      await new Promise((resolve) => setTimeout(resolve, 3_500));
       const before = shot();
-      // Kéo rèm thông báo từ mép trên: làm được từ BẤT KỲ màn hình nào, nên bài
-      // test không phụ thuộc vào biểu tượng nào đang nằm ở đâu.
+
       const screen = await screenSize(udid!);
+      const middle = Math.round(screen.width / 2);
       await swipe(
         udid!,
-        { x: Math.round(screen.width / 2), y: 10 },
-        { x: Math.round(screen.width / 2), y: Math.round(screen.height * 0.6) },
+        { x: middle, y: Math.round(screen.height * 0.75) },
+        { x: middle, y: Math.round(screen.height * 0.3) },
         300,
       );
       await new Promise((resolve) => setTimeout(resolve, 2_500));
       assert.notEqual(shot(), before, 'màn hình không đổi — cú quét không tới được máy');
     } finally {
       handle.stop();
-      spawnSync('adb', ['-s', udid!, 'shell', 'cmd', 'statusbar', 'collapse']);
       spawnSync('adb', ['-s', udid!, 'shell', 'input', 'keyevent', 'KEYCODE_HOME']);
     }
   });

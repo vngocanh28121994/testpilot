@@ -103,6 +103,17 @@ export interface ScreenSize {
 export interface ScreenStreamHandle {
   /** Kích thước khung video đang gửi — KHÁC kích thước màn hình khi có `--size`. */
   readonly frame: { width: number; height: number };
+  /**
+   * Phần đầu luồng cho người xem VÀO SAU — gửi trước mọi mảnh trực tiếp.
+   *
+   * Trả về đây thay vì tự đẩy vào sink, vì THỨ TỰ chịu lực: người xem phải
+   * nhận `meta` (biết codec, biết kích thước) rồi mới dựng bộ giải mã. Bản đầu
+   * đẩy thẳng vào sink ngay trong `startScreenStream`, nên phần giữ tới TRƯỚC
+   * `meta` và bị vứt — luồng chạy tiếp bằng khung P và ảnh đứng im, không lỗi.
+   *
+   * Vắng mặt với người xem đầu tiên: luồng của họ vốn đã bắt đầu từ đầu.
+   */
+  readonly primer?: Buffer;
   stop(): void;
 }
 
@@ -289,22 +300,6 @@ function toFrame(state: StreamState, x: number, y: number): {
 }
 
 /**
- * Đưa người vừa vào phần đầu luồng, để họ dựng được hình ngay.
- *
- * Chi tiết vì sao cần và hai cách đã thử rồi bỏ: xem [h264.ts](./h264.ts).
- * Điều đáng giữ ở đây là nó KHÔNG đụng gì tới phiên đang chạy — người đang xem
- * không hề biết có ai vừa vào.
- */
-function prime(state: StreamState, sink: ScreenStreamSink): void {
-  const held = state.primer.primer();
-  if (!held) return;
-  // `restart` trước: nó bảo bộ giải mã phía trình duyệt dựng lại từ đầu, và
-  // phần gửi ngay sau đây đúng là một khởi đầu mới.
-  sink.restart();
-  sink.chunk(held);
-}
-
-/**
  * Thử mở phiên scrcpy và nối luồng của nó vào các sink.
  *
  * Trả về `false` thay vì ném: gọi được scrcpy hay không là chuyện của môi
@@ -360,8 +355,11 @@ export async function startScreenStream(
     existing.sinks.add(sink);
     // Người vào SAU chỉ nhận được khung P từ đây trở đi, và bộ giải mã không
     // dựng được gì từ chúng: trắng màn, không báo lỗi, không tự hết.
-    prime(existing, sink);
-    return { frame: existing.frame, stop: () => detach(udid, sink) };
+    return {
+      frame: existing.frame,
+      primer: existing.primer.primer(),
+      stop: () => detach(udid, sink),
+    };
   }
 
   const screen = await screenSize(udid);
