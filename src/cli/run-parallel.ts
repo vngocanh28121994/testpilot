@@ -1,7 +1,8 @@
 import { spawn } from 'node:child_process';
 import path from 'node:path';
 import { attachedDevices } from '../core/attachedDevices.js';
-import { devicesOf, loadConfig, type DeviceSpec, type TestPilotConfig } from '../config.js';
+import { loadConfig, type DeviceSpec, type TestPilotConfig } from '../config.js';
+import { pickTargets, type Args, type Target } from './parallelTargets.js';
 import { mergeRunLearnings } from '../core/learned.js';
 import type { Platform } from '../core/types.js';
 
@@ -25,36 +26,7 @@ import type { Platform } from '../core/types.js';
  * only safe when one process owns the merge, so that process is this one.
  */
 
-interface Args {
-  platforms: Platform[];
-  config?: string;
-  tag?: string;
-  includeQuarantined: boolean;
-  /** Which environment every device runs against; see config.environments. */
-  env?: string;
-  /** Bản đã cài sẵn trên máy, hay bản đã tải lên. Chuyển thẳng cho từng lượt con. */
-  appSource?: 'device' | 'upload';
-  /** Reinstall the app on every device even when already on this environment. */
-  reinstall: boolean;
-  /** Subset of device ids, as `id` or `platform:id`; all of them when omitted. */
-  only?: string[];
-}
 
-/** One device to drive, and the platform it belongs to. */
-interface Target {
-  platform: Platform;
-  device: DeviceSpec;
-  /**
-   * Whether the config names this device in a `devices` list.
-   *
-   * False means the platform declares only a `deviceName`, so `devicesOf`
-   * synthesised this entry. Such a run is passed no `--device` at all: it takes
-   * the ordinary single-device path, and its run directory keeps the ordinary
-   * unsuffixed name. Nothing can collide with it, because the only other run
-   * sharing that second is on the other platform and the platform is in the name.
-   */
-  named: boolean;
-}
 
 interface DeviceOutcome {
   target: Target;
@@ -253,61 +225,6 @@ function runOne(target: Target, args: Args, label: (t: Target) => string): Promi
   });
 }
 
-function pickTargets(cfg: TestPilotConfig, args: Args): Target[] {
-  const available: Target[] = args.platforms.flatMap((platform) => {
-    const named = Boolean(
-      (platform === 'android' ? cfg.android.devices : cfg.ios.devices)?.length,
-    );
-    return devicesOf(cfg, platform).map((device) => ({ platform, device, named }));
-  });
-
-  if (!args.only) {
-    if (available.length < 2) {
-      throw new Error(
-        `Only ${available.length} device is configured across ${args.platforms.join(', ')}, ` +
-        `so there is nothing to parallelise. Add entries to <platform>.devices, ` +
-        `name a second platform, or use the single-device run.`,
-      );
-    }
-    return available;
-  }
-
-  return args.only.map((token) => {
-    // `platform:id` when the same id exists on both platforms; a bare id while
-    // it is unambiguous, which it is in every single-platform run.
-    const [maybePlatform, maybeId] = token.includes(':') ? token.split(':', 2) : [undefined, token];
-    const matches = available.filter((t) =>
-      t.device.id === maybeId && (!maybePlatform || t.platform === maybePlatform));
-
-    if (matches.length === 0) {
-      throw new Error(
-        `--devices names "${token}", which is not configured. ` +
-        `Available: ${available.map((t) => `${t.platform}:${t.device.id}`).join(', ')}.`,
-      );
-    }
-    if (matches.length > 1) {
-      throw new Error(
-        `--devices names "${token}", which exists on ${matches.map((t) => t.platform).join(' and ')}. ` +
-        `Qualify it as ${matches.map((t) => `${t.platform}:${t.device.id}`).join(' or ')}.`,
-      );
-    }
-    return matches[0]!;
-  });
-}
-
-/**
- * Refuses to start when two sessions of the same kind would ask for one port.
- *
- * They fail late and confusingly otherwise: the second session either cannot
- * bind or quietly attaches to the first device's server, and the run that comes
- * back looks real. Cheaper to say so before any device is touched.
- *
- * Checked per platform, and only where a platform runs more than one device.
- * Android sessions contend for `systemPort` and iOS ones for `wdaLocalPort` —
- * different fields, so one phone and one iPhone never collide, and demanding
- * ports of them would turn the most ordinary cross-platform run into a config
- * chore for a conflict that cannot happen.
- */
 function assertPortsAreUnique(targets: Target[]): void {
   for (const platform of ['android', 'ios'] as const) {
     const onPlatform = targets.filter((t) => t.platform === platform);

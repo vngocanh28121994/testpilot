@@ -36,6 +36,17 @@ export interface DeviceTarget {
    * điều chưa hề kiểm tra.
    */
   attached?: boolean;
+  /**
+   * Tên chiếc MÁY TÍNH nó cắm vào.
+   *
+   * Từ lúc có runner cá nhân, "SM_S918B" một mình không nói được nó nằm ở
+   * laptop của ai hay ở phòng máy — mà đó là câu người dùng phải trả lời trước
+   * khi bấm chạy: chiếc ở bàn mình thì cắm rút tuỳ ý, chiếc ở phòng máy thì
+   * người khác cũng đang dùng.
+   */
+  runnerName?: string;
+  /** Máy cắm ở chính máy tính của người đang xem. */
+  mine?: boolean;
 }
 
 export const deviceToken = (t: DeviceTarget) => `${t.platform}:${t.id}`;
@@ -76,6 +87,46 @@ export function matchesQuery(target: DeviceTarget, query: string): boolean {
     .some((value) => value!.toLowerCase().includes(q));
 }
 
+/**
+ * Gom máy theo CHIẾC MÁY TÍNH nó cắm vào, máy của mình lên trước.
+ *
+ * Vì sao nhóm theo máy tính chứ không theo nền tảng như bản cũ: nền tảng đã
+ * được chọn ở ô phía trên và hiện ra trên từng chip, còn câu chưa ai trả lời
+ * là "chiếc này ở bàn tôi hay ở phòng máy". Hai thứ ấy khác nhau về hệ quả:
+ * máy ở bàn mình thì cắm rút tuỳ ý, máy phòng máy thì người khác cũng đang
+ * chờ.
+ *
+ * Vì sao KHÔNG phải hai tab: ô này chọn NHIỀU máy và chạy song song, nên chọn
+ * một máy của mình cùng một máy phòng máy là chuyện có thật — tab thì chỉ cho
+ * thấy một nửa, và dòng "2 máy — chạy song song" ở dưới sẽ nói về thứ đang bị
+ * giấu. Số máy ở đây cũng chỉ vài chiếc, chưa tới mức cần giấu bớt.
+ *
+ * Máy chưa biết nằm ở đâu (`runnerName` vắng) gom vào cuối chứ không bỏ đi:
+ * chúng vẫn chạy được, và giấu một chiếc máy dùng được là cách chắc chắn để
+ * người ta tưởng nó hỏng.
+ */
+export function groupByMachine(targets: DeviceTarget[]): Array<{
+  key: string; title: string; mine: boolean; list: DeviceTarget[];
+}> {
+  const order: string[] = [];
+  const byKey = new Map<string, DeviceTarget[]>();
+  for (const target of targets) {
+    const key = target.runnerName ?? '';
+    if (!byKey.has(key)) { byKey.set(key, []); order.push(key); }
+    byKey.get(key)!.push(target);
+  }
+  return order
+    .map((key) => ({
+      key: key || 'chưa-rõ',
+      title: key || 'chưa rõ máy',
+      list: byKey.get(key)!,
+      mine: byKey.get(key)!.some((t) => t.mine),
+    }))
+    // Máy của mình lên đầu: đó là chiếc người ta vừa cắm và đang định chạy.
+    // Giữ nguyên thứ tự còn lại, để danh sách không nhảy giữa hai lần dò.
+    .sort((a, b) => Number(b.mine) - Number(a.mine));
+}
+
 export function DeviceChips({
   targets,
   selected,
@@ -100,9 +151,7 @@ export function DeviceChips({
   const visible = targets.filter(
     (t) => matchesQuery(t, query) || selected.includes(deviceToken(t)),
   );
-  const groups = (['android', 'ios'] as const)
-    .map((platform) => [platform, visible.filter((t) => t.platform === platform)] as const)
-    .filter(([, list]) => list.length > 0);
+  const groups = groupByMachine(visible);
 
   return (
     <div className="border-border flex flex-col gap-2.5 rounded-lg border p-3">
@@ -129,11 +178,24 @@ export function DeviceChips({
       {groups.length === 0 && (
         <span className="text-muted-foreground text-xs">Không có thiết bị nào khớp.</span>
       )}
-      {groups.map(([platform, list]) => (
-        <div key={platform} className="flex flex-wrap items-baseline gap-x-2 gap-y-1.5">
-          <span className="text-muted-foreground w-14 shrink-0 text-[11px] tracking-wide uppercase">
-            {platform}
-          </span>
+      {groups.map(({ key, title, mine, list }) => (
+        // Tiêu đề đứng RIÊNG một dòng, không phải một cột hẹp bên trái: tên máy
+        // tính là thứ người ta tự đặt, và "MacBook-Air-cua-Tuoi.local" vỡ thành
+        // ba dòng trong một cột hẹp.
+        <div key={key} className="flex flex-col gap-1.5">
+          <div className="flex items-center gap-1.5">
+            <span className="text-muted-foreground text-[11px] tracking-wide uppercase">
+              {title}
+            </span>
+            {/* Nhãn chứ không dựa vào tên: tên máy do người dùng đặt, và
+                "laptop của Bình" không nói cho Bình biết đó là máy của mình. */}
+            {mine && (
+              <span className="border-border text-muted-foreground rounded border px-1 text-[10px]">
+                máy của bạn
+              </span>
+            )}
+          </div>
+          <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1.5">
           {list.map((target) => {
             const token = deviceToken(target);
             const on = selected.includes(token);
@@ -165,9 +227,15 @@ export function DeviceChips({
                   />
                 )}
                 {chipLabel(target)}
+                {/* Nền tảng lùi xuống thành nhãn nhỏ trên chip, vì nhóm ngoài
+                    giờ trả lời câu khác — máy này nằm ở đâu. */}
+                <span className="text-muted-foreground text-[10px] uppercase">
+                  {target.platform}
+                </span>
               </button>
             );
           })}
+          </div>
         </div>
       ))}
       <span className="text-muted-foreground text-xs">{selectionHint(selected, fallbackPlatform)}</span>

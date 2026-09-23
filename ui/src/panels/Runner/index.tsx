@@ -52,9 +52,6 @@ import type {
   ControlDeviceView,
   ControlTargetsResponse,
   PreflightResponse,
-  PrereqIosNamesResponse,
-  PrereqAdbResponse,
-  PrereqIosDevicesResponse,
   ReportView,
 } from '@core/ui/contracts.js';
 
@@ -116,32 +113,6 @@ export default function RunnerPanel() {
    * — "máy nào khi có nhiều máy cùng cắm" và "chạy trên mấy máy cùng lúc".
    */
   const [multi, setMulti] = useState<string[]>([]);
-  /**
-   * UDID của những máy đang thật sự cắm, dò cho CẢ hai nền tảng.
-   *
-   * `null` nghĩa là chưa dò lần nào — khác hẳn "dò rồi và không có máy nào".
-   * Preflight chỉ dò nền tảng đang chọn, nên một mình nó không đủ để vẽ trạng
-   * thái cho chip của nền tảng còn lại.
-   */
-  const [attachedUdids, setAttachedUdids] = useState<Set<string> | null>(null);
-  /** udid → tên máy đọc được, gom từ cả hai nền tảng sau khi dò. */
-  const [deviceNames, setDeviceNames] = useState<Record<string, string>>({});
-
-  /**
-   * Tên máy iOS, hỏi ngay khi mở màn.
-   *
-   * Không đợi người dùng bấm "Kiểm tra máy đang cắm": tên máy không đổi theo
-   * việc máy có đang cắm hay không, và tải lại trang mà chip tụt về
-   * "iPhone của Anh" — tên ai đó gõ vào Cài đặt — là mất đúng thứ vừa làm ra.
-   *
-   * Rẻ nên gọi được: `devicectl` mất 0,05 giây, khác hẳn `xctrace` 1,5 giây
-   * của endpoint danh sách đầy đủ.
-   */
-  const iosNames = useQuery({
-    queryKey: ['ios-device-names'],
-    queryFn: () => api.get<PrereqIosNamesResponse>(ROUTES.prereqIosNames),
-    staleTime: 5 * 60_000,
-  });
   const [detecting, setDetecting] = useState(false);
   const job = useStreamJob('local-run', STREAM_ROUTES.run);
 
@@ -273,80 +244,57 @@ export default function RunnerPanel() {
    * Cả những máy chưa cắm cũng hiện — chúng là thứ người ta mong thấy khi đi
    * tìm xem còn máy nào; giấu đi thì danh sách trông như config bị mất.
    */
-  const targets: DeviceTarget[] = useMemo(() => {
-    const cfg = state.data?.config;
-    const attached = new Set((preflight.data?.candidates ?? []).map((c) => c.id));
-    return (['android', 'ios'] as const).flatMap((p) =>
-      (cfg?.[p]?.devices ?? []).map((d) => ({
-        platform: p,
-        id: d.id,
-        deviceName: d.deviceName,
-        udid: d.udid,
-        // Đã dò cả hai nền tảng thì dùng kết quả đó; chưa dò thì chỉ nền
-        // tảng đang chọn mới biết được, phần còn lại để trống.
-        // Nhãn trong config đứng TRƯỚC mọi thứ dò được: nó do đội đặt, nằm
-        // trong repo, và không đổi theo việc ai đang cầm máy.
-        ...(() => {
-          const probed = d.udid ? deviceNames[d.udid] ?? iosNames.data?.names[d.udid] : undefined;
-          const name = d.label ?? probed;
-          return name ? { friendlyName: name } : {};
-        })(),
-        ...(attachedUdids
-          ? { attached: Boolean(d.udid && attachedUdids.has(d.udid)) }
-          : p === platform
-            ? { attached: attached.has(d.id) }
-            : {}),
-      })),
-    );
-  }, [state.data?.config, preflight.data?.candidates, platform, attachedUdids, deviceNames, iosNames.data]);
+  /**
+   * Máy để chọn — lấy từ SỔ MÁY, không từ config.
+   *
+   * Bản trước dựng danh sách này từ `config.<platform>.devices` của máy chủ.
+   * Điều đó đúng khi cả hệ thống chạy trên một chiếc máy, và sai hẳn từ lúc
+   * điện thoại có thể cắm ở laptop người khác: config của máy chủ không biết
+   * chiếc máy ấy tồn tại, nên nó không bao giờ hiện ra để chọn. Cùng một lỗi
+   * đã sửa ở màn Điều khiển và ở đường đặt job.
+   *
+   * Đổi lại, token gửi đi mang `udid` thay cho `id` trong config —
+   * `pickTargets` nhận cả hai.
+   */
+  const targets: DeviceTarget[] = useMemo(
+    () => (registry.data?.devices ?? []).map((device) => ({
+      platform: device.platform,
+      id: device.udid,
+      udid: device.udid,
+      friendlyName: device.label,
+      ...(device.runnerName ? { runnerName: device.runnerName } : {}),
+      ...(device.mine !== undefined ? { mine: device.mine } : {}),
+      // Sổ máy đã biết máy nào đang cắm; không phải dò lại bằng preflight.
+      attached: !device.offline,
+    })),
+    [registry.data],
+  );
 
   /**
-   * Dò cả android lẫn ios, rồi tự tích những máy đang cắm.
+   * Làm mới sổ máy, rồi tích sẵn những máy đang cắm.
    *
-   * Server quyết định "đang cắm" nghĩa là gì. Tự suy ra từ danh sách in ra sẽ
-   * đếm nhầm cả máy offline lẫn simulator vào — đúng cái bẫy master đã ghi lại.
+   * Bản trước gọi thẳng `prereq/adb` và `prereq/ios-devices` — tức là hỏi
+   * CHÍNH chiếc máy tính đang chạy tiến trình web xem nó đang cắm gì. Đúng khi
+   * cả hệ thống chạy trên một máy; vô nghĩa sau khi lên server, vì ở đó máy
+   * chủ không nhất thiết cắm gì còn điện thoại nằm trên laptop từng người.
+   *
+   * Sổ máy đã trả lời đúng câu ấy cho MỌI runner, và runner báo lại mỗi mười
+   * giây. Nên việc ở đây chỉ còn là hỏi lại sổ ngay thay vì chờ nhịp sau.
    *
    * Thay hẳn lựa chọn chứ không cộng thêm: một máy không cắm thì chạy cũng
-   * không được — run-parallel bỏ qua nó — nên để nó tích chỉ là hứa một lượt
-   * chạy sẽ không xảy ra.
+   * không được, nên để nó tích chỉ là hứa một lượt chạy sẽ không xảy ra.
    */
   const detectDevices = async () => {
     setDetecting(true);
     try {
-      const [android, ios] = await Promise.all([
-        api.get<PrereqAdbResponse>(ROUTES.prereqAdb).catch(() => ({ devices: [] })),
-        api
-          .get<PrereqIosDevicesResponse>(ROUTES.prereqIosDevices)
-          .catch(() => ({ attached: [] as string[], names: {} as Record<string, string> })),
-      ]);
-      setDeviceNames({
-        ...(ios.names ?? {}),
-        // Android: tên thương mại nếu máy khai, không thì mã máy kèm hãng.
-        ...Object.fromEntries(
-          android.devices
-            .filter((d) => d.state === 'device')
-            // CHỈ tên thương mại máy tự khai. Ghép hãng + mã máy ra
-            // "samsung SM-S938B" — dài hơn `deviceName` trong config mà không
-            // nói thêm được gì.
-            .map((d) => [d.id, d.marketName ?? ''])
-            .filter(([, name]) => Boolean(name)),
-        ),
-      });
-      const udids = new Set<string>([
-        ...android.devices.filter((d) => d.state === 'device').map((d) => d.id),
-        ...(ios.attached ?? []),
-      ]);
-      setAttachedUdids(udids);
-      const cfg = state.data?.config;
-      const ticked = (['android', 'ios'] as const).flatMap((p) =>
-        (cfg?.[p]?.devices ?? [])
-          .filter((d) => d.udid && udids.has(d.udid))
-          .map((d) => deviceToken({ platform: p, id: d.id })),
-      );
-      setMulti(ticked);
+      const fresh = await registry.refetch();
+      const online = (fresh.data?.devices ?? []).filter((device) => !device.offline);
+      setMulti(online.map((device) => deviceToken({
+        platform: device.platform, id: device.udid,
+      })));
       toast.success(
-        ticked.length > 0
-          ? `${ticked.length} máy đang cắm, đã tích sẵn.`
+        online.length > 0
+          ? `${online.length} máy đang cắm, đã tích sẵn.`
           : 'Không thấy máy nào đang cắm.',
       );
     } finally {
