@@ -47,6 +47,33 @@ const KEYS: Record<'android' | 'ios', Array<{ key: string; label: string }>> = {
   ],
 };
 
+/**
+ * Hai chiếc máy cùng đời thì cùng tên — thêm số sê-ri cho đúng những cái ấy.
+ *
+ * Nhãn của máy là tên model chứ không phải số sê-ri, vì "Samsung SM-S918B"
+ * nhận ra được còn "R5CW525G35Y" thì phải đi tra. Nhưng một phòng máy có hai
+ * chiếc S23 là chuyện thường, và lúc ấy hai dòng giống hệt nhau còn tệ hơn
+ * hai số sê-ri: người ta chọn nhầm mà không biết mình đã chọn nhầm.
+ *
+ * Chỉ thêm vào những dòng THẬT SỰ trùng. Gắn số sê-ri vào mọi dòng để phòng
+ * xa là bắt mọi người đọc một chuỗi mười một ký tự mỗi ngày vì một trường hợp
+ * họ có thể không bao giờ gặp.
+ */
+export function withDistinctLabels(
+  devices: ReadonlyArray<{ udid: string; label: string }>,
+): Array<{ value: string; label: string }> {
+  const seen = new Map<string, number>();
+  for (const device of devices) {
+    seen.set(device.label, (seen.get(device.label) ?? 0) + 1);
+  }
+  return devices.map((device) => ({
+    value: device.udid,
+    label: (seen.get(device.label) ?? 0) > 1
+      ? `${device.label} · ${device.udid}`
+      : device.label,
+  }));
+}
+
 export default function DeviceControlPanel() {
   const canvas = useRef<HTMLCanvasElement>(null);
   const { state, hold, release, send } = useDeviceControl(canvas);
@@ -128,10 +155,7 @@ export default function DeviceControlPanel() {
             // chung đã quy đổi sẵn cho trường hợp ấy.
             options={[
               { value: '', label: '— chọn máy —' },
-              ...(devices.data ?? []).map((device) => ({
-                value: device.udid,
-                label: device.label,
-              })),
+              ...withDistinctLabels(devices.data ?? []),
             ]}
           />
 

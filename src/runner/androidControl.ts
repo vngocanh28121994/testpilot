@@ -361,16 +361,69 @@ export async function attachedDevices(): Promise<Array<{ udid: string; label: st
     .filter(Boolean);
 
   return Promise.all(ids.map(async (udid) => {
-    const props = await run(['shell', 'getprop'], udid, 5_000).catch(() => '');
-    const read = (key: string): string | undefined =>
-      new RegExp(`^\\\\[${key}\\\\]: \\\\[(.*)\\\\]$`, 'm').exec(props)?.[1]?.trim() || undefined;
-    const name = read('ro.product.marketname') ?? read('ro.config.marketing_name')
-      ?? read('ro.product.model') ?? udid;
-    const version = read('ro.build.version.release');
-    return {
-      udid,
-      label: [name, version && `Android ${version}`,
-        udid.startsWith('emulator-') ? 'emulator' : undefined].filter(Boolean).join(' · '),
-    };
+    const props = parseProps(await run(['shell', 'getprop'], udid, 5_000).catch(() => ''));
+    return { udid, label: deviceLabel(udid, props) };
   }));
+}
+
+/**
+ * `getprop` → bảng tra.
+ *
+ * Phân tích MỘT LẦN thay vì dựng một `RegExp` cho mỗi khoá. Bản đầu làm cách
+ * thứ hai và nó hỏng theo kiểu tệ nhất: chuỗi mẫu bị thừa dấu escape
+ * (`\\\\[` thay vì `\\[`), nên regex không khớp được dòng nào — và vì mọi
+ * phép đọc đều có `?? udid` đứng sau, nó KHÔNG báo lỗi. Nó chỉ lặng lẽ trả về
+ * số sê-ri cho mọi chiếc máy, suốt nhiều tuần, cho tới khi có người cắm một
+ * chiếc điện thoại thật vào và hỏi "máy này là máy gì".
+ *
+ * Một hàm thuần thì test được bằng đúng thứ `adb` in ra.
+ */
+export function parseProps(output: string): Map<string, string> {
+  const props = new Map<string, string>();
+  for (const line of output.split('\n')) {
+    const at = line.indexOf(']: [');
+    if (at < 1 || !line.startsWith('[') || !line.trimEnd().endsWith(']')) continue;
+    const key = line.slice(1, at);
+    const value = line.slice(at + 4, line.trimEnd().length - 1).trim();
+    if (key && value) props.set(key, value);
+  }
+  return props;
+}
+
+/**
+ * Tên đọc được của một chiếc máy Android.
+ *
+ * Thứ tự ưu tiên là thứ tự "người ta gọi nó là gì" giảm dần. Samsung không
+ * khai tên thương mại trong `getprop` — một chiếc Galaxy S23 Ultra chỉ nói
+ * `SM-S918B` — nên ghép thêm hãng vào: "Samsung SM-S918B" nhận ra được, còn
+ * "SM-S918B" một mình thì phải đi tra.
+ *
+ * Rơi về `udid` là đường CUỐI. Nó đúng về mặt kỹ thuật và vô dụng với người
+ * đang chọn máy, nên mọi nhánh trên tồn tại để không phải dùng tới nó.
+ */
+export function deviceLabel(udid: string, props: Map<string, string>): string {
+  const get = (key: string): string | undefined => props.get(key)?.trim() || undefined;
+  const emulator = udid.startsWith('emulator-');
+  const model = get('ro.product.model');
+  const maker = get('ro.product.manufacturer');
+  const name = get('ro.product.marketname')
+    ?? get('ro.config.marketing_name')
+    // Máy giả lập KHÔNG ghép hãng: "Google sdk_gphone64_arm64" dài hơn mà
+    // không nói thêm gì — hậu tố "· emulator" ở dưới đã trả lời câu hỏi mà
+    // tên hãng định trả lời.
+    ?? (model && maker && !emulator && !model.toLowerCase().startsWith(maker.toLowerCase())
+      ? `${capitalise(maker)} ${model}`
+      : model)
+    ?? udid;
+  const version = get('ro.build.version.release');
+  return [
+    name,
+    version && `Android ${version}`,
+    emulator ? 'emulator' : undefined,
+  ].filter(Boolean).join(' · ');
+}
+
+/** `samsung` → `Samsung`. Hãng khai bằng chữ thường; người đọc thì không viết thế. */
+function capitalise(word: string): string {
+  return word.charAt(0).toUpperCase() + word.slice(1);
 }
