@@ -25,6 +25,7 @@
 import { get, request } from 'node:http';
 import { FrameDeduper, MjpegSplitter } from './mjpeg.js';
 import type { ScreenSize, ScreenStreamHandle, ScreenStreamSink } from './androidControl.js';
+import type { IosSigning } from '../protocol/control.js';
 
 const APPIUM = { host: '127.0.0.1', port: Number(process.env.TESTPILOT_APPIUM_PORT ?? 4723) };
 const MJPEG_PORT = Number(process.env.TESTPILOT_MJPEG_PORT ?? 9100);
@@ -105,7 +106,38 @@ async function appium<T>(
  */
 const sessions = new Map<string, Promise<Session>>();
 
-async function openSession(udid: string): Promise<Session> {
+/**
+ * Chữ ký WDA thành capability — cùng cách `drivers/native.ts` làm cho lượt
+ * chạy test, để một chiếc iPhone đã chạy test được thì cũng xem được.
+ *
+ * Dùng lại WDA đã cài thì KHÔNG gửi cờ ký: Appium bỏ hẳn xcodebuild, và gửi
+ * kèm chỉ khiến nó build lại — rồi iOS hỏi tin cậy lại.
+ */
+export function signingCaps(signing: IosSigning | undefined): Record<string, unknown> {
+  if (!signing) return {};
+  return {
+    ...(signing.wdaLocalPort ? { 'appium:wdaLocalPort': signing.wdaLocalPort } : {}),
+    ...(signing.usePrebuiltWDA ? { 'appium:usePrebuiltWDA': true } : {}),
+    ...(signing.derivedDataPath ? { 'appium:derivedDataPath': signing.derivedDataPath } : {}),
+    ...(signing.usePreinstalledWDA && signing.wdaBundleId
+      ? { 'appium:usePreinstalledWDA': true, 'appium:updatedWDABundleId': signing.wdaBundleId }
+      : {}),
+    ...(!signing.usePreinstalledWDA && signing.teamId
+      ? {
+        'appium:xcodeOrgId': signing.teamId,
+        'appium:xcodeSigningId': signing.signingId ?? 'Apple Development',
+        ...(signing.wdaBundleId ? { 'appium:updatedWDABundleId': signing.wdaBundleId } : {}),
+        'appium:allowProvisioningDeviceRegistration': true,
+      }
+      : {}),
+    // Build WDA lần đầu cho máy thật mất vài phút; mặc định 60s của Appium
+    // bỏ ngang một bản build đang chạy bình thường.
+    'appium:wdaLaunchTimeout': signing.usePreinstalledWDA ? 60_000 : 10 * 60_000,
+    'appium:showXcodeLog': true,
+  };
+}
+
+async function openSession(udid: string, signing?: IosSigning): Promise<Session> {
   const created = await appium<{ sessionId: string }>('POST', '/session', {
     capabilities: {
       alwaysMatch: {
@@ -119,6 +151,7 @@ async function openSession(udid: string): Promise<Session> {
         // Mười phút im lặng thì Appium mới tự đóng phiên. Người ta nhìn một
         // màn hình rồi đi pha cà phê là chuyện thường.
         'appium:newCommandTimeout': 600,
+        ...signingCaps(signing),
       },
       firstMatch: [{}],
     },
@@ -137,10 +170,41 @@ async function openSession(udid: string): Promise<Session> {
   };
 }
 
-async function session(udid: string): Promise<Session> {
+/**
+ * Câu Appium cho mọi thứ hỏng quanh WDA là "xcodebuild failed with code NN" —
+ * tiếng Anh, và không nói gì về việc phải làm. Hai mã hay gặp nhất trên iPhone
+ * thật, đo trên chính máy dev (iPhone 12 Pro Max, Apple ID miễn phí):
+ *
+ * - 70: iOS từ chối CÀI — "This provisioning profile has expired". Profile
+ *   của Apple ID miễn phí chỉ sống 7 ngày, và `usePrebuiltWDA` cài lại đúng
+ *   bản cũ mang profile đã chết.
+ * - 65: cài được nhưng iOS từ chối MỞ — chứng chỉ chưa được tin cậy trên máy.
+ *   Luôn xảy ra ngay sau khi profile được cấp lại.
+ *
+ * Giữ nguyên câu gốc ở cuối để ai cần vẫn tra được.
+ */
+export function explainWdaStart(message: string): string {
+  if (/xcodebuild failed with code 70/i.test(message)) {
+    return 'iPhone từ chối cài WebDriverAgent — thường là vì provisioning profile đã hết hạn '
+      + '(Apple ID miễn phí chỉ cho 7 ngày). Dựng lại WDA một lần để Xcode cấp profile mới: '
+      + 'tạm tắt ios.usePrebuiltWDA rồi mở lại, hoặc chạy `bash scripts/prepare-wda.sh`. '
+      + `Nguyên văn: ${message}`;
+  }
+  if (/xcodebuild failed with code 65/i.test(message)) {
+    return 'WebDriverAgent đã cài nhưng iPhone không cho mở — thường là chứng chỉ nhà phát '
+      + 'triển chưa được tin cậy. Trên điện thoại: Cài đặt › Cài đặt chung › VPN & Quản lý '
+      + 'thiết bị › chọn chứng chỉ › Tin cậy, mở khoá máy, rồi bấm Giữ máy lại. '
+      + `Nguyên văn: ${message}`;
+  }
+  return message;
+}
+
+async function session(udid: string, signing?: IosSigning): Promise<Session> {
   let pending = sessions.get(udid);
   if (!pending) {
-    pending = openSession(udid);
+    pending = openSession(udid, signing).catch((err: Error) => {
+      throw new Error(explainWdaStart(err.message));
+    });
     sessions.set(udid, pending);
     // Dựng hỏng thì XOÁ lời hứa hỏng đi: giữ lại nghĩa là mọi lần thử sau đều
     // nhận lại đúng lỗi cũ, kể cả sau khi người dùng đã sửa nguyên nhân.
@@ -149,8 +213,8 @@ async function session(udid: string): Promise<Session> {
   return pending;
 }
 
-export async function screenSize(udid: string): Promise<ScreenSize> {
-  return (await session(udid)).screen;
+export async function screenSize(udid: string, signing?: IosSigning): Promise<ScreenSize> {
+  return (await session(udid, signing)).screen;
 }
 
 /* ── Luồng màn hình ───────────────────────────────────────────────────── */
@@ -172,6 +236,7 @@ const streams = new Map<string, {
 export async function startScreenStream(
   udid: string,
   sink: ScreenStreamSink,
+  signing?: IosSigning,
 ): Promise<ScreenStreamHandle> {
   const existing = streams.get(udid);
   if (existing) {
@@ -179,7 +244,7 @@ export async function startScreenStream(
     return { frame: existing.frame, stop: () => detach(udid, sink) };
   }
 
-  const open = await session(udid);
+  const open = await session(udid, signing);
   const state = {
     sinks: new Set([sink]),
     // Khung MJPEG là PIXEL đã thu nhỏ; kích thước thật của ảnh do WDA quyết
@@ -357,7 +422,37 @@ const KEY_CHARS: Record<string, string> = {
   delete: String.fromCharCode(0xe003),
 };
 
-/** Simulator đang bật + máy thật đang cắm. Dùng cho danh sách chọn máy. */
+/**
+ * iPhone thật đang cắm và dùng được — cùng luật với preflight
+ * (`usableFromDevicectl`), để màn Điều khiển và phép kiểm trước khi chạy
+ * không bao giờ nói khác nhau về cùng một chiếc máy.
+ */
+export async function connectedIphones(): Promise<Array<{ udid: string; label: string }>> {
+  const { execFile } = await import('node:child_process');
+  const { mkdtemp, readFile, rm } = await import('node:fs/promises');
+  const { tmpdir } = await import('node:os');
+  const path = await import('node:path');
+  const { usableFromDevicectl } = await import('../core/iosDevices.js');
+  const dir = await mkdtemp(path.join(tmpdir(), 'tp-devicectl-'));
+  const out = path.join(dir, 'devices.json');
+  try {
+    await new Promise<void>((resolve, reject) => {
+      execFile('xcrun', ['devicectl', 'list', 'devices', '--json-output', out], { timeout: 20_000 },
+        (err) => (err ? reject(err) : resolve()));
+    });
+    return usableFromDevicectl(JSON.parse(await readFile(out, 'utf8'))).map((device) => ({
+      udid: device.udid,
+      label: [device.name ?? 'iPhone', device.osVersion && `iOS ${device.osVersion}`]
+        .filter(Boolean).join(' · '),
+    }));
+  } catch {
+    return [];
+  } finally {
+    await rm(dir, { recursive: true, force: true }).catch(() => undefined);
+  }
+}
+
+/** Simulator đang bật. Dùng cho danh sách chọn máy. */
 export async function bootedSimulators(): Promise<Array<{ udid: string; label: string }>> {
   const { execFile } = await import('node:child_process');
   return new Promise((resolve) => {

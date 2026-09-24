@@ -14,7 +14,8 @@
  * kiểm cho SSE ở P2.6. Khi nào đổi sang scrcpy để hạ độ trễ thì lúc ấy mới cần
  * kênh nhị phân, và lúc ấy nginx đã có sẵn `Upgrade`.
  */
-import { checkAction, type ControlPlatform, type ControlTarget } from '../../protocol/control.js';
+import { checkAction, type ControlPlatform, type ControlTarget, type IosSigning } from '../../protocol/control.js';
+import { loadConfig } from '../../config.js';
 import { allows } from '../auth/roles.js';
 import { codecFor } from '../../runner/control.js';
 import { localRunner } from '../../runner/index.js';
@@ -140,7 +141,7 @@ export const controlRoutes: RouteTable = {
     if (!deviceId || !leaseId || !platform) {
       return json(res, 400, { error: 'Thiếu deviceId, leaseId hoặc platform.' });
     }
-    const target: ControlTarget = { platform, udid: deviceId };
+    const target = await controlTarget(ctx.configFile, platform, deviceId);
     const held = await heldBy(ctx, deviceId, leaseId);
     if (!held.ok) return json(res, held.status, { error: held.error });
 
@@ -226,7 +227,7 @@ export const controlRoutes: RouteTable = {
     if (!deviceId || !leaseId || !platform || !body.action) {
       return json(res, 400, { error: 'Thiếu deviceId, leaseId, platform hoặc action.' });
     }
-    const target: ControlTarget = { platform, udid: deviceId };
+    const target = await controlTarget(ctx.configFile, platform, deviceId);
 
     const held = await heldBy(ctx, deviceId, leaseId);
     if (!held.ok) return json(res, held.status, { error: held.error });
@@ -266,3 +267,25 @@ export const controlRoutes: RouteTable = {
     return json(res, 200, { ok: true });
   },
 };
+
+/**
+ * Máy đích, kèm chữ ký WDA khi là iPhone — đọc từ config của NGƯỜI ĐANG XEM,
+ * cùng các trường `ios.*` mà lượt chạy test dùng, để hai đường không ký khác
+ * nhau. Config hỏng không chặn simulator: nó không cần chữ ký.
+ */
+async function controlTarget(configFile: string, platform: ControlPlatform, udid: string): Promise<ControlTarget> {
+  if (platform !== 'ios') return { platform, udid };
+  const cfg = await loadConfig(configFile).catch(() => undefined);
+  if (!cfg) return { platform, udid };
+  const ios = cfg.ios;
+  const port = ios.devices?.find((device) => device.udid === udid)?.wdaLocalPort;
+  const signing: IosSigning = {
+    ...(ios.teamId ? { teamId: ios.teamId, signingId: ios.signingId ?? 'Apple Development' } : {}),
+    ...(ios.wdaBundleId ? { wdaBundleId: ios.wdaBundleId } : {}),
+    ...(ios.usePreinstalledWDA ? { usePreinstalledWDA: true } : {}),
+    ...(ios.usePrebuiltWDA ? { usePrebuiltWDA: true } : {}),
+    ...(ios.derivedDataPath ? { derivedDataPath: ios.derivedDataPath } : {}),
+    ...(port ? { wdaLocalPort: port } : {}),
+  };
+  return { platform, udid, ...(Object.keys(signing).length > 0 ? { iosSigning: signing } : {}) };
+}

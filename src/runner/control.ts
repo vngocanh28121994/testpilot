@@ -26,7 +26,7 @@ export function codecFor(platform: ControlTarget['platform']): StreamCodec {
 
 export function screenSize(target: ControlTarget): Promise<ScreenSize> {
   return target.platform === 'ios'
-    ? ios.screenSize(target.udid)
+    ? ios.screenSize(target.udid, target.iosSigning)
     : android.screenSize(target.udid);
 }
 
@@ -35,7 +35,7 @@ export function startScreenStream(
   sink: ScreenStreamSink,
 ): Promise<ScreenStreamHandle> {
   return target.platform === 'ios'
-    ? ios.startScreenStream(target.udid, sink)
+    ? ios.startScreenStream(target.udid, sink, target.iosSigning)
     : android.startScreenStream(target.udid, sink);
 }
 
@@ -88,13 +88,16 @@ export interface ControlDevice extends ControlTarget {
  * người chỉ có Android không nên thấy màn hình lỗi vì máy họ không cài Xcode.
  */
 export async function controlDevices(): Promise<ControlDevice[]> {
-  const [androids, iphones] = await Promise.all([
+  const [androids, simulators, iphones] = await Promise.all([
     android.attachedDevices().catch(() => []),
     ios.bootedSimulators().catch(() => []),
+    // iPhone thật: thiếu dòng này thì sổ máy chỉ biết simulator, và chiếc máy
+    // mà preflight nói "đã cắm" biến khỏi mọi ô chọn máy dùng sổ.
+    ios.connectedIphones().catch(() => []),
   ]);
   return [
     ...androids.map((device) => ({ platform: 'android' as const, ...device })),
-    ...iphones.map((device) => ({ platform: 'ios' as const, ...device })),
+    ...[...simulators, ...iphones].map((device) => ({ platform: 'ios' as const, ...device })),
   ];
 }
 

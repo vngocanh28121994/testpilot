@@ -10,7 +10,7 @@
  */
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { attachedFromDevicectl } from '../iosDevices.js';
+import { attachedFromDevicectl, usableFromDevicectl } from '../iosDevices.js';
 
 const UDID = '00008101-00096DA21EF1001E';
 
@@ -48,5 +48,25 @@ describe('máy iOS nào đang thật sự cắm', () => {
   it('devicectl trả về rỗng thì không nổ', () => {
     assert.deepEqual(attachedFromDevicectl({}), []);
     assert.deepEqual(attachedFromDevicectl({ result: {} }), []);
+  });
+});
+
+describe('usableFromDevicectl — nhãn cho sổ máy', () => {
+  it('cùng luật với attachedFromDevicectl, kèm tên và phiên bản iOS', () => {
+    const parsed = { result: { devices: [
+      {
+        hardwareProperties: { udid: '00008101-00096DA21EF1001E', marketingName: 'iPhone 12 Pro Max' },
+        connectionProperties: { pairingState: 'paired', tunnelState: 'disconnected' },
+        deviceProperties: { osVersionNumber: '26.6.1' },
+      },
+      {
+        hardwareProperties: { udid: 'rut-ra-roi', marketingName: 'iPhone 15' },
+        connectionProperties: { pairingState: 'paired', tunnelState: 'unavailable' },
+      },
+    ] } };
+    assert.deepEqual(usableFromDevicectl(parsed), [
+      { udid: '00008101-00096DA21EF1001E', name: 'iPhone 12 Pro Max', osVersion: '26.6.1' },
+    ]);
+    assert.deepEqual(attachedFromDevicectl(parsed), ['00008101-00096DA21EF1001E']);
   });
 });

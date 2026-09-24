@@ -18,15 +18,36 @@
  * rút ra từ lâu, và người dùng tích vào đó rồi chờ một lượt chạy không bao giờ
  * chạy được.
  */
-export function attachedFromDevicectl(parsed: {
+export interface DevicectlJson {
   result?: { devices?: Array<{
-    hardwareProperties?: { udid?: string };
+    hardwareProperties?: { udid?: string; marketingName?: string };
     connectionProperties?: { tunnelState?: string; pairingState?: string };
+    deviceProperties?: { osVersionNumber?: string };
   }> };
-}): string[] {
+}
+
+export function attachedFromDevicectl(parsed: DevicectlJson): string[] {
+  return usableFromDevicectl(parsed).map((device) => device.udid);
+}
+
+/**
+ * Cùng luật với `attachedFromDevicectl`, kèm tên và phiên bản iOS — cho sổ
+ * máy, nơi một chiếc iPhone cần một cái nhãn đọc được.
+ *
+ * MỘT luật cho cả hai: preflight nói "máy thật: iPhone 12 Pro Max" trong khi
+ * màn Điều khiển không thấy chiếc máy ấy đâu là đúng thứ đã xảy ra khi sổ máy
+ * dò máy bằng một đường khác — nó chỉ biết tới simulator.
+ */
+export function usableFromDevicectl(parsed: DevicectlJson): Array<{
+  udid: string; name?: string; osVersion?: string;
+}> {
   return (parsed.result?.devices ?? [])
     .filter((d) => d.connectionProperties?.pairingState === 'paired')
     .filter((d) => d.connectionProperties?.tunnelState !== 'unavailable')
-    .map((d) => d.hardwareProperties?.udid)
-    .filter((u): u is string => Boolean(u));
+    .filter((d) => Boolean(d.hardwareProperties?.udid))
+    .map((d) => ({
+      udid: d.hardwareProperties!.udid!,
+      ...(d.hardwareProperties?.marketingName ? { name: d.hardwareProperties.marketingName } : {}),
+      ...(d.deviceProperties?.osVersionNumber ? { osVersion: d.deviceProperties.osVersionNumber } : {}),
+    }));
 }

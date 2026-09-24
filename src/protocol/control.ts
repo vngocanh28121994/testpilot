@@ -13,6 +13,23 @@ export type ControlPlatform = 'android' | 'ios';
 export interface ControlTarget {
   platform: ControlPlatform;
   udid: string;
+  /**
+   * Chữ ký WebDriverAgent cho iPhone THẬT — lấy từ config của người đang xem.
+   * Simulator không cần; máy thật thiếu nó thì Appium build WDA hỏng với
+   * "xcodebuild failed with code 65" và màn điều khiển đứng ở "đang mở".
+   */
+  iosSigning?: IosSigning;
+}
+
+/** Cùng các trường `ios.*` mà lượt chạy test dùng để ký WDA. */
+export interface IosSigning {
+  teamId?: string;
+  signingId?: string;
+  wdaBundleId?: string;
+  usePreinstalledWDA?: boolean;
+  usePrebuiltWDA?: boolean;
+  derivedDataPath?: string;
+  wdaLocalPort?: number;
 }
 
 /**
