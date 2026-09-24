@@ -40,6 +40,15 @@
         "--strictPort"
       ],
       "port": 4174
+    },
+    {
+      "name": "testpilot-server",
+      "runtimeExecutable": "bash",
+      "runtimeArgs": [
+        "-c",
+        "set -a && source .env.server && set +a && npm run ui"
+      ],
+      "port": 4300
     }
   ]
 }

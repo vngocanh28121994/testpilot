@@ -53,3 +53,8 @@ tmp_spreadsheet_preview/
 .testpilot/members.json
 dist-runner/
 *.tgz
+
+# Cấu hình chế độ server thật — chứa mật khẩu, không bao giờ vào git.
+.env.server
+.env.server.*
+!.env.server.example

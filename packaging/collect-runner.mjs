@@ -143,6 +143,23 @@ for (const asset of ASSETS) {
   fs.cpSync(from, path.join(out, asset), { recursive: true });
 }
 
+const BIN = {
+  'testpilot-runner': 'dist/runner/main.js',
+  'testpilot-runner-login': 'dist/cli/runner-login.js',
+};
+
+// Lệnh trong `bin` được shell chạy THẲNG — qua npm, qua launchd
+// (`/usr/local/bin/testpilot-runner`), qua systemd. Thiếu dòng shebang thì
+// shell đọc file JS như script shell và chết ở dòng đầu ("/**: is a
+// directory"). Kiểm trước đây chỉ chạy gói bằng `node main.js`, nên lỗi này
+// chỉ lộ ra trên máy người khác, lúc cài lần đầu.
+for (const rel of Object.values(BIN)) {
+  const file = path.join(out, rel);
+  const code = fs.readFileSync(file, 'utf8');
+  if (!code.startsWith('#!')) fs.writeFileSync(file, `#!/usr/bin/env node\n${code}`);
+  fs.chmodSync(file, 0o755);
+}
+
 fs.writeFileSync(
   path.join(out, 'package.json'),
   JSON.stringify({
@@ -150,10 +167,7 @@ fs.writeFileSync(
     version: manifest.version,
     description: 'Runner TestPilot: nhận job từ control plane và chạy test trên máy này.',
     type: 'module',
-    bin: {
-      'testpilot-runner': 'dist/runner/main.js',
-      'testpilot-runner-login': 'dist/cli/runner-login.js',
-    },
+    bin: BIN,
     files: ['dist', ...ASSETS],
     engines: manifest.engines,
     dependencies,
