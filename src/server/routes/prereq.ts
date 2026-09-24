@@ -18,6 +18,7 @@ import { preflight } from '../../core/preflight.js';
 import { localRunner } from '../../runner/index.js';
 import { json, readJson, stream } from '../http.js';
 import { remotePreflight, remoteRunsFor } from '../remoteRuns.js';
+import { describeBuild } from '../appBuilds.js';
 import type { RouteTable } from './types.js';
 
 export const prereqRoutes: RouteTable = {
@@ -100,10 +101,10 @@ export const prereqRoutes: RouteTable = {
       const udid = devicesOf(cfg, platform).find((item) => item.id === device)?.udid ?? device;
       const there = await remoteRunsFor(ctx).locate(udid);
       if (there) {
-        const appSource = url.searchParams.get('appSource');
-        return json(res, 200, remotePreflight(
-          platform, there, appSource === 'upload' || appSource === 'device' ? appSource : undefined,
-        ));
+        const build = url.searchParams.get('appSource') === 'upload'
+          ? await describeBuild(base, env, platform)
+          : undefined;
+        return json(res, 200, remotePreflight(platform, there, build));
       }
     }
     return json(res, 200, await preflight(platform, cfg, device));

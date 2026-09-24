@@ -52,6 +52,7 @@ export const RUNNER_ROUTES: ReadonlySet<string> = new Set([
   'POST /api/runner/result',
   'POST /api/runner/artifacts/sign',
   'POST /api/runner/artifacts/done',
+  'GET /api/runner/build',
 ]);
 
 export const ROUTE_POLICY: Record<string, Role> = {
@@ -144,6 +145,7 @@ export const ROUTE_POLICY: Record<string, Role> = {
   'POST /api/runner/result': 'runner_user',
   'POST /api/runner/artifacts/sign': 'runner_user',
   'POST /api/runner/artifacts/done': 'runner_user',
+  'GET /api/runner/build': 'runner_user',
 
   /* ── Chạy test: tiêu tiền, nhưng không đổi thứ người khác dựa vào ────── */
   'POST /api/run': 'runner_user',

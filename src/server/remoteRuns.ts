@@ -14,8 +14,10 @@
  * Nó là một interface, không phải lời gọi thẳng vào hàng đợi, để workflow test
  * được mà không cần dựng hàng đợi, sổ máy và sổ runner.
  */
-import type { JobState } from '../protocol/messages.js';
+import type { AppBuildRef, JobState } from '../protocol/messages.js';
 import type { PreflightResult } from '../core/preflight.js';
+import { loadConfig } from '../config.js';
+import { describeBuild, type BuildLookup } from './appBuilds.js';
 import { allows } from './auth/roles.js';
 import { waitForClose } from './routes/run.js';
 import type { RouteContext } from './routes/types.js';
@@ -103,6 +105,14 @@ export function remoteRunsFor(ctx: RouteContext): RemoteRuns {
       // duyệt kịch bản có thể đã sửa locator trong lúc chờ, và job phải chạy
       // với đúng thứ người ấy vừa sửa.
       const { data, revision } = await ctx.repos.registry.read();
+      // "Bản đã tải lên" là bản trên máy chủ; runner phải tải đúng bản ấy về.
+      // Tính NGAY LÚC ĐẶT JOB, cùng lý do với registry ở trên.
+      let appBuild: AppBuildRef | undefined;
+      if (request.appSource === 'upload') {
+        const found = await describeBuild(await loadConfig(ctx.configFile), request.env, request.platform);
+        if (!found.ok) throw new Error(found.reason);
+        appBuild = found.build;
+      }
       const job = await ctx.repos.queue.create({
         orgId: ctx.identity.orgId,
         kind: 'run_suite',
@@ -118,6 +128,7 @@ export function remoteRunsFor(ctx: RouteContext): RemoteRuns {
             feature: request.feature.name,
             ...(request.env ? { env: request.env } : {}),
             ...(request.appSource ? { appSource: request.appSource } : {}),
+            ...(appBuild ? { appBuild } : {}),
           },
           snapshot: {
             registryRevision: revision ?? '',
@@ -156,7 +167,11 @@ export function remoteRunsFor(ctx: RouteContext): RemoteRuns {
 export function remotePreflight(
   platform: 'android' | 'ios' | string,
   device: RemoteDevice,
-  appSource?: 'device' | 'upload',
+  /**
+   * Bản build máy chủ sẽ gửi đi, khi nguồn app là "bản đã tải lên". Người gọi
+   * tra bằng `describeBuild` — hàm này giữ thuần để test được không cần đĩa.
+   */
+  build?: BuildLookup,
 ): PreflightResult {
   const where = device.runnerName ?? device.runnerId;
   const checks = [
@@ -179,17 +194,16 @@ export function remotePreflight(
           ? `${where} chưa báo trạng thái môi trường; runner sẽ tự kiểm lúc nhận job.`
           : `${where} sẵn sàng chạy ${platform}.`,
     },
-    // "Bản đã tải lên" CHƯA đi được sang runner ở xa: `RunSuiteParams.appKey`
-    // có khai báo nhưng chưa runner nào đọc nó. Cho qua ở đây nghĩa là runner
-    // cài bất cứ bản build nào đang nằm trên đĩa của CHÍNH nó — có thể là bản
-    // cũ ba tuần — rồi báo kết quả như thể đã chạy trên bản vừa tải. Với một
-    // bộ test chuyển tiền thật, sai kiểu ấy không được phép im lặng.
-    ...(appSource === 'upload' ? [{
-      name: 'Nguồn app',
-      ok: false,
-      detail: `Chưa gửi được bản đã tải lên sang ${where}. Chọn "Bản có sẵn trên thiết bị", `
-        + 'hoặc cắm máy vào chính máy chủ.',
-    }] : []),
+    // Bản build đi sang runner ở xa: nói tên và cỡ, vì lần đầu nó là vài trăm
+    // MB qua mạng và người bấm chạy nên biết vì sao bước đầu tiên lâu.
+    ...(build ? [build.ok
+      ? {
+        name: 'Bản build',
+        ok: true,
+        detail: `${build.build.name} (${Math.round(build.build.size / 1024 / 1024)} MB) — `
+          + `${where} sẽ tải về nếu chưa có đúng bản này.`,
+      }
+      : { name: 'Bản build', ok: false, detail: build.reason }] : []),
   ];
   return {
     platform: platform as PreflightResult['platform'],

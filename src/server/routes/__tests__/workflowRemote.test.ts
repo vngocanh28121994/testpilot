@@ -120,13 +120,26 @@ describe('workflow trên máy ở runner khác', () => {
     assert.equal(run.status, 'failed');
   });
 
-  it('chọn "bản đã tải lên" với máy ở xa thì dừng TRƯỚC khi đặt job', async () => {
+  it('"bản đã tải lên" mà máy chủ chưa có bản build thì dừng TRƯỚC khi đặt job', async () => {
     const { remote, sent } = fakeRemote(LAPTOP);
     await continueWorkflow(configFile, runId, () => {}, () => {}, 'upload', remote, historyFile);
-    assert.equal(sent.length, 0);
+    assert.equal(sent.length, 0, 'không được giữ máy của người khác chỉ để hỏng vì thiếu build');
     const run = (await History.load(historyFile)).find(runId)!;
     assert.equal(run.status, 'failed');
-    assert.ok(run.log.some((l) => l.includes('Chưa gửi được bản đã tải lên')));
+    assert.ok(run.log.some((l) => /bản build/i.test(l)));
+  });
+
+  it('"bản đã tải lên" có bản build thì gửi job, kèm nguồn app', async () => {
+    const apk = path.join(tmp, 'app.apk');
+    await writeFile(apk, 'không phải apk thật nhưng là một file');
+    const cfg = JSON.parse(await readFile(configFile, 'utf8'));
+    cfg.android = { ...(cfg.android ?? {}), app: apk };
+    await writeFile(configFile, JSON.stringify(cfg));
+
+    const { remote, sent } = fakeRemote(LAPTOP);
+    await continueWorkflow(configFile, runId, () => {}, () => {}, 'upload', remote, historyFile);
+    assert.equal(sent.length, 1);
+    assert.equal(sent[0]!.appSource, 'upload');
   });
 
   it('máy ở xa đang tắt thì dừng TRƯỚC khi đặt job', async () => {
@@ -152,14 +165,26 @@ describe('phép kiểm cho máy ở xa', () => {
     assert.equal(remotePreflight('android', unmeasured).ok, true);
   });
 
-  it('"bản đã tải lên" thì dừng — runner ở xa sẽ cài nhầm bản build của chính nó', () => {
-    // `appKey` có khai báo nhưng chưa runner nào đọc. Cho qua là để laptop
-    // cài bất cứ bản build cũ nào đang nằm trên đĩa của nó, rồi báo kết quả
-    // như thể đã chạy trên bản vừa tải.
-    const result = remotePreflight('android', LAPTOP, 'upload');
+  it('"bản đã tải lên": nói bản nào sẽ gửi đi, và cỡ của nó', () => {
+    // Lần đầu là vài trăm MB qua mạng; người bấm chạy nên biết vì sao bước
+    // đầu tiên lâu.
+    const result = remotePreflight('android', LAPTOP, {
+      ok: true, build: { key: 'build/app.apk', name: 'app.apk', sha256: 'a'.repeat(64), size: 215 * 1024 * 1024 },
+    });
+    assert.equal(result.ok, true);
+    const check = result.checks.find((c) => c.name === 'Bản build')!;
+    assert.match(check.detail, /app\.apk \(215 MB\)/);
+    assert.match(check.detail, /laptop của Bình/);
+  });
+
+  it('máy chủ chưa có bản build thì dừng, kèm lý do', () => {
+    const result = remotePreflight('android', LAPTOP, { ok: false, reason: 'Máy chủ chưa có bản build android.' });
     assert.equal(result.ok, false);
-    assert.ok(result.checks.some((c) => c.name === 'Nguồn app' && !c.ok));
-    assert.equal(remotePreflight('android', LAPTOP, 'device').ok, true);
+    assert.match(result.checks.find((c) => c.name === 'Bản build')!.detail, /chưa có bản build/);
+  });
+
+  it('"bản có sẵn trên thiết bị" thì không hỏi gì về bản build', () => {
+    assert.equal(remotePreflight('android', LAPTOP).checks.some((c) => c.name === 'Bản build'), false);
   });
 
   it('máy tính giữ nó thiếu driver thì dừng, kèm lý do của chính runner ấy', () => {

@@ -10,10 +10,11 @@
  *     khi job `failed`: dòng log đã nói rõ, và ném thêm một lỗi ở tầng request
  *     sẽ chồng một toast đỏ lên chính cái log đang giải thích.
  */
+import { createHash } from 'node:crypto';
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { Readable } from 'node:stream';
-import { mkdtemp, writeFile } from 'node:fs/promises';
+import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import type { IncomingMessage, ServerResponse } from 'node:http';
@@ -217,14 +218,17 @@ describe('POST /api/run tạo job', () => {
       pollMs: 5, runner: runner({ code: 0 }),
     });
     try {
+      // `device`, không `upload`: bài này đo đường đi của TỪNG TRƯỜNG. "Bản
+      // đã tải lên" kéo theo cả việc tra bản build trên máy chủ, và có bài
+      // riêng ở dưới.
       await postRun(queue, {
         platform: 'android', tag: '@p0', headed: true, includeQuarantined: true,
-        env: 'uat', appSource: 'upload', devices: ['android:emulator-5554'],
+        env: 'uat', appSource: 'device', devices: ['android:emulator-5554'],
       });
       const [job] = await queue.list();
       assert.deepEqual(job!.spec.run, {
         platform: 'android', tag: '@p0', headed: true, includeQuarantined: true,
-        env: 'uat', appSource: 'upload',
+        env: 'uat', appSource: 'device',
       });
       assert.deepEqual(job!.spec.deviceTokens, ['android:emulator-5554']);
       assert.equal(job!.spec.orgId, 'org-1');
@@ -388,3 +392,101 @@ describe('quyền dùng thiết bị khi tạo job', () => {
     assert.equal((await queue.list()).length, 0);
   });
 });
+
+/**
+ * "Bản đã tải lên" là bản trên MÁY CHỦ — nó phải đi theo job.
+ *
+ * Không có nó, runner ở laptop khác cài bản build nằm trên đĩa của chính nó,
+ * có thể là bản cũ ba tuần, rồi báo kết quả như thể đã chạy trên bản vừa tải.
+ */
+describe('POST /api/run và bản build', () => {
+  async function withBuildConfig(app?: string) {
+    const dir = await mkdtemp(path.join(tmpdir(), 'tp-build-'));
+    const configFile = path.join(dir, 'cfg.json');
+    await writeFile(configFile, JSON.stringify({
+      web: { baseUrl: 'https://example.test' },
+      android: { deviceName: 'Android Device', ...(app ? { app } : {}) },
+    }));
+    return { dir, configFile };
+  }
+
+  it('gắn bản build máy chủ vào job, kèm cỡ và hash', async () => {
+    const { dir, configFile } = await withBuildConfig();
+    const apk = path.join(dir, 'app.apk');
+    await writeFile(apk, 'nội dung bản build');
+    await writeFile(configFile, JSON.stringify({
+      web: { baseUrl: 'https://example.test' }, android: { deviceName: 'x', app: apk },
+    }));
+    const queue = new MemoryJobQueue();
+    try {
+      // Không bật worker: bài này đo thứ được ĐẶT vào hàng đợi.
+      const pending = postRun(queue, {
+        platform: 'android', appSource: 'upload', devices: ['android:emulator-5554'],
+      }, defaultDevices, 'u1', configFile);
+      await waitUntil(async () => (await queue.list()).length > 0);
+      const [job] = await queue.list();
+      const build = job!.spec.run!.appBuild!;
+      assert.equal(build.name, 'app.apk');
+      assert.equal(build.size, Buffer.byteLength('nội dung bản build'));
+      assert.equal(build.sha256, createHash('sha256').update('nội dung bản build').digest('hex'));
+      await close(queue, job!.id);
+      await pending;
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('máy ở runner KHÁC mà máy chủ không có bản build thì từ chối, không đặt job', async () => {
+    const { dir, configFile } = await withBuildConfig();
+    const queue = new MemoryJobQueue();
+    try {
+      const events = await postRun(queue, {
+        platform: 'android', appSource: 'upload', devices: ['android:emulator-5554'],
+      }, defaultDevices, 'u1', configFile);
+      assert.equal(events.refused.status, 400);
+      assert.match(String(events.refused.body.error), /bản build/);
+      assert.equal((await queue.list()).length, 0);
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('máy cắm ở CHÍNH máy chủ thì vẫn chạy như trước, không cần gửi bản build', async () => {
+    // Simulator iOS dùng bản `.app` là một thư mục — thứ chưa gửi qua mạng
+    // được — nhưng máy ở đây thì chẳng cần gửi đi đâu. Chặn ở đây là một hồi
+    // quy cho đúng cách chạy dùng hằng ngày.
+    const { dir, configFile } = await withBuildConfig();
+    const local = new MemoryDeviceRegistry();
+    await local.report(
+      { id: 'runner:local', orgId: 'org-1', visibility: 'shared' },
+      [{ platform: 'android', udid: 'emulator-5554', label: 'emulator' }],
+    );
+    const queue = new MemoryJobQueue();
+    try {
+      const pending = postRun(queue, {
+        platform: 'android', appSource: 'upload', devices: ['android:emulator-5554'],
+      }, local, 'u1', configFile);
+      await waitUntil(async () => (await queue.list()).length > 0);
+      const [job] = await queue.list();
+      assert.equal(job!.spec.run!.appBuild, undefined);
+      await close(queue, job!.id);
+      await pending;
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+});
+
+/** Đóng job thay cho một worker, để lượt POST đang chờ nó kết thúc. */
+async function close(queue: MemoryJobQueue, id: string): Promise<void> {
+  await queue.claim({ runnerId: 'test' });
+  await queue.finish(id, { type: 'job.result', jobId: id, state: 'succeeded' });
+}
+
+async function waitUntil(check: () => Promise<boolean>, within = 2_000): Promise<void> {
+  const deadline = Date.now() + within;
+  while (!(await check())) {
+    if (Date.now() > deadline) throw new Error('hết giờ chờ');
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  }
+}

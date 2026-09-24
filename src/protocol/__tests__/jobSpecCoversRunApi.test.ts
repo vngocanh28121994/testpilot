@@ -73,7 +73,7 @@ describe('JobSpec phủ hết POST /api/run', () => {
         includeQuarantined: false,
         env: 'sit',
         appSource: 'upload',
-        appKey: 'builds/org-1/app-sit.apk',
+        appBuild: { key: 'build/sit/app-sit.apk', name: 'app-sit.apk', sha256: 'ab', size: 1 },
       },
       snapshot: { registryRevision: 'r42', registry: {}, features: [] },
     };

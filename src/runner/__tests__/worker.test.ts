@@ -9,7 +9,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { existsSync } from 'node:fs';
-import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { MemoryJobQueue } from '../../server/queue/memoryQueue.js';
@@ -769,6 +769,96 @@ describe('worker trong mô hình nhiều runner', () => {
     } finally {
       worker.stop();
       await rm(tmp, { recursive: true, force: true });
+    }
+  });
+});
+
+describe('worker và bản build của máy chủ', () => {
+  const build = { key: 'build/app.apk', name: 'app.apk', sha256: 'a'.repeat(64), size: 3 };
+
+  function uploadJob(withBuild: boolean) {
+    return {
+      orgId: 'org-1', kind: 'run_suite' as const, createdBy: 'u1',
+      spec: {
+        orgId: 'org-1', kind: 'run_suite' as const, createdBy: 'u1', timeoutMs: 60_000,
+        deviceTokens: ['android:emulator-5554'],
+        run: { platform: 'android', appSource: 'upload' as const, ...(withBuild ? { appBuild: build } : {}) },
+      },
+    };
+  }
+
+  it('"bản đã tải lên": cài ĐÚNG file máy chủ chọn, ở mọi môi trường', async () => {
+    const tmp = await mkdtemp(path.join(os.tmpdir(), 'tp-wb-'));
+    const configFile = path.join(tmp, 'cfg.json');
+    // Config runner có bản SIT RIÊNG của laptop — đúng thứ không được cài.
+    await writeFile(configFile, JSON.stringify({
+      web: { baseUrl: 'https://example.test' },
+      android: { app: 'build/cua-laptop.apk' },
+      environments: { sit: { accounts: {}, android: { app: 'build/sit-cua-laptop.apk' } } },
+    }));
+    const fetched = path.join(tmp, 'da-tai.apk');
+    const asked: string[] = [];
+    let derived: Record<string, any> | undefined;
+
+    const queue = new MemoryJobQueue();
+    const { runner } = fakeRunner({ code: 0 });
+    const capturing = {
+      ...runner,
+      run: {
+        ...runner.run,
+        startSuite: async (...args: unknown[]) => {
+          derived = JSON.parse(await readFile(args[11] as string, 'utf8'));
+          return { code: 0, stopped: false, reportPaths: [], runDirs: [] };
+        },
+      },
+    } as unknown as typeof runner;
+    const job = await queue.create(uploadJob(true));
+    const worker = startWorker({
+      queue, leases: new MemoryLeaseRepo(), runnerId: 'lap', configFile, config,
+      pollMs: 5, runner: capturing, jobsRoot: tmp,
+      fetchBuild: async (jobId) => { asked.push(jobId); return fetched; },
+    });
+    try {
+      assert.equal(await settled(queue, job.id), 'succeeded');
+      assert.deepEqual(asked, [job.id], 'xin theo mã job');
+      assert.equal(derived!.android.app, fetched);
+      assert.equal(derived!.environments.sit.android.app, fetched, 'bản SIT của laptop không được thắng');
+    } finally {
+      worker.stop();
+      await rm(tmp, { recursive: true, force: true });
+    }
+  });
+
+  it('runner đứng riêng KHÔNG tự cài bản trên đĩa của nó khi máy chủ không gửi kèm', async () => {
+    const queue = new MemoryJobQueue();
+    const { runner, seen } = fakeRunner({ code: 0 });
+    const job = await queue.create(uploadJob(false));
+    const worker = startWorker({
+      queue, leases: new MemoryLeaseRepo(), runnerId: 'lap', configFile: 'x.json', config,
+      pollMs: 5, runner, fetchBuild: async () => 'không được gọi',
+    });
+    try {
+      assert.equal(await settled(queue, job.id), 'failed');
+      assert.deepEqual(seen.calls, [], 'không được bắt đầu lượt chạy');
+      assert.match((await queue.find(job.id))?.error ?? '', /không cài bản đang nằm trên đĩa/);
+    } finally {
+      worker.stop();
+    }
+  });
+
+  it('worker nhúng trong máy chủ bỏ qua bản build kèm theo — nó chung đĩa với máy chủ', async () => {
+    const queue = new MemoryJobQueue();
+    const { runner, seen } = fakeRunner({ code: 0 });
+    const job = await queue.create(uploadJob(true));
+    const worker = startWorker({
+      queue, leases: new MemoryLeaseRepo(), runnerId: 'local', configFile: 'x.json', config,
+      pollMs: 5, runner,
+    });
+    try {
+      assert.equal(await settled(queue, job.id), 'succeeded');
+      assert.equal(seen.calls.length, 1);
+    } finally {
+      worker.stop();
     }
   });
 });

@@ -280,10 +280,29 @@ Quy tắc:
   Người dùng đầu tiên là workflow của App Automation Studio: máy chọn cắm ở runner khác thì workflow
   đặt job lên hàng đợi thay vì `runSuite` tại chỗ ([remoteRuns.ts](src/server/remoteRuns.ts)).
 
-  Hai giới hạn còn lại, nói thẳng: job mang snapshot **chưa chạy song song** được (worker từ chối rõ
-  ràng thay vì lặng lẽ chạy sai bộ kịch bản), và **"bản đã tải lên" chưa đi sang runner ở xa** —
-  `RunSuiteParams.appKey` có khai báo nhưng chưa ai đọc, nên runner sẽ cài bản build nằm trên đĩa của
-  chính nó. Workflow chặn tổ hợp ấy ở bước kiểm môi trường.
+  Giới hạn còn lại: job mang snapshot **chưa chạy song song** được — worker từ chối rõ ràng thay vì
+  lặng lẽ chạy song song trên `features/` của máy ấy.
+
+  **"Bản đã tải lên" đi sang runner ở xa (24/09/2026).** Trước đó runner ở xa cài bản build nằm trên
+  đĩa của CHÍNH nó — có thể là bản cũ — rồi báo kết quả như thể đã chạy trên bản vừa tải lên. Nay:
+
+  - Lúc đặt job, máy chủ tính bản build bằng đúng phép `run.ts` dùng (`applyEnv` rồi `<platform>.app`,
+    kèm cả phép chặn "môi trường không có bản riêng thì không rơi về bản mặc định"), gói thành
+    `RunSuiteParams.appBuild` kèm SHA-256 ([appBuilds.ts](src/server/appBuilds.ts)).
+  - Runner tải về qua `GET /api/runner/build?job=<id>` — nó chỉ đưa MÃ JOB, không đưa đường dẫn, và chỉ
+    runner đang giữ job mới lấy được. Kiểm hash, giữ đệm theo hash, trần ba bản
+    ([appBuild.ts](src/runner/appBuild.ts)). Đo qua loopback: 205 MB tải và kiểm trong 0,6 giây; lần
+    hai lấy từ đệm.
+  - Config dẫn xuất trỏ bản build vào file ấy ở MỌI môi trường — chỉ trỏ bản gốc thì một
+    `environments.sit.android.app` riêng của laptop vẫn thắng.
+  - Chốt cuối ở phía runner: runner đứng riêng KHÔNG BAO GIỜ tự cài bản trên đĩa của nó cho một job
+    "bản đã tải lên" không kèm bản build — nó dừng bằng một câu.
+  - Worker nhúng trong máy chủ bỏ qua `appBuild`: nó chung đĩa và chung config với máy chủ, nên bản
+    trong config của nó đã là bản đúng. Đường chạy tại chỗ dùng hằng ngày không đổi gì.
+
+  Chưa gửi được: bản `.app` của simulator iOS (một THƯ MỤC, cần đóng gói), và lượt song song bắc cả
+  Android lẫn iOS (một trường không chứa được hai bản build). Cả hai dừng bằng câu nói rõ lý do khi máy
+  nằm ở runner khác; máy cắm ở chính máy chủ thì chạy như trước.
 
 ---
 

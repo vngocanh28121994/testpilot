@@ -23,6 +23,7 @@ import { readFile, readdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { applyEnv, assertEnvPackage, devicesOf, loadConfig, resolveModel, type TestPilotConfig } from '../../config.js';
 import { preflight, preflightSummary } from '../../core/preflight.js';
+import { describeBuild } from '../appBuilds.js';
 import {
   remotePreflight,
   remoteRunsFor,
@@ -374,12 +375,14 @@ export async function continueWorkflow(
   const preflightResults = await Promise.all(
     execution.platforms.map(async (platform) => {
       const there = away.get(platform);
-      return {
-        platform,
-        result: there
-          ? remotePreflight(platform, there, execution.appSource)
-          : await preflight(platform, cfg),
-      };
+      if (!there) return { platform, result: await preflight(platform, cfg) };
+      // "Bản đã tải lên" với máy ở xa: bản ấy phải đi sang được. Tra NGAY ở
+      // đây, trước khi đặt job, để một môi trường chưa có bản build dừng lại
+      // bằng một câu — không phải bằng một job đỏ sau khi đã giữ máy.
+      const build = execution.appSource === 'upload' && (platform === 'android' || platform === 'ios')
+        ? await describeBuild(cfg, execution.env, platform)
+        : undefined;
+      return { platform, result: remotePreflight(platform, there, build) };
     }),
   );
   for (const { platform, result } of preflightResults) {

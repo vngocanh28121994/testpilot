@@ -248,6 +248,8 @@ export function runSuiteParallel(
   log: (l: string) => void,
   env?: string,
   appSource?: 'device' | 'upload',
+  /** Config của riêng job — xem `runSuite`. `run-parallel` chuyển nó cho từng lượt con. */
+  configFile?: string,
 ) {
   return new Promise<void>((resolve, reject) => {
     const { bin, entry } = cliCommand('run-parallel');
@@ -255,6 +257,7 @@ export function runSuiteParallel(
       entry,
       '--platform', platform,
       '--devices', devices.join(','),
+      ...(configFile ? ['--config', configFile] : []),
       ...(env ? ['--env', env] : []),
       ...(appSource ? ['--app-source', appSource] : []),
       ...(appSource === 'upload' ? ['--reinstall'] : []),

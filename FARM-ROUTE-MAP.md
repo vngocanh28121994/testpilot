@@ -13,7 +13,12 @@ file nào. Kiến trúc: [FARM-ARCHITECTURE.md](FARM-ARCHITECTURE.md) · Kế ho
 | **R** | Runner. Chạm thiết bị hoặc tiến trình cục bộ; **không** được tồn tại trên control plane |
 | **LOCAL** | Chỉ còn ở chế độ `embedded`. Chế độ server phải trả 404 |
 
-Đếm: **CP 66 · JOB 8 · R 12 · LOCAL 1** — tổng 87. (P3.5 không thêm route nào; P3.4 thêm năm route `/api/runner/*`; P4.4b thêm bốn route registry/proposal; P4.2 thêm ba route chia sẻ máy; P2.5 thêm ba route artifact; `POST /api/devices/register` thêm máy đang cắm vào config.)
+Đếm: **CP 66 · JOB 8 · R 13 · LOCAL 1** — tổng 88. (`GET /api/runner/build` cho runner tải bản build của job nó đang giữ; P3.5 không thêm route nào; P3.4 thêm năm route `/api/runner/*`; P4.4b thêm bốn route registry/proposal; P4.2 thêm ba route chia sẻ máy; P2.5 thêm ba route artifact; `POST /api/devices/register` thêm máy đang cắm vào config.)
+
+> **Thêm ngày 2026-09-24.** `GET /api/runner/build?job=<id>` — **R**, token runner. Runner KHÔNG gửi
+> đường dẫn nào: nó đưa mã job, máy chủ tra bản build từ chính job ấy (thứ máy chủ đã tính lúc đặt
+> job), và chỉ khi đúng runner ấy đang giữ job. Nhận đường dẫn từ runner là cho bất cứ ai cầm một token
+> runner đọc file tuỳ ý trên máy chủ. Cỡ file lệch với lúc đặt job thì trả 409 ngay thay vì gửi 200 MB.
 
 > **Thêm ngày 2026-09-21 (P2.1b).** Bốn route đăng nhập, và chúng là những route DUY NHẤT gọi được
 > khi chưa có phiên: `GET /api/auth/login`, `GET /api/auth/callback`, `POST /api/auth/logout`,

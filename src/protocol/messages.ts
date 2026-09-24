@@ -200,8 +200,14 @@ export interface RunSuiteParams {
   includeQuarantined?: boolean;
   env?: string;
   appSource?: 'device' | 'upload';
-  /** Build cần tải về trước khi chạy; khoá trong object storage. */
-  appKey?: string;
+  /**
+   * Bản build máy chủ đã chọn cho lượt này, khi nguồn app là "bản đã tải lên".
+   *
+   * Không có trường này thì runner ở xa cài bản build đang nằm trên đĩa của
+   * CHÍNH nó — có thể là bản cũ ba tuần — rồi báo kết quả như thể đã chạy trên
+   * bản vừa tải lên. Xem [appBuild.ts](../runner/appBuild.ts).
+   */
+  appBuild?: AppBuildRef;
   /**
    * Chỉ chạy đúng một file feature — lượt chạy của một workflow Studio.
    *
@@ -210,6 +216,25 @@ export interface RunSuiteParams {
    * ở laptop người khác.
    */
   feature?: string;
+}
+
+/**
+ * Một bản build, đủ để runner tải về và TỰ KIỂM.
+ *
+ * `key` là đường dẫn trên máy chủ, và runner không bao giờ gửi nó ngược lên:
+ * runner chỉ xin "bản build của job tôi đang giữ", máy chủ tự tra file từ job.
+ * Không có đường nào để runner tự chọn một file trên đĩa máy chủ.
+ *
+ * `sha256` để runner kiểm cái nó nhận được, và để giữ đệm: một bản 215 MB tải
+ * lại cho mỗi lượt chạy là phí, còn so hash thì biết chắc bản trong đệm có
+ * đúng là bản job cần hay không.
+ */
+export interface AppBuildRef {
+  key: string;
+  /** Tên file, để giữ đúng đuôi `.apk` / `.ipa` — Appium đọc đuôi để biết cách cài. */
+  name: string;
+  sha256: string;
+  size: number;
 }
 
 export interface JobSnapshot {

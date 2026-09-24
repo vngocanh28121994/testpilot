@@ -26,6 +26,10 @@ import type { ElementRegistry } from '../../core/types.js';
 import type { RouteContext } from './types.js';
 import type { PrereqByPlatform } from '../../runner/prereqReport.js';
 import type { JobResult } from '../../protocol/messages.js';
+import { createReadStream } from 'node:fs';
+import { stat } from 'node:fs/promises';
+import path from 'node:path';
+import { pipeline } from 'node:stream/promises';
 import { json, readJson } from '../http.js';
 import type { RouteTable } from './types.js';
 
@@ -37,6 +41,51 @@ export const runnerRoutes: RouteTable = {
    * bị bỏ qua sẽ là thứ quan trọng, vì những trường tuỳ chọn thì không ai tăng
    * major vì chúng.
    */
+  /**
+   * Bản build của job runner này ĐANG GIỮ.
+   *
+   * Runner KHÔNG gửi đường dẫn nào: nó đưa mã job, máy chủ tra bản build từ
+   * chính job ấy — thứ máy chủ đã tự tính lúc đặt job. Nhận một đường dẫn từ
+   * runner là mở cửa cho bất cứ ai cầm được một token runner đọc file tuỳ ý
+   * trên máy chủ, `.testpilot.secrets.json` trước tiên.
+   *
+   * Và chỉ khi đúng runner ấy đang giữ job: token của phòng máy A không lấy
+   * được bản build của một job đang chạy ở phòng máy B.
+   */
+  'GET /api/runner/build': async (_req, res, url, ctx) => {
+    const jobId = url.searchParams.get('job')?.trim();
+    if (!jobId) return json(res, 400, { error: 'Thiếu job.' });
+    const job = await ctx.repos.queue.find(jobId);
+    const build = job?.spec.run?.appBuild;
+    if (!job || job.runnerId !== ctx.identity.userId
+      || (job.state !== 'assigned' && job.state !== 'running')) {
+      // Một câu cho mọi trường hợp: phân biệt "job không có" với "job của
+      // runner khác" là nói cho người lạ biết mã job nào có thật.
+      return json(res, 404, { error: 'Không có job đang chạy nào mang mã này ở runner của bạn.' });
+    }
+    if (!build) return json(res, 404, { error: 'Job này không kèm bản build nào.' });
+
+    const abs = path.resolve(build.key);
+    const info = await stat(abs).catch(() => undefined);
+    if (!info?.isFile()) {
+      return json(res, 410, { error: `Bản build ${build.name} không còn trên máy chủ.` });
+    }
+    // Cỡ lệch là file đã bị thay kể từ lúc đặt job — ai đó vừa tải bản mới
+    // lên. Nói ngay thay vì gửi 200 MB để runner tự phát hiện hash sai.
+    if (info.size !== build.size) {
+      return json(res, 409, {
+        error: `Bản build ${build.name} đã được thay kể từ lúc đặt job. Chạy lại để dùng bản mới.`,
+      });
+    }
+    res.writeHead(200, {
+      'content-type': 'application/octet-stream',
+      'content-length': String(info.size),
+      'x-build-sha256': build.sha256,
+    });
+    await pipeline(createReadStream(abs), res).catch(() => undefined);
+    return;
+  },
+
   'POST /api/runner/hello': async (req, res, _url, ctx) => {
     const body = await readJson<{
       name?: string; mode?: string; os?: string; arch?: string;

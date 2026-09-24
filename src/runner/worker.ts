@@ -13,6 +13,7 @@
  */
 import { loadConfig, type TestPilotConfig } from '../config.js';
 import { prepareJobWorkspace, type JobWorkspace } from './jobWorkspace.js';
+import type { BuildFetcher } from './appBuild.js';
 import { resolveDevices, runnerPlatforms, type AttachedDevice } from '../server/scheduler/match.js';
 import { measurePrereq, refuseReason, type PrereqByPlatform } from './prereqReport.js';
 import type { JobRecord, JobQueue } from '../server/queue/queue.js';
@@ -97,6 +98,15 @@ export interface WorkerDeps {
   runner?: Runner;
   /** Nơi dựng thư mục cho job mang snapshot. Mặc định `.testpilot/jobs`. */
   jobsRoot?: string;
+  /**
+   * Lấy bản build máy chủ đã chọn về máy này. Xem [appBuild.ts](./appBuild.ts).
+   *
+   * CHỈ runner đứng riêng có nó. Worker nhúng trong máy chủ thì không cần: nó
+   * dùng CHÍNH config và CHÍNH đĩa của máy chủ, nên bản build trong config của
+   * nó là đúng bản máy chủ vừa chọn — tải lại từ chính mình là chép 215 MB qua
+   * lại không vì gì, và thêm một đường có thể hỏng vào lượt chạy dùng hằng ngày.
+   */
+  fetchBuild?: BuildFetcher;
 }
 
 export interface WorkerHandle {
@@ -337,17 +347,42 @@ async function run(
   // vẫn nhả máy khi dựng hỏng.
   let workspace: JobWorkspace | undefined;
   try {
-    if (job.spec.snapshot) {
-      if (picked.length > 1) {
-        // Nói thẳng thay vì lặng lẽ chạy song song trên `features/` của máy
-        // này: đó sẽ là một lượt chạy TRÔNG bình thường mà chạy sai bộ kịch bản.
-        throw new Error('Job mang snapshot chưa chạy song song được — gửi mỗi máy một job.');
-      }
+    if (job.spec.snapshot && picked.length > 1) {
+      // Nói thẳng thay vì lặng lẽ chạy song song trên `features/` của máy
+      // này: đó sẽ là một lượt chạy TRÔNG bình thường mà chạy sai bộ kịch bản.
+      throw new Error('Job mang snapshot chưa chạy song song được — gửi mỗi máy một job.');
+    }
+    // "Bản đã tải lên" trên một runner đứng riêng: lấy ĐÚNG bản máy chủ chọn,
+    // không phải bản đang nằm trên đĩa máy này.
+    const nativePlatform = params.platform === 'android' || params.platform === 'ios'
+      ? params.platform : undefined;
+    // Chốt cuối, ở phía runner: runner đứng riêng KHÔNG BAO GIỜ tự cài bản
+    // build trên đĩa của nó cho một job "bản đã tải lên". Máy chủ không gửi kèm
+    // bản nào — lượt song song bắc hai nền tảng, hay máy chủ không có bản đơn
+    // file để gửi — thì dừng bằng một câu, thay vì chạy trên một bản không ai
+    // chọn và trả về một report trông hoàn toàn bình thường.
+    if (deps.fetchBuild && params.appSource === 'upload' && nativePlatform && !params.appBuild) {
+      throw new Error(
+        'Job chọn "bản đã tải lên" nhưng máy chủ không gửi kèm bản build nào, nên máy này '
+        + 'không cài bản đang nằm trên đĩa của nó. Chạy lại với "Bản có sẵn trên thiết bị", '
+        + 'hoặc tải bản build lên máy chủ.',
+      );
+    }
+    const appPath = params.appBuild && params.appSource === 'upload' && deps.fetchBuild && nativePlatform
+      ? await deps.fetchBuild(job.id, params.appBuild, log)
+      : undefined;
+
+    if (job.spec.snapshot || appPath) {
       workspace = await prepareJobWorkspace({
-        jobId: job.id, snapshot: job.spec.snapshot, configFile: deps.configFile,
+        jobId: job.id,
+        configFile: deps.configFile,
+        ...(job.spec.snapshot ? { snapshot: job.spec.snapshot } : {}),
+        ...(appPath && nativePlatform ? { app: { platform: nativePlatform, path: appPath } } : {}),
         ...(deps.jobsRoot ? { root: deps.jobsRoot } : {}),
       });
-      log(`[job] Chạy trên bản sao gửi kèm job: ${workspace.features.join(', ')}.`);
+      if (workspace.features.length > 0) {
+        log(`[job] Chạy trên bản sao gửi kèm job: ${workspace.features.join(', ')}.`);
+      }
     }
 
     if (picked.length > 1) {
@@ -356,7 +391,7 @@ async function run(
       const tokens = picked.map((device) => `${device.platform}:${device.id}`);
       await runner.run.startParallel(
         platforms, tokens, params.tag, Boolean(params.includeQuarantined), log,
-        params.env, params.appSource,
+        params.env, params.appSource, workspace?.configFile,
       );
       await close(deps, job, lost
         ? { type: 'job.result', jobId: job.id, state: 'interrupted', error: lost }
@@ -399,12 +434,12 @@ async function run(
       // thư mục job, và nó bị xoá khi job xong. Ghi thẳng vào đó là học xong
       // rồi vứt. Hoãn thì phần học được nằm ở thư mục lượt chạy và đi về máy
       // chủ qua `registryProposal`, như mọi runner đứng riêng.
-      deps.deferSharedWrites || Boolean(workspace),
+      deps.deferSharedWrites || Boolean(job.spec.snapshot),
       workspace?.configFile,
     );
 
     const learned = await harvest(
-      { ...deps, deferSharedWrites: deps.deferSharedWrites || Boolean(workspace) },
+      { ...deps, deferSharedWrites: deps.deferSharedWrites || Boolean(job.spec.snapshot) },
       runner, outcome.runDirs, log,
     );
     // TRƯỚC khi đóng job: người mở kết quả ngay lúc nó chuyển sang "xong" phải

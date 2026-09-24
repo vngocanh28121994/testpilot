@@ -26,6 +26,7 @@ import { readToken } from './credentials.js';
 import { ProtocolMismatchError, RemoteJobQueue } from './remote.js';
 import { applyUpdate, EXIT_UPDATED, planUpdate } from './update.js';
 import { startWorker } from './worker.js';
+import { buildFetcher } from './appBuild.js';
 
 /** Đẩy log đi mỗi nửa giây. Đủ nhanh để người xem thấy gần như tức thì. */
 const FLUSH_MS = 500;
@@ -154,6 +155,11 @@ async function main(): Promise<void> {
     // và server quyết định gộp hay treo lại chờ duyệt — runner không ghi thẳng
     // vào dữ liệu dùng chung. Xem mục 4b của tài liệu kiến trúc.
     deferSharedWrites: true,
+    // "Bản đã tải lên" là bản trên MÁY CHỦ. Không có dòng này thì máy này cài
+    // bản build nằm trên đĩa của chính nó — có thể là bản cũ — và report trông
+    // hoàn toàn bình thường. Farm thì không: AWS nhận bản build theo đường
+    // riêng của nó.
+    ...(mode === 'farm' ? {} : { fetchBuild: buildFetcher({ serverUrl, token, name }) }),
     // Bằng chứng đi lên kho dùng chung: người đọc report ngồi ở chỗ khác với
     // chiếc máy đã chạy test. Server chưa cấu hình kho thì lời gọi đầu tiên
     // trả 501 và `uploadRuns` biến nó thành một dòng log — lượt chạy vẫn xong.

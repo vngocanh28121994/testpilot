@@ -1,5 +1,6 @@
 /**
- * Một job mang snapshot chạy trên ĐÚNG snapshot ấy, trong một thư mục riêng.
+ * Một job chạy trên ĐÚNG thứ nó mang theo — snapshot và/hoặc bản build máy chủ
+ * chọn — trong một thư mục riêng.
  *
  * `JobSpec.snapshot` sinh ra để mỗi job "mang theo bản sao chứ không phải con
  * trỏ" — nhưng trước file này runner chưa từng đọc nó. Hậu quả có thật: một
@@ -62,9 +63,26 @@ function safeJobDir(jobId: string): string {
   return jobId;
 }
 
+/** Bản build job phải cài, đã nằm sẵn trên đĩa máy này. */
+export interface JobApp {
+  platform: 'android' | 'ios';
+  /** Đường dẫn tuyệt đối tới file build — thường là trong đệm build. */
+  path: string;
+}
+
+type RawConfig = {
+  paths?: Record<string, string>;
+  android?: Record<string, unknown>;
+  ios?: Record<string, unknown>;
+  environments?: Record<string, Record<string, unknown>>;
+};
+
 export async function prepareJobWorkspace(opts: {
   jobId: string;
-  snapshot: JobSnapshot;
+  /** Feature và registry gửi kèm job. Vắng mặt thì dùng của runner như thường. */
+  snapshot?: JobSnapshot;
+  /** Bản build máy chủ đã chọn. Vắng mặt thì dùng bản build trong config runner. */
+  app?: JobApp;
   /** Config thường của runner — nền để dẫn xuất. */
   configFile: string;
   /** Để test đặt vào thư mục tạm. */
@@ -75,39 +93,43 @@ export async function prepareJobWorkspace(opts: {
   const registryDir = path.join(dir, 'registry');
   // Kiểm MỌI tên trước khi ghi byte nào: dừng giữa chừng là để lại nửa thư
   // mục job, và nửa thư mục thì không ai dọn.
-  const names = opts.snapshot.features.map((feature) => safeFeatureName(feature.name));
+  const names = (opts.snapshot?.features ?? []).map((feature) => safeFeatureName(feature.name));
 
   await rm(dir, { recursive: true, force: true });
-  await mkdir(featuresDir, { recursive: true });
-  await mkdir(registryDir, { recursive: true });
+  await mkdir(dir, { recursive: true });
 
-  await Promise.all(opts.snapshot.features.map((feature, i) =>
-    writeFile(path.join(featuresDir, names[i]!), feature.content, 'utf8')));
-  await writeFile(
-    path.join(registryDir, 'elements.json'),
-    JSON.stringify(opts.snapshot.registry ?? {}, null, 2) + '\n',
-    'utf8',
-  );
-
-  // Đọc config THÔ rồi chỉ ghi đè ba đường dẫn. Parse qua schema rồi ghi lại
+  // Đọc config THÔ rồi chỉ ghi đè đúng thứ cần. Parse qua schema rồi ghi lại
   // sẽ điền mọi giá trị mặc định vào file dẫn xuất — vô hại hôm nay, và là
   // một bản sao của các mặc định sẽ lệch ngay khi ai đó đổi chúng.
-  const raw = JSON.parse(await readFile(path.resolve(opts.configFile), 'utf8')) as {
-    paths?: Record<string, string>;
-  };
-  const derived = {
-    ...raw,
-    paths: {
-      ...raw.paths,
-      features: featuresDir,
-      registry: path.join(registryDir, 'elements.json'),
-      // Cơ sở duyệt RIÊNG, trống: file trong snapshot đã chỉ chứa kịch bản
-      // được duyệt ở máy chủ, và một cơ sở trống coi mọi kịch bản mới là đã
-      // duyệt. Dùng cơ sở của runner thì một file trùng tên cũ sẽ kéo kịch bản
-      // vừa sửa về "chờ duyệt" — và chúng biến khỏi lượt chạy không một lời.
-      scenarioReviewDb: path.join(registryDir, 'scenario-review.json'),
-    },
-  };
+  let derived = JSON.parse(await readFile(path.resolve(opts.configFile), 'utf8')) as RawConfig;
+
+  if (opts.snapshot) {
+    await mkdir(featuresDir, { recursive: true });
+    await mkdir(registryDir, { recursive: true });
+    await Promise.all(opts.snapshot.features.map((feature, i) =>
+      writeFile(path.join(featuresDir, names[i]!), feature.content, 'utf8')));
+    await writeFile(
+      path.join(registryDir, 'elements.json'),
+      JSON.stringify(opts.snapshot.registry ?? {}, null, 2) + '\n',
+      'utf8',
+    );
+    derived = {
+      ...derived,
+      paths: {
+        ...derived.paths,
+        features: featuresDir,
+        registry: path.join(registryDir, 'elements.json'),
+        // Cơ sở duyệt RIÊNG, trống: file trong snapshot đã chỉ chứa kịch bản
+        // được duyệt ở máy chủ, và một cơ sở trống coi mọi kịch bản mới là đã
+        // duyệt. Dùng cơ sở của runner thì một file trùng tên cũ sẽ kéo kịch
+        // bản vừa sửa về "chờ duyệt" — và chúng biến khỏi lượt chạy không một
+        // lời.
+        scenarioReviewDb: path.join(registryDir, 'scenario-review.json'),
+      },
+    };
+  }
+
+  if (opts.app) derived = withApp(derived, opts.app);
   const configFile = path.join(dir, 'testpilot.config.json');
   await writeFile(configFile, JSON.stringify(derived, null, 2) + '\n', 'utf8');
 
@@ -116,5 +138,35 @@ export async function prepareJobWorkspace(opts: {
     configFile,
     features: names,
     cleanup: () => rm(dir, { recursive: true, force: true }).catch(() => undefined),
+  };
+}
+
+/**
+ * Trỏ bản build của nền tảng ấy vào file đã tải — ở MỌI môi trường.
+ *
+ * `run.ts` chọn bản build bằng `applyEnv(config, env)`: bản của môi trường
+ * nếu nó có, không thì bản gốc. Chỉ ghi đè bản gốc thì một config runner có
+ * `environments.sit.android.app` riêng vẫn cài bản SIT CỦA LAPTOP — đúng cái
+ * lỗi mà trường `appBuild` sinh ra để chặn. Ghi đè ở mọi môi trường thì môi
+ * trường nào được chọn cũng ra cùng một file: file máy chủ đã chọn cho job này.
+ *
+ * `useInstalledApp` tắt theo: người ta đã chọn "bản đã tải lên", nên cờ "dùng
+ * bản đang cài trên máy" của config runner không được phép thắng lựa chọn ấy.
+ */
+function withApp(cfg: RawConfig, app: JobApp): RawConfig {
+  const environments = Object.fromEntries(
+    Object.entries(cfg.environments ?? {}).map(([name, env]) => [name, {
+      ...env,
+      [app.platform]: {
+        ...(env[app.platform] as Record<string, unknown> | undefined),
+        app: app.path,
+        useInstalledApp: false,
+      },
+    }]),
+  );
+  return {
+    ...cfg,
+    [app.platform]: { ...cfg[app.platform], app: app.path },
+    ...(cfg.environments ? { environments } : {}),
   };
 }

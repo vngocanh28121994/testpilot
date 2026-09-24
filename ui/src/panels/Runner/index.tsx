@@ -202,10 +202,15 @@ export default function RunnerPanel() {
     // `env` nằm trong khoá cache, không chỉ trong query string: đổi môi trường
     // là một câu hỏi khác, và câu trả lời cũ không được phép ở lại. Thiếu nó
     // thì bấm "Kiểm tra lại" cũng chỉ nạp lại đúng câu trả lời cũ.
-    queryKey: ['preflight', platform, device, env],
+    // `appSource` cũng đi kèm: với máy ở runner khác, "bản đã tải lên" là
+    // một bản build phải gửi qua mạng, và câu trả lời nói bản nào, cỡ bao
+    // nhiêu — hoặc vì sao chưa gửi được — trước khi người ta bấm chạy.
+    queryKey: ['preflight', platform, device, env, appSource],
     queryFn: () =>
       api.get<PreflightResponse>(
-        `${ROUTES.preflight}${qs({ platform, device: device || undefined, env: env || undefined })}`,
+        `${ROUTES.preflight}${qs({
+          platform, device: device || undefined, env: env || undefined, appSource,
+        })}`,
       ),
     enabled: Boolean(state.data),
   });

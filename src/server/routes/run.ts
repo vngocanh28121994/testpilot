@@ -23,6 +23,9 @@ import { allows } from '../auth/roles.js';
 import { activeRuns, findActiveRun } from '../../ui/activeRuns.js';
 import { json, readJson, stream } from '../http.js';
 import type { JobsResponse } from '../../ui/contracts.js';
+import type { AppBuildRef } from '../../protocol/messages.js';
+import { describeBuild } from '../appBuilds.js';
+import { LOCAL_HOST_RUNNER } from '../remoteRuns.js';
 import type { JobQueue, JobRecord } from '../queue/queue.js';
 import type { RouteTable } from './types.js';
 
@@ -175,6 +178,8 @@ export const runRoutes: RouteTable = {
     const cfgForDevices = (body.devices ?? []).length > 0
       ? await loadConfig(ctx.configFile)
       : undefined;
+    /** Có chiếc máy nào nằm ở runner KHÁC không — xem phần bản build bên dưới. */
+    let anyRemote = false;
     for (const token of body.devices ?? []) {
       const [tokenPlatform, ...rest] = token.split(':');
       const named = rest.join(':');
@@ -202,6 +207,35 @@ export const runRoutes: RouteTable = {
           error: `Không dùng được thiết bị "${named}": nó không có trong danh sách máy của bạn.`,
         });
       }
+      if (seen.runnerId !== LOCAL_HOST_RUNNER) anyRemote = true;
+    }
+
+    /**
+     * "Bản đã tải lên" là bản trên MÁY CHỦ — gắn nó vào job.
+     *
+     * Không có dòng này thì một runner ở laptop khác cài bản build nằm trên
+     * đĩa của chính nó, có thể là bản cũ ba tuần, rồi báo kết quả như thể đã
+     * chạy trên bản vừa tải lên. Worker nhúng trong máy chủ thì bỏ qua trường
+     * này — nó chung đĩa với máy chủ nên bản trong config của nó là đúng bản.
+     *
+     * Chỉ khi lượt chạy nằm trọn trên MỘT nền tảng: một trường không chứa
+     * được hai bản build. Lượt song song bắc qua cả Android lẫn iOS đi như cũ.
+     */
+    const platforms = new Set(
+      (body.devices ?? []).length > 0
+        ? (body.devices ?? []).map((token) => token.split(':')[0])
+        : [body.platform],
+    );
+    const only = platforms.size === 1 ? [...platforms][0] : undefined;
+    let appBuild: AppBuildRef | undefined;
+    if (body.appSource === 'upload' && (only === 'android' || only === 'ios')) {
+      const found = await describeBuild(await loadConfig(ctx.configFile), body.env, only);
+      if (found.ok) appBuild = found.build;
+      // Không gửi được bản build thì CHỈ chặn khi máy nằm ở runner khác. Máy
+      // cắm ở chính máy chủ vẫn chạy như trước — kể cả simulator iOS với bản
+      // `.app` là một thư mục, thứ chưa gửi qua mạng được nhưng ở đây thì chẳng
+      // cần gửi đi đâu.
+      else if (anyRemote) return json(res, 400, { error: found.reason });
     }
 
     const job = await ctx.repos.queue.create({
@@ -225,6 +259,7 @@ export const runRoutes: RouteTable = {
           includeQuarantined: Boolean(body.includeQuarantined),
           env: body.env,
           appSource: body.appSource,
+          ...(appBuild ? { appBuild } : {}),
         },
       },
     });
