@@ -310,8 +310,18 @@ Quy tắc:
   thật (20 MB): đóng gói 657 ms còn 6 MB, lần sau 2 ms; runner tải và mở 125 ms; `diff -r` giống hệt,
   `codesign --verify --deep --strict` hợp lệ, 11/11 file thực thi giữ bit.
 
-  Còn chưa gửi được: lượt song song bắc cả Android lẫn iOS (một trường không chứa được hai bản build) —
-  dừng bằng câu nói rõ lý do khi máy nằm ở runner khác.
+  **Song song cả Android lẫn iOS.** `RunSuiteParams.appBuilds` là một bảng theo nền tảng thay cho
+  một trường đơn, và runner tải bản của từng nền tảng (`GET /api/runner/build?job=…&platform=…` —
+  nền tảng chỉ CHỌN giữa những bản job đã mang, không phải một đường dẫn). Thiếu bản của một nền tảng
+  thì dừng cả job: nửa lượt song song trên bản không ai chọn là một report nửa đúng nửa sai.
+
+  **Một job cho mỗi runner.** Một job chỉ được một runner nhận, và runner ấy đòi MỌI máy của job cắm
+  ở chính nó (`resolveDevices`) — nên một job chứa Android ở máy chủ và iPhone ở laptop bị cả hai
+  runner hoãn mãi, treo không một lời. Ô chọn máy gom theo máy tính làm tổ hợp ấy chọn được bằng hai
+  cú bấm. `POST /api/run` nay tách lượt chạy thành một job cho mỗi runner giữ máy, chạy song song, và
+  gộp log về một luồng với tên máy tính ở đầu mỗi dòng. Máy cùng một runner vẫn chung một job. Bản
+  build được tra cho MỌI nhóm trước khi tạo job nào — không bao giờ để nửa lượt trong hàng đợi và trả
+  lỗi cho nửa kia.
 
 ---
 

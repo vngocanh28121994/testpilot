@@ -52,7 +52,7 @@ async function setup(runnerId: string, claim = true, size = Buffer.byteLength('n
       orgId: 'org-1', kind: 'run_suite', createdBy: 'u1', timeoutMs: 60_000, deviceTokens: [],
       run: {
         platform: 'android', appSource: 'upload',
-        appBuild: { key: apk, name: 'app.apk', sha256: 'a'.repeat(64), size },
+        appBuilds: { android: { key: apk, name: 'app.apk', sha256: 'a'.repeat(64), size } },
       },
     },
   });
@@ -67,7 +67,7 @@ async function setup(runnerId: string, claim = true, size = Buffer.byteLength('n
 async function call(ctx: RouteContext, jobId: string) {
   const c = capture();
   await runnerRoutes['GET /api/runner/build']!(
-    {} as IncomingMessage, c.res, new URL(`http://x/api/runner/build?job=${jobId}`), ctx,
+    {} as IncomingMessage, c.res, new URL(`http://x/api/runner/build?job=${jobId}&platform=android`), ctx,
   );
   return c;
 }

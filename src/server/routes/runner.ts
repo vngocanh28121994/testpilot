@@ -55,15 +55,21 @@ export const runnerRoutes: RouteTable = {
   'GET /api/runner/build': async (_req, res, url, ctx) => {
     const jobId = url.searchParams.get('job')?.trim();
     if (!jobId) return json(res, 400, { error: 'Thiếu job.' });
+    // Nền tảng chỉ CHỌN giữa những bản build job đã mang — không phải một
+    // đường dẫn. Một lượt song song bắc cả Android lẫn iOS mang hai bản.
+    const platform = url.searchParams.get('platform');
+    if (platform !== 'android' && platform !== 'ios') {
+      return json(res, 400, { error: 'platform phải là android hoặc ios.' });
+    }
     const job = await ctx.repos.queue.find(jobId);
-    const build = job?.spec.run?.appBuild;
+    const build = job?.spec.run?.appBuilds?.[platform];
     if (!job || job.runnerId !== ctx.identity.userId
       || (job.state !== 'assigned' && job.state !== 'running')) {
       // Một câu cho mọi trường hợp: phân biệt "job không có" với "job của
       // runner khác" là nói cho người lạ biết mã job nào có thật.
       return json(res, 404, { error: 'Không có job đang chạy nào mang mã này ở runner của bạn.' });
     }
-    if (!build) return json(res, 404, { error: 'Job này không kèm bản build nào.' });
+    if (!build) return json(res, 404, { error: `Job này không kèm bản build ${platform} nào.` });
 
     const abs = path.resolve(build.key);
     const info = await stat(abs).catch(() => undefined);

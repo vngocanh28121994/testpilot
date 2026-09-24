@@ -40,12 +40,12 @@ describe('tải bản build về runner', () => {
     const { fetchImpl, calls } = server('bản build thật');
     const fetchBuild = buildFetcher({ serverUrl: 'https://cp', token: 'tk', name: 'lap', cacheDir: tmp, fetchImpl });
     const build = ref('bản build thật');
-    const file = await fetchBuild('job-1', build, () => {});
+    const file = await fetchBuild('job-1', 'android', build, () => {});
     assert.equal(await readFile(file, 'utf8'), 'bản build thật');
     assert.equal(path.basename(file), `${build.sha256}.apk`);
     // Runner xin theo MÃ JOB, không theo đường dẫn: nó không có cách nào tự
     // chọn một file trên máy chủ.
-    assert.equal(calls[0]!.url, 'https://cp/api/runner/build?job=job-1');
+    assert.equal(calls[0]!.url, 'https://cp/api/runner/build?job=job-1&platform=android');
     assert.equal(calls[0]!.auth, 'Bearer tk');
   });
 
@@ -53,8 +53,8 @@ describe('tải bản build về runner', () => {
     const { fetchImpl, calls } = server('bản build thật');
     const fetchBuild = buildFetcher({ serverUrl: 'https://cp', token: 'tk', name: 'lap', cacheDir: tmp, fetchImpl });
     const build = ref('bản build thật');
-    await fetchBuild('job-1', build, () => {});
-    await fetchBuild('job-2', build, () => {});
+    await fetchBuild('job-1', 'android', build, () => {});
+    await fetchBuild('job-2', 'android', build, () => {});
     assert.equal(calls.length, 1, 'bản 215 MB không được đi qua mạng hai lần');
   });
 
@@ -63,21 +63,21 @@ describe('tải bản build về runner', () => {
     // dung sai — và Appium sẽ cài nó rồi hỏng ở bước thứ ba.
     const { fetchImpl } = server('thứ khác hẳn!');
     const fetchBuild = buildFetcher({ serverUrl: 'https://cp', token: 'tk', name: 'lap', cacheDir: tmp, fetchImpl });
-    await assert.rejects(fetchBuild('job-1', ref('bản build thật'), () => {}), /không khớp/);
+    await assert.rejects(fetchBuild('job-1', 'android', ref('bản build thật'), () => {}), /không khớp/);
     assert.deepEqual(await readdir(tmp), []);
   });
 
   it('máy chủ từ chối thì nói lại đúng câu của máy chủ', async () => {
     const { fetchImpl } = server(JSON.stringify({ error: 'Bản build app.apk đã được thay kể từ lúc đặt job.' }), 409);
     const fetchBuild = buildFetcher({ serverUrl: 'https://cp', token: 'tk', name: 'lap', cacheDir: tmp, fetchImpl });
-    await assert.rejects(fetchBuild('job-1', ref('x'), () => {}), /đã được thay kể từ lúc đặt job/);
+    await assert.rejects(fetchBuild('job-1', 'android', ref('x'), () => {}), /đã được thay kể từ lúc đặt job/);
   });
 
   it('tên hay hash lạ thì từ chối trước khi chạm đĩa', async () => {
     const { fetchImpl, calls } = server('x');
     const fetchBuild = buildFetcher({ serverUrl: 'https://cp', token: 'tk', name: 'lap', cacheDir: tmp, fetchImpl });
-    await assert.rejects(fetchBuild('j', { ...ref('x'), name: '../../evil.sh' }, () => {}), /không phải \.apk hay \.ipa/);
-    await assert.rejects(fetchBuild('j', { ...ref('x'), sha256: '../x' }, () => {}), /không hợp lệ/);
+    await assert.rejects(fetchBuild('j', 'android', { ...ref('x'), name: '../../evil.sh' }, () => {}), /không phải \.apk hay \.ipa/);
+    await assert.rejects(fetchBuild('j', 'android', { ...ref('x'), sha256: '../x' }, () => {}), /không hợp lệ/);
     assert.equal(calls.length, 0);
   });
 
@@ -92,7 +92,7 @@ describe('tải bản build về runner', () => {
     }
     const { fetchImpl } = server('bản mới');
     const fetchBuild = buildFetcher({ serverUrl: 'https://cp', token: 'tk', name: 'lap', cacheDir: tmp, fetchImpl });
-    const fresh = await fetchBuild('job-1', ref('bản mới'), () => {});
+    const fresh = await fetchBuild('job-1', 'android', ref('bản mới'), () => {});
     const left = await readdir(tmp);
     assert.equal(left.length, 3);
     assert.ok(existsSync(fresh));
@@ -141,7 +141,7 @@ describe('tải bản .app về runner', () => {
     const { build, fetchImpl } = await packedBundle();
     const cacheDir = path.join(tmp, 'cache');
     const fetchBuild = buildFetcher({ serverUrl: 'https://cp', token: 't', name: 'lap', cacheDir, fetchImpl });
-    const app = await fetchBuild('job-1', build, () => {});
+    const app = await fetchBuild('job-1', 'ios', build, () => {});
     assert.equal(path.basename(app), 'Test.app');
     assert.equal((await stat(path.join(app, 'Test'))).mode & 0o111, 0o111, 'mất bit thực thi');
     assert.equal(await readlink(path.join(app, 'Frameworks', 'Current')), 'lib.dylib');
@@ -153,8 +153,8 @@ describe('tải bản .app về runner', () => {
     const { build, fetchImpl, calls } = await packedBundle();
     const cacheDir = path.join(tmp, 'cache');
     const fetchBuild = buildFetcher({ serverUrl: 'https://cp', token: 't', name: 'lap', cacheDir, fetchImpl });
-    const first = await fetchBuild('job-1', build, () => {});
-    const second = await fetchBuild('job-2', build, () => {});
+    const first = await fetchBuild('job-1', 'ios', build, () => {});
+    const second = await fetchBuild('job-2', 'ios', build, () => {});
     assert.equal(first, second);
     assert.equal(calls.length, 1);
   });
@@ -165,7 +165,7 @@ describe('tải bản .app về runner', () => {
     const { build, fetchImpl } = await packedBundle(['x.txt'], ',^x.txt,../../evil.txt,');
     const cacheDir = path.join(tmp, 'deep', 'cache');
     const fetchBuild = buildFetcher({ serverUrl: 'https://cp', token: 't', name: 'lap', cacheDir, fetchImpl });
-    await assert.rejects(fetchBuild('job-1', build, () => {}), /nằm ngoài Test\.app/);
+    await assert.rejects(fetchBuild('job-1', 'ios', build, () => {}), /nằm ngoài Test\.app/);
     assert.equal(existsSync(path.join(tmp, 'evil.txt')), false);
     assert.deepEqual(await readdir(cacheDir), [], 'không để lại gói hay thư mục dựng dở');
   });
@@ -175,7 +175,7 @@ describe('tải bản .app về runner', () => {
     const fetchBuild = buildFetcher({
       serverUrl: 'https://cp', token: 't', name: 'lap', cacheDir: path.join(tmp, 'cache'), fetchImpl,
     });
-    await assert.rejects(fetchBuild('job-1', build, () => {}), /nằm ngoài Test\.app/);
+    await assert.rejects(fetchBuild('job-1', 'ios', build, () => {}), /nằm ngoài Test\.app/);
   });
 
   it('tên gói không phải .app thì từ chối trước khi chạm mạng', async () => {
@@ -183,7 +183,7 @@ describe('tải bản .app về runner', () => {
     const fetchBuild = buildFetcher({
       serverUrl: 'https://cp', token: 't', name: 'lap', cacheDir: path.join(tmp, 'cache'), fetchImpl,
     });
-    await assert.rejects(fetchBuild('job-1', { ...build, name: '../evil.app' }, () => {}), /không phải một thư mục \.app/);
+    await assert.rejects(fetchBuild('job-1', 'ios', { ...build, name: '../evil.app' }, () => {}), /không phải một thư mục \.app/);
     assert.equal(calls.length, 0);
   });
 });

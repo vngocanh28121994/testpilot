@@ -81,8 +81,11 @@ export async function prepareJobWorkspace(opts: {
   jobId: string;
   /** Feature và registry gửi kèm job. Vắng mặt thì dùng của runner như thường. */
   snapshot?: JobSnapshot;
-  /** Bản build máy chủ đã chọn. Vắng mặt thì dùng bản build trong config runner. */
-  app?: JobApp;
+  /**
+   * Bản build máy chủ đã chọn, cho từng nền tảng của job. Nền tảng vắng mặt
+   * dùng bản build trong config runner như thường.
+   */
+  apps?: JobApp[];
   /** Config thường của runner — nền để dẫn xuất. */
   configFile: string;
   /** Để test đặt vào thư mục tạm. */
@@ -129,7 +132,7 @@ export async function prepareJobWorkspace(opts: {
     };
   }
 
-  if (opts.app) derived = withApp(derived, opts.app);
+  for (const app of opts.apps ?? []) derived = withApp(derived, app);
   const configFile = path.join(dir, 'testpilot.config.json');
   await writeFile(configFile, JSON.stringify(derived, null, 2) + '\n', 'utf8');
 

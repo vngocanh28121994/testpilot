@@ -765,6 +765,12 @@ describe('worker trong mô hình nhiều runner', () => {
       assert.equal(seen[0]!.existed, true, 'config của job phải có mặt lúc chạy');
       // Hoãn ghi: registry của lượt này là bản chép sẽ bị xoá.
       assert.equal(seen[0]!.defer, true);
+      // Dọn trong `finally`, SAU khi đóng job — cùng thứ tự với việc nhả máy.
+      // Nên chờ nó thay vì kiểm ngay lúc thấy `succeeded`: bản đầu của bài
+      // này kiểm ngay và đỏ chập chờn, tuỳ máy bận tới đâu.
+      for (let i = 0; i < 100 && existsSync(path.join(tmp, job.id)); i += 1) {
+        await new Promise((resolve) => setTimeout(resolve, 10));
+      }
       assert.equal(existsSync(path.join(tmp, job.id)), false, 'thư mục job phải được dọn');
     } finally {
       worker.stop();
@@ -782,7 +788,7 @@ describe('worker và bản build của máy chủ', () => {
       spec: {
         orgId: 'org-1', kind: 'run_suite' as const, createdBy: 'u1', timeoutMs: 60_000,
         deviceTokens: ['android:emulator-5554'],
-        run: { platform: 'android', appSource: 'upload' as const, ...(withBuild ? { appBuild: build } : {}) },
+        run: { platform: 'android', appSource: 'upload' as const, ...(withBuild ? { appBuilds: { android: build } } : {}) },
       },
     };
   }
@@ -816,11 +822,11 @@ describe('worker và bản build của máy chủ', () => {
     const worker = startWorker({
       queue, leases: new MemoryLeaseRepo(), runnerId: 'lap', configFile, config,
       pollMs: 5, runner: capturing, jobsRoot: tmp,
-      fetchBuild: async (jobId) => { asked.push(jobId); return fetched; },
+      fetchBuild: async (jobId, platform) => { asked.push(`${jobId}:${platform}`); return fetched; },
     });
     try {
       assert.equal(await settled(queue, job.id), 'succeeded');
-      assert.deepEqual(asked, [job.id], 'xin theo mã job');
+      assert.deepEqual(asked, [`${job.id}:android`], 'xin theo mã job và nền tảng');
       assert.equal(derived!.android.app, fetched);
       assert.equal(derived!.environments.sit.android.app, fetched, 'bản SIT của laptop không được thắng');
     } finally {
@@ -857,6 +863,90 @@ describe('worker và bản build của máy chủ', () => {
     try {
       assert.equal(await settled(queue, job.id), 'succeeded');
       assert.equal(seen.calls.length, 1);
+    } finally {
+      worker.stop();
+    }
+  });
+});
+
+describe('worker: song song cả Android lẫn iOS với bản đã tải lên', () => {
+  const apk = { key: 'build/app.apk', name: 'app.apk', sha256: 'a'.repeat(64), size: 3 };
+  const app = { key: 'x.tar.gz', name: 'App.app', sha256: 'b'.repeat(64), size: 5, packed: 'tar.gz' as const };
+
+  function bothJob(builds: Record<string, unknown>) {
+    return {
+      orgId: 'org-1', kind: 'run_suite' as const, createdBy: 'u1',
+      spec: {
+        orgId: 'org-1', kind: 'run_suite' as const, createdBy: 'u1', timeoutMs: 60_000,
+        deviceTokens: ['android:emulator-5554', 'ios:SIM-1'],
+        run: { platform: 'android', appSource: 'upload' as const, appBuilds: builds },
+      },
+    };
+  }
+
+  /** Runner giả thấy cả một máy Android lẫn một simulator iOS. */
+  function bothRunner(onParallel: (configFile?: string) => Promise<void>) {
+    const { runner } = fakeRunner({ code: 0 });
+    return {
+      ...runner,
+      run: {
+        ...runner.run,
+        startParallel: async (...args: unknown[]) => { await onParallel(args[7] as string | undefined); },
+      },
+      control: {
+        devices: async () => [
+          { platform: 'android' as const, udid: 'emulator-5554', label: 'a' },
+          { platform: 'ios' as const, udid: 'SIM-1', label: 'i' },
+        ],
+      },
+    } as unknown as typeof runner;
+  }
+
+  it('lấy bản build của CẢ HAI nền tảng, và config của job trỏ cả hai vào đó', async () => {
+    const tmp = await mkdtemp(path.join(os.tmpdir(), 'tp-wboth-'));
+    const configFile = path.join(tmp, 'cfg.json');
+    await writeFile(configFile, JSON.stringify({
+      web: { baseUrl: 'https://example.test' },
+      android: { app: 'cua-laptop.apk' }, ios: { app: 'cua-laptop.app' },
+    }));
+    const asked: string[] = [];
+    let derived: Record<string, any> | undefined;
+    const runner = bothRunner(async (cfgPath) => {
+      derived = JSON.parse(await readFile(cfgPath!, 'utf8'));
+    });
+    const queue = new MemoryJobQueue();
+    const job = await queue.create(bothJob({ android: apk, ios: app }));
+    const worker = startWorker({
+      queue, leases: new MemoryLeaseRepo(), runnerId: 'lap', configFile, config,
+      pollMs: 5, runner, jobsRoot: tmp,
+      fetchBuild: async (_id, platform) => { asked.push(platform); return `/dem/${platform}`; },
+    });
+    try {
+      assert.equal(await settled(queue, job.id), 'succeeded');
+      assert.deepEqual(asked.sort(), ['android', 'ios']);
+      assert.equal(derived!.android.app, '/dem/android');
+      assert.equal(derived!.ios.app, '/dem/ios');
+    } finally {
+      worker.stop();
+      await rm(tmp, { recursive: true, force: true });
+    }
+  });
+
+  it('thiếu bản build của MỘT nền tảng thì dừng cả job, và nói nền tảng nào', async () => {
+    // Chạy nửa lượt song song trên bản không ai chọn là một report nửa đúng
+    // nửa sai, trông hoàn toàn bình thường.
+    let ran = false;
+    const runner = bothRunner(async () => { ran = true; });
+    const queue = new MemoryJobQueue();
+    const job = await queue.create(bothJob({ android: apk }));
+    const worker = startWorker({
+      queue, leases: new MemoryLeaseRepo(), runnerId: 'lap', configFile: 'x.json', config,
+      pollMs: 5, runner, fetchBuild: async () => '/dem/x',
+    });
+    try {
+      assert.equal(await settled(queue, job.id), 'failed');
+      assert.equal(ran, false);
+      assert.match((await queue.find(job.id))?.error ?? '', /bản build ios/);
     } finally {
       worker.stop();
     }

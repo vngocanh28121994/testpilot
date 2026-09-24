@@ -425,7 +425,7 @@ describe('POST /api/run và bản build', () => {
       }, defaultDevices, 'u1', configFile);
       await waitUntil(async () => (await queue.list()).length > 0);
       const [job] = await queue.list();
-      const build = job!.spec.run!.appBuild!;
+      const build = job!.spec.run!.appBuilds!.android!;
       assert.equal(build.name, 'app.apk');
       assert.equal(build.size, Buffer.byteLength('nội dung bản build'));
       assert.equal(build.sha256, createHash('sha256').update('nội dung bản build').digest('hex'));
@@ -468,7 +468,7 @@ describe('POST /api/run và bản build', () => {
       }, local, 'u1', configFile);
       await waitUntil(async () => (await queue.list()).length > 0);
       const [job] = await queue.list();
-      assert.equal(job!.spec.run!.appBuild, undefined);
+      assert.equal(job!.spec.run!.appBuilds, undefined);
       await close(queue, job!.id);
       await pending;
     } finally {
@@ -490,3 +490,127 @@ async function waitUntil(check: () => Promise<boolean>, within = 2_000): Promise
     await new Promise((resolve) => setTimeout(resolve, 10));
   }
 }
+
+/**
+ * Máy ở NHIỀU máy tính trong một lượt chạy: một job cho mỗi runner.
+ *
+ * Một job chỉ được một runner nhận, và runner ấy đòi MỌI máy của job cắm ở
+ * chính nó. Một job chứa Android ở máy chủ và iPhone ở laptop thì bị cả hai
+ * runner hoãn mãi — mỗi bên thấy một chiếc "chưa cắm" — và lượt chạy treo không
+ * một lời. Ô chọn máy gom theo máy tính làm tổ hợp ấy chọn được bằng hai cú bấm.
+ */
+describe('POST /api/run chia máy theo runner', () => {
+  async function twoRunners() {
+    const devices = new MemoryDeviceRegistry();
+    await devices.report(
+      { id: 'runner:lab', orgId: 'org-1', visibility: 'shared' },
+      [{ platform: 'android', udid: 'emulator-5554', label: 'emulator' }],
+    );
+    await devices.report(
+      { id: 'runner:mac', orgId: 'org-1', visibility: 'shared' },
+      [{ platform: 'ios', udid: 'SIM-1', label: 'iPhone 15' }],
+    );
+    return devices;
+  }
+
+  async function closeAll(queue: MemoryJobQueue): Promise<void> {
+    for (const job of await queue.list()) {
+      await queue.claim({ runnerId: 'test' });
+      await queue.finish(job.id, { type: 'job.result', jobId: job.id, state: 'succeeded' });
+    }
+  }
+
+  it('máy của hai runner thành hai job, mỗi job đúng máy của runner ấy', async () => {
+    const queue = new MemoryJobQueue();
+    const devices = await twoRunners();
+    const pending = postRun(queue, {
+      platform: 'android', devices: ['android:emulator-5554', 'ios:SIM-1'],
+    }, devices);
+    await waitUntil(async () => (await queue.list()).length === 2);
+    const jobs = await queue.list();
+    const byTokens = new Map(jobs.map((job) => [job.spec.deviceTokens.join(','), job]));
+    assert.ok(byTokens.has('android:emulator-5554'));
+    assert.ok(byTokens.has('ios:SIM-1'));
+    // Nền tảng của mỗi job là của chính nhóm ấy: nó quyết định runner nào
+    // được mời nhận job.
+    assert.equal(byTokens.get('ios:SIM-1')!.spec.run!.platform, 'ios');
+    assert.equal(byTokens.get('android:emulator-5554')!.spec.run!.platform, 'android');
+    await closeAll(queue);
+    const events = await pending;
+    // Hai luồng log gộp lại, và mỗi dòng nói nó của máy nào.
+    const logs = events.filter((e) => e.event === 'log').map((e) => String(e.data));
+    assert.ok(logs.some((line) => line.startsWith('[runner:lab]')));
+    assert.ok(logs.some((line) => line.startsWith('[runner:mac]')));
+  });
+
+  it('máy cùng một runner vẫn ở chung một job', async () => {
+    const queue = new MemoryJobQueue();
+    const devices = await twoRunners();
+    await devices.report(
+      { id: 'runner:mac', orgId: 'org-1', visibility: 'shared' },
+      [
+        { platform: 'ios', udid: 'SIM-1', label: 'iPhone 15' },
+        { platform: 'android', udid: 'PIXEL-1', label: 'Pixel' },
+      ],
+    );
+    const pending = postRun(queue, {
+      platform: 'android', devices: ['android:PIXEL-1', 'ios:SIM-1'],
+    }, devices);
+    await waitUntil(async () => (await queue.list()).length > 0);
+    // Cho route thêm một nhịp: nếu nó định tạo job thứ hai thì đã tạo.
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    const jobs = await queue.list();
+    assert.equal(jobs.length, 1);
+    assert.deepEqual(jobs[0]!.spec.deviceTokens.sort(), ['android:PIXEL-1', 'ios:SIM-1']);
+    await closeAll(queue);
+    await pending;
+  });
+
+  it('bản đã tải lên: mỗi job mang bản build của ĐÚNG những nền tảng nó chạy', async () => {
+    const dir = await mkdtemp(path.join(tmpdir(), 'tp-both-'));
+    const apk = path.join(dir, 'app.apk');
+    const ipa = path.join(dir, 'App.ipa');
+    await writeFile(apk, 'android');
+    await writeFile(ipa, 'ios');
+    const configFile = path.join(dir, 'cfg.json');
+    await writeFile(configFile, JSON.stringify({
+      web: { baseUrl: 'https://example.test' },
+      android: { deviceName: 'a', app: apk }, ios: { deviceName: 'i', app: ipa },
+    }));
+    const queue = new MemoryJobQueue();
+    try {
+      const pending = postRun(queue, {
+        platform: 'android', appSource: 'upload', devices: ['android:emulator-5554', 'ios:SIM-1'],
+      }, await twoRunners(), 'u1', configFile);
+      await waitUntil(async () => (await queue.list()).length === 2);
+      for (const job of await queue.list()) {
+        const [platform] = job.spec.deviceTokens[0]!.split(':');
+        assert.deepEqual(Object.keys(job.spec.run!.appBuilds ?? {}), [platform]);
+      }
+      await closeAll(queue);
+      await pending;
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('một nhóm không gửi được bản build thì KHÔNG tạo job nào — không để nửa lượt trong hàng đợi', async () => {
+    const dir = await mkdtemp(path.join(tmpdir(), 'tp-half-'));
+    const apk = path.join(dir, 'app.apk');
+    await writeFile(apk, 'android');
+    const configFile = path.join(dir, 'cfg.json');
+    await writeFile(configFile, JSON.stringify({
+      web: { baseUrl: 'https://example.test' }, android: { deviceName: 'a', app: apk },
+    }));
+    const queue = new MemoryJobQueue();
+    try {
+      const events = await postRun(queue, {
+        platform: 'android', appSource: 'upload', devices: ['android:emulator-5554', 'ios:SIM-1'],
+      }, await twoRunners(), 'u1', configFile);
+      assert.equal(events.refused.status, 400);
+      assert.equal((await queue.list()).length, 0);
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+});

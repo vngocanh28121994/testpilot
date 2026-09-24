@@ -206,8 +206,11 @@ export interface RunSuiteParams {
    * Không có trường này thì runner ở xa cài bản build đang nằm trên đĩa của
    * CHÍNH nó — có thể là bản cũ ba tuần — rồi báo kết quả như thể đã chạy trên
    * bản vừa tải lên. Xem [appBuild.ts](../runner/appBuild.ts).
+   *
+   * Theo TỪNG nền tảng: một lượt song song bắc cả Android lẫn iOS cần hai bản
+   * build khác nhau, và một trường đơn thì chỉ chứa được một.
    */
-  appBuild?: AppBuildRef;
+  appBuilds?: AppBuilds;
   /**
    * Chỉ chạy đúng một file feature — lượt chạy của một workflow Studio.
    *
@@ -243,6 +246,9 @@ export interface AppBuildRef {
    */
   packed?: 'tar.gz';
 }
+
+/** Bản build cho từng nền tảng của job. Nền tảng vắng mặt là nền tảng không cài gì. */
+export type AppBuilds = Partial<Record<'android' | 'ios', AppBuildRef>>;
 
 export interface JobSnapshot {
   registryRevision: string;

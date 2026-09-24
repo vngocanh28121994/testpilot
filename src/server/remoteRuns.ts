@@ -14,7 +14,7 @@
  * Nó là một interface, không phải lời gọi thẳng vào hàng đợi, để workflow test
  * được mà không cần dựng hàng đợi, sổ máy và sổ runner.
  */
-import type { AppBuildRef, JobState } from '../protocol/messages.js';
+import type { AppBuilds, JobState } from '../protocol/messages.js';
 import type { PreflightResult } from '../core/preflight.js';
 import { loadConfig } from '../config.js';
 import { describeBuild, type BuildLookup } from './appBuilds.js';
@@ -107,11 +107,11 @@ export function remoteRunsFor(ctx: RouteContext): RemoteRuns {
       const { data, revision } = await ctx.repos.registry.read();
       // "Bản đã tải lên" là bản trên máy chủ; runner phải tải đúng bản ấy về.
       // Tính NGAY LÚC ĐẶT JOB, cùng lý do với registry ở trên.
-      let appBuild: AppBuildRef | undefined;
+      const appBuilds: AppBuilds = {};
       if (request.appSource === 'upload') {
         const found = await describeBuild(await loadConfig(ctx.configFile), request.env, request.platform);
         if (!found.ok) throw new Error(found.reason);
-        appBuild = found.build;
+        appBuilds[request.platform] = found.build;
       }
       const job = await ctx.repos.queue.create({
         orgId: ctx.identity.orgId,
@@ -128,7 +128,7 @@ export function remoteRunsFor(ctx: RouteContext): RemoteRuns {
             feature: request.feature.name,
             ...(request.env ? { env: request.env } : {}),
             ...(request.appSource ? { appSource: request.appSource } : {}),
-            ...(appBuild ? { appBuild } : {}),
+            ...(Object.keys(appBuilds).length > 0 ? { appBuilds } : {}),
           },
           snapshot: {
             registryRevision: revision ?? '',

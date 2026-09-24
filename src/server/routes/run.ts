@@ -23,8 +23,8 @@ import { allows } from '../auth/roles.js';
 import { activeRuns, findActiveRun } from '../../ui/activeRuns.js';
 import { json, readJson, stream } from '../http.js';
 import type { JobsResponse } from '../../ui/contracts.js';
-import type { AppBuildRef } from '../../protocol/messages.js';
-import { describeBuild } from '../appBuilds.js';
+import type { AppBuilds } from '../../protocol/messages.js';
+import { describeBuild, type BuildLookup } from '../appBuilds.js';
 import { LOCAL_HOST_RUNNER } from '../remoteRuns.js';
 import type { JobQueue, JobRecord } from '../queue/queue.js';
 import type { RouteTable } from './types.js';
@@ -178,8 +178,13 @@ export const runRoutes: RouteTable = {
     const cfgForDevices = (body.devices ?? []).length > 0
       ? await loadConfig(ctx.configFile)
       : undefined;
-    /** Có chiếc máy nào nằm ở runner KHÁC không — xem phần bản build bên dưới. */
-    let anyRemote = false;
+    /**
+     * Máy nằm ở runner nào, theo từng token.
+     *
+     * Cần cho hai việc: tách lượt chạy theo runner (xem `groups` bên dưới), và
+     * biết bản build có phải đi qua mạng không.
+     */
+    const runnerOf = new Map<string, string>();
     for (const token of body.devices ?? []) {
       const [tokenPlatform, ...rest] = token.split(':');
       const named = rest.join(':');
@@ -207,78 +212,135 @@ export const runRoutes: RouteTable = {
           error: `Không dùng được thiết bị "${named}": nó không có trong danh sách máy của bạn.`,
         });
       }
-      if (seen.runnerId !== LOCAL_HOST_RUNNER) anyRemote = true;
+      runnerOf.set(token, seen.runnerId);
     }
 
     /**
-     * "Bản đã tải lên" là bản trên MÁY CHỦ — gắn nó vào job.
+     * MỘT JOB CHO MỖI RUNNER giữ máy.
      *
-     * Không có dòng này thì một runner ở laptop khác cài bản build nằm trên
-     * đĩa của chính nó, có thể là bản cũ ba tuần, rồi báo kết quả như thể đã
-     * chạy trên bản vừa tải lên. Worker nhúng trong máy chủ thì bỏ qua trường
-     * này — nó chung đĩa với máy chủ nên bản trong config của nó là đúng bản.
+     * Một job chỉ được một runner nhận, và runner ấy đòi MỌI máy của job phải
+     * cắm ở chính nó — thiếu chiếc nào là hoãn (`resolveDevices`). Nên một job
+     * chứa Android ở máy chủ và iPhone ở laptop sẽ bị cả hai runner hoãn mãi
+     * mãi, mỗi bên thấy một chiếc "chưa cắm": một lượt chạy treo không một
+     * lời. Ô chọn máy gom theo máy tính làm cho tổ hợp ấy chọn được bằng hai cú
+     * bấm, nên nó phải chạy được.
      *
-     * Chỉ khi lượt chạy nằm trọn trên MỘT nền tảng: một trường không chứa
-     * được hai bản build. Lượt song song bắc qua cả Android lẫn iOS đi như cũ.
+     * Tách ra thì mỗi runner nhận đúng phần máy của nó, các job chạy SONG SONG
+     * trên các máy tính khác nhau, và log gộp về một luồng. Máy cùng một runner
+     * vẫn ở chung một job — đường song song sẵn có của runner ấy lo phần đó.
      */
-    const platforms = new Set(
-      (body.devices ?? []).length > 0
-        ? (body.devices ?? []).map((token) => token.split(':')[0])
-        : [body.platform],
-    );
-    const only = platforms.size === 1 ? [...platforms][0] : undefined;
-    let appBuild: AppBuildRef | undefined;
-    // Chỉ tra khi bản build CÓ THỂ phải đi qua mạng: có máy nằm ở runner
-    // khác, hoặc không nêu máy nào (không biết runner nào sẽ nhận). Mọi máy
-    // cắm ở chính máy chủ thì bỏ qua hẳn — tra nghĩa là băm 200 MB, hay đóng
-    // gói cả một bản `.app` của simulator, cho một lượt chạy không gửi gì đi
-    // đâu. Đường tại chỗ giữ nguyên như trước.
-    const mayTravel = anyRemote || (body.devices ?? []).length === 0;
-    if (body.appSource === 'upload' && mayTravel && (only === 'android' || only === 'ios')) {
-      const found = await describeBuild(await loadConfig(ctx.configFile), body.env, only);
-      if (found.ok) appBuild = found.build;
-      // Không gửi được thì CHỈ chặn khi chắc chắn máy nằm ở runner khác.
-      else if (anyRemote) return json(res, 400, { error: found.reason });
+    const groups = new Map<string, string[]>();
+    for (const token of body.devices ?? []) {
+      const key = runnerOf.get(token) ?? '';
+      groups.set(key, [...(groups.get(key) ?? []), token]);
+    }
+    if (groups.size === 0) groups.set('', []);
+
+    /**
+     * "Bản đã tải lên" là bản trên MÁY CHỦ — gắn nó vào job, cho TỪNG nền tảng.
+     *
+     * Không có nó, runner ở laptop khác cài bản build nằm trên đĩa của chính
+     * nó, có thể là bản cũ ba tuần, rồi báo kết quả như thể đã chạy trên bản
+     * vừa tải lên. Worker nhúng trong máy chủ bỏ qua trường này — nó chung đĩa
+     * với máy chủ nên bản trong config của nó là đúng bản.
+     *
+     * Chỉ tra khi bản build CÓ THỂ phải đi qua mạng: nhóm nằm ở runner khác,
+     * hoặc không nêu máy nào (không biết runner nào sẽ nhận). Nhóm cắm ở
+     * chính máy chủ thì bỏ qua hẳn — tra nghĩa là băm 200 MB, hay đóng gói cả
+     * một bản `.app` của simulator, cho một lượt chạy không gửi gì đi đâu.
+     *
+     * Tra HẾT trước khi tạo job nào: tạo job Android rồi mới phát hiện iOS
+     * không gửi được là để nửa lượt chạy trong hàng đợi và trả lỗi cho nửa kia.
+     */
+    const lookups = new Map<'android' | 'ios', Promise<BuildLookup>>();
+    const lookup = async (platform: 'android' | 'ios'): Promise<BuildLookup> => {
+      if (!lookups.has(platform)) {
+        lookups.set(platform, loadConfig(ctx.configFile)
+          .then((cfg) => describeBuild(cfg, body.env, platform)));
+      }
+      return lookups.get(platform)!;
+    };
+    const plans: Array<{ runnerId: string; tokens: string[]; platform: string; appBuilds: AppBuilds }> = [];
+    for (const [runnerId, tokens] of groups) {
+      const platforms = [...new Set(tokens.length > 0
+        ? tokens.map((token) => token.split(':')[0]!)
+        : [body.platform])];
+      const remote = runnerId !== LOCAL_HOST_RUNNER;
+      const appBuilds: AppBuilds = {};
+      if (body.appSource === 'upload' && (remote || tokens.length === 0)) {
+        for (const platform of platforms) {
+          if (platform !== 'android' && platform !== 'ios') continue;
+          const found = await lookup(platform);
+          if (found.ok) appBuilds[platform] = found.build;
+          // Không gửi được thì CHỈ chặn khi chắc chắn máy nằm ở runner khác.
+          else if (remote && tokens.length > 0) return json(res, 400, { error: found.reason });
+        }
+      }
+      plans.push({
+        runnerId,
+        tokens,
+        // Nền tảng của job quyết định runner nào được mời nhận nó. Giữ nền
+        // tảng người dùng chọn nếu nhóm có nó; không thì lấy của chính nhóm.
+        platform: platforms.includes(body.platform) ? body.platform : platforms[0]!,
+        appBuilds,
+      });
     }
 
-    const job = await ctx.repos.queue.create({
-      orgId: ctx.identity.orgId,
-      kind: 'run_suite',
-      createdBy: ctx.identity.userId,
-      spec: {
+    const jobs: JobRecord[] = [];
+    for (const plan of plans) {
+      jobs.push(await ctx.repos.queue.create({
         orgId: ctx.identity.orgId,
         kind: 'run_suite',
         createdBy: ctx.identity.userId,
-        // Mười lăm phút: dài hơn mọi lượt chạy đã đo, ngắn hơn một đêm. Thu hồi
-        // job quá hạn là việc của P3.2.
-        timeoutMs: 15 * 60_000,
-        // Thiết bị tới dưới dạng `platform:id` vì một id trần không nói được
-        // nó là máy nào khi cả hai nền tảng cùng có mặt.
-        deviceTokens: body.devices ?? [],
-        run: {
-          platform: body.platform,
-          tag: body.tag,
-          headed: Boolean(body.headed),
-          includeQuarantined: Boolean(body.includeQuarantined),
-          env: body.env,
-          appSource: body.appSource,
-          ...(appBuild ? { appBuild } : {}),
+        spec: {
+          orgId: ctx.identity.orgId,
+          kind: 'run_suite',
+          createdBy: ctx.identity.userId,
+          // Mười lăm phút: dài hơn mọi lượt chạy đã đo, ngắn hơn một đêm. Thu
+          // hồi job quá hạn là việc của P3.2.
+          timeoutMs: 15 * 60_000,
+          // Thiết bị tới dưới dạng `platform:id` vì một id trần không nói được
+          // nó là máy nào khi cả hai nền tảng cùng có mặt.
+          deviceTokens: plan.tokens,
+          run: {
+            platform: plan.platform,
+            tag: body.tag,
+            headed: Boolean(body.headed),
+            includeQuarantined: Boolean(body.includeQuarantined),
+            env: body.env,
+            appSource: body.appSource,
+            ...(Object.keys(plan.appBuilds).length > 0 ? { appBuilds: plan.appBuilds } : {}),
+          },
         },
-      },
-    });
+      }));
+    }
+
+    // Tên runner để gắn vào log khi có nhiều job: hai luồng log trộn vào nhau
+    // mà không nói dòng nào của máy nào thì không đọc được.
+    const names = new Map<string, string>();
+    if (jobs.length > 1) {
+      for (const plan of plans) {
+        const runner = plan.runnerId ? await ctx.runners.find(plan.runnerId) : undefined;
+        names.set(plan.runnerId, runner?.name ?? plan.runnerId);
+      }
+    }
 
     return stream(res, async (log) => {
-      log(`[job] ${job.id} đã vào hàng đợi.`);
-      const offLog = await ctx.repos.queue.onLog(job.id, log);
-      try {
-        const closed = await waitForClose(ctx.repos.queue, job.id, log);
-        // KHÔNG ném khi job `failed`: một lượt test đỏ không phải lỗi của
-        // request, và dòng log đã nói rõ. Ném ở đây sẽ biến mọi lượt có test
-        // fail thành một toast lỗi chồng lên chính cái log đang nói điều đó.
-        if (closed?.state === 'interrupted') log(`[job] ${closed.error ?? 'Job bị bỏ dở.'}`);
-      } finally {
-        offLog();
-      }
+      await Promise.all(jobs.map(async (job, i) => {
+        const label = jobs.length > 1 ? `[${names.get(plans[i]!.runnerId)}] ` : '';
+        const say = (line: string): void => log(`${label}${line}`);
+        say(`[job] ${job.id} đã vào hàng đợi.`);
+        const offLog = await ctx.repos.queue.onLog(job.id, say);
+        try {
+          const closed = await waitForClose(ctx.repos.queue, job.id, say);
+          // KHÔNG ném khi job `failed`: một lượt test đỏ không phải lỗi của
+          // request, và dòng log đã nói rõ. Ném ở đây sẽ biến mọi lượt có test
+          // fail thành một toast lỗi chồng lên chính cái log đang nói điều đó.
+          if (closed?.state === 'interrupted') say(`[job] ${closed.error ?? 'Job bị bỏ dở.'}`);
+        } finally {
+          offLog();
+        }
+      }));
     });
   },
 

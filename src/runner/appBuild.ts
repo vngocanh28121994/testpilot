@@ -44,6 +44,7 @@ const KEEP = 3;
 
 export type BuildFetcher = (
   jobId: string,
+  platform: 'android' | 'ios',
   build: AppBuildRef,
   log: (line: string) => void,
 ) => Promise<string>;
@@ -85,11 +86,13 @@ export function buildFetcher(opts: {
    * Tải ĐÚNG những byte của job về `dest`, kiểm cỡ và hash — hoặc ném.
    * Một lần tải đứt, hay một proxy chèn trang lỗi, không để lại gì trên đĩa.
    */
-  const download = async (jobId: string, build: AppBuildRef, dest: string, log: (l: string) => void) => {
+  const download = async (
+    jobId: string, platform: 'android' | 'ios', build: AppBuildRef, dest: string, log: (l: string) => void,
+  ) => {
     log(`[build] Tải ${build.name} từ máy chủ (${megabytes(build.size)})…`);
     const started = Date.now();
     const res = await fetchImpl(
-      `${opts.serverUrl}/api/runner/build?job=${encodeURIComponent(jobId)}`,
+      `${opts.serverUrl}/api/runner/build?job=${encodeURIComponent(jobId)}&platform=${platform}`,
       { headers: { authorization: `Bearer ${opts.token}`, 'x-runner-name': opts.name } },
     );
     if (!res.ok || !res.body) {
@@ -125,11 +128,14 @@ export function buildFetcher(opts: {
     log(`[build] Đã tải và kiểm xong trong ${((Date.now() - started) / 1000).toFixed(1)}s.`);
   };
 
-  return async (jobId, build, log) => {
+  return async (jobId, platform, build, log) => {
     const name = checkedName(build);
     await mkdir(cacheDir, { recursive: true });
 
-    if (build.packed) return fetchBundle(jobId, build, name, cacheDir, download, log);
+    if (build.packed) {
+      return fetchBundle(jobId, build, name, cacheDir,
+        (id, b, dest, l) => download(id, platform, b, dest, l), log);
+    }
 
     const target = path.join(cacheDir, `${build.sha256}${name}`);
     // Tên file CHÍNH LÀ hash, và file chỉ được đặt vào tên ấy sau khi hash đã
@@ -141,7 +147,7 @@ export function buildFetcher(opts: {
       return target;
     }
     const temp = `${target}.part-${process.pid}-${Date.now()}`;
-    await download(jobId, build, temp, log);
+    await download(jobId, platform, build, temp, log);
     await rename(temp, target);
     await prune(cacheDir, target);
     return target;

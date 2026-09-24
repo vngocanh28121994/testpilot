@@ -12,7 +12,7 @@
  * sẽ tranh cùng một chiếc điện thoại, và không ai phân xử.
  */
 import { loadConfig, type TestPilotConfig } from '../config.js';
-import { prepareJobWorkspace, type JobWorkspace } from './jobWorkspace.js';
+import { prepareJobWorkspace, type JobApp, type JobWorkspace } from './jobWorkspace.js';
 import type { BuildFetcher } from './appBuild.js';
 import { resolveDevices, runnerPlatforms, type AttachedDevice } from '../server/scheduler/match.js';
 import { measurePrereq, refuseReason, type PrereqByPlatform } from './prereqReport.js';
@@ -353,31 +353,38 @@ async function run(
       throw new Error('Job mang snapshot chưa chạy song song được — gửi mỗi máy một job.');
     }
     // "Bản đã tải lên" trên một runner đứng riêng: lấy ĐÚNG bản máy chủ chọn,
-    // không phải bản đang nằm trên đĩa máy này.
-    const nativePlatform = params.platform === 'android' || params.platform === 'ios'
-      ? params.platform : undefined;
-    // Chốt cuối, ở phía runner: runner đứng riêng KHÔNG BAO GIỜ tự cài bản
-    // build trên đĩa của nó cho một job "bản đã tải lên". Máy chủ không gửi kèm
-    // bản nào — lượt song song bắc hai nền tảng, hay máy chủ không có bản đơn
-    // file để gửi — thì dừng bằng một câu, thay vì chạy trên một bản không ai
-    // chọn và trả về một report trông hoàn toàn bình thường.
-    if (deps.fetchBuild && params.appSource === 'upload' && nativePlatform && !params.appBuild) {
-      throw new Error(
-        'Job chọn "bản đã tải lên" nhưng máy chủ không gửi kèm bản build nào, nên máy này '
-        + 'không cài bản đang nằm trên đĩa của nó. Chạy lại với "Bản có sẵn trên thiết bị", '
-        + 'hoặc tải bản build lên máy chủ.',
-      );
+    // không phải bản đang nằm trên đĩa máy này — cho TỪNG nền tảng của job.
+    // Một lượt song song bắc cả Android lẫn iOS cần hai bản.
+    const nativePlatforms = [...new Set(
+      (picked.length > 0 ? picked.map((device) => device.platform) : [params.platform])
+        .filter((platform): platform is 'android' | 'ios' => platform === 'android' || platform === 'ios'),
+    )];
+    const apps: JobApp[] = [];
+    if (deps.fetchBuild && params.appSource === 'upload') {
+      for (const platform of nativePlatforms) {
+        const build = params.appBuilds?.[platform];
+        // Chốt cuối, ở phía runner: runner đứng riêng KHÔNG BAO GIỜ tự cài bản
+        // build trên đĩa của nó cho một job "bản đã tải lên". Thiếu bản của
+        // MỘT nền tảng cũng dừng cả job: chạy nửa lượt song song trên bản
+        // không ai chọn là một report nửa đúng nửa sai, trông hoàn toàn bình
+        // thường.
+        if (!build) {
+          throw new Error(
+            `Job chọn "bản đã tải lên" nhưng máy chủ không gửi kèm bản build ${platform}, nên máy `
+            + 'này không cài bản đang nằm trên đĩa của nó. Chạy lại với "Bản có sẵn trên thiết bị", '
+            + 'hoặc tải bản build lên máy chủ.',
+          );
+        }
+        apps.push({ platform, path: await deps.fetchBuild(job.id, platform, build, log) });
+      }
     }
-    const appPath = params.appBuild && params.appSource === 'upload' && deps.fetchBuild && nativePlatform
-      ? await deps.fetchBuild(job.id, params.appBuild, log)
-      : undefined;
 
-    if (job.spec.snapshot || appPath) {
+    if (job.spec.snapshot || apps.length > 0) {
       workspace = await prepareJobWorkspace({
         jobId: job.id,
         configFile: deps.configFile,
         ...(job.spec.snapshot ? { snapshot: job.spec.snapshot } : {}),
-        ...(appPath && nativePlatform ? { app: { platform: nativePlatform, path: appPath } } : {}),
+        ...(apps.length > 0 ? { apps } : {}),
         ...(deps.jobsRoot ? { root: deps.jobsRoot } : {}),
       });
       if (workspace.features.length > 0) {
