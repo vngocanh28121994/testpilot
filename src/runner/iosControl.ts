@@ -28,7 +28,38 @@ import type { ScreenSize, ScreenStreamHandle, ScreenStreamSink } from './android
 import type { IosSigning } from '../protocol/control.js';
 
 const APPIUM = { host: '127.0.0.1', port: Number(process.env.TESTPILOT_APPIUM_PORT ?? 4723) };
-const MJPEG_PORT = Number(process.env.TESTPILOT_MJPEG_PORT ?? 9100);
+/**
+ * Cổng trên Mac cho luồng MJPEG và cho WDA của iPhone thật — MỖI PHIÊN MỘT CỔNG
+ * TRỐNG, không cố định.
+ *
+ * Từng cố định 9100/8100, và iPhone thật hỏng với "The port #9100 is occupied":
+ * WDA của simulator chạy NGAY TRÊN MAC nên mở thẳng hai cổng ấy, còn iPhone thật
+ * cần chuyển tiếp đúng hai cổng ấy qua USB. Hai chiếc máy iOS cùng lúc — hay chỉ
+ * một simulator còn chạy WDA từ lượt test trước — là tranh cổng. Biến môi trường
+ * vẫn ép được một cổng cố định, cho ai cần mở tường lửa theo số.
+ */
+const MJPEG_PORT_OVERRIDE = process.env.TESTPILOT_MJPEG_PORT
+  ? Number(process.env.TESTPILOT_MJPEG_PORT)
+  : undefined;
+
+async function freePort(): Promise<number> {
+  const { createServer } = await import('node:net');
+  return new Promise((resolve, reject) => {
+    const server = createServer();
+    server.unref();
+    server.on('error', reject);
+    server.listen(0, '127.0.0.1', () => {
+      const address = server.address();
+      const port = typeof address === 'object' && address ? address.port : 0;
+      server.close(() => (port ? resolve(port) : reject(new Error('Không tìm được cổng trống.'))));
+    });
+  });
+}
+
+/** udid của simulator là một UUID; của iPhone thật thì không. */
+function isSimulatorUdid(udid: string): boolean {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(udid);
+}
 
 /**
  * Tốc độ khung và tỉ lệ thu nhỏ của luồng MJPEG.
@@ -56,6 +87,8 @@ const MJPEG_SETTINGS = {
 interface Session {
   id: string;
   screen: ScreenSize;
+  /** Cổng trên Mac nơi luồng MJPEG của phiên này nghe. */
+  mjpegPort: number;
 }
 
 async function appium<T>(
@@ -126,7 +159,6 @@ const sessions = new Map<string, Promise<Session>>();
 export function signingCaps(signing: IosSigning | undefined): Record<string, unknown> {
   if (!signing) return {};
   return {
-    ...(signing.wdaLocalPort ? { 'appium:wdaLocalPort': signing.wdaLocalPort } : {}),
     ...(signing.usePrebuiltWDA ? { 'appium:usePrebuiltWDA': true } : {}),
     ...(signing.derivedDataPath ? { 'appium:derivedDataPath': signing.derivedDataPath } : {}),
     ...(signing.usePreinstalledWDA && signing.wdaBundleId
@@ -147,14 +179,62 @@ export function signingCaps(signing: IosSigning | undefined): Record<string, unk
   };
 }
 
+/**
+ * Mã phiên Appium đã mở, theo udid — GHI RA ĐĨA.
+ *
+ * Phiên sống tới khi tiến trình tắt, nhưng tắt tiến trình (tsx watch khởi động
+ * lại, Ctrl+C, sập) KHÔNG đóng phiên bên Appium. Với iPhone thật, phiên cũ còn
+ * giữ cổng chuyển tiếp MJPEG 9100 qua USB, và phiên mới hỏng ngay với "The port
+ * #9100 is occupied" — suốt 10 phút tới khi `newCommandTimeout` tự đóng nó.
+ * Simulator không chuyển tiếp cổng, nên lỗi này chỉ lộ ra trên máy thật.
+ *
+ * Nhớ trong bộ nhớ thì chết cùng tiến trình; Appium thì không cho liệt kê phiên
+ * (`session_discovery` tắt). Nên ghi ra đĩa, và lần sau mở phiên cho cùng máy
+ * thì đóng phiên cũ trước.
+ */
+export const SESSION_RECORD = '.testpilot/control-sessions.json';
+
+export async function readSessionRecord(file = SESSION_RECORD): Promise<Record<string, string>> {
+  const { readFile } = await import('node:fs/promises');
+  try {
+    const parsed = JSON.parse(await readFile(file, 'utf8')) as unknown;
+    return parsed && typeof parsed === 'object' ? parsed as Record<string, string> : {};
+  } catch {
+    return {};
+  }
+}
+
+export async function writeSessionRecord(
+  udid: string, sessionId: string | undefined, file = SESSION_RECORD,
+): Promise<void> {
+  const { mkdir, writeFile } = await import('node:fs/promises');
+  const path = await import('node:path');
+  const record = await readSessionRecord(file);
+  if (sessionId) record[udid] = sessionId;
+  else delete record[udid];
+  await mkdir(path.dirname(path.resolve(file)), { recursive: true });
+  await writeFile(file, JSON.stringify(record, null, 2) + '\n', 'utf8');
+}
+
 async function openSession(udid: string, signing?: IosSigning): Promise<Session> {
+  const stale = (await readSessionRecord())[udid];
+  if (stale) {
+    // Phiên đã hết hạn thì Appium trả 404 — cũng là kết quả mong muốn.
+    await appium('DELETE', `/session/${stale}`, undefined, 30_000).catch(() => undefined);
+    await writeSessionRecord(udid, undefined).catch(() => undefined);
+  }
+  const mjpegPort = MJPEG_PORT_OVERRIDE ?? await freePort();
+  // iPhone thật: Appium chuyển tiếp cổng WDA qua USB, nên cũng cần một cổng
+  // trống — cổng 8100 mặc định là của WDA simulator nếu có simulator đang chạy.
+  const wdaLocalPort = isSimulatorUdid(udid) ? undefined : await freePort();
   const created = await appium<{ sessionId: string }>('POST', '/session', {
     capabilities: {
       alwaysMatch: {
         platformName: 'iOS',
         'appium:automationName': 'XCUITest',
         'appium:udid': udid,
-        'appium:mjpegServerPort': MJPEG_PORT,
+        'appium:mjpegServerPort': mjpegPort,
+        ...(wdaLocalPort ? { 'appium:wdaLocalPort': wdaLocalPort } : {}),
         // Không mở ứng dụng nào: màn điều khiển bắt đầu ở nơi chiếc máy đang
         // đứng, chứ không kéo nó về màn hình chính.
         'appium:noReset': true,
@@ -166,6 +246,7 @@ async function openSession(udid: string, signing?: IosSigning): Promise<Session>
       firstMatch: [{}],
     },
   });
+  await writeSessionRecord(udid, created.sessionId).catch(() => undefined);
   const rect = await appium<{ width: number; height: number }>(
     'GET', `/session/${created.sessionId}/window/rect`, undefined, 30_000,
   );
@@ -177,6 +258,7 @@ async function openSession(udid: string, signing?: IosSigning): Promise<Session>
     // `overridden` false: toạ độ W3C đi theo đúng số này, không có lớp quy đổi
     // nào ở giữa như `wm size` của Android.
     screen: { width: rect.width, height: rect.height, overridden: false },
+    mjpegPort,
   };
 }
 
@@ -280,7 +362,7 @@ export async function startScreenStream(
   const splitter = new MjpegSplitter();
   const deduper = new FrameDeduper();
 
-  const req = get({ host: APPIUM.host, port: MJPEG_PORT, path: '/' }, (res) => {
+  const req = get({ host: APPIUM.host, port: open.mjpegPort, path: '/' }, (res) => {
     res.on('data', (chunk: Buffer) => {
       for (const frame of splitter.push(chunk)) {
         const fresh = deduper.keep(frame);
@@ -297,7 +379,7 @@ export async function startScreenStream(
   req.on('error', (err) => {
     if (state.stopped) return;
     for (const each of state.sinks) {
-      each.fail(`Không mở được luồng MJPEG ở cổng ${MJPEG_PORT}: ${err.message}`);
+      each.fail(`Không mở được luồng MJPEG ở cổng ${open.mjpegPort}: ${err.message}`);
     }
     streams.delete(udid);
   });

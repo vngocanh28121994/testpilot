@@ -278,14 +278,12 @@ async function controlTarget(configFile: string, platform: ControlPlatform, udid
   const cfg = await loadConfig(configFile).catch(() => undefined);
   if (!cfg) return { platform, udid };
   const ios = cfg.ios;
-  const port = ios.devices?.find((device) => device.udid === udid)?.wdaLocalPort;
   const signing: IosSigning = {
     ...(ios.teamId ? { teamId: ios.teamId, signingId: ios.signingId ?? 'Apple Development' } : {}),
     ...(ios.wdaBundleId ? { wdaBundleId: ios.wdaBundleId } : {}),
     ...(ios.usePreinstalledWDA ? { usePreinstalledWDA: true } : {}),
     ...(ios.usePrebuiltWDA ? { usePrebuiltWDA: true } : {}),
     ...(ios.derivedDataPath ? { derivedDataPath: ios.derivedDataPath } : {}),
-    ...(port ? { wdaLocalPort: port } : {}),
   };
   return { platform, udid, ...(Object.keys(signing).length > 0 ? { iosSigning: signing } : {}) };
 }

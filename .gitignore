@@ -22,6 +22,7 @@ docs/
 #   builds/          đệm bản build tải từ máy chủ (runner)
 #   build-archives/  gói .app của simulator đã đóng để gửi đi (máy chủ)
 .testpilot/jobs/
+.testpilot/control-sessions.json
 .testpilot/builds/
 .testpilot/build-archives/
 

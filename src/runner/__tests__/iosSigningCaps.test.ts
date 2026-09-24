@@ -16,14 +16,15 @@ describe('signingCaps', () => {
     const caps = signingCaps({
       teamId: 'TMAP9PAQXM', signingId: 'Apple Development',
       wdaBundleId: 'com.tuoiha17.WebDriverAgentRunner', usePrebuiltWDA: true,
-      derivedDataPath: '/dd', wdaLocalPort: 8100,
+      derivedDataPath: '/dd',
     });
     assert.equal(caps['appium:xcodeOrgId'], 'TMAP9PAQXM');
     assert.equal(caps['appium:updatedWDABundleId'], 'com.tuoiha17.WebDriverAgentRunner');
     assert.equal(caps['appium:allowProvisioningDeviceRegistration'], true);
     assert.equal(caps['appium:usePrebuiltWDA'], true);
     assert.equal(caps['appium:derivedDataPath'], '/dd');
-    assert.equal(caps['appium:wdaLocalPort'], 8100);
+    // Cổng WDA do phiên tự lấy (cổng trống), không lấy từ chữ ký.
+    assert.equal(caps['appium:wdaLocalPort'], undefined);
   });
 
   it('dùng lại WDA đã cài: không gửi cờ ký, để Appium không build lại', () => {
@@ -48,5 +49,21 @@ describe('explainWdaStart', () => {
   });
   it('lỗi khác: giữ nguyên', () => {
     assert.equal(explainWdaStart('Appium không trả lời kịp.'), 'Appium không trả lời kịp.');
+  });
+});
+
+describe('sổ phiên điều khiển trên đĩa', () => {
+  it('ghi, đọc lại, và xoá theo từng máy', async () => {
+    const { mkdtemp } = await import('node:fs/promises');
+    const { tmpdir } = await import('node:os');
+    const path = await import('node:path');
+    const { readSessionRecord, writeSessionRecord } = await import('../iosControl.js');
+    const file = path.join(await mkdtemp(path.join(tmpdir(), 'tp-sess-')), 'sub', 's.json');
+    assert.deepEqual(await readSessionRecord(file), {});
+    await writeSessionRecord('iphone', 'A', file);
+    await writeSessionRecord('sim', 'B', file);
+    assert.deepEqual(await readSessionRecord(file), { iphone: 'A', sim: 'B' });
+    await writeSessionRecord('iphone', undefined, file);
+    assert.deepEqual(await readSessionRecord(file), { sim: 'B' });
   });
 });

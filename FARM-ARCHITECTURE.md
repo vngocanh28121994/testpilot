@@ -421,7 +421,7 @@ header `Upgrade`/`Connection` đã có sẵn trong [infra/nginx/testpilot.conf](
 **Phần thực thi iOS** đi đường khác hẳn, và đó là sự thật của nền tảng chứ không phải một thiếu
 sót cần gộp lại: iOS không có `adb`, và không lệnh nào trên máy chủ chạm được vào màn hình một
 chiếc iPhone. Đường duy nhất là WebDriverAgent — một ứng dụng chạy TRÊN máy ấy, do Appium dựng và
-cài. Video là MJPEG ở cổng 9100; đầu vào là W3C actions và `mobile:` script qua `execute/sync`.
+cài. Video là MJPEG, mỗi phiên một cổng trống trên máy runner (cổng cố định 9100 va với WDA của simulator); đầu vào là W3C actions và `mobile:` script qua `execute/sync`.
 
 Ba con số định hình thiết kế ấy (simulator iPhone 17 Pro, iOS 26.5, 22/09/2026):
 

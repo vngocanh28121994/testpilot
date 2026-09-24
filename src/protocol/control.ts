@@ -29,7 +29,6 @@ export interface IosSigning {
   usePreinstalledWDA?: boolean;
   usePrebuiltWDA?: boolean;
   derivedDataPath?: string;
-  wdaLocalPort?: number;
 }
 
 /**

@@ -1,7 +1,7 @@
 /**
  * Tách luồng `multipart/x-mixed-replace` của WebDriverAgent thành từng ảnh JPEG.
  *
- * WDA phát MJPEG ở cổng 9100: mỗi khung là một ảnh JPEG trọn vẹn, ngăn nhau
+ * WDA phát MJPEG ở một cổng HTTP (mỗi phiên một cổng trống, xem iosControl.ts): mỗi khung là một ảnh JPEG trọn vẹn, ngăn nhau
  * bằng một ranh giới và một khối header có `Content-Length`. Socket thì trả về
  * từng mảnh theo kích thước bộ đệm, nên một mảnh có thể chứa nửa header, hay
  * ba khung rưỡi — cùng hình dạng vấn đề với Annex-B của Android, và cùng cách
