@@ -41,6 +41,11 @@ describe('explainWdaStart', () => {
   it('code 65: nói tới Tin cậy trên máy', () => {
     assert.match(explainWdaStart('xcodebuild failed with code 65. …'), /Tin cậy/);
   });
+  it('máy đang khoá: bảo mở khoá', () => {
+    const raw = 'Unable to launch WebDriverAgent. … because the device was not, or could not be, '
+      + 'unlocked). … BSErrorCodeDescription = Locked';
+    assert.match(explainWdaStart(raw), /đang khoá màn hình/);
+  });
   it('lỗi khác: giữ nguyên', () => {
     assert.equal(explainWdaStart('Appium không trả lời kịp.'), 'Appium không trả lời kịp.');
   });

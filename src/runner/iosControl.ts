@@ -184,6 +184,13 @@ async function openSession(udid: string, signing?: IosSigning): Promise<Session>
  * Giữ nguyên câu gốc ở cuối để ai cần vẫn tra được.
  */
 export function explainWdaStart(message: string): string {
+  // WDA cài sẵn (`usePreinstalledWDA`): iOS không mở app nào khi màn hình đang
+  // khoá, và câu của Appium chôn điều đó giữa mười dòng mã lỗi.
+  if (/could not be, unlocked|Description = Locked/i.test(message)) {
+    return 'iPhone đang khoá màn hình nên iOS không cho mở WebDriverAgent. Mở khoá máy '
+      + '(và để máy sáng) rồi bấm Giữ máy lại. '
+      + `Nguyên văn: ${message}`;
+  }
   if (/xcodebuild failed with code 70/i.test(message)) {
     return 'iPhone từ chối cài WebDriverAgent — thường là vì provisioning profile đã hết hạn '
       + '(Apple ID miễn phí chỉ cho 7 ngày). Dựng lại WDA một lần để Xcode cấp profile mới: '

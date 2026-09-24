@@ -125,11 +125,23 @@ APP="$OUT/WebDriverAgentRunner-Runner.app"
 # Profile của đúng bundle id đó, do Xcode quản lý. Không có thì mở
 # WebDriverAgent.xcodeproj một lần cho Xcode cấp, hoặc chạy một lượt iOS theo
 # đường xcodebuild cũ.
+#
+# Lấy bản CÒN HẠN LÂU NHẤT, bỏ bản đã hết hạn: profile Apple ID miễn phí sống 7
+# ngày, và một bản cũ nằm lại trong thư mục thì ký bằng nó là iOS từ chối cài
+# ("This provisioning profile has expired", xcodebuild code 70).
 PROFILE=""
+BEST=""
+NOW="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 for p in "$HOME/Library/Developer/Xcode/UserData/Provisioning Profiles/"*.mobileprovision; do
   [ -e "$p" ] || continue
-  if security cms -D -i "$p" 2>/dev/null | grep -q "$TEAM\.$BUNDLE\.xctrunner"; then PROFILE="$p"; break; fi
+  DECODED="$(security cms -D -i "$p" 2>/dev/null)" || continue
+  grep -q "$TEAM\.$BUNDLE\.xctrunner" <<<"$DECODED" || continue
+  EXPIRES="$(plutil -extract ExpirationDate raw - <<<"$DECODED" 2>/dev/null)" || continue
+  # Ngày ISO 8601 cùng múi UTC so được như chuỗi.
+  [[ "$EXPIRES" > "$NOW" ]] || { echo "→ bỏ qua profile đã hết hạn ($EXPIRES): $(basename "$p")"; continue; }
+  if [[ -z "$BEST" || "$EXPIRES" > "$BEST" ]]; then BEST="$EXPIRES"; PROFILE="$p"; fi
 done
+[ -n "$PROFILE" ] && echo "→ profile   : $(basename "$PROFILE") (hạn tới $BEST)"
 if [ -z "$PROFILE" ]; then
   cat >&2 <<MSG
 Không thấy provisioning profile nào cho $BUNDLE.xctrunner.
