@@ -64,15 +64,31 @@ export class PgDeviceRegistry implements DeviceRegistry {
     const client = await (await this.pool()).connect();
     try {
       await client.query('BEGIN');
-      // Xoá rồi chèn, trong MỘT transaction: giữa hai bước ấy không ai được
-      // nhìn thấy một danh sách rỗng. Đọc ngoài transaction sẽ thấy hoặc bản
-      // cũ hoặc bản mới, không thấy khoảng trống.
-      await client.query('DELETE FROM device WHERE runner_id = $1', [runner.id]);
+      // CẬP NHẬT máy còn cắm, chỉ XOÁ máy không còn được báo — trong MỘT
+      // transaction, nên không ai nhìn thấy một danh sách dở dang.
+      //
+      // Từng là "xoá hết rồi chèn lại". Nghe gọn, nhưng `lease.device_id` trỏ
+      // vào dòng này với ON DELETE CASCADE: mỗi nhịp báo máy (10 giây) xoá sạch
+      // mọi lượt giữ. Người bấm Giữ máy nhận "Chưa giữ chỗ thiết bị này" trước
+      // cả khi màn hình kịp hiện, và job chạy trên máy của runner ở xa mất lease
+      // giữa chừng. Máy đã rút ra thì mất lượt giữ theo — đó là đúng.
+      const ids = devices.map((device) => idOf(runner.id, device.udid));
+      await client.query(
+        'DELETE FROM device WHERE runner_id = $1 AND NOT (id = ANY($2::text[]))',
+        [runner.id, ids],
+      );
       for (const device of devices) {
         await client.query(
           `INSERT INTO device
              (id, runner_id, org_id, platform, name, udid, visibility, state, updated_at)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, 'idle', $8)`,
+           VALUES ($1, $2, $3, $4, $5, $6, $7, 'idle', $8)
+           ON CONFLICT (id) DO UPDATE SET
+             org_id = EXCLUDED.org_id, platform = EXCLUDED.platform, name = EXCLUDED.name,
+             udid = EXCLUDED.udid, visibility = EXCLUDED.visibility,
+             updated_at = EXCLUDED.updated_at,
+             -- Báo lên nghĩa là đang cắm: một máy từng bị đánh dấu tắt thì sống
+             -- lại. Trạng thái khác (cách ly) là quyết định của người, giữ nguyên.
+             state = CASE WHEN device.state = 'offline' THEN 'idle' ELSE device.state END`,
           [
             idOf(runner.id, device.udid), runner.id, runner.orgId, device.platform,
             device.label, device.udid, runner.visibility, now.toISOString(),

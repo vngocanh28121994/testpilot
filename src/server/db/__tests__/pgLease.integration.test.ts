@@ -15,6 +15,7 @@ import assert from 'node:assert/strict';
 import { Pool } from 'pg';
 import { connect } from '../connect.js';
 import { PgLeaseRepo } from '../pgRepo.js';
+import { PgDeviceRegistry } from '../../devices/pgRegistry.js';
 import { MemoryLeaseRepo } from '../leaseRepo.js';
 import { LeaseTakenError, LEASE_TTL_MS, type LeaseHolder, type LeaseRepo } from '../repo.js';
 
@@ -201,5 +202,25 @@ describe('PgLeaseRepo', () => {
 
   it('thiết bị không có trong sổ: câu nói được việc cần làm, không phải lỗi khoá ngoại', async () => {
     await assert.rejects(repo().acquire('khong-co-may-nay', ME, T0), /Không tìm thấy thiết bị .*Tìm lại/);
+  });
+
+  /**
+   * Giữ máy xong thì loading rồi "Chưa giữ chỗ thiết bị này": sổ thiết bị xoá
+   * hết rồi chèn lại mỗi nhịp báo máy, và ON DELETE CASCADE mang lease đi theo.
+   */
+  it('báo máy lại mỗi nhịp KHÔNG xoá lượt giữ; rút máy ra thì mất lượt giữ', async () => {
+    const runner = { id: `run-${ORG}`, orgId: ORG, visibility: 'shared' as const };
+    const udid = `REPORT-${ORG}`;
+    const devices = new PgDeviceRegistry(async () => pool);
+    const phone = { platform: 'ios' as const, udid, label: 'iPhone' };
+    await devices.report(runner, [phone]);
+    const leases = repo();
+    const lease = await leases.acquire(udid, ME, new Date());
+
+    await devices.report(runner, [phone]); // nhịp báo máy tiếp theo
+    assert.equal((await leases.find(udid))?.id, lease.id, 'lượt giữ phải còn sau khi báo máy lại');
+
+    await devices.report(runner, []); // rút máy ra
+    assert.equal(await leases.find(udid), undefined);
   });
 });
