@@ -549,11 +549,9 @@ export async function typeText(udid: string, text: string): Promise<void> {
  * phím — chúng là cú vuốt bắt đầu SÁT MÉP màn hình. Bắt đầu cách mép vài điểm
  * là cuộn nội dung app, không phải cử chỉ hệ thống.
  */
-const GESTURES: Record<'recents' | 'notifications' | 'quick_settings', {
+const GESTURES: Record<'notifications' | 'quick_settings', {
   from: [number, number]; to: [number, number]; durationMs: number; holdMs: number;
 }> = {
-  // Vuốt lên từ thanh Home rồi GIỮ: nhả ngay là về màn hình chính.
-  recents: { from: [0.5, 0.999], to: [0.5, 0.6], durationMs: 400, holdMs: 800 },
   // Nửa trái mép trên là Trung tâm thông báo, góc phải là Trung tâm điều khiển.
   notifications: { from: [0.3, 0.001], to: [0.3, 0.6], durationMs: 300, holdMs: 0 },
   quick_settings: { from: [0.92, 0.001], to: [0.92, 0.6], durationMs: 300, holdMs: 0 },
@@ -573,7 +571,26 @@ export async function pressKey(udid: string, key: string): Promise<void> {
     await script(udid, 'mobile: pressButton', { name: HARDWARE[key] });
     return;
   }
-  if (key === 'recents' || key === 'notifications' || key === 'quick_settings') {
+  if (key === 'recents') {
+    // Đa nhiệm: vuốt lên từ thanh Home rồi GIỮ. Làm bằng W3C actions thì iOS
+    // BỎ QUA — đã thử ba kiểu (sát mép, cách mép 5 điểm, kéo chậm 1,2 giây,
+    // giữ 1,5 giây) trên iPhone 12 Pro Max, iOS 26.6.1, và máy vẫn nằm yên
+    // trong app. Bấm Home hai lần (cả qua pressButton lẫn sự kiện HID) thì chỉ
+    // về màn hình chính. Chỉ đường kéo của CHÍNH XCTest — press, kéo có vận
+    // tốc, rồi giữ — mới mở được màn đa nhiệm.
+    const { screen } = await session(udid);
+    await script(udid, 'mobile: dragFromToWithVelocity', {
+      pressDuration: 0.1,
+      holdDuration: 1.0,
+      fromX: screen.width / 2,
+      fromY: screen.height - 1,
+      toX: screen.width / 2,
+      toY: screen.height * 0.55,
+      velocity: 400,
+    });
+    return;
+  }
+  if (key === 'notifications' || key === 'quick_settings') {
     const { screen } = await session(udid);
     const g = GESTURES[key];
     const at = ([fx, fy]: [number, number]) => ({

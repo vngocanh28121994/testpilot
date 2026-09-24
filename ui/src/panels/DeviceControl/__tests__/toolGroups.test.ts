@@ -5,15 +5,14 @@ const ids = (platform: 'android' | 'ios') =>
   toolsFor(platform).flatMap((group) => group.items.map((item) => item.id));
 
 describe('toolsFor — cột nút theo nền tảng', () => {
-  it('iPhone có thông báo, trung tâm điều khiển, âm lượng, xoay, app, chụp màn hình', () => {
+  it('iPhone có đa nhiệm, thông báo, trung tâm điều khiển, âm lượng, xoay, app, chụp màn hình', () => {
     expect(ids('ios')).toEqual(expect.arrayContaining([
-      'home', 'notifications', 'quick_settings',
+      'home', 'recents', 'notifications', 'quick_settings',
       'volume_up', 'volume_down', 'rotate', 'restart', 'close', 'screenshot',
     ]));
   });
 
-  it('iPhone KHÔNG có Quay lại, Tab, và (chưa) Đa nhiệm — không hiện rồi báo lỗi', () => {
-    expect(ids('ios')).not.toContain('recents');
+  it('iPhone KHÔNG có Quay lại và Tab — không hiện rồi báo lỗi', () => {
     expect(ids('ios')).not.toContain('back');
     expect(ids('ios')).not.toContain('tab');
   });

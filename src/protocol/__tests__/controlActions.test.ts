@@ -48,9 +48,8 @@ describe('checkAction — động tác mới', () => {
     assert.equal(checkAction({ kind: 'app', op: 'uninstall' }, SCREEN).ok, false);
   });
 
-  it('phím theo nền tảng: iPhone có âm lượng, không có Quay lại (và chưa có Đa nhiệm)', () => {
-    assert.equal(checkAction({ kind: 'key', key: 'recents' }, SCREEN, 'ios').ok, false);
-    assert.equal(checkAction({ kind: 'key', key: 'recents' }, SCREEN, 'android').ok, true);
+  it('phím theo nền tảng: iPhone có đa nhiệm và âm lượng, không có Quay lại', () => {
+    assert.equal(checkAction({ kind: 'key', key: 'recents' }, SCREEN, 'ios').ok, true);
     assert.equal(checkAction({ kind: 'key', key: 'volume_up' }, SCREEN, 'ios').ok, true);
     assert.equal(checkAction({ kind: 'key', key: 'back' }, SCREEN, 'ios').ok, false);
   });

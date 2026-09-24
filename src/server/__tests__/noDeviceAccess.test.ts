@@ -168,7 +168,7 @@ describe('ranh giới control plane', () => {
       'volume_down', 'volume_up',
     ]);
     assert.deepEqual([...CONTROL_KEYS_BY_PLATFORM.ios].sort(), [
-      'delete', 'enter', 'home', 'notifications', 'quick_settings',
+      'delete', 'enter', 'home', 'notifications', 'quick_settings', 'recents',
       'volume_down', 'volume_up',
     ]);
     for (const keys of Object.values(CONTROL_KEYS_BY_PLATFORM)) {

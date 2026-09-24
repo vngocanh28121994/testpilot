@@ -62,12 +62,8 @@ export const CONTROL_KEYS_BY_PLATFORM: Record<ControlPlatform, readonly string[]
   // iPhone không có nút Quay lại, và bàn phím của nó không có Tab. Đa nhiệm,
   // Thông báo và Trung tâm điều khiển là CỬ CHỈ trên iOS chứ không phải phím —
   // runner làm cử chỉ ấy thay người dùng (xem iosControl.ts).
-  //
-  // Đa nhiệm CHƯA có: cử chỉ vuốt-lên-rồi-giữ đã thử trên iPhone 12 Pro Max
-  // (iOS 26.6.1) và máy vẫn ở màn hình chính. Không đưa ra một nút bấm mà
-  // không làm gì — thêm lại khi đã tìm ra cử chỉ chạy được trên máy thật.
   ios: [
-    'home', 'notifications', 'quick_settings',
+    'home', 'recents', 'notifications', 'quick_settings',
     'volume_up', 'volume_down', 'enter', 'delete',
   ],
 };

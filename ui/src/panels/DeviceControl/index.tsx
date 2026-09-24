@@ -80,9 +80,7 @@ const TOOL_GROUPS: Array<{ title: string; items: ToolItem[] }> = [
       // Tam giác, tròn, vuông: đúng ba hình của thanh điều hướng Android.
       { id: 'back', key: 'back', label: 'Quay lại', Icon: ChevronLeft, only: 'android' },
       { id: 'home', key: 'home', label: 'Home', Icon: Circle },
-      // Chỉ Android: trên iPhone cử chỉ đa nhiệm chưa chạy được qua WDA — xem
-      // CONTROL_KEYS_BY_PLATFORM ở protocol/control.ts.
-      { id: 'recents', key: 'recents', label: 'Đa nhiệm', Icon: Square, only: 'android' },
+      { id: 'recents', key: 'recents', label: 'Đa nhiệm', Icon: Square },
       { id: 'notifications', key: 'notifications', label: 'Thông báo', Icon: Bell },
       {
         id: 'quick_settings', key: 'quick_settings', Icon: SlidersHorizontal,
