@@ -115,6 +115,12 @@ export function runSuite(
   appSource?: 'device' | 'upload',
   /** Park shared-store changes in each run directory for one coordinator to merge. */
   deferSharedWrites = false,
+  /**
+   * Config của RIÊNG lượt này — một job mang snapshot chạy trên đúng snapshot
+   * ấy, trong thư mục cách ly. Xem [jobWorkspace.ts](./jobWorkspace.ts).
+   * Bỏ trống là config thường của máy này.
+   */
+  configFile?: string,
 ): Promise<RunSuiteOutcome> {
   return new Promise<RunSuiteOutcome>((resolve, reject) => {
     const { bin, entry } = cliCommand('run');
@@ -122,6 +128,7 @@ export function runSuite(
       entry,
       '--platform',
       platform,
+      ...(configFile ? ['--config', configFile] : []),
       ...(device ? ['--device', device] : []),
       ...(env ? ['--env', env] : []),
       ...(feature ? ['--feature', feature] : []),

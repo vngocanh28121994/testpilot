@@ -8,6 +8,10 @@
  */
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
+import { existsSync } from 'node:fs';
+import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
 import { MemoryJobQueue } from '../../server/queue/memoryQueue.js';
 import { MemoryLeaseRepo } from '../../server/db/leaseRepo.js';
 import { ConfigSchema } from '../../config.js';
@@ -668,6 +672,103 @@ describe('worker và môi trường của máy (P4.5)', () => {
       assert.equal(await settled(queue, job.id), 'succeeded');
     } finally {
       worker.stop();
+    }
+  });
+});
+
+describe('worker trong mô hình nhiều runner', () => {
+  /**
+   * Máy chủ không có Xcode nhận một job iOS nhắm chiếc iPhone cắm ở laptop
+   * người khác. Bản trước ĐÁNH HỎNG job ấy vì "thiếu Xcode" — câu đúng về máy
+   * chủ, nhưng không liên quan gì tới chiếc máy job cần. Job không phải của
+   * mình thì trả về hàng đợi cho runner đúng nhận.
+   */
+  it('máy không cắm ở đây thì HOÃN, kể cả khi máy này thiếu driver', async () => {
+    const queue = new MemoryJobQueue();
+    const { runner, seen } = fakeRunner({ code: 0 }, ['emulator-5554']);
+    const broken = {
+      ...runner,
+      prereq: {
+        appiumStatus: async () => ({ running: false, managed: false }),
+        xcode: async () => ({ ok: true }),
+      },
+    } as typeof runner;
+
+    const job = await queue.create(androidJob(['android:R5CY21WADDY']));
+    const worker = startWorker({
+      queue, leases: new MemoryLeaseRepo(), runnerId: 'local', configFile: 'x.json', config,
+      pollMs: 5, deferMs: 10_000, runner: broken,
+    });
+    try {
+      await new Promise((resolve) => setTimeout(resolve, 80));
+      const now = await queue.find(job.id);
+      assert.equal(now?.state, 'queued', 'job phải về hàng đợi, không bị đánh hỏng');
+      assert.doesNotMatch(now?.error ?? '', /Appium/);
+      assert.deepEqual(seen.calls, []);
+    } finally {
+      worker.stop();
+    }
+  });
+
+  /**
+   * Workflow Studio sinh file feature ở máy chủ; điện thoại cắm ở laptop khác.
+   * Job mang file ấy trong snapshot, và runner phải chạy ĐÚNG file ấy — không
+   * phải thư mục `features/` của chính nó, nơi file ấy không tồn tại.
+   */
+  it('job mang snapshot chạy trên bản sao gửi kèm, rồi dọn sạch', async () => {
+    const tmp = await mkdtemp(path.join(os.tmpdir(), 'tp-worker-'));
+    const configFile = path.join(tmp, 'cfg.json');
+    await writeFile(configFile, JSON.stringify({ web: { baseUrl: 'https://example.test' } }));
+
+    const queue = new MemoryJobQueue();
+    const seen: Array<{ feature?: string; configFile?: string; defer?: boolean; existed: boolean }> = [];
+    const { runner } = fakeRunner({ code: 0 });
+    const capturing = {
+      ...runner,
+      run: {
+        ...runner.run,
+        startSuite: async (...args: unknown[]) => {
+          const cfgPath = args[11] as string | undefined;
+          seen.push({
+            feature: args[7] as string | undefined,
+            configFile: cfgPath,
+            defer: args[10] as boolean,
+            existed: Boolean(cfgPath && existsSync(cfgPath)),
+          });
+          return { code: 0, stopped: false, reportPaths: [], runDirs: [] };
+        },
+      },
+    } as unknown as typeof runner;
+
+    const job = await queue.create({
+      orgId: 'org-1', kind: 'run_suite', createdBy: 'u1',
+      spec: {
+        orgId: 'org-1', kind: 'run_suite', createdBy: 'u1', timeoutMs: 60_000,
+        deviceTokens: ['android:emulator-5554'],
+        run: { platform: 'android', feature: 'moi-sinh.feature' },
+        snapshot: {
+          registryRevision: 'r1',
+          registry: { elements: {} },
+          features: [{ name: 'moi-sinh.feature', content: 'Feature: x\n' }],
+        },
+      },
+    });
+    const worker = startWorker({
+      queue, leases: new MemoryLeaseRepo(), runnerId: 'local', configFile, config,
+      pollMs: 5, runner: capturing, jobsRoot: tmp,
+    });
+    try {
+      assert.equal(await settled(queue, job.id), 'succeeded');
+      assert.equal(seen.length, 1);
+      assert.equal(seen[0]!.feature, 'moi-sinh.feature');
+      assert.ok(seen[0]!.configFile?.startsWith(path.join(tmp, job.id)), 'chạy bằng config của job');
+      assert.equal(seen[0]!.existed, true, 'config của job phải có mặt lúc chạy');
+      // Hoãn ghi: registry của lượt này là bản chép sẽ bị xoá.
+      assert.equal(seen[0]!.defer, true);
+      assert.equal(existsSync(path.join(tmp, job.id)), false, 'thư mục job phải được dọn');
+    } finally {
+      worker.stop();
+      await rm(tmp, { recursive: true, force: true });
     }
   });
 });

@@ -45,6 +45,7 @@ import { poolProvider } from '../server/db/pool.js';
 import { s3OptionsFromEnv, S3ArtifactStore } from '../server/storage/artifacts.js';
 import { PgArtifactRepo } from '../server/storage/artifactRepo.js';
 import { sweepArtifacts } from '../server/storage/retention.js';
+import { LOCAL_HOST_RUNNER } from '../server/remoteRuns.js';
 
 const CONFIG_PROFILE = await ensurePersonalConfig(personalConfigProfile());
 const CONFIG_FILE = CONFIG_PROFILE.file;
@@ -235,13 +236,13 @@ if (MODE === 'embedded') {
   // Chính chiếc máy này cũng là một runner trong sổ. Không có dòng ấy thì mọi
   // thiết bị của nó hiện "đang tắt" và không có trạng thái môi trường — cả
   // hai câu đều tra sổ runner. Xem `seedLocalHost`.
-  localRunners.seedLocalHost('runner:local', `Máy này (${os.hostname()})`);
+  localRunners.seedLocalHost(LOCAL_HOST_RUNNER, `Máy này (${os.hostname()})`);
 
   const reportDevices = async (): Promise<void> => {
     const devices = await localRunner.control.devices().catch(() => []);
-    localRunners.seedLocalHost('runner:local', `Máy này (${os.hostname()})`);
+    localRunners.seedLocalHost(LOCAL_HOST_RUNNER, `Máy này (${os.hostname()})`);
     await STORES.devices.report(
-      { id: 'runner:local', orgId: 'local', visibility: 'shared' },
+      { id: LOCAL_HOST_RUNNER, orgId: 'local', visibility: 'shared' },
       devices
         .filter((device) => device.platform === 'android' || device.platform === 'ios')
         .map((device) => ({
@@ -272,7 +273,7 @@ if (MODE === 'embedded') {
   // hai ở đây thì hai bên sẽ lệch, và lúc ấy màn hình nói "sẵn sàng" trong
   // khi worker vừa từ chối một job vì thiếu Appium.
   const reportPrereq = (): void => {
-    void localRunners.reportPrereq('runner:local', worker.environment());
+    void localRunners.reportPrereq(LOCAL_HOST_RUNNER, worker.environment());
   };
   reportPrereq();
   const prereqTimer = setInterval(reportPrereq, DEVICE_REPORT_MS);

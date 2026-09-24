@@ -59,27 +59,75 @@ describe('WorkflowPreflight', () => {
     expect(await screen.findByText(/Android — chưa chạy được/)).toBeInTheDocument();
   });
 
-  it('chỉ hỏi chọn máy khi có nhiều hơn một máy đang cắm', async () => {
+  /**
+   * Danh sách máy tới từ SỔ MÁY, không từ phép dò của máy chủ: máy cắm ở
+   * laptop người khác cũng phải hiện ra để chọn, vì workflow nay chạy được
+   * trên chúng qua hàng đợi job.
+   */
+  it('chỉ hỏi chọn máy khi có nhiều hơn một máy, và gọi theo udid', async () => {
     server.use(
       http.get(ROUTES.preflight, () =>
-        HttpResponse.json({
-          platform: 'android',
-          ok: false,
-          checks: [{ name: 'Thiết bị', ok: false, detail: 'Hai máy đang cắm.' }],
-          candidates: [
-            { id: 'pixel', label: 'pixel (emulator-5554)' },
-            { id: 'samsung', label: 'samsung (R5CT10)' },
-          ],
-        }),
-      ),
+        HttpResponse.json({ platform: 'android', ok: false, checks: [] })),
+      http.get(ROUTES.deviceTargets, () => HttpResponse.json({
+        devices: [
+          { platform: 'android', udid: 'emulator-5554', label: 'pixel', runnerName: 'máy chủ' },
+          { platform: 'android', udid: 'R5CT10', label: 'samsung', runnerName: 'laptop của Bình' },
+        ],
+      })),
     );
     const onPick = vi.fn();
     renderWithProviders(
       <WorkflowPreflight platforms={['android']} devices={{}} onPick={onPick} />,
     );
-    const choice = await screen.findByRole('radio', { name: 'samsung (R5CT10)' });
+    const choice = await screen.findByRole('radio', { name: 'samsung' });
+    // Nhóm theo máy tính, giống Local Runner.
+    expect(screen.getByText('laptop của Bình')).toBeInTheDocument();
     await userEvent.click(choice);
-    expect(onPick).toHaveBeenCalledWith('android', 'samsung');
+    expect(onPick).toHaveBeenCalledWith('android', 'R5CT10');
+  });
+
+  /**
+   * Một máy duy nhất thì không có gì để hỏi — nhưng lựa chọn phải được GHI,
+   * vì workflow đọc đúng lựa chọn ấy. Bản trước không chọn gì, nên máy chủ tự
+   * dò `adb` của chính nó và báo "Chưa có máy nào kết nối" trong khi chiếc máy
+   * duy nhất đang cắm ở laptop khác, sẵn sàng.
+   */
+  it('một máy đang chạy duy nhất thì tự chọn và ghi lại', async () => {
+    server.use(
+      http.get(ROUTES.preflight, () =>
+        HttpResponse.json({ platform: 'android', ok: true, checks: [] })),
+      http.get(ROUTES.deviceTargets, () => HttpResponse.json({
+        devices: [
+          { platform: 'android', udid: 'R5CT10', label: 'samsung', runnerName: 'laptop của Bình' },
+          // Máy đang tắt không được tính: tự chọn một chiếc máy đã tắt là
+          // đưa workflow tới một cú dừng chắc chắn.
+          { platform: 'android', udid: 'OLD1', label: 'cũ · đang tắt', offline: true },
+        ],
+      })),
+    );
+    const onPick = vi.fn();
+    renderWithProviders(
+      <WorkflowPreflight platforms={['android']} devices={{}} onPick={onPick} />,
+    );
+    await vi.waitFor(() => expect(onPick).toHaveBeenCalledWith('android', 'R5CT10'));
+  });
+
+  it('gửi nguồn app kèm lần dò', async () => {
+    // Với máy ở runner khác, "bản đã tải lên" chưa gửi sang được — màn hình
+    // phải nói điều đó trước khi bấm chạy, và nó chỉ nói được khi biết.
+    const asked: string[] = [];
+    server.use(
+      http.get(ROUTES.preflight, ({ request }) => {
+        asked.push(new URL(request.url).search);
+        return HttpResponse.json({ platform: 'android', ok: true, checks: [] });
+      }),
+    );
+    renderWithProviders(
+      <WorkflowPreflight
+        platforms={['android']} devices={{ android: 'R5CT10' }} onPick={vi.fn()} appSource="upload"
+      />,
+    );
+    await vi.waitFor(() => expect(asked.some((q) => q.includes('appSource=upload'))).toBe(true));
   });
 
   /**

@@ -202,6 +202,14 @@ export interface RunSuiteParams {
   appSource?: 'device' | 'upload';
   /** Build cần tải về trước khi chạy; khoá trong object storage. */
   appKey?: string;
+  /**
+   * Chỉ chạy đúng một file feature — lượt chạy của một workflow Studio.
+   *
+   * Khi job mang `snapshot`, file ấy nằm TRONG snapshot chứ không nằm trên đĩa
+   * runner: file Studio vừa sinh ra ở máy chủ, còn chiếc điện thoại thì cắm
+   * ở laptop người khác.
+   */
+  feature?: string;
 }
 
 export interface JobSnapshot {

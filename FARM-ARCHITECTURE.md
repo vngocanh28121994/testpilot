@@ -269,6 +269,22 @@ Quy tắc:
 - **`job.offer` mang theo snapshot**, không phải con trỏ. Nhờ vậy job lặp lại được, và hai job song
   song không đọc hai phiên bản registry khác nhau.
 
+  **Cập nhật 24/09/2026 — runner nay thật sự đọc snapshot.** Trường này đã có trong `JobSpec` từ P1
+  nhưng chưa runner nào dùng tới, nên hàng đợi chỉ chạy được feature có sẵn trên đĩa runner. Nay job
+  mang snapshot được chạy trong một thư mục riêng (`.testpilot/jobs/<id>/`, xem
+  [jobWorkspace.ts](src/runner/jobWorkspace.ts)): feature và registry dựng từ snapshot, một config dẫn
+  xuất chỉ ghi đè ba đường dẫn, và một cơ sở duyệt kịch bản TRỐNG — vì cơ sở của runner sẽ kéo một
+  file trùng tên đã sửa về "chờ duyệt" và kịch bản ấy biến khỏi lượt chạy không một lời. Phần học
+  được luôn đi về qua `registryProposal`, vì registry trong thư mục job bị xoá khi xong.
+
+  Người dùng đầu tiên là workflow của App Automation Studio: máy chọn cắm ở runner khác thì workflow
+  đặt job lên hàng đợi thay vì `runSuite` tại chỗ ([remoteRuns.ts](src/server/remoteRuns.ts)).
+
+  Hai giới hạn còn lại, nói thẳng: job mang snapshot **chưa chạy song song** được (worker từ chối rõ
+  ràng thay vì lặng lẽ chạy sai bộ kịch bản), và **"bản đã tải lên" chưa đi sang runner ở xa** —
+  `RunSuiteParams.appKey` có khai báo nhưng chưa ai đọc, nên runner sẽ cài bản build nằm trên đĩa của
+  chính nó. Workflow chặn tổ hợp ấy ở bước kiểm môi trường.
+
 ---
 
 ## 6. Hàng đợi và giữ chỗ thiết bị

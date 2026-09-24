@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { useQueries, useQuery } from '@tanstack/react-query';
 import { DevicePicker } from '@/components/DevicePicker';
 import { PreflightChecks } from '@/components/PreflightChecks';
@@ -26,35 +27,54 @@ export function WorkflowPreflight({
   platforms,
   devices,
   onPick,
+  appSource,
 }: {
   platforms: NativePlatform[];
   devices: Partial<Record<NativePlatform, string>>;
   onPick: (platform: NativePlatform, id: string) => void;
+  /**
+   * Nguồn app đã chọn ở ngay dưới. Đi kèm câu hỏi vì với máy ở runner khác,
+   * "bản đã tải lên" là thứ chưa gửi sang được — và màn hình phải nói điều đó
+   * trước khi người ta bấm chạy, không phải sau.
+   */
+  appSource?: 'device' | 'upload';
 }) {
   /**
-   * Sổ máy, chỉ để BIẾT MÁY NÀO Ở ĐÂU.
+   * Máy để chọn — lấy từ SỔ MÁY, giống hệt Local Runner.
    *
-   * Không dùng làm danh sách ứng viên: `result.candidates` tới từ phép dò của
-   * chính máy chủ, nên nó là tập máy workflow này thật sự chạy được. Đưa vào
-   * đây một chiếc cắm ở laptop người khác là mời người ta chọn một thứ rồi
-   * nhận lại "máy đó không nằm trong số đang cắm".
-   *
-   * Nhưng cái tên thì sổ máy nói được còn preflight thì không — và "Pixel 7"
-   * một mình không cho biết nó nằm ở đâu, đúng câu màn Local Runner đã trả
-   * lời. Hai màn hỏi cùng một câu thì phải trả lời giống nhau.
+   * Bản trước lấy từ phép dò của chính máy chủ (`result.candidates`), nên nó
+   * không bao giờ thấy chiếc điện thoại cắm ở laptop người khác — và khi chưa
+   * chọn máy nào, nó báo "Chưa có máy nào kết nối" trong khi máy đang cắm ở
+   * đó, sẵn sàng. Workflow nay chạy được trên những máy ấy qua hàng đợi job
+   * (xem `server/remoteRuns.ts`), nên chúng phải hiện ra để chọn.
    */
   const registry = useQuery({
     queryKey: ['device-targets'],
     queryFn: () => api.get<ControlTargetsResponse>(ROUTES.deviceTargets),
     refetchInterval: 10_000,
   });
-  const whereIs = (candidate: { id: string; udid?: string }) =>
-    (registry.data?.devices ?? []).find(
-      // Nối theo udid trước — sổ máy khoá theo nó. `id` chỉ khớp khi config
-      // tình cờ đặt tên trùng serial, nên nó là đường lui chứ không phải
-      // đường chính.
-      (device) => device.udid === (candidate.udid ?? candidate.id),
-    );
+  const candidatesFor = (platform: NativePlatform) => (registry.data?.devices ?? [])
+    .filter((device) => device.platform === platform)
+    .map((device) => ({
+      id: device.udid,
+      label: device.label,
+      ...(device.runnerName ? { runnerName: device.runnerName } : {}),
+      ...(device.mine !== undefined ? { mine: device.mine } : {}),
+      offline: Boolean(device.offline),
+    }));
+
+  // Một máy đang chạy duy nhất thì KHÔNG có gì để hỏi — nó là máy sẽ chạy.
+  // Chọn hộ và ghi vào lựa chọn thật, vì workflow đọc đúng lựa chọn ấy: chỉ
+  // "hiện như đã chọn" trên màn hình mà không ghi lại thì màn hình nói một
+  // đằng, lượt chạy đi một nẻo.
+  useEffect(() => {
+    for (const platform of platforms) {
+      if (devices[platform]) continue;
+      const online = candidatesFor(platform).filter((item) => !item.offline);
+      if (online.length === 1) onPick(platform, online[0]!.id);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [registry.data, platforms.join(','), devices.android, devices.ios]);
 
   // useQueries thay vì tự đếm token chống đua: khoá cache đã gồm cả máy đang
   // chọn, nên câu trả lời của lần dò cũ không thể ghi đè lần mới, và tick hai ô
@@ -63,13 +83,14 @@ export function WorkflowPreflight({
     queries: platforms.map((platform) => {
       const device = devices[platform];
       return {
-        queryKey: ['preflight', platform, device ?? ''] as const,
+        queryKey: ['preflight', platform, device ?? '', appSource ?? ''] as const,
         // Lựa chọn đi kèm luôn với lần dò: server đọc config đã lưu, mà máy vừa
         // được chọn một giây trước thì chưa nằm trong đó.
         queryFn: () =>
           api.get<PreflightResponse>(
             `${ROUTES.preflight}?platform=${encodeURIComponent(platform)}` +
-              (device ? `&device=${encodeURIComponent(device)}` : ''),
+              (device ? `&device=${encodeURIComponent(device)}` : '') +
+              (appSource ? `&appSource=${appSource}` : ''),
           ),
       };
     }),
@@ -111,17 +132,10 @@ export function WorkflowPreflight({
             {/* Câu hỏi được hỏi ngay tại chỗ phát hiện ra nó. Đẩy người dùng đi
                 sửa file config để trả lời một câu mà màn hình đã biết là cách
                 giữ cho một lượt chạy bị chặn cứ bị chặn mãi. */}
-            {(result.candidates?.length ?? 0) > 1 && (
+            {candidatesFor(platform).length > 1 && (
               <DevicePicker
                 name={platform}
-                candidates={result.candidates!.map((candidate) => {
-                  const seen = whereIs(candidate);
-                  return {
-                    ...candidate,
-                    ...(seen?.runnerName ? { runnerName: seen.runnerName } : {}),
-                    ...(seen?.mine !== undefined ? { mine: seen.mine } : {}),
-                  };
-                })}
+                candidates={candidatesFor(platform)}
                 chosen={devices[platform]}
                 onPick={(id) => onPick(platform, id)}
               />

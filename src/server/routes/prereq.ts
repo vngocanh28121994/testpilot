@@ -11,12 +11,13 @@
  * và app Cài đặt trên chính chiếc máy đang chạy. Ở chế độ `server` chúng phải
  * biến mất; FARM-ROUTE-MAP.md xếp chúng vào nhóm LOCAL.
  */
-import { applyEnv, loadConfig, saveConfig } from '../../config.js';
+import { applyEnv, devicesOf, loadConfig, saveConfig } from '../../config.js';
 import { attachedDevices } from '../../core/attachedDevices.js';
 import { registerDevices } from '../../core/deviceSync.js';
 import { preflight } from '../../core/preflight.js';
 import { localRunner } from '../../runner/index.js';
 import { json, readJson, stream } from '../http.js';
+import { remotePreflight, remoteRunsFor } from '../remoteRuns.js';
 import type { RouteTable } from './types.js';
 
 export const prereqRoutes: RouteTable = {
@@ -88,11 +89,24 @@ export const prereqRoutes: RouteTable = {
     const base = await loadConfig(ctx.configFile);
     const env = url.searchParams.get('env')?.trim();
     const cfg = env ? applyEnv(base, env).config : base;
-    return json(
-      res,
-      200,
-      await preflight(platform, cfg, url.searchParams.get('device') ?? undefined),
-    );
+    const device = url.searchParams.get('device') ?? undefined;
+
+    // Máy đã chọn nằm ở RUNNER KHÁC thì máy chủ không dò được nó — `adb` tại
+    // chỗ sẽ luôn nói "không nằm trong số đang cắm", dù lượt chạy qua hàng
+    // đợi vẫn tới được nó. Trả lời bằng thứ chính runner ấy đã đo, và bằng
+    // ĐÚNG phép kiểm mà cổng chặn của workflow dùng: màn hình nói "sẵn sàng"
+    // mà workflow lại dừng là hai câu trả lời cho một câu hỏi.
+    if (device && (platform === 'android' || platform === 'ios')) {
+      const udid = devicesOf(cfg, platform).find((item) => item.id === device)?.udid ?? device;
+      const there = await remoteRunsFor(ctx).locate(udid);
+      if (there) {
+        const appSource = url.searchParams.get('appSource');
+        return json(res, 200, remotePreflight(
+          platform, there, appSource === 'upload' || appSource === 'device' ? appSource : undefined,
+        ));
+      }
+    }
+    return json(res, 200, await preflight(platform, cfg, device));
   },
 
   /**

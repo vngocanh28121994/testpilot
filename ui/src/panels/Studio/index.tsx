@@ -514,6 +514,7 @@ function StudioFormPanel({ state }: { state: StateResponse }) {
                   )}
                   devices={devices}
                   onPick={(platform, id) => setDevices((all) => ({ ...all, [platform]: id }))}
+                  appSource={workflowAppSource}
                 />
 
                 {farm && (

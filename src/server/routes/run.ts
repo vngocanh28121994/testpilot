@@ -37,7 +37,7 @@ const CLOSED = ['succeeded', 'failed', 'cancelled', 'interrupted'];
  * thì sự kiện "đã xong" rơi vào khoảng giữa hai lời gọi — người bấm nút sẽ
  * chờ mãi một job đã xong từ lâu.
  */
-async function waitForClose(
+export async function waitForClose(
   queue: JobQueue,
   id: string,
   log: (line: string) => void,

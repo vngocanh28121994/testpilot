@@ -12,6 +12,7 @@
  * sẽ tranh cùng một chiếc điện thoại, và không ai phân xử.
  */
 import { loadConfig, type TestPilotConfig } from '../config.js';
+import { prepareJobWorkspace, type JobWorkspace } from './jobWorkspace.js';
 import { resolveDevices, runnerPlatforms, type AttachedDevice } from '../server/scheduler/match.js';
 import { measurePrereq, refuseReason, type PrereqByPlatform } from './prereqReport.js';
 import type { JobRecord, JobQueue } from '../server/queue/queue.js';
@@ -94,6 +95,8 @@ export interface WorkerDeps {
   artifacts?: (jobId: string, runDirs: string[], log: (line: string) => void) => Promise<void>;
   /** Tiêm bản giả trong test. Mặc định là runner thật của máy này. */
   runner?: Runner;
+  /** Nơi dựng thư mục cho job mang snapshot. Mặc định `.testpilot/jobs`. */
+  jobsRoot?: string;
 }
 
 export interface WorkerHandle {
@@ -236,23 +239,6 @@ async function run(
     return;
   }
 
-  /**
-   * Môi trường thiếu thì TỪ CHỐI NGAY, không nhận rồi hỏng ở phút thứ ba.
-   *
-   * `failed` chứ không `defer`: thiếu driver hay thiếu Xcode không tự khỏi,
-   * nên trả job về hàng đợi chỉ tạo một vòng lặp bận rộn — và ở một phòng máy
-   * một runner thì nó là vòng lặp vô tận. Câu lỗi nói VIỆC CẦN LÀM, vì người
-   * đọc nó là người sẽ đi sửa chiếc máy ấy.
-   */
-  const refused = refuseReason(prereq, params.platform);
-  if (refused) {
-    log(`[job] ${refused}`);
-    await close(deps, job, {
-      type: 'job.result', jobId: job.id, state: 'failed', error: refused,
-    });
-    return;
-  }
-
   const picked = job.spec.deviceTokens
     .map((token) => runner.run.parseDeviceToken(token))
     .filter((device): device is NonNullable<typeof device> => device !== null);
@@ -276,15 +262,40 @@ async function run(
   const resolved = deps.managesOwnDevices
     ? ({ ok: true, udids: [] as string[] } as const)
     : resolveDevices(job.spec, await (deps.config?.() ?? loadConfig(deps.configFile)), attached);
-  if (!resolved.ok) {
-    if (!resolved.wait) {
-      await close(deps, job, {
-        type: 'job.result', jobId: job.id, state: 'failed', error: resolved.reason,
-      });
-      return;
-    }
+  // Máy KHÔNG cắm ở đây thì hoãn — TRƯỚC khi xét môi trường của máy này.
+  //
+  // Thứ tự ngược lại từng là một lỗi thật trong mô hình nhiều runner: máy chủ
+  // không có Xcode nhận được một job iOS nhắm chiếc iPhone cắm ở laptop người
+  // khác, và nó ĐÁNH HỎNG job ấy vì "thiếu Xcode" — một câu đúng về máy chủ
+  // nhưng không liên quan gì tới chiếc máy job cần. Job không phải của mình
+  // thì trả về hàng đợi cho runner đúng nhận, không phán xét gì thêm.
+  if (!resolved.ok && resolved.wait) {
     if (job.error !== resolved.reason) log(`[job] ${resolved.reason} Job chờ tới lượt.`);
     await deps.queue.defer(job.id, resolved.reason, deps.deferMs ?? 5_000);
+    return;
+  }
+
+  /**
+   * Môi trường thiếu thì TỪ CHỐI NGAY, không nhận rồi hỏng ở phút thứ ba.
+   *
+   * `failed` chứ không `defer`: thiếu driver hay thiếu Xcode không tự khỏi,
+   * nên trả job về hàng đợi chỉ tạo một vòng lặp bận rộn — và ở một phòng máy
+   * một runner thì nó là vòng lặp vô tận. Câu lỗi nói VIỆC CẦN LÀM, vì người
+   * đọc nó là người sẽ đi sửa chiếc máy ấy.
+   */
+  const refused = refuseReason(prereq, params.platform);
+  if (refused) {
+    log(`[job] ${refused}`);
+    await close(deps, job, {
+      type: 'job.result', jobId: job.id, state: 'failed', error: refused,
+    });
+    return;
+  }
+
+  if (!resolved.ok) {
+    await close(deps, job, {
+      type: 'job.result', jobId: job.id, state: 'failed', error: resolved.reason,
+    });
     return;
   }
 
@@ -321,7 +332,24 @@ async function run(
   }, deps.renewMs ?? 30_000);
   renew.unref?.();
 
+  // Job mang snapshot thì chạy trên đúng snapshot ấy, trong thư mục riêng —
+  // xem [jobWorkspace.ts](./jobWorkspace.ts). Dựng TRONG `try` để `finally`
+  // vẫn nhả máy khi dựng hỏng.
+  let workspace: JobWorkspace | undefined;
   try {
+    if (job.spec.snapshot) {
+      if (picked.length > 1) {
+        // Nói thẳng thay vì lặng lẽ chạy song song trên `features/` của máy
+        // này: đó sẽ là một lượt chạy TRÔNG bình thường mà chạy sai bộ kịch bản.
+        throw new Error('Job mang snapshot chưa chạy song song được — gửi mỗi máy một job.');
+      }
+      workspace = await prepareJobWorkspace({
+        jobId: job.id, snapshot: job.spec.snapshot, configFile: deps.configFile,
+        ...(deps.jobsRoot ? { root: deps.jobsRoot } : {}),
+      });
+      log(`[job] Chạy trên bản sao gửi kèm job: ${workspace.features.join(', ')}.`);
+    }
+
     if (picked.length > 1) {
       // Nhiều máy: cùng đường mà nút "chạy" vẫn đi, không phải một đường thứ hai.
       const platforms = [...new Set(picked.map((device) => device.platform))].join(',');
@@ -364,13 +392,21 @@ async function run(
       log,
       pinned,
       params.env,
-      undefined,
+      params.feature,
       undefined,
       params.appSource,
-      deps.deferSharedWrites,
+      // Snapshot thì LUÔN hoãn ghi: registry của lượt này là bản chép trong
+      // thư mục job, và nó bị xoá khi job xong. Ghi thẳng vào đó là học xong
+      // rồi vứt. Hoãn thì phần học được nằm ở thư mục lượt chạy và đi về máy
+      // chủ qua `registryProposal`, như mọi runner đứng riêng.
+      deps.deferSharedWrites || Boolean(workspace),
+      workspace?.configFile,
     );
 
-    const learned = await harvest(deps, runner, outcome.runDirs, log);
+    const learned = await harvest(
+      { ...deps, deferSharedWrites: deps.deferSharedWrites || Boolean(workspace) },
+      runner, outcome.runDirs, log,
+    );
     // TRƯỚC khi đóng job: người mở kết quả ngay lúc nó chuyển sang "xong" phải
     // thấy được report. Đẩy sau khi đóng nghĩa là có một khoảng thời gian màn
     // hình nói đã xong mà bấm vào thì chưa có gì.
@@ -387,6 +423,7 @@ async function run(
       type: 'job.result', jobId: job.id, state: 'failed', error: (err as Error).message,
     });
   } finally {
+    await workspace?.cleanup();
     clearInterval(renew);
     // Nhả trong `finally`: một job ném mà không nhả máy là một chiếc điện thoại
     // bị khoá 60 giây cho mỗi lần hỏng, và người tiếp theo không biết vì sao.

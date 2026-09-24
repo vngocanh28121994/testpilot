@@ -6,15 +6,30 @@
  * sang Device Farm, ghi lịch sử, đọc coverage. Chuyển nó cuối cùng là có chủ ý:
  * mọi thứ nó gọi đã yên chỗ rồi.
  *
- * Nó vẫn dựng tiến trình con (qua `runSuite` và `runOnFarm` của runner), nên ở
- * chế độ `server` nó trở thành job `workflow` trong hàng đợi chứ không chạy
- * ngay trong tiến trình web. Hôm nay, chế độ embedded chạy như cũ.
+ * Chạy ở đâu thì tuỳ chiếc máy đã chọn:
+ *
+ * - Máy cắm vào CHÍNH máy chủ → `runSuite` tại chỗ, như từ trước tới nay.
+ * - Máy cắm ở runner KHÁC — laptop của một người, hay một máy chủ phòng máy
+ *   khác — → một job `run_suite` trong hàng đợi, mang theo file feature và
+ *   registry trong snapshot, vì cả hai đều nằm ở đây chứ không nằm ở đó. Xem
+ *   [remoteRuns.ts](../remoteRuns.ts) và [jobWorkspace.ts](../../runner/jobWorkspace.ts).
+ *
+ * Trước khi có nhánh thứ hai, workflow chỉ chạm được máy cắm vào máy chủ —
+ * trong khi Local Runner đã chạy được trên mọi máy qua hàng đợi. Cùng một
+ * chiếc điện thoại chạy được từ màn này mà không chạy được từ màn kia.
  */
 import { existsSync } from 'node:fs';
 import { readFile, readdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
-import { applyEnv, assertEnvPackage, loadConfig, resolveModel, type TestPilotConfig } from '../../config.js';
+import { applyEnv, assertEnvPackage, devicesOf, loadConfig, resolveModel, type TestPilotConfig } from '../../config.js';
 import { preflight, preflightSummary } from '../../core/preflight.js';
+import {
+  remotePreflight,
+  remoteRunsFor,
+  type RemoteDevice,
+  type RemoteRunResult,
+  type RemoteRuns,
+} from '../remoteRuns.js';
 import { runSuite, type RunSuiteOutcome } from '../../runner/execute.js';
 import { runOnFarm, spawnStep, type FarmHandoff } from '../../runner/farm.js';
 import { resolveFarmTarget } from '../../farm/target.js';
@@ -212,14 +227,24 @@ async function runWorkflow(
   }
 }
 
-async function continueWorkflow(
+export async function continueWorkflow(
   configFile: string,
   runId: string,
   log: (line: string) => void,
   stage: (run: WorkflowRun) => void,
   appSource?: 'device' | 'upload',
+  /**
+   * Đường chạy trên máy cắm ở RUNNER KHÁC, qua hàng đợi job.
+   *
+   * Vắng mặt thì mọi nền tảng chạy tại chỗ như trước. Có mặt thì nền tảng nào
+   * đã chọn một chiếc máy nằm ở laptop người khác sẽ đi đường hàng đợi — xem
+   * [remoteRuns.ts](../remoteRuns.ts).
+   */
+  remote?: RemoteRuns,
+  /** Để test dựng lịch sử trong thư mục tạm. */
+  historyFile?: string,
 ): Promise<void> {
-  const history = await History.load();
+  const history = await History.load(historyFile);
   const run = history.find(runId);
   if (!run || run.kind !== 'workflow') throw new Error('Không tìm thấy workflow cần tiếp tục.');
   if (run.status !== 'waiting_review') {
@@ -274,11 +299,14 @@ async function continueWorkflow(
   // Re-audit after edits for traceability, but do not create a second hidden
   // approval gate. The business user has explicitly approved/rejected every
   // scenario; missing coverage remains visible as a warning in the report.
+  // Chỉ những kịch bản ĐÃ DUYỆT. Dùng cho phép đối chiếu coverage bên dưới,
+  // và cũng chính là thứ gửi sang runner ở xa: ở đó một file mới được coi là
+  // đã duyệt hết, nên gửi nguyên file là chạy luôn cả kịch bản bị từ chối.
+  const approvedFeature = featureWithApprovedScenarios(content, blocks, approved);
   const coverageRecord = await readFeatureCoverage(cfg, run.generatedFile);
   if (coverageRecord && coverageRecord.requirements.length > 0) {
     record('Đang đối chiếu testcase đã duyệt với các yêu cầu nghiệp vụ quan trọng…');
     await history.save();
-    const approvedFeature = featureWithApprovedScenarios(content, blocks, approved);
     const attempt = await tryAuditFeatureCoverage(approvedFeature, coverageRecord.requirements, {
       model: resolveModel(cfg.llm.model),
     });
@@ -328,8 +356,31 @@ async function continueWorkflow(
   // and it has to be carried into the run, or the preflight passes and the run
   // itself refuses for want of `--device`.
   const chosenDevice = new Map<string, string>();
+  // Máy đã chọn cho từng nền tảng nằm ở đâu. Máy ở runner KHÁC thì máy chủ
+  // không dò được — nó không cắm ở đây — nên phép kiểm của nó là thứ chính
+  // runner ấy đã đo và báo lên sổ, không phải một lần `adb devices` tại chỗ
+  // sẽ luôn trả lời "chưa cắm".
+  const away = new Map<string, RemoteDevice>();
+  if (remote) {
+    for (const platform of execution.platforms) {
+      if (platform !== 'android' && platform !== 'ios') continue;
+      const choice = cfg.workflow.devices?.[platform];
+      if (!choice) continue;
+      const udid = devicesOf(cfg, platform).find((device) => device.id === choice)?.udid ?? choice;
+      const found = await remote.locate(udid);
+      if (found) away.set(platform, found);
+    }
+  }
   const preflightResults = await Promise.all(
-    execution.platforms.map(async (platform) => ({ platform, result: await preflight(platform, cfg) })),
+    execution.platforms.map(async (platform) => {
+      const there = away.get(platform);
+      return {
+        platform,
+        result: there
+          ? remotePreflight(platform, there, execution.appSource)
+          : await preflight(platform, cfg),
+      };
+    }),
   );
   for (const { platform, result } of preflightResults) {
     record(preflightSummary(result));
@@ -352,6 +403,8 @@ async function continueWorkflow(
   await set(6, 'done');
 
   const outcomes: RunSuiteOutcome[] = [];
+  /** Job đã gửi sang runner khác — report của chúng nằm ở đó, không ở đây. */
+  const remoteJobs: Array<{ platform: string } & RemoteRunResult> = [];
   await set(7, 'running');
   // Mỗi tiến trình run.ts bình thường tự ghi lại toàn bộ registry/healing/flake.
   // Hai tiến trình kết thúc gần nhau sẽ gây last-writer-wins và làm mất dữ liệu
@@ -364,6 +417,31 @@ async function continueWorkflow(
     // can still change while the other parallel branches are being prepared —
     // Appium gets closed, a phone gets unplugged, a cable gets borrowed.
     // Re-probing costs a moment and turns a WebDriver stack trace into a sentence.
+    const there = away.get(platform);
+    if (there && remote && (platform === 'android' || platform === 'ios')) {
+      record(
+        `\n▶ Chạy ${run.generatedFile} trên ${platform} (${there.label}) — máy cắm ở `
+        + `${there.runnerName ?? there.runnerId}, gửi qua hàng đợi…`,
+      );
+      const result = await remote.run(
+        {
+          platform,
+          udid: there.udid,
+          feature: { name: path.basename(run.generatedFile!), content: approvedFeature },
+          ...(execution.env ? { env: execution.env } : {}),
+          ...(execution.appSource ? { appSource: execution.appSource } : {}),
+        },
+        (line) => record(`[${platform}] ${line}`),
+      );
+      remoteJobs.push({ platform, ...result });
+      if (result.error) record(`[${platform}] ${result.error}`);
+      return {
+        code: result.state === 'succeeded' ? 0 : 1,
+        stopped: result.state === 'cancelled',
+        reportPaths: [],
+        runDirs: [],
+      } satisfies RunSuiteOutcome;
+    }
     if (platform !== 'web') {
       const recheck = await preflight(platform, cfg);
       if (!recheck.ok) {
@@ -496,10 +574,14 @@ async function continueWorkflow(
   run.runDirs = reportPaths.map((report) => path.basename(path.dirname(report)));
   if (reportPaths.length > 0) {
     record(`Đã sinh ${reportPaths.length} report với screenshot/video tương ứng.`);
-    await set(9, 'done');
-  } else {
-    await set(9, 'failed');
   }
+  // Report của lượt chạy ở xa nằm trên CHÍNH runner ấy và được đẩy lên kho
+  // artifact; máy chủ không đọc được thư mục của nó. Nói ra nó ở đâu, thay vì
+  // đánh dấu giai đoạn này hỏng chỉ vì không có file nào nằm trên đĩa ở đây.
+  for (const job of remoteJobs) {
+    record(`Report của ${job.platform} nằm ở job ${job.jobId} — xem ở trang Thiết bị & hàng đợi.`);
+  }
+  await set(9, reportPaths.length > 0 || remoteJobs.length > 0 ? 'done' : 'failed');
 
   run.status = allPassed ? 'passed' : 'failed';
   run.finishedAt = new Date().toISOString();
@@ -731,7 +813,9 @@ export const workflowRoutes: RouteTable = {
     const effectiveRunId = retry ? await retryFailedWorkflow(runId, appSource) : runId;
     return stream(
       res,
-      (log, stage) => continueWorkflow(ctx.configFile, effectiveRunId, log, stage, appSource),
+      (log, stage) => continueWorkflow(
+        ctx.configFile, effectiveRunId, log, stage, appSource, remoteRunsFor(ctx),
+      ),
       (err) => failRunningWorkflow(effectiveRunId, err),
     );
   },
@@ -763,3 +847,5 @@ export const workflowRoutes: RouteTable = {
     return json(res, 200, { ok: true });
   },
 };
+
+export { remotePreflight };
