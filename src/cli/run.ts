@@ -65,6 +65,11 @@ import { generatePom } from '../pom/generator.js';
 const REPEATED_FAILURE_LIMIT = 3;
 
 async function main(): Promise<void> {
+  // TRƯỚC mọi thứ khác: một lệnh gõ sai không được chạm tới app thật.
+  if (checkFlags(process.argv.slice(2)) === 'help') {
+    console.log(USAGE);
+    return;
+  }
   await adoptStoredApiKeys();
   const args = parseArgs(process.argv.slice(2));
   const baseCfg = await loadConfig(args.config ?? process.env.TESTPILOT_CONFIG);
@@ -1251,6 +1256,49 @@ interface Args {
   locatorRetries?: number;
   /** Reinstall the app even when the device is already on this environment. */
   reinstall: boolean;
+}
+
+/** Cờ nhận giá trị (`--env prod`) và cờ bật/tắt (`--headed`). */
+const VALUE_FLAGS = [
+  '--platform', '--config', '--tag', '--env', '--app-source', '--feature',
+  '--locator-retries', '--device',
+];
+const SWITCH_FLAGS = [
+  '--on-farm', '--include-quarantined', '--headed', '--defer-shared-writes', '--reinstall',
+];
+
+const USAGE = `Dùng: tsx src/cli/run.ts --platform web|android|ios [tuỳ chọn]
+
+  --env <tên>              môi trường (mặc định: defaultEnv trong config)
+  --tag <@tag>             chỉ chạy kịch bản mang tag này
+  --feature <file>         chỉ chạy một file feature
+  --device <id|udid>       máy trong ios.devices / android.devices
+  --app-source device|upload
+  --config <file>          config khác testpilot.config.json
+  --locator-retries <0-2>
+  --headed  --reinstall  --include-quarantined  --on-farm  --defer-shared-writes`;
+
+/**
+ * Cờ lạ thì DỪNG, không bỏ qua.
+ *
+ * Từng bỏ qua mọi cờ không biết — kể cả `--help`. Gõ `run.ts --help` để xem
+ * cách dùng thế là chạy THẬT toàn bộ kịch bản trên môi trường mặc định (prod),
+ * bắt đầu bằng "Chuyển tiền thành công" với tài khoản thật. Một cờ gõ sai
+ * (`--feture`) cũng vậy: lượt chạy trông như có giới hạn mà thật ra chạy hết.
+ */
+export function checkFlags(argv: string[]): 'help' | undefined {
+  if (argv.includes('--help') || argv.includes('-h')) return 'help';
+  for (let i = 0; i < argv.length; i++) {
+    const arg = argv[i]!;
+    if (VALUE_FLAGS.includes(arg)) {
+      const value = argv[i + 1];
+      if (value === undefined || value.startsWith('--')) throw new Error(`${arg} cần một giá trị.`);
+      i++;
+    } else if (!SWITCH_FLAGS.includes(arg)) {
+      throw new Error(`Không hiểu tham số "${arg}" — không chạy gì.\n\n${USAGE}`);
+    }
+  }
+  return undefined;
 }
 
 function parseArgs(argv: string[]): Args {
