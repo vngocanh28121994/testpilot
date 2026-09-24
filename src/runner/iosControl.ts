@@ -298,7 +298,40 @@ export function explainWdaStart(message: string): string {
   return message;
 }
 
-async function session(udid: string, signing?: IosSigning): Promise<Session> {
+/**
+ * Phiên đã nhớ còn sống không — hỏi Appium, không hỏi WDA, nên chỉ vài ms.
+ *
+ * Phiên có thể chết mà tiến trình này không hay: một lượt TEST mở phiên riêng
+ * trên cùng chiếc iPhone là Appium đóng phiên của màn điều khiển. Dùng lại lời
+ * hứa cũ thì người xem nhận "ECONNREFUSED" ở cổng MJPEG của một phiên đã mất.
+ */
+async function alive(open: Session): Promise<boolean> {
+  try {
+    await appium('GET', `/session/${open.id}`, undefined, 10_000);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** Quên phiên của máy này — lần gọi sau sẽ mở phiên mới. */
+function forget(udid: string, open?: Session): void {
+  const pending = sessions.get(udid);
+  if (!pending) return;
+  if (!open) { sessions.delete(udid); return; }
+  // Chỉ xoá nếu mục đang nhớ VẪN là phiên hỏng ấy — có thể một phiên mới đã
+  // được mở trong lúc chờ.
+  void pending.then((current) => { if (current.id === open.id) sessions.delete(udid); }, () => undefined);
+}
+
+async function session(udid: string, signing?: IosSigning, verify = false): Promise<Session> {
+  const cached = sessions.get(udid);
+  if (cached && verify) {
+    const open = await cached.catch(() => undefined);
+    if (open && !(await alive(open))) {
+      if (sessions.get(udid) === cached) sessions.delete(udid);
+    }
+  }
   let pending = sessions.get(udid);
   if (!pending) {
     pending = openSession(udid, signing).catch((err: Error) => {
@@ -313,7 +346,7 @@ async function session(udid: string, signing?: IosSigning): Promise<Session> {
 }
 
 export async function screenSize(udid: string, signing?: IosSigning): Promise<ScreenSize> {
-  return (await session(udid, signing)).screen;
+  return (await session(udid, signing, true)).screen;
 }
 
 /* ── Luồng màn hình ───────────────────────────────────────────────────── */
@@ -343,7 +376,7 @@ export async function startScreenStream(
     return { frame: existing.frame, stop: () => detach(udid, sink) };
   }
 
-  const open = await session(udid, signing);
+  const open = await session(udid, signing, true);
   const state = {
     sinks: new Set([sink]),
     // Khung MJPEG là PIXEL đã thu nhỏ; kích thước thật của ảnh do WDA quyết
@@ -372,16 +405,22 @@ export async function startScreenStream(
     });
     res.on('end', () => {
       if (state.stopped) return;
-      for (const each of state.sinks) each.fail('Luồng MJPEG của WebDriverAgent đã đóng.');
+      for (const each of state.sinks) {
+        each.fail('Luồng hình của iPhone đã đóng — thường là phiên bị một lượt test chiếm. Bấm Giữ máy lại.');
+      }
       streams.delete(udid);
+      forget(udid, open);
     });
   });
   req.on('error', (err) => {
     if (state.stopped) return;
     for (const each of state.sinks) {
-      each.fail(`Không mở được luồng MJPEG ở cổng ${open.mjpegPort}: ${err.message}`);
+      each.fail(`Không mở được luồng MJPEG ở cổng ${open.mjpegPort}: ${err.message}. Bấm Giữ máy lại để mở phiên mới.`);
     }
     streams.delete(udid);
+    // Cổng không ai nghe = phiên đã chết. Quên nó, để lần giữ máy sau mở phiên
+    // mới thay vì nhận lại đúng lỗi này.
+    forget(udid, open);
   });
   state.close = () => req.destroy();
 
