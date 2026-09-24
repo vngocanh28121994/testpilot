@@ -32,6 +32,20 @@ export function registryContract(
     assert.equal(found?.id, runner.id);
   });
 
+  it('máy chủ tự ghi mình vào sổ: dùng chung, online, và không token nào mở được nó', async () => {
+    const registry = await fresh();
+    await registry.seedLocalHost('runner:local', 'Máy chủ (test)');
+    // Gọi lại mỗi nhịp báo máy: không được tạo dòng thứ hai.
+    await registry.seedLocalHost('runner:local', 'Máy chủ (test)');
+    const host = await registry.find('runner:local');
+    assert.equal(host?.name, 'Máy chủ (test)');
+    assert.equal(host?.visibility, 'shared');
+    assert.equal(host?.state, 'online');
+    assert.equal((await registry.list()).filter((r) => r.id === 'runner:local').length, 1);
+    assert.equal(await registry.findByToken(''), undefined);
+    assert.equal(await registry.findByToken('host:no-token'), undefined);
+  });
+
   it('token sai thì không tra ra gì', async () => {
     const registry = await fresh();
     await registry.create(personal);

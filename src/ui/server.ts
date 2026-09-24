@@ -45,7 +45,8 @@ import { poolProvider } from '../server/db/pool.js';
 import { s3OptionsFromEnv, S3ArtifactStore } from '../server/storage/artifacts.js';
 import { PgArtifactRepo } from '../server/storage/artifactRepo.js';
 import { sweepArtifacts } from '../server/storage/retention.js';
-import { LOCAL_HOST_RUNNER } from '../server/remoteRuns.js';
+import { startHostDevices } from '../server/hostDevices.js';
+import { pgRepos } from '../server/db/pgRepo.js';
 
 const CONFIG_PROFILE = await ensurePersonalConfig(personalConfigProfile());
 const CONFIG_FILE = CONFIG_PROFILE.file;
@@ -214,13 +215,15 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
 }
 
 /**
- * Worker chỉ chạy ở chế độ `embedded`, và đó là một ranh giới chứ không phải
- * một tối ưu.
+ * Worker chạy ở chế độ `embedded`, và ở chế độ server CHỈ KHI được bật rõ
+ * ràng bằng `TESTPILOT_HOST_DEVICES=1`.
  *
- * Worker sinh tiến trình con để chạy test. Bật nó trong control plane ở chế độ
- * server nghĩa là máy chủ web chạy Appium và adb — đúng thứ mà cả kiến trúc
- * này dựng lên để tránh (xem FARM-ARCHITECTURE mục 12). Ở chế độ server,
- * worker sống trên máy có thiết bị và nối vào qua transport của P3.4.
+ * Worker sinh tiến trình con để chạy test, tức là máy chủ web chạy Appium và
+ * adb — thứ mà kiến trúc tách runner dựng lên để tránh khi máy chủ nằm trong
+ * container hay trên cloud (xem FARM-ARCHITECTURE mục 12). Nhưng với một
+ * device farm nhỏ, nơi CHÍNH chiếc máy chủ cắm điện thoại, tách ra chỉ bắt
+ * người ta tạo token và chạy runner riêng trên cùng một máy. Nên đó là lựa
+ * chọn của người triển khai, mặc định tắt.
  */
 /**
  * Ở chế độ embedded, chính tiến trình này là runner — nên nó BÁO CÁO máy của
@@ -230,54 +233,37 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
  * người đang nhìn, và phép lọc ấy chỉ đúng nếu mọi đường đọc đi qua cùng một
  * chỗ. Hai đường — một hỏi sổ, một hỏi adb — sẽ lệch nhau ở đúng phần quyền.
  */
-const DEVICE_REPORT_MS = 10_000;
-
 if (MODE === 'embedded') {
   // Chính chiếc máy này cũng là một runner trong sổ. Không có dòng ấy thì mọi
   // thiết bị của nó hiện "đang tắt" và không có trạng thái môi trường — cả
   // hai câu đều tra sổ runner. Xem `seedLocalHost`.
-  localRunners.seedLocalHost(LOCAL_HOST_RUNNER, `Máy này (${os.hostname()})`);
-
-  const reportDevices = async (): Promise<void> => {
-    const devices = await localRunner.control.devices().catch(() => []);
-    localRunners.seedLocalHost(LOCAL_HOST_RUNNER, `Máy này (${os.hostname()})`);
-    await STORES.devices.report(
-      { id: LOCAL_HOST_RUNNER, orgId: 'local', visibility: 'shared' },
-      devices
-        .filter((device) => device.platform === 'android' || device.platform === 'ios')
-        .map((device) => ({
-          platform: device.platform, udid: device.udid, label: device.label,
-        })),
-    );
-  };
-  void reportDevices();
-  const deviceTimer = setInterval(() => void reportDevices(), DEVICE_REPORT_MS);
-  deviceTimer.unref?.();
-}
-
-if (MODE === 'embedded') {
-  // Dọn job treo TRƯỚC khi nhận job mới: một job còn `running` sau khi tiến
-  // trình chết là một dòng nói dối, và nó nằm đó mãi.
-  void localQueue.interruptStale();
-  const worker = startWorker({
+  startHostDevices({
+    runners: localRunners,
+    devices: STORES.devices,
     queue: localQueue,
-    // CÙNG kho lease mà màn Điều khiển dùng. Hai kho riêng nghĩa là job chạy
-    // đè lên tay người đang cầm máy — xem FARM-ARCHITECTURE mục 6b.
     leases: localLeases,
-    runnerId: 'local',
+    orgId: 'local',
     configFile: CONFIG_FILE,
+    name: `Máy này (${os.hostname()})`,
+    // Hàng đợi trong RAM không có khoá ngoại; giữ mã cũ để job đang nằm trong
+    // lịch sử vẫn khớp.
+    workerRunnerId: 'local',
   });
-
-  // Máy chủ cũng báo môi trường của chính nó, y như một runner ở xa. MỘT phép
-  // đo, hai nơi đọc: chính phép đo mà worker dùng để từ chối job. Đo lần thứ
-  // hai ở đây thì hai bên sẽ lệch, và lúc ấy màn hình nói "sẵn sàng" trong
-  // khi worker vừa từ chối một job vì thiếu Appium.
-  const reportPrereq = (): void => {
-    void localRunners.reportPrereq(LOCAL_HOST_RUNNER, worker.environment());
-  };
-  reportPrereq();
-  const prereqTimer = setInterval(reportPrereq, DEVICE_REPORT_MS);
-  prereqTimer.unref?.();
+} else if (process.env.TESTPILOT_HOST_DEVICES === '1' && POOL) {
+  // Máy chủ cũng cắm điện thoại — một device farm nhỏ. Điện thoại cắm vào đây
+  // hiện với cả tổ chức, không ai phải tạo token hay chạy runner riêng. Xem
+  // src/server/hostDevices.ts.
+  const hostRepos = pgRepos(await POOL(), 'default');
+  startHostDevices({
+    runners: STORES.runners,
+    devices: STORES.devices,
+    queue: hostRepos.queue,
+    leases: hostRepos.leases,
+    orgId: 'default',
+    configFile: CONFIG_FILE,
+    name: `Máy chủ (${os.hostname()})`,
+  });
+  console.log('[host] máy chủ nhận thiết bị cắm vào chính nó (TESTPILOT_HOST_DEVICES=1).');
 }
 
 /**

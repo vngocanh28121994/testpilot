@@ -85,6 +85,12 @@ export interface RunnerRegistry {
   touch(id: string, at?: Date): Promise<void>;
   /** Runner báo tình trạng môi trường của máy nó. Xem `RunnerRecord.prereq`. */
   reportPrereq(id: string, prereq: PrereqByPlatform): Promise<void>;
+  /**
+   * Ghi chính tiến trình máy chủ vào sổ như một runner dùng chung, không token.
+   * Dùng khi máy chủ cũng là máy cắm thiết bị (embedded, hoặc server với
+   * `TESTPILOT_HOST_DEVICES=1`).
+   */
+  seedLocalHost(id: string, name: string): Promise<void> | void;
   /** Đánh dấu `offline` những runner im lặng quá lâu. Trả về số đã đổi. */
   reapSilent(olderThanMs: number, now?: Date): Promise<number>;
 }

@@ -55,6 +55,9 @@ function toRecord(row: RunnerRow): RunnerRecord {
  */
 const REVOKED = 'revoked';
 
+/** `token_hash` của máy chủ tự làm runner: không phải hash, không token nào khớp. */
+const HOST_NO_TOKEN = 'host:no-token';
+
 const PREREQ_KEY = 'prereq';
 
 /** JSON hỏng thì coi như CHƯA ĐO, không coi như hỏng: xem `RunnerRecord.prereq`. */
@@ -89,6 +92,28 @@ export class PgRunnerRegistry implements RunnerRegistry {
       ],
     );
     return { runner: toRecord(rows[0]!), token };
+  }
+
+  /**
+   * Ghi CHÍNH MÁY CHỦ vào sổ, khi nó cũng là máy cắm thiết bị
+   * (`TESTPILOT_HOST_DEVICES=1`). Gọi lại mỗi nhịp báo máy để giữ nó "online".
+   *
+   * Không có token: không ai nối vào nó qua mạng. `token_hash` là `NOT NULL`
+   * nên đặt một chuỗi không phải hash sha256 — không token nào khớp được.
+   * Là máy DÙNG CHUNG của tổ chức: đó là cả lý do có chế độ này — cắm điện
+   * thoại vào máy chủ là cả nhóm thấy, không ai phải khai máy tính của mình.
+   */
+  async seedLocalHost(id: string, name: string): Promise<void> {
+    const at = new Date().toISOString();
+    await (await this.pool()).query(
+      `INSERT INTO runner (id, org_id, name, mode, owner_user_id, os, arch,
+                           protocol_version, agent_version, token_hash,
+                           visibility, state, last_seen_at, created_at)
+       VALUES ($1, $2, $3, 'lab', NULL, $4, $5, $6, $6, $7, 'shared', 'online', $8, $8)
+       ON CONFLICT (id) DO UPDATE
+         SET name = EXCLUDED.name, state = 'online', last_seen_at = EXCLUDED.last_seen_at`,
+      [id, this.orgId, name, process.platform, process.arch, PROTOCOL_VERSION, HOST_NO_TOKEN, at],
+    );
   }
 
   async findByToken(token: string): Promise<RunnerRecord | undefined> {

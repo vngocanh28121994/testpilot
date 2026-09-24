@@ -124,18 +124,30 @@ describe('ranh giới control plane', () => {
    * Appium và adb — đúng thứ mà cả kiến trúc này dựng lên để tránh. Và kiểu
    * hỏng ấy im lặng: mọi thứ vẫn chạy, chỉ là chạy ở sai chỗ.
    */
-  it('worker chỉ khởi động ở chế độ embedded', () => {
-    const host = readFileSync('src/ui/server.ts', 'utf8')
+  it('worker chỉ khởi động ở embedded, hoặc khi server bật rõ TESTPILOT_HOST_DEVICES', () => {
+    const strip = (code: string) => code
       .replace(/\/\*[\s\S]*?\*\//g, '')
       .replace(/^\s*\/\/.*$/gm, '');
-    const call = host.indexOf('startWorker(');
-    assert.ok(call > 0, 'server.ts phải khởi động worker ở chế độ embedded');
+    const host = strip(readFileSync('src/ui/server.ts', 'utf8'));
 
-    const guard = host.lastIndexOf("MODE === 'embedded'", call);
-    assert.ok(
-      guard > 0 && call - guard < 600,
-      'lời gọi startWorker phải nằm trong nhánh kiểm MODE === embedded',
-    );
+    // server.ts không tự gọi worker: mọi đường đều đi qua startHostDevices.
+    assert.equal(host.indexOf('startWorker('), -1, 'server.ts không được gọi startWorker trực tiếp');
+
+    const calls = [...host.matchAll(/startHostDevices\(/g)].map((m) => m.index!);
+    assert.ok(calls.length > 0, 'server.ts phải khởi động máy chủ-làm-runner ở chế độ embedded');
+    for (const call of calls) {
+      const before = host.slice(Math.max(0, call - 600), call);
+      assert.ok(
+        /MODE === 'embedded'/.test(before) || /TESTPILOT_HOST_DEVICES === '1'/.test(before),
+        'mỗi lời gọi startHostDevices phải nằm trong nhánh embedded hoặc nhánh TESTPILOT_HOST_DEVICES',
+      );
+    }
+
+    // Ngoài hostDevices.ts, không file nào trong control plane khởi động worker.
+    const offenders = filesUnder('src/server')
+      .filter((file) => !file.endsWith('hostDevices.ts') && !file.includes('__tests__'))
+      .filter((file) => strip(readFileSync(file, 'utf8')).includes('startWorker('));
+    assert.deepEqual(offenders, []);
   });
 
   /**

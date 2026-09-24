@@ -62,6 +62,18 @@ Cùng luật ấy áp cho **phiên đăng nhập**: ở chế độ server chún
 instance này gọi API rơi vào instance kia sẽ nhận 401 — không phải thỉnh
 thoảng, mà là một nửa số request.
 
+## Máy chủ cũng cắm điện thoại (device farm nhỏ)
+
+Đặt `TESTPILOT_HOST_DEVICES=1` khi chính máy chạy server cũng là máy cắm điện
+thoại. Điện thoại cắm vào đó hiện với **cả tổ chức** như thiết bị dùng chung —
+không ai phải tạo token hay chạy runner riêng trên máy chủ, và màn Điều khiển
+thiết bị điều khiển được chúng.
+
+Để tắt khi server nằm trong container hay trên cloud: lúc ấy máy chủ web không
+được chạy Appium hay adb, và thiết bị nối vào qua runner (`Thêm máy`). Runner
+cá nhân trên laptop từng người vẫn dùng được song song, cho ai muốn cắm thêm
+máy ở chỗ mình.
+
 ## Artifact: report, ảnh, video
 
 Ở chế độ `server`, bằng chứng của một lượt chạy **không ở lại trên máy runner**

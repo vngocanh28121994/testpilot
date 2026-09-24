@@ -67,6 +67,7 @@ const emptyRunners: RunnerRegistry = {
   revoke: async () => false,
   touch: async () => {},
   reportPrereq: async () => {},
+  seedLocalHost: async () => {},
   reapSilent: async () => 0,
 };
 
