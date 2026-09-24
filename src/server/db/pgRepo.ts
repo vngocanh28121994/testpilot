@@ -514,6 +514,23 @@ export class PgLeaseRepo implements LeaseRepo {
   }
 }
 
+/** Tên hiển thị của người dùng: email trước, tên sau — cái đồng nghiệp nhận ra. */
+class PgPeopleRepo {
+  private readonly cache = new Map<string, string | undefined>();
+
+  constructor(private readonly pool: Pool) {}
+
+  async displayName(userId: string): Promise<string | undefined> {
+    if (this.cache.has(userId)) return this.cache.get(userId);
+    const { rows } = await this.pool.query<{ email: string | null; name: string | null }>(
+      'SELECT email, name FROM app_user WHERE id = $1', [userId],
+    );
+    const shown = rows[0]?.email || rows[0]?.name || undefined;
+    this.cache.set(userId, shown);
+    return shown;
+  }
+}
+
 export function pgRepos(pool: Pool, orgId: string): Repos {
   return {
     registry: new PgRegistryRepo(pool, orgId),
@@ -522,6 +539,7 @@ export function pgRepos(pool: Pool, orgId: string): Repos {
     leases: new PgLeaseRepo(pool, orgId),
     queue: new PgJobQueue(pool, orgId),
     proposals: new PgProposalStore(pool, orgId),
+    people: new PgPeopleRepo(pool),
   };
 }
 

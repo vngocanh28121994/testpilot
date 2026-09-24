@@ -823,6 +823,8 @@ export interface DeviceLeaseView {
   id: string;
   deviceId: string;
   holder: LeaseHolderView;
+  /** Người giữ, dạng đọc được: "bạn", email, hoặc "một lượt chạy test". */
+  holderLabel?: string;
   acquiredAt: string;
   expiresAt: string;
   renewedAt?: string;

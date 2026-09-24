@@ -40,9 +40,11 @@ describe('MemoryLeaseRepo', () => {
       (err: unknown) => {
         assert.ok(err instanceof LeaseTakenError);
         assert.deepEqual(err.current.holder, ME);
-        // Câu lỗi phải trả lời được "bao lâu nữa thì tới lượt tôi".
-        assert.match(err.message, /user-1/);
-        assert.match(err.message, /giữ tới/);
+        // Câu lỗi mặc định nói việc cần làm, không in mã người dùng hay giờ
+        // UTC. Ai giữ nằm trong `err.current`, để route viết câu có tên người
+        // và tên máy.
+        assert.doesNotMatch(err.message, /user-1|T\d\d:\d\d/);
+        assert.match(err.message, /Chờ/);
         return true;
       },
     );

@@ -66,12 +66,16 @@ describe('màn thiết bị', () => {
   });
 
   /** Phép ghép thứ nhất: lease → người. */
-  it('người đang điều khiển thì hiện tên người ấy', async () => {
-    mock({ devices: [DEVICE], leases: [lease({ kind: 'human', userId: 'an' })] });
+  it('người đang điều khiển thì hiện tên người ấy — không phải mã người dùng', async () => {
+    mock({
+      devices: [DEVICE],
+      leases: [{ ...lease({ kind: 'human', userId: '597d89e8-7791' }), holderLabel: 'an@congty.vn' }],
+    });
     await show();
 
     const row = (await screen.findByText(DEVICE.label)).closest('tr')!;
-    expect(within(row).getByText('an')).toBeInTheDocument();
+    expect(within(row).getByText('an@congty.vn')).toBeInTheDocument();
+    expect(within(row).queryByText(/597d89e8/)).not.toBeInTheDocument();
     expect(within(row).queryByText('không ai')).not.toBeInTheDocument();
   });
 

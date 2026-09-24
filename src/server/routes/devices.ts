@@ -52,11 +52,46 @@ function me(ctx: RouteContext): LeaseHolder {
  * mình — nhưng nó là một mã nội bộ, và mã nội bộ đi ra ngoài thì sớm muộn có
  * người dùng nó làm tham số.
  */
-function view(lease: Lease): DeviceLeaseView {
+/**
+ * Người giữ, dưới dạng đồng nghiệp nhận ra: "bạn", email, hoặc "một lượt chạy
+ * test". Không bao giờ là mã người dùng — "đang được 597d89e8-7791-… giữ" là
+ * câu thật đã hiện trên màn hình, và không ai đọc ra đó là ai.
+ */
+async function holderName(ctx: RouteContext, holder: LeaseHolder): Promise<string> {
+  if (holder.kind === 'job') return 'một lượt chạy test';
+  if (holder.userId === ctx.identity.userId) return 'bạn';
+  return (await ctx.repos.people?.displayName(holder.userId).catch(() => undefined))
+    ?? 'một người dùng khác';
+}
+
+/**
+ * "Máy đang có người giữ", nói được ba điều: máy NÀO, AI giữ, và KHI NÀO trống.
+ *
+ * Không đưa giờ hết hạn: lượt giữ tự gia hạn mỗi 30 giây khi người kia còn mở
+ * trang, nên "giữ tới 09:26:29" không phải lúc máy trống — nó chỉ là nhịp gia
+ * hạn kế tiếp. Điều thật là: trống khi họ nhả, hoặc chừng một phút sau khi họ
+ * rời trang.
+ */
+async function leaseTakenMessage(ctx: RouteContext, deviceId: string, lease: Lease): Promise<string> {
+  const device = await ctx.devices.find(deviceId, viewer(ctx),
+    await ctx.grants.forUser(ctx.identity.orgId, ctx.identity.userId)).catch(() => undefined);
+  const name = device?.label ?? deviceId;
+  if (lease.holder.kind === 'job') {
+    return `${name} đang chạy một lượt test. Máy sẽ trống khi lượt chạy xong — xem tiến độ ở màn Thiết bị & hàng đợi.`;
+  }
+  // Không có nhánh "chính bạn": cùng người bấm giữ lại là GIA HẠN (xem
+  // `acquire`), không bao giờ tới được đây.
+  const who = await holderName(ctx, lease.holder);
+  return `${name} đang được ${who} giữ. Máy sẽ trống khi người đó bấm Nhả máy, `
+    + 'hoặc khoảng 1 phút sau khi họ đóng trang.';
+}
+
+function view(lease: Lease, holderLabel?: string): DeviceLeaseView {
   return {
     id: lease.id,
     deviceId: lease.deviceId,
     holder: lease.holder,
+    ...(holderLabel ? { holderLabel } : {}),
     acquiredAt: lease.acquiredAt,
     expiresAt: lease.expiresAt,
     renewedAt: lease.renewedAt,
@@ -141,7 +176,9 @@ export const deviceRoutes: RouteTable = {
   /** Ai đang giữ máy nào. Đọc thì vô hại, và người đang chờ máy cần thấy. */
   'GET /api/device/leases': async (_req, res, _url, ctx) => {
     const leases = await ctx.repos.leases.list();
-    const body: DeviceLeasesResponse = { leases: leases.map(view) };
+    const body: DeviceLeasesResponse = {
+      leases: await Promise.all(leases.map(async (lease) => view(lease, await holderName(ctx, lease.holder)))),
+    };
     return json(res, 200, body);
   },
 
@@ -157,8 +194,11 @@ export const deviceRoutes: RouteTable = {
       // có người. Trả 403 ở đây sẽ khiến họ đi xin quyền cho một việc không
       // liên quan gì tới quyền.
       if (err instanceof LeaseTakenError) {
-        return json(res, 409, { error: err.message, holder: err.current.holder,
-          expiresAt: err.current.expiresAt });
+        return json(res, 409, {
+          error: await leaseTakenMessage(ctx, deviceId, err.current),
+          holder: err.current.holder,
+          expiresAt: err.current.expiresAt,
+        });
       }
       throw err;
     }

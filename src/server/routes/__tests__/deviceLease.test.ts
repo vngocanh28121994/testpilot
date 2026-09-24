@@ -38,14 +38,18 @@ function person(userId: string, role: Identity['role'] = 'runner_user'): Identit
   return { userId, orgId: 'org-1', email: `${userId}@example.com`, role };
 }
 
+const PEOPLE: Record<string, string> = { 'user-1': 'an@congty.vn', 'user-2': 'binh@congty.vn' };
+const people = { displayName: async (id: string) => PEOPLE[id] };
+let devices = new MemoryDeviceRegistry();
+
 function context(identity: Identity, leases: MemoryLeaseRepo): RouteContext {
   return {
     configFile: 'testpilot.config.json',
     configProfile: { owner: 't', source: 'personal' },
     identity,
-    repos: { leases } as unknown as Repos,
+    repos: { leases, people } as unknown as Repos,
     runners: new MemoryRunnerRegistry(),
-    devices: new MemoryDeviceRegistry(),
+    devices,
       grants: new MemoryDeviceGrants(),
       sessions: new MemorySessionStore(),
   };
@@ -104,6 +108,52 @@ describe('POST /api/device/lease', () => {
     assert.equal(out.status, 409);
     assert.deepEqual(out.body.holder, { kind: 'human', userId: 'user-1' });
     assert.ok(typeof out.body.expiresAt === 'string');
+  });
+
+  /**
+   * Câu thật đã hiện trên màn hình: 'Thiết bị "00008101-…" đang được
+   * 597d89e8-7791-… giữ tới 2026-09-24T09:26:29.496Z.' — udid, mã người dùng,
+   * giờ UTC. Không ai đọc ra được đó là máy nào, ai giữ, và bao giờ trống.
+   */
+  it('câu 409 nói tên máy, email người giữ, và khi nào trống — không mã, không giờ UTC', async () => {
+    devices = new MemoryDeviceRegistry();
+    await devices.report({ id: 'runner:local', orgId: 'org-1', visibility: 'shared' },
+      [{ platform: 'ios', udid: 'dev-1', label: 'iPhone 12 Pro Max · iOS 26.6.1' }]);
+    const leases = new MemoryLeaseRepo();
+    await call('POST /api/device/lease', ME, leases, { deviceId: 'dev-1' });
+    const out = await call('POST /api/device/lease', YOU, leases, { deviceId: 'dev-1' });
+
+    const error = String(out.body.error);
+    assert.match(error, /^iPhone 12 Pro Max · iOS 26\.6\.1 đang được an@congty\.vn giữ\./);
+    assert.match(error, /Nhả máy/);
+    assert.match(error, /1 phút/);
+    assert.doesNotMatch(error, /user-1|dev-1|T\d\d:\d\d/);
+    devices = new MemoryDeviceRegistry();
+  });
+
+  it('máy đang chạy test thì nói thế; cùng người bấm lại là gia hạn', async () => {
+    const leases = new MemoryLeaseRepo();
+    await leases.acquire('dev-1', { kind: 'job', jobId: 'j-1' });
+    const byJob = await call('POST /api/device/lease', ME, leases, { deviceId: 'dev-1' });
+    assert.match(String(byJob.body.error), /đang chạy một lượt test/);
+
+    const mine = new MemoryLeaseRepo();
+    await mine.acquire('dev-2', { kind: 'human', userId: 'user-1' });
+    // Tab thứ hai cùng người: repo coi là gia hạn, nên giả lập bằng một mã phiên khác.
+    const other = { ...ME, userId: 'user-1' };
+    const out = await call('POST /api/device/lease', other, mine, { deviceId: 'dev-2' });
+    assert.equal(out.status, 200, 'cùng người bấm lại là gia hạn, không phải xung đột');
+  });
+});
+
+describe('GET /api/device/leases', () => {
+  it('trả kèm tên người giữ đọc được', async () => {
+    const leases = new MemoryLeaseRepo();
+    await call('POST /api/device/lease', ME, leases, { deviceId: 'dev-1' });
+    const asMe = await call('GET /api/device/leases', ME, leases);
+    const asYou = await call('GET /api/device/leases', YOU, leases);
+    assert.equal((asMe.body.leases as Array<{ holderLabel: string }>)[0]!.holderLabel, 'bạn');
+    assert.equal((asYou.body.leases as Array<{ holderLabel: string }>)[0]!.holderLabel, 'an@congty.vn');
   });
 });
 

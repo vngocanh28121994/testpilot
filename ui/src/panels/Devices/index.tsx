@@ -169,7 +169,10 @@ export default function DevicesPanel() {
                         <TableCell>
                           {!lease && <span className="text-muted-foreground">không ai</span>}
                           {lease?.holder.kind === 'human' && (
-                            <span>người dùng <b>{lease.holder.userId}</b> đang điều khiển</span>
+                            // Tên đọc được do máy chủ tra — không phải mã người dùng.
+                            <span>
+                              <b>{lease.holderLabel ?? 'một người dùng khác'}</b> đang điều khiển
+                            </span>
                           )}
                           {lease?.holder.kind === 'job' && (
                             <span>

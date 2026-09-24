@@ -124,11 +124,11 @@ export type LeaseHolder =
  */
 export class LeaseTakenError extends Error {
   constructor(readonly current: Lease) {
-    super(
-      `Thiết bị "${current.deviceId}" đang được `
-        + `${current.holder.kind === 'job' ? `job ${current.holder.jobId}` : current.holder.userId}`
-        + ` giữ tới ${current.expiresAt}.`,
-    );
+    // Câu mặc định, khi nơi bắt lỗi không có gì hay hơn để nói. Route giữ máy
+    // viết lại nó với tên máy và tên người — xem `leaseTakenMessage`.
+    super(current.holder.kind === 'job'
+      ? 'Thiết bị đang chạy một lượt test. Chờ lượt chạy xong rồi thử lại.'
+      : 'Thiết bị đang có người khác giữ. Chờ họ nhả máy rồi thử lại.');
     this.name = 'LeaseTakenError';
   }
 }
@@ -185,4 +185,16 @@ export interface Repos {
    * thứ đã được đồng ý, `proposals` là thứ chưa.
    */
   proposals: ProposalStore;
+  /**
+   * Tên để HIỂN THỊ cho một mã người dùng — email, hoặc tên nếu không có.
+   *
+   * Không có ở chế độ embedded: ở đó chỉ có một người, và câu trả lời luôn là
+   * "bạn". Trước khi có nó, màn hình in thẳng mã người dùng ("đang được
+   * 597d89e8-7791-… giữ") — một chuỗi không ai nhận ra là đồng nghiệp nào.
+   */
+  people?: PeopleRepo;
+}
+
+export interface PeopleRepo {
+  displayName(userId: string): Promise<string | undefined>;
 }
