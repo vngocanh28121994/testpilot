@@ -311,10 +311,12 @@ interface LeaseRow {
   renewed_at: string | null;
 }
 
-function toLease(row: LeaseRow): Lease {
+function toLease(row: LeaseRow & { device_key?: string | null }): Lease {
   return {
     id: row.id,
-    deviceId: row.device_id,
+    // Mã mà PHẦN CÒN LẠI của hệ thống dùng cho thiết bị — udid — chứ không
+    // phải mã dòng `runner::udid`. Xem `PgLeaseRepo.rowIdFor`.
+    deviceId: row.device_key ?? row.device_id,
     orgId: row.org_id,
     holder: row.holder_kind === 'job'
       ? { kind: 'job', jobId: row.job_id! }
@@ -339,15 +341,54 @@ function sameHolder(a: LeaseHolder, b: LeaseHolder): boolean {
  * `Map` nào dùng chung, nên thứ duy nhất còn lại để phân xử là DB — và nó phân
  * xử bằng một chỉ mục, tức là bằng một khẳng định không mã nào lách được.
  */
+/**
+ * Cột trả kèm mọi dòng lease: udid của thiết bị (hoặc mã dòng nếu không có).
+ * Dùng tên bảng `lease` tường minh để chạy được cả trong RETURNING.
+ */
+const DEVICE_KEY =
+  '(SELECT COALESCE(d.udid, d.id) FROM device d WHERE d.id = lease.device_id) AS device_key';
+
 export class PgLeaseRepo implements LeaseRepo {
   constructor(
     private readonly pool: Pool,
     private readonly orgId: string,
   ) {}
 
-  async acquire(deviceId: string, holder: LeaseHolder, now = new Date()): Promise<Lease> {
+  /**
+   * Mã dòng `device` cho một thiết bị mà người gọi gọi bằng UDID.
+   *
+   * Cả hệ thống — màn Điều khiển, API giữ máy, worker nhận job — gọi thiết bị
+   * bằng udid. Bảng `device` thì khoá bằng `runner::udid`, vì cùng một udid có
+   * thể được hai runner báo lên. Bản trong RAM không có khoá ngoại nên chưa
+   * từng lệch; bản Postgres thì từ chối với "lease_v2_device_id_fkey" ngay lần
+   * đầu có người bấm Giữ máy ở chế độ server.
+   *
+   * Nhận cả mã dòng (test và dữ liệu cũ dùng nó). Hai runner cùng báo một udid
+   * thì chọn dòng đang không tắt, mới cập nhật nhất — chiếc máy thật đang cắm.
+   */
+  private async rowIdFor(
+    q: Pick<Pool, 'query'>, key: string,
+  ): Promise<string | undefined> {
+    const { rows } = await q.query<{ id: string }>(
+      `SELECT id FROM device
+       WHERE org_id = $1 AND (id = $2 OR udid = $2)
+       ORDER BY (id = $2) DESC, (state <> 'offline') DESC, updated_at DESC
+       LIMIT 1`,
+      [this.orgId, key],
+    );
+    return rows[0]?.id;
+  }
+
+  async acquire(key: string, holder: LeaseHolder, now = new Date()): Promise<Lease> {
     const at = now.toISOString();
     const expires = new Date(now.getTime() + LEASE_TTL_MS).toISOString();
+    const deviceId = await this.rowIdFor(this.pool, key);
+    if (!deviceId) {
+      throw new Error(
+        `Không tìm thấy thiết bị "${key}" trong danh sách máy — có thể máy vừa rút ra, `
+        + 'hoặc máy tính giữ nó vừa tắt. Bấm Tìm lại rồi chọn lại máy.',
+      );
+    }
     const client = await this.pool.connect();
     try {
       await client.query('BEGIN');
@@ -364,7 +405,7 @@ export class PgLeaseRepo implements LeaseRepo {
                             acquired_at, expires_at)
          VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
          ON CONFLICT (device_id) DO NOTHING
-         RETURNING *`,
+         RETURNING *, ${DEVICE_KEY}`,
         [randomUUID(), deviceId, this.orgId, holder.kind,
          holder.kind === 'job' ? holder.jobId : null,
          holder.kind === 'human' ? holder.userId : null, at, expires],
@@ -375,7 +416,7 @@ export class PgLeaseRepo implements LeaseRepo {
       }
 
       const { rows } = await client.query<LeaseRow>(
-        'SELECT * FROM lease WHERE org_id = $1 AND device_id = $2',
+        `SELECT *, ${DEVICE_KEY} FROM lease WHERE org_id = $1 AND device_id = $2`,
         [this.orgId, deviceId],
       );
       const current = rows[0];
@@ -384,7 +425,7 @@ export class PgLeaseRepo implements LeaseRepo {
         // khác. Một thiết bị chỉ thuộc một tổ chức, nên đây là dữ liệu đã lệch,
         // và im lặng cấp lease thì hai tổ chức dùng chung một chiếc máy.
         await client.query('ROLLBACK');
-        throw new Error(`Thiết bị "${deviceId}" đang bị giữ bởi một tổ chức khác.`);
+        throw new Error(`Thiết bị "${key}" đang bị giữ bởi một tổ chức khác.`);
       }
       const existing = toLease(current);
       if (!sameHolder(existing.holder, holder)) {
@@ -395,7 +436,7 @@ export class PgLeaseRepo implements LeaseRepo {
       // nên làm mất quyền điều khiển của người vừa lấy nó.
       const renewed = await client.query<LeaseRow>(
         `UPDATE lease SET expires_at = $3, renewed_at = $4
-         WHERE org_id = $1 AND id = $2 RETURNING *`,
+         WHERE org_id = $1 AND id = $2 RETURNING *, ${DEVICE_KEY}`,
         [this.orgId, existing.id, expires, at],
       );
       await client.query('COMMIT');
@@ -418,7 +459,7 @@ export class PgLeaseRepo implements LeaseRepo {
        WHERE org_id = $1 AND id = $2 AND expires_at > $3
          AND holder_kind = $5
          AND (($5 = 'job' AND job_id = $6) OR ($5 = 'human' AND holder_user_id = $6))
-       RETURNING *`,
+       RETURNING *, ${DEVICE_KEY}`,
       [this.orgId, leaseId, at, new Date(now.getTime() + LEASE_TTL_MS).toISOString(),
        holder.kind, holder.kind === 'job' ? holder.jobId : holder.userId],
     );
@@ -446,17 +487,19 @@ export class PgLeaseRepo implements LeaseRepo {
     const at = now.toISOString();
     await this.reap(now);
     const { rows } = await this.pool.query<LeaseRow>(
-      'SELECT * FROM lease WHERE org_id = $1 AND expires_at > $2 ORDER BY acquired_at',
+      `SELECT *, ${DEVICE_KEY} FROM lease WHERE org_id = $1 AND expires_at > $2 ORDER BY acquired_at`,
       [this.orgId, at],
     );
     return rows.map(toLease);
   }
 
-  async find(deviceId: string, now = new Date()): Promise<Lease | undefined> {
+  async find(key: string, now = new Date()): Promise<Lease | undefined> {
     const at = now.toISOString();
     await this.reap(now);
+    const deviceId = await this.rowIdFor(this.pool, key);
+    if (!deviceId) return undefined;
     const { rows } = await this.pool.query<LeaseRow>(
-      'SELECT * FROM lease WHERE org_id = $1 AND device_id = $2 AND expires_at > $3',
+      `SELECT *, ${DEVICE_KEY} FROM lease WHERE org_id = $1 AND device_id = $2 AND expires_at > $3`,
       [this.orgId, deviceId, at],
     );
     return rows[0] ? toLease(rows[0]) : undefined;

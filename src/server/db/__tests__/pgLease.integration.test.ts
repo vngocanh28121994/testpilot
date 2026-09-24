@@ -173,4 +173,33 @@ describe('PgLeaseRepo', () => {
       assert.equal(await leases.find(DEV, later(5_001)), undefined);
     }
   });
+
+  /**
+   * Chế độ server, lần đầu có người bấm Giữ máy: "insert or update on table
+   * lease violates foreign key constraint lease_v2_device_id_fkey". Cả hệ thống
+   * gọi thiết bị bằng UDID; bảng `device` khoá bằng `runner::udid`.
+   */
+  it('giữ bằng udid: tìm đúng dòng thiết bị, trả lại udid cho người gọi', async () => {
+    const udid = `UDID-${ORG}`;
+    const rowId = `run-${ORG}::${udid}`;
+    await pool.query(
+      `INSERT INTO device (id, runner_id, org_id, platform, name, udid, visibility, state, updated_at)
+       VALUES ($1, $2, $3, 'ios', 'iPhone', $4, 'shared', 'idle', $5)`,
+      [rowId, `run-${ORG}`, ORG, udid, new Date().toISOString()],
+    );
+    const leases = repo();
+    const lease = await leases.acquire(udid, ME, T0);
+    assert.equal(lease.deviceId, udid, 'người gọi nhận lại đúng mã họ đã gửi');
+    assert.equal((await leases.find(udid, later(1_000)))?.id, lease.id);
+    assert.ok((await leases.list(later(1_000))).some((l) => l.deviceId === udid));
+
+    // Người khác giữ cùng máy bằng udid: bị chặn như thường, không lách qua mã dòng.
+    await assert.rejects(leases.acquire(udid, YOU, later(1_000)), LeaseTakenError);
+    await assert.rejects(leases.acquire(rowId, YOU, later(1_000)), LeaseTakenError);
+    assert.equal(await leases.release(lease.id, ME), true);
+  });
+
+  it('thiết bị không có trong sổ: câu nói được việc cần làm, không phải lỗi khoá ngoại', async () => {
+    await assert.rejects(repo().acquire('khong-co-may-nay', ME, T0), /Không tìm thấy thiết bị .*Tìm lại/);
+  });
 });
