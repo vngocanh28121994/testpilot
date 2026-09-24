@@ -110,4 +110,31 @@ describe('PreflightChecks', () => {
     await user.click(screen.getByRole('button', { name: 'Khởi động Appium' }));
     await waitFor(() => expect(sent).toEqual({ op: 'start_appium', platform: 'ios', device: 'IPHONE-1' }));
   });
+
+  /**
+   * Người dùng làm việc từ xa: không ai ngồi ở máy chủ để gõ mật khẩu. Máy
+   * có dịch vụ tunnel thì nút chỉ khởi động lại nó — và nói là không cần
+   * mật khẩu.
+   */
+  it('máy có dịch vụ tunnel: nút khởi động lại, không cần mật khẩu', () => {
+    renderWithProviders(
+      <PreflightChecks
+        checks={[{ name: 'Tunnel cho WebView (iOS 17+)', ok: false, fix: 'ios-tunnel', detail: 'Chưa nhận máy.' }]}
+        target={{ platform: 'ios', host: { name: 'Máy chủ (mac)', remote: false, tunnelService: true } }}
+      />,
+    );
+    expect(screen.getByRole('button', { name: 'Khởi động lại tunnel' })).toBeInTheDocument();
+    expect(screen.getByText(/không cần mật khẩu/)).toBeInTheDocument();
+  });
+
+  it('máy chủ CHƯA có dịch vụ: nói thẳng là cần người ở máy chủ, và cách cài một lần', () => {
+    renderWithProviders(
+      <PreflightChecks
+        checks={[{ name: 'Tunnel cho WebView (iOS 17+)', ok: false, fix: 'ios-tunnel', detail: 'Chưa chạy.' }]}
+        target={{ platform: 'ios', host: { name: 'Máy chủ (mac)', remote: false } }}
+      />,
+    );
+    expect(screen.getByRole('button', { name: 'Mở Terminal trên máy chủ' })).toBeInTheDocument();
+    expect(screen.getByText(/install-ios-tunnel-service\.sh/)).toBeInTheDocument();
+  });
 });

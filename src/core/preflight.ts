@@ -83,7 +83,12 @@ export interface PreflightResult {
    * bị. Có để giao diện nói trước "Terminal sẽ mở trên …", thay vì để người
    * ngồi ở máy này bấm rồi thấy nó bật lên ở máy khác.
    */
-  host?: { name: string; remote: boolean };
+  host?: {
+    name: string;
+    remote: boolean;
+    /** Tunnel trên máy ấy chạy như dịch vụ: sửa được mà không ai gõ mật khẩu. */
+    tunnelService?: boolean;
+  };
 }
 
 /** Một chiếc máy đang cắm mà config chưa khai. */

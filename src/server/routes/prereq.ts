@@ -186,6 +186,7 @@ export const prereqRoutes: RouteTable = {
       host: {
         name: process.env.TESTPILOT_MODE === 'server' ? `Máy chủ (${os.hostname()})` : `Máy này (${os.hostname()})`,
         remote: false,
+        tunnelService: localRunner.prereq.tunnelService(),
       },
     });
   },
@@ -235,11 +236,15 @@ export const prereqRoutes: RouteTable = {
 async function localPrep(op: PrepOp, cfg: TestPilotConfig, log: (line: string) => void): Promise<void> {
   if (op === 'start_appium') return localRunner.prereq.startAppium(log);
   if (op === 'restart_appium') return localRunner.prereq.restartAppium(log);
-  const opened = op === 'ios_tunnel'
-    ? await localRunner.prereq.openTunnelTerminal()
-    : await localRunner.prereq.openIosSettings(cfg);
-  if (!opened.ok) throw new Error(opened.error ?? 'Không mở được.');
-  log(op === 'ios_tunnel'
-    ? '[prep] Đã mở Terminal với lệnh tunnel. Nhập mật khẩu máy ở cửa sổ đó.'
-    : '[prep] Đã mở Cài đặt trên iPhone. Bấm Tin cậy trên máy.');
+  if (op === 'ios_tunnel') {
+    const fixed = await localRunner.prereq.fixTunnel();
+    if (!fixed.ok) throw new Error(fixed.error ?? 'Không bật được tunnel.');
+    log(fixed.mode === 'service'
+      ? '[prep] Đã khởi động lại dịch vụ tunnel trên máy chủ — không cần mật khẩu.'
+      : '[prep] Đã mở Terminal với lệnh tunnel. Nhập mật khẩu máy ở cửa sổ đó.');
+    return;
+  }
+  const opened = await localRunner.prereq.openIosSettings(cfg);
+  if (!opened.ok) throw new Error(opened.error ?? 'Không mở được Cài đặt.');
+  log('[prep] Đã mở Cài đặt trên iPhone. Bấm Tin cậy trên máy.');
 }

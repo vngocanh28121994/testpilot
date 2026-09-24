@@ -27,7 +27,7 @@ export interface FixTarget {
   platform?: string;
   /** Id hoặc udid của thiết bị đang kiểm. */
   device?: string;
-  host?: { name: string; remote: boolean };
+  host?: { name: string; remote: boolean; tunnelService?: boolean };
 }
 
 export function PreflightChecks({ checks, target }: { checks: PreflightCheck[]; target?: FixTarget }) {
@@ -71,16 +71,48 @@ const FIX_TEXT: Record<FixOp, { idle: string; busy: string; done: string; Icon: 
   },
 };
 
+/** Máy chủ chưa cài dịch vụ tunnel: nói thẳng việc admin làm MỘT lần. */
+const TUNNEL_SERVICE_HINT = 'sudo bash scripts/install-ios-tunnel-service.sh';
+
+/**
+ * Chữ của nút tunnel theo tình huống THẬT của máy đang cắm iPhone.
+ *
+ * Máy có dịch vụ tunnel: không ai phải gõ mật khẩu — kể cả khi mọi người làm
+ * việc từ xa. Máy chủ chưa có: bấm là mở Terminal ở máy chủ, nơi thường không
+ * có ai; nói ra điều đó và cách để không bao giờ phải làm thế nữa.
+ */
+function tunnelText(host?: FixTarget['host']): { idle: string; note?: string; done: string } {
+  if (host?.tunnelService) {
+    return {
+      idle: 'Khởi động lại tunnel',
+      note: `Tunnel trên ${host.name} chạy như dịch vụ — khởi động lại được, không cần mật khẩu.`,
+      done: 'Đã khởi động lại tunnel. Dò lại môi trường ở trên sau vài giây.',
+    };
+  }
+  const done = 'Đã mở Terminal. Nhập mật khẩu máy ở cửa sổ đó, rồi dò lại môi trường ở trên.';
+  if (!host) return { idle: 'Mở Terminal và chạy', done };
+  if (host.remote) {
+    return {
+      idle: 'Mở Terminal và chạy',
+      note: `Terminal sẽ mở trên ${host.name} — máy đang cắm iPhone. Người ngồi ở máy đó nhập mật khẩu.`,
+      done,
+    };
+  }
+  return {
+    idle: 'Mở Terminal trên máy chủ',
+    note: `Tunnel trên ${host.name} chưa được cài làm dịch vụ, nên nút này mở Terminal ở máy ấy và `
+      + 'cần người ngồi đó nhập mật khẩu. Admin cài một lần trên máy chủ để không ai phải làm vậy '
+      + `nữa: ${TUNNEL_SERVICE_HINT}`,
+    done,
+  };
+}
+
 /** "Làm trên: …" — nói TRƯỚC khi bấm, vì chỗ việc xảy ra có thể là máy khác. */
 function WhereNote({ target, op }: { target?: FixTarget; op: FixOp }) {
   const host = target?.host;
   if (!host) return null;
-  const text = op === 'ios_tunnel'
-    ? host.remote
-      ? `Terminal sẽ mở trên ${host.name} — máy đang cắm iPhone. Người ngồi ở máy đó nhập mật khẩu.`
-      : `Terminal sẽ mở trên ${host.name} — máy đang cắm iPhone. Cần người ở máy đó nhập mật khẩu.`
-    : `Làm trên ${host.name} — máy đang cắm thiết bị.`;
-  return <span className="text-muted-foreground text-xs">{text}</span>;
+  const text = op === 'ios_tunnel' ? tunnelText(host).note : `Làm trên ${host.name} — máy đang cắm thiết bị.`;
+  return text ? <span className="text-muted-foreground text-xs">{text}</span> : null;
 }
 
 /**
@@ -90,7 +122,9 @@ function WhereNote({ target, op }: { target?: FixTarget; op: FixOp }) {
 function FixButton({ op, target }: { op: FixOp; target?: FixTarget }) {
   const job = useStreamJob(`preflight-fix-${op}`, STREAM_ROUTES.prereqFix);
   const client = useQueryClient();
-  const text = FIX_TEXT[op];
+  const text = op === 'ios_tunnel'
+    ? { ...FIX_TEXT.ios_tunnel, ...tunnelText(target?.host) }
+    : FIX_TEXT[op];
 
   useEffect(() => {
     if (job.status !== 'done') return;

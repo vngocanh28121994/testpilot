@@ -16,7 +16,7 @@ import type { Runner } from '../index.js';
 const CONFIG = ConfigSchema.parse({ web: { baseUrl: 'https://example.test' }, android: { deviceName: 'Android Device' } });
 const config = async () => CONFIG;
 
-function prepRunner(attached: string[]) {
+function prepRunner(attached: string[], service = false) {
   const did: string[] = [];
   const runner = {
     run: { parseDeviceToken: () => null },
@@ -28,7 +28,8 @@ function prepRunner(attached: string[]) {
       xcode: async () => ({ ok: true }),
       startAppium: async (log: (l: string) => void) => { did.push('start_appium'); log('appium lên'); },
       restartAppium: async () => { did.push('restart_appium'); },
-      openTunnelTerminal: async () => { did.push('ios_tunnel'); return { ok: true, command: 'x' }; },
+      fixTunnel: async () => { did.push('ios_tunnel'); return { ok: true, mode: service ? 'service' : 'terminal' }; },
+      tunnelService: () => service,
       openIosSettings: async () => { did.push('ios_trust'); return { ok: true }; },
     },
   } as unknown as Runner;
@@ -89,5 +90,25 @@ describe('worker — job chuẩn bị', () => {
       assert.equal(done?.state, 'failed');
       assert.deepEqual(did, []);
     } finally { worker.stop(); }
+  });
+
+  /**
+   * Máy chủ của device farm: không ai ngồi đó để gõ mật khẩu. Có dịch vụ
+   * tunnel thì chỉ khởi động lại nó — log phải nói "không cần mật khẩu", chứ
+   * không bảo ai đi nhập mật khẩu ở một Terminal không có ai nhìn.
+   */
+  it('máy có dịch vụ tunnel: khởi động lại dịch vụ, không bảo ai nhập mật khẩu', async () => {
+    const queue = new MemoryJobQueue();
+    const { runner, did } = prepRunner(['IPHONE-1'], true);
+    const job = await queue.create(prepJob('ios_tunnel'));
+    const lines: string[] = [];
+    const off = await queue.onLog(job.id, (line) => lines.push(line));
+    const worker = startWorker({ queue, leases: new MemoryLeaseRepo(), runnerId: 'server', configFile: 'x.json', config, pollMs: 5, runner });
+    try {
+      await waitFor(() => queue.find(job.id), (j) => j?.state === 'succeeded');
+      assert.deepEqual(did, ['ios_tunnel']);
+      assert.ok(lines.some((l) => /không cần mật khẩu/.test(l)), lines.join('\n'));
+      assert.ok(!lines.some((l) => /Nhập mật khẩu/.test(l)));
+    } finally { worker.stop(); off(); }
   });
 });

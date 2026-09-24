@@ -51,6 +51,8 @@ import {
   iosDeviceNames,
   openIosSettings,
   openTunnelTerminal,
+  fixTunnel,
+  tunnelServiceInstalled,
   prereqAdb,
   prereqAppium,
   prereqAppiumStatus,
@@ -87,6 +89,13 @@ export interface RunnerPrereqApi {
   iosNames(): ReturnType<typeof iosDeviceNames>;
   /** Mở Terminal của máy với lệnh dựng tunnel điền sẵn. KHÔNG tự chạy sudo. */
   openTunnelTerminal(): ReturnType<typeof openTunnelTerminal>;
+  /**
+   * Làm tunnel chạy: khởi động lại DỊCH VỤ nếu máy đã cài (không mật khẩu),
+   * không thì mở Terminal. Xem scripts/install-ios-tunnel-service.sh.
+   */
+  fixTunnel(): ReturnType<typeof fixTunnel>;
+  /** Máy này có tunnel chạy như dịch vụ không. */
+  tunnelService(): boolean;
   /** Mở app Cài đặt trên chính chiếc iPhone đang cắm, để người dùng bấm Tin cậy. */
   openIosSettings(cfg: TestPilotConfig): ReturnType<typeof openIosSettings>;
   /** Cài một driver Appium theo tên đã kiểm tra. */
@@ -217,6 +226,8 @@ export const localRunner: Runner = {
     iosDevices: () => prereqIosDevices(),
     iosNames: () => iosDeviceNames(),
     openTunnelTerminal: () => openTunnelTerminal(),
+    fixTunnel: () => fixTunnel(),
+    tunnelService: () => tunnelServiceInstalled(),
     openIosSettings: (cfg) => openIosSettings(cfg),
     installDriver: (driver, log) => prereqInstallDriver(driver, log),
   },

@@ -614,14 +614,16 @@ async function runPrep(
   try {
     if (op === 'start_appium') await runner.prereq.startAppium(log);
     else if (op === 'restart_appium') await runner.prereq.restartAppium(log);
-    else {
-      const opened = op === 'ios_tunnel'
-        ? await runner.prereq.openTunnelTerminal()
-        : await runner.prereq.openIosSettings(cfg);
-      if (!opened.ok) throw new Error(opened.error ?? 'Không mở được.');
-      log(op === 'ios_tunnel'
-        ? '[prep] Đã mở Terminal với lệnh tunnel trên máy này. Nhập mật khẩu máy ở cửa sổ đó.'
-        : '[prep] Đã mở Cài đặt trên iPhone. Bấm Tin cậy trên máy.');
+    else if (op === 'ios_tunnel') {
+      const fixed = await runner.prereq.fixTunnel();
+      if (!fixed.ok) throw new Error(fixed.error ?? 'Không bật được tunnel.');
+      log(fixed.mode === 'service'
+        ? '[prep] Đã khởi động lại dịch vụ tunnel trên máy này — không cần mật khẩu.'
+        : '[prep] Đã mở Terminal với lệnh tunnel trên máy này. Nhập mật khẩu máy ở cửa sổ đó.');
+    } else {
+      const opened = await runner.prereq.openIosSettings(cfg);
+      if (!opened.ok) throw new Error(opened.error ?? 'Không mở được Cài đặt.');
+      log('[prep] Đã mở Cài đặt trên iPhone. Bấm Tin cậy trên máy.');
     }
     await close(deps, job, { type: 'job.result', jobId: job.id, state: 'succeeded' });
   } catch (err) {

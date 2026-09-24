@@ -560,6 +560,53 @@ export async function openTunnelTerminal(): Promise<{ ok: boolean; error?: strin
   }
 }
 
+/** Tên dịch vụ tunnel mà `scripts/install-ios-tunnel-service.sh` cài. */
+export const TUNNEL_SERVICE_LABEL = 'com.testpilot.ios-tunnel';
+
+/**
+ * Máy này có tunnel chạy như DỊCH VỤ không — tức là không cần ai gõ mật khẩu.
+ *
+ * Máy chủ của một device farm phải có: mọi người làm việc từ xa, và "mở
+ * Terminal rồi nhập mật khẩu" trên máy chủ là bắt ai đó đi tới tận máy ấy.
+ */
+export function tunnelServiceInstalled(): boolean {
+  return process.platform === 'darwin'
+    && existsSync(`/Library/LaunchDaemons/${TUNNEL_SERVICE_LABEL}.plist`);
+}
+
+/**
+ * Làm cho tunnel chạy — theo cách hợp với máy này.
+ *
+ * - Có dịch vụ: khởi động lại nó bằng `sudo -n` cho ĐÚNG lệnh mà quy tắc
+ *   sudoers của script cài cho phép. `-n`: không bao giờ hỏi mật khẩu — thiếu
+ *   quy tắc thì hỏng ngay với câu nói việc cần làm, không treo chờ ai gõ.
+ * - Không có: mở Terminal với lệnh điền sẵn, cho người đang ngồi ở máy này.
+ */
+export async function fixTunnel(): Promise<{
+  ok: boolean; mode: 'service' | 'terminal'; error?: string;
+}> {
+  if (!tunnelServiceInstalled()) {
+    const opened = await openTunnelTerminal();
+    return { ok: opened.ok, mode: 'terminal', ...(opened.error ? { error: opened.error } : {}) };
+  }
+  try {
+    await execFileAsync('sudo',
+      ['-n', '/bin/launchctl', 'kickstart', '-k', `system/${TUNNEL_SERVICE_LABEL}`],
+      { timeout: 15_000 });
+    return { ok: true, mode: 'service' };
+  } catch (err) {
+    const message = (err as Error).message;
+    return {
+      ok: false,
+      mode: 'service',
+      error: /password is required|a terminal is required/i.test(message)
+        ? 'Dịch vụ tunnel đã cài nhưng thiếu quyền khởi động lại không cần mật khẩu. '
+          + 'Admin chạy lại một lần trên máy này: sudo bash scripts/install-ios-tunnel-service.sh'
+        : `Không khởi động lại được dịch vụ tunnel: ${message}`,
+    };
+  }
+}
+
 /**
  * Mở sẵn ứng dụng Cài đặt trên chính chiếc iPhone đang cắm.
  *

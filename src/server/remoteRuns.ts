@@ -46,7 +46,7 @@ export interface RemoteDevice {
   /** Nút sửa được ngay từ web, do chính runner ấy báo. */
   fix?: 'appium';
   /** Tunnel cho WebView, đo trên máy ấy (chỉ iOS). */
-  tunnel?: { ok: boolean; detail: string };
+  tunnel?: { ok: boolean; detail: string; service?: boolean };
 }
 
 export interface RemoteRunRequest {
@@ -225,6 +225,6 @@ export function remotePreflight(
     ok: checks.every((check) => check.ok),
     checks,
     device: device.udid,
-    host: { name: where, remote: true },
+    host: { name: where, remote: true, ...(device.tunnel?.service ? { tunnelService: true } : {}) },
   };
 }

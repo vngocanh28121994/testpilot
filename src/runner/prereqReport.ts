@@ -25,7 +25,7 @@ export interface PrereqReport {
    * `ok` sai: app native chạy được không cần nó, và từ chối job vì một thứ
    * lượt chạy có thể không dùng tới là từ chối nhầm.
    */
-  tunnel?: { ok: boolean; detail: string };
+  tunnel?: { ok: boolean; detail: string; service?: boolean };
   at: string;
 }
 
@@ -65,7 +65,9 @@ export async function measurePrereq(runner: Runner, now = new Date()): Promise<P
   // Tunnel đo ở ĐÂY, trên máy cắm iPhone: máy chủ không nhìn được tunnel của
   // laptop người khác, và trước đây màn chuẩn bị chỉ biết tunnel của máy chủ.
   const tunnel = process.platform === 'darwin'
-    ? await iosTunnelCheck().then((c) => ({ ok: c.ok, detail: c.detail })).catch(() => undefined)
+    ? await iosTunnelCheck()
+      .then((c) => ({ ok: c.ok, detail: c.detail, service: runner.prereq.tunnelService() }))
+      .catch(() => undefined)
     : undefined;
   report.ios = xcode.ok
     ? { ok: true, at, ...(tunnel ? { tunnel } : {}) }

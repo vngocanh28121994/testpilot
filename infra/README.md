@@ -74,6 +74,22 @@ thiết bị điều khiển được chúng.
 cá nhân trên laptop từng người vẫn dùng được song song, cho ai muốn cắm thêm
 máy ở chỗ mình.
 
+### Tunnel iOS trên máy chủ: cài làm dịch vụ, một lần
+
+iPhone iOS 17+ cần một tunnel chạy bằng quyền root cho WebView. Mở Terminal và gõ
+mật khẩu thì được với laptop của một người — không được với máy chủ, vì mọi người
+làm việc từ xa và không ai ngồi ở máy chủ. Admin cài một lần trên máy chủ:
+
+```bash
+sudo bash scripts/install-ios-tunnel-service.sh
+```
+
+Tunnel thành dịch vụ hệ thống: tự chạy khi máy khởi động, tự dựng lại khi chết.
+Nút trên web đổi thành "Khởi động lại tunnel" và chạy không cần mật khẩu, nhờ một
+quy tắc sudoers cho ĐÚNG MỘT lệnh (`launchctl kickstart -k` dịch vụ ấy). Gỡ:
+`sudo bash scripts/install-ios-tunnel-service.sh --uninstall`. Log:
+`/Library/Logs/testpilot-ios-tunnel.log`.
+
 ## Artifact: report, ảnh, video
 
 Ở chế độ `server`, bằng chứng của một lượt chạy **không ở lại trên máy runner**

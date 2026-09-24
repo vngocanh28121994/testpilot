@@ -59,6 +59,7 @@ describe('ranh giới control plane', () => {
     assert.deepEqual(Object.keys(localRunner.prereq).sort(), [
       'androidDevices',
       'appiumStatus',
+      'fixTunnel',
       'installDriver',
       'iosDevices',
       'iosNames',
@@ -66,6 +67,7 @@ describe('ranh giới control plane', () => {
       'openTunnelTerminal',
       'restartAppium',
       'startAppium',
+      'tunnelService',
       'xcode',
     ]);
   });

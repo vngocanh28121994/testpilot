@@ -22,10 +22,14 @@ import { describe, it } from 'node:test';
  */
 const runner = readFileSync('src/runner/prereq.ts', 'utf8');
 const routes = readFileSync('src/server/routes/prereq.ts', 'utf8');
-const handler = runner.slice(
-  runner.indexOf('export async function openTunnelTerminal'),
-  runner.indexOf('export async function iosDeviceNames'),
-);
+/** Thân MỘT hàm: từ khai báo tới khai báo `export` kế tiếp. */
+function body(name: string): string {
+  const start = runner.indexOf(`export async function ${name}`);
+  const next = runner.indexOf('\nexport ', start + 1);
+  return runner.slice(start, next < 0 ? undefined : next);
+}
+const handler = body('openTunnelTerminal');
+const fixTunnel = body('fixTunnel');
 
 describe('mở Terminal để dựng tunnel', () => {
   it('có endpoint riêng, không nằm trong nhóm SSE', () => {
@@ -44,5 +48,17 @@ describe('mở Terminal để dựng tunnel', () => {
 
   it('không nhận mật khẩu dưới bất kỳ dạng nào', () => {
     assert.doesNotMatch(handler, /password|mật khẩu|sudo -S|stdin/i);
+  });
+
+  /**
+   * Khởi động lại DỊCH VỤ tunnel (máy chủ, nơi không ai ngồi gõ mật khẩu):
+   * `sudo -n` — không bao giờ hỏi mật khẩu, chỉ chạy được nhờ quy tắc sudoers
+   * cho đúng một lệnh. Câu lỗi được phép NHẮC tới mật khẩu (để nói việc cần
+   * làm), nhưng không có đường nào đưa mật khẩu vào.
+   */
+  it('khởi động lại dịch vụ tunnel bằng sudo -n, không đưa mật khẩu vào đâu', () => {
+    assert.ok(fixTunnel.length > 0, 'không tìm thấy fixTunnel');
+    assert.match(fixTunnel, /'sudo',\s*\[\s*'-n', '\/bin\/launchctl', 'kickstart', '-k'/);
+    assert.doesNotMatch(fixTunnel, /sudo -S|'-S'|stdin|readJson|req\./);
   });
 });
