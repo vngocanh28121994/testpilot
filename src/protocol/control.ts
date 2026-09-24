@@ -19,6 +19,12 @@ export interface ControlTarget {
    * "xcodebuild failed with code 65" và màn điều khiển đứng ở "đang mở".
    */
   iosSigning?: IosSigning;
+  /**
+   * App đang test trên máy này — `android.appPackage` hoặc `ios.bundleId` của
+   * config. Cho nút "mở lại / đóng app". Người dùng không gửi được nó: mở một
+   * app tuỳ ý theo tên trên máy dùng chung là việc không ai nhờ.
+   */
+  appId?: string;
 }
 
 /** Cùng các trường `ios.*` mà lượt chạy test dùng để ký WDA. */
@@ -49,12 +55,28 @@ export interface IosSigning {
  * đi một lệnh rồi báo lỗi từ tầng dưới.
  */
 export const CONTROL_KEYS_BY_PLATFORM: Record<ControlPlatform, readonly string[]> = {
-  android: ['back', 'home', 'enter', 'delete', 'tab', 'recents'],
-  ios: ['home', 'enter', 'delete'],
+  android: [
+    'back', 'home', 'recents', 'notifications', 'quick_settings',
+    'volume_up', 'volume_down', 'enter', 'delete', 'tab',
+  ],
+  // iPhone không có nút Quay lại, và bàn phím của nó không có Tab. Đa nhiệm,
+  // Thông báo và Trung tâm điều khiển là CỬ CHỈ trên iOS chứ không phải phím —
+  // runner làm cử chỉ ấy thay người dùng (xem iosControl.ts).
+  //
+  // Đa nhiệm CHƯA có: cử chỉ vuốt-lên-rồi-giữ đã thử trên iPhone 12 Pro Max
+  // (iOS 26.6.1) và máy vẫn ở màn hình chính. Không đưa ra một nút bấm mà
+  // không làm gì — thêm lại khi đã tìm ra cử chỉ chạy được trên máy thật.
+  ios: [
+    'home', 'notifications', 'quick_settings',
+    'volume_up', 'volume_down', 'enter', 'delete',
+  ],
 };
 
 /** Hợp của cả hai nền tảng — dùng cho kiểu, không dùng để cho phép. */
-export const CONTROL_KEYS = ['back', 'home', 'enter', 'delete', 'tab', 'recents'] as const;
+export const CONTROL_KEYS = [
+  'back', 'home', 'enter', 'delete', 'tab', 'recents',
+  'notifications', 'quick_settings', 'volume_up', 'volume_down',
+] as const;
 
 export type ControlKey = (typeof CONTROL_KEYS)[number];
 
@@ -66,12 +88,53 @@ export function isControlKey(value: unknown, platform?: ControlPlatform): value 
   return allowed.includes(value);
 }
 
-/** Bốn động tác, và không hơn. Xem `RunnerControlApi`. */
+export type ControlOrientation = 'portrait' | 'landscape';
+export type ControlAppOp = 'restart' | 'close';
+
+/** Danh sách ĐÓNG các động tác. Xem `RunnerControlApi`. */
 export type ControlAction =
   | { kind: 'tap'; x: number; y: number }
   | { kind: 'swipe'; x: number; y: number; toX: number; toY: number; durationMs?: number }
   | { kind: 'text'; text: string }
-  | { kind: 'key'; key: ControlKey };
+  | { kind: 'key'; key: ControlKey }
+  | { kind: 'rotate'; orientation: ControlOrientation }
+  | { kind: 'open_url'; url: string }
+  /** App đang test — mã app lấy từ config ở máy chủ, KHÔNG từ request. */
+  | { kind: 'app'; op: ControlAppOp };
+
+/**
+ * Scheme không bao giờ được mở từ web.
+ *
+ * `javascript:` và `data:` chạy mã trong trình duyệt của máy; `file:` và
+ * `content:` đọc tệp trên máy. Một nút "mở URL" trên web mà mở được mấy thứ ấy
+ * là một cửa đọc dữ liệu của chiếc điện thoại dùng chung cho bất kỳ ai giữ nó.
+ */
+const BLOCKED_SCHEMES = new Set(['javascript:', 'data:', 'file:', 'content:', 'blob:', 'about:']);
+
+/** URL hay deep link mở được — hoặc câu nói vì sao không. */
+export function checkUrl(raw: unknown): { ok: true; url: string } | { ok: false; error: string } {
+  if (typeof raw !== 'string' || !raw.trim()) return { ok: false, error: 'Thiếu URL.' };
+  const url = raw.trim();
+  if (url.length > 2_000) return { ok: false, error: 'URL quá dài (tối đa 2000 ký tự).' };
+  let parsed: URL;
+  try {
+    parsed = new URL(url);
+  } catch {
+    return {
+      ok: false,
+      error: `"${url}" không phải URL. Ghi đủ cả phần đầu, ví dụ https://… hoặc tcinvest://…`,
+    };
+  }
+  if (BLOCKED_SCHEMES.has(parsed.protocol)) {
+    return { ok: false, error: `Không mở URL dạng ${parsed.protocol} từ web.` };
+  }
+  // Ký tự điều khiển (xuống dòng…) không có chỗ trong một URL thật, và là cách
+  // quen thuộc để chèn thêm lệnh vào một dòng lệnh shell.
+  if (/[\u0000-\u001f\u007f]/.test(url)) {
+    return { ok: false, error: 'URL chứa ký tự điều khiển.' };
+  }
+  return { ok: true, url };
+}
 
 /**
  * Kiểm một động tác trước khi nó tới `adb`.
@@ -151,6 +214,23 @@ export function checkAction(
         };
       }
       return { ok: true, action: { kind: 'key', key: action.key } };
+    }
+    case 'rotate': {
+      if (action.orientation !== 'portrait' && action.orientation !== 'landscape') {
+        return { ok: false, error: 'Hướng xoay phải là portrait hoặc landscape.' };
+      }
+      return { ok: true, action: { kind: 'rotate', orientation: action.orientation } };
+    }
+    case 'open_url': {
+      const checked = checkUrl(action.url);
+      if (!checked.ok) return checked;
+      return { ok: true, action: { kind: 'open_url', url: checked.url } };
+    }
+    case 'app': {
+      if (action.op !== 'restart' && action.op !== 'close') {
+        return { ok: false, error: 'Thao tác app phải là restart hoặc close.' };
+      }
+      return { ok: true, action: { kind: 'app', op: action.op } };
     }
     default:
       return { ok: false, error: `Động tác "${String(action.kind)}" không có.` };

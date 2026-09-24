@@ -32,6 +32,10 @@ import { readLearned } from '../core/learned.js';
 import {
   controlDevices,
   pressKey,
+  rotate,
+  openUrl,
+  appControl,
+  screenshot,
   screenSize,
   startScreenStream,
   swipe,
@@ -40,7 +44,7 @@ import {
   type ControlDevice,
   type ScreenStreamSink,
 } from './control.js';
-import type { ControlTarget } from '../protocol/control.js';
+import type { ControlAppOp, ControlOrientation, ControlTarget } from '../protocol/control.js';
 import type { PrereqAndroidDevice } from './prereq.js';
 import { packAppBundle } from './bundle.js';
 import {
@@ -179,6 +183,13 @@ export interface RunnerControlApi {
   typeText(target: ControlTarget, text: string): Promise<void>;
   /** Chỉ phím trong danh sách cho phép của NỀN TẢNG ấy; xem `protocol/control.ts`. */
   pressKey(target: ControlTarget, key: string): Promise<void>;
+  rotate(target: ControlTarget, orientation: ControlOrientation): Promise<void>;
+  /** URL đã qua `checkUrl` — không scheme đọc tệp hay chạy mã. */
+  openUrl(target: ControlTarget, url: string): Promise<void>;
+  /** CHỈ app đang test (`target.appId`, từ config) — không nhận tên app tuỳ ý. */
+  appControl(target: ControlTarget, op: ControlAppOp): Promise<void>;
+  /** PNG đúng độ phân giải của máy. */
+  screenshot(target: ControlTarget): Promise<Buffer>;
 }
 
 export interface Runner {
@@ -233,6 +244,10 @@ export const localRunner: Runner = {
     swipe: (target, from, to, durationMs) => swipe(target, from, to, durationMs),
     typeText: (target, text) => typeText(target, text),
     pressKey: (target, key) => pressKey(target, key),
+    rotate: (target, orientation) => rotate(target, orientation),
+    openUrl: (target, url) => openUrl(target, url),
+    appControl: (target, op) => appControl(target, op),
+    screenshot: (target) => screenshot(target),
   },
 };
 

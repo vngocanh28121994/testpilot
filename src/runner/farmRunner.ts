@@ -159,6 +159,10 @@ export function farmRunner(options: FarmRunnerOptions): Runner {
       swipe: () => notHere('quét'),
       typeText: () => notHere('gõ chữ'),
       pressKey: () => notHere('bấm phím'),
+      rotate: () => notHere('xoay màn hình'),
+      openUrl: () => notHere('mở URL'),
+      appControl: () => notHere('mở lại / đóng app'),
+      screenshot: () => notHere('chụp màn hình'),
     },
     farm: {
       run: (...args: Parameters<typeof runOnFarm>) => runFarm(...args),

@@ -23,46 +23,108 @@ import {
 } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import {
+  ArrowRightToLine,
+  Bell,
+  Camera,
   ChevronLeft,
-  Loader2,
   Circle,
   CornerDownLeft,
   Delete,
+  Link,
+  Loader2,
+  RefreshCw,
+  RotateCw,
+  SlidersHorizontal,
   Square,
+  Volume1,
+  Volume2,
+  X,
   type LucideIcon,
 } from 'lucide-react';
 import { useDeviceControl, type ControlDevice } from '@/hooks/useDeviceControl';
+import type { ControlKey } from '@core/protocol/control.js';
 import { DRAG_THRESHOLD_PX, isDrag, toScreenPoint } from '@/lib/deviceScale';
 
-/**
- * Phím hiện ra theo nền tảng.
- *
- * iPhone không có nút Quay lại, và không có "ứng dụng gần đây" bấm được từ
- * WebDriverAgent. Vẽ những nút ấy rồi để chúng báo lỗi khi bấm là đẩy một sự
- * thật của nền tảng thành một lỗi của người dùng.
- */
 /** Chờ lâu hơn thế này thì không còn là "đang mở" nữa, mà là có gì đó hỏng. */
 const SLOW_AFTER_MS = 12_000;
 
-const KEYS: Record<'android' | 'ios', Array<{
-  key: string; label: string; Icon: LucideIcon;
-}>> = {
-  android: [
-    // Biểu tượng theo đúng ba nút điều hướng của Android — tam giác, tròn,
-    // vuông — vì đó là hình người dùng đã quen trên chính chiếc máy họ đang
-    // nhìn, không phải một bộ hình do ta nghĩ ra.
-    { key: 'back', label: 'Quay lại', Icon: ChevronLeft },
-    { key: 'home', label: 'Home', Icon: Circle },
-    { key: 'recents', label: 'Gần đây', Icon: Square },
-    { key: 'enter', label: 'Enter', Icon: CornerDownLeft },
-    { key: 'delete', label: 'Xoá', Icon: Delete },
-  ],
-  ios: [
-    { key: 'home', label: 'Home', Icon: Circle },
-    { key: 'enter', label: 'Enter', Icon: CornerDownLeft },
-    { key: 'delete', label: 'Xoá', Icon: Delete },
-  ],
-};
+type Platform = 'android' | 'ios';
+
+/**
+ * Một nút trong cột thao tác. `key` là phím của hợp đồng (xem
+ * protocol/control.ts); nút không phải phím thì có `action` riêng.
+ */
+interface ToolItem {
+  id: string;
+  label: string | Record<Platform, string>;
+  Icon: LucideIcon;
+  /** Vắng mặt = cả hai nền tảng. */
+  only?: Platform;
+  key?: string;
+  action?: 'rotate' | 'restart' | 'close' | 'screenshot';
+}
+
+/**
+ * Nút chia theo NHÓM, theo thứ người dùng tìm: đi đâu trong máy, nút cứng,
+ * app đang test, bàn phím. Một cột mười lăm nút không chia nhóm là mười lăm
+ * thứ phải đọc lướt mỗi lần bấm.
+ *
+ * iPhone không có nút Quay lại, và bàn phím của nó không có Tab — những nút ấy
+ * không hiện, thay vì hiện rồi báo lỗi. Đa nhiệm / Thông báo / Trung tâm điều
+ * khiển trên iOS là cử chỉ vuốt; runner làm cử chỉ ấy thay người dùng.
+ */
+const TOOL_GROUPS: Array<{ title: string; items: ToolItem[] }> = [
+  {
+    title: 'Điều hướng',
+    items: [
+      // Tam giác, tròn, vuông: đúng ba hình của thanh điều hướng Android.
+      { id: 'back', key: 'back', label: 'Quay lại', Icon: ChevronLeft, only: 'android' },
+      { id: 'home', key: 'home', label: 'Home', Icon: Circle },
+      // Chỉ Android: trên iPhone cử chỉ đa nhiệm chưa chạy được qua WDA — xem
+      // CONTROL_KEYS_BY_PLATFORM ở protocol/control.ts.
+      { id: 'recents', key: 'recents', label: 'Đa nhiệm', Icon: Square, only: 'android' },
+      { id: 'notifications', key: 'notifications', label: 'Thông báo', Icon: Bell },
+      {
+        id: 'quick_settings', key: 'quick_settings', Icon: SlidersHorizontal,
+        label: { android: 'Cài đặt nhanh', ios: 'Trung tâm điều khiển' },
+      },
+    ],
+  },
+  {
+    title: 'Phần cứng',
+    items: [
+      { id: 'volume_up', key: 'volume_up', label: 'Tăng âm lượng', Icon: Volume2 },
+      { id: 'volume_down', key: 'volume_down', label: 'Giảm âm lượng', Icon: Volume1 },
+      { id: 'rotate', action: 'rotate', label: 'Xoay màn hình', Icon: RotateCw },
+    ],
+  },
+  {
+    title: 'App đang test',
+    items: [
+      { id: 'restart', action: 'restart', label: 'Mở lại app', Icon: RefreshCw },
+      { id: 'close', action: 'close', label: 'Đóng app', Icon: X },
+      { id: 'screenshot', action: 'screenshot', label: 'Chụp màn hình', Icon: Camera },
+    ],
+  },
+  {
+    title: 'Bàn phím',
+    items: [
+      { id: 'enter', key: 'enter', label: 'Enter', Icon: CornerDownLeft },
+      { id: 'delete', key: 'delete', label: 'Xoá', Icon: Delete },
+      { id: 'tab', key: 'tab', label: 'Tab', Icon: ArrowRightToLine, only: 'android' },
+    ],
+  },
+];
+
+export function toolsFor(platform: Platform): Array<{ title: string; items: ToolItem[] }> {
+  return TOOL_GROUPS
+    .map((group) => ({ ...group, items: group.items.filter((item) => !item.only || item.only === platform) }))
+    .filter((group) => group.items.length > 0);
+}
+
+function labelOf(item: ToolItem, platform: Platform): string {
+  return typeof item.label === 'string' ? item.label : item.label[platform];
+}
 
 /**
  * Hai chiếc máy cùng đời thì cùng tên — thêm số sê-ri cho đúng những cái ấy.
@@ -93,9 +155,47 @@ export function withDistinctLabels(
 
 export default function DeviceControlPanel() {
   const canvas = useRef<HTMLCanvasElement>(null);
-  const { state, hold, release, send } = useDeviceControl(canvas);
+  const { state, hold, release, send, reconnect, captureScreenshot } = useDeviceControl(canvas);
   const [chosen, setChosen] = useState('');
   const [text, setText] = useState('');
+  const [url, setUrl] = useState('');
+  // Hướng hiện tại, để nút Xoay biết xoay sang đâu. Giữ máy lại = về dọc: đó là
+  // hướng máy đứng lúc ta chưa đụng vào.
+  const [landscape, setLandscape] = useState(false);
+  const [busyTool, setBusyTool] = useState<string | undefined>(undefined);
+  const holding = state.phase === 'holding';
+  useEffect(() => {
+    if (!holding) setLandscape(false);
+  }, [holding]);
+
+  const runTool = useCallback(async (item: ToolItem) => {
+    setBusyTool(item.id);
+    try {
+      if (item.key) {
+        await send({ kind: 'key', key: item.key as ControlKey });
+      } else if (item.action === 'rotate') {
+        const next = !landscape;
+        if (await send({ kind: 'rotate', orientation: next ? 'landscape' : 'portrait' })) {
+          setLandscape(next);
+          // Kích thước màn hình vừa đổi chiều: mở lại luồng để nhận kích thước
+          // mới, không thì mọi cú chạm sau đó rơi sai chỗ.
+          reconnect();
+        }
+      } else if (item.action === 'restart' || item.action === 'close') {
+        await send({ kind: 'app', op: item.action });
+      } else if (item.action === 'screenshot') {
+        await captureScreenshot();
+      }
+    } finally {
+      setBusyTool(undefined);
+    }
+  }, [captureScreenshot, landscape, reconnect, send]);
+
+  const openUrl = useCallback(() => {
+    const target = url.trim();
+    if (!target) return;
+    void send({ kind: 'open_url', url: target }).then((ok) => { if (ok) setUrl(''); });
+  }, [send, url]);
   const down = useRef<{ x: number; y: number; at: number } | undefined>(undefined);
 
   const devices = useQuery({
@@ -261,19 +361,34 @@ export default function DeviceControlPanel() {
             <div
               aria-label="Thao tác"
               role="group"
-              className="flex w-40 shrink-0 flex-col gap-1.5"
+              className="flex w-44 shrink-0 flex-col gap-3"
             >
-              {KEYS[state.platform].map((item) => (
-                <Button
-                  key={item.key}
-                  size="sm"
-                  variant="outline"
-                  className="justify-start gap-2"
-                  onClick={() => void send({ kind: 'key', key: item.key })}
-                >
-                  <item.Icon className="size-4 shrink-0" aria-hidden />
-                  {item.label}
-                </Button>
+              {toolsFor(state.platform).map((group) => (
+                <div key={group.title} role="group" aria-label={group.title} className="flex flex-col gap-1">
+                  <span className="text-muted-foreground px-1 text-[11px] font-medium uppercase tracking-wide">
+                    {group.title}
+                  </span>
+                  {group.items.map((item) => {
+                    const label = item.action === 'rotate'
+                      ? (landscape ? 'Xoay về dọc' : 'Xoay ngang')
+                      : labelOf(item, state.platform);
+                    return (
+                      <Button
+                        key={item.id}
+                        size="sm"
+                        variant="outline"
+                        className="h-8 justify-start gap-2"
+                        disabled={busyTool === item.id}
+                        onClick={() => void runTool(item)}
+                      >
+                        {busyTool === item.id
+                          ? <Loader2 className="size-4 shrink-0 animate-spin" aria-hidden />
+                          : <item.Icon className="size-4 shrink-0" aria-hidden />}
+                        {label}
+                      </Button>
+                    );
+                  })}
+                </div>
               ))}
             </div>
 
@@ -298,9 +413,25 @@ export default function DeviceControlPanel() {
                 </Button>
               </div>
 
+              <div className="flex gap-2">
+                <Input
+                  value={url}
+                  aria-label="URL hoặc deep link"
+                  placeholder="Mở URL hoặc deep link (https://…, tcinvest://…)"
+                  onChange={(event) => setUrl(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter') openUrl();
+                  }}
+                />
+                <Button size="sm" variant="outline" disabled={!url.trim()} onClick={openUrl}>
+                  <Link className="size-4" aria-hidden /> Mở
+                </Button>
+              </div>
+
               <p className="text-muted-foreground text-xs">
-                Bấm để chạm, kéo quá {DRAG_THRESHOLD_PX}px để quét. Không có phím nguồn: một cái
-                nút trên web khoá màn hình chiếc máy ở phòng khác là thứ không ai gỡ được từ xa.
+                Bấm để chạm, kéo quá {DRAG_THRESHOLD_PX}px để quét. "Mở lại app" và "Đóng app" tác
+                động lên app đang test khai trong Cấu hình. Không có phím nguồn: một cái nút trên
+                web khoá màn hình chiếc máy ở phòng khác là thứ không ai gỡ được từ xa.
               </p>
             </div>
             </CardContent>

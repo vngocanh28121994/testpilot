@@ -12,10 +12,19 @@
  * iOS thật là 25 hoặc 40 ký tự, còn Android thì tuỳ nhà sản xuất. Đoán sai
  * nghĩa là gửi lệnh `adb` cho một chiếc iPhone, và câu lỗi sẽ nói về `adb`.
  */
-import type { ControlTarget } from '../protocol/control.js';
+import type { ControlAppOp, ControlOrientation, ControlTarget } from '../protocol/control.js';
 import * as android from './androidControl.js';
 import * as ios from './iosControl.js';
 import type { ScreenSize, ScreenStreamHandle, ScreenStreamSink } from './androidControl.js';
+
+/**
+ * iOS: báo chữ ký WDA của máy TRƯỚC mọi thao tác, để phiên mở từ bất kỳ đường
+ * nào cũng mang nó. Xem `rememberSigning`.
+ */
+function ready(target: ControlTarget): ControlTarget {
+  if (target.platform === 'ios') ios.rememberSigning(target.udid, target.iosSigning);
+  return target;
+}
 
 /** Kiểu ảnh mà người xem sẽ nhận. Giao diện chọn bộ vẽ theo đúng giá trị này. */
 export type StreamCodec = 'h264' | 'mjpeg';
@@ -25,6 +34,7 @@ export function codecFor(platform: ControlTarget['platform']): StreamCodec {
 }
 
 export function screenSize(target: ControlTarget): Promise<ScreenSize> {
+  ready(target);
   return target.platform === 'ios'
     ? ios.screenSize(target.udid, target.iosSigning)
     : android.screenSize(target.udid);
@@ -34,12 +44,14 @@ export function startScreenStream(
   target: ControlTarget,
   sink: ScreenStreamSink,
 ): Promise<ScreenStreamHandle> {
+  ready(target);
   return target.platform === 'ios'
     ? ios.startScreenStream(target.udid, sink, target.iosSigning)
     : android.startScreenStream(target.udid, sink);
 }
 
 export function tap(target: ControlTarget, x: number, y: number): Promise<void> {
+  ready(target);
   return target.platform === 'ios' ? ios.tap(target.udid, x, y) : android.tap(target.udid, x, y);
 }
 
@@ -49,21 +61,54 @@ export function swipe(
   to: { x: number; y: number },
   durationMs?: number,
 ): Promise<void> {
+  ready(target);
   return target.platform === 'ios'
     ? ios.swipe(target.udid, from, to, durationMs)
     : android.swipe(target.udid, from, to, durationMs);
 }
 
 export function typeText(target: ControlTarget, text: string): Promise<void> {
+  ready(target);
   return target.platform === 'ios'
     ? ios.typeText(target.udid, text)
     : android.typeText(target.udid, text);
 }
 
 export function pressKey(target: ControlTarget, key: string): Promise<void> {
+  ready(target);
   return target.platform === 'ios'
     ? ios.pressKey(target.udid, key)
     : android.pressKey(target.udid, key);
+}
+
+export function rotate(target: ControlTarget, orientation: ControlOrientation): Promise<void> {
+  ready(target);
+  return target.platform === 'ios'
+    ? ios.rotate(target.udid, orientation)
+    : android.rotate(target.udid, orientation);
+}
+
+export function openUrl(target: ControlTarget, url: string): Promise<void> {
+  ready(target);
+  return target.platform === 'ios' ? ios.openUrl(target.udid, url) : android.openUrl(target.udid, url);
+}
+
+export async function appControl(target: ControlTarget, op: ControlAppOp): Promise<void> {
+  ready(target);
+  if (!target.appId) {
+    throw new Error(
+      `Chưa biết app nào đang test trên ${target.platform === 'ios' ? 'iOS' : 'Android'}. `
+      + `Khai ${target.platform === 'ios' ? 'ios.bundleId' : 'android.appPackage'} ở màn Cấu hình.`,
+    );
+  }
+  return target.platform === 'ios'
+    ? ios.appControl(target.udid, target.appId, op)
+    : android.appControl(target.udid, target.appId, op);
+}
+
+export function screenshot(target: ControlTarget): Promise<Buffer> {
+  ready(target);
+  return target.platform === 'ios' ? ios.screenshot(target.udid) : android.screenshot(target.udid);
 }
 
 export function stopAllScreenStreams(): void {

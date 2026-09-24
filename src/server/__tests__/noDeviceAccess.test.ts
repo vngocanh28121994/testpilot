@@ -106,9 +106,13 @@ describe('ranh giới control plane', () => {
   it('RunnerControlApi vẫn là danh sách đóng', async () => {
     const { localRunner } = await import('../../runner/index.js');
     assert.deepEqual(Object.keys(localRunner.control).sort(), [
+      'appControl',
       'devices',
+      'openUrl',
       'pressKey',
+      'rotate',
       'screenSize',
+      'screenshot',
       'startScreenStream',
       'swipe',
       'tap',
@@ -157,12 +161,16 @@ describe('ranh giới control plane', () => {
    * iOS ít phím hơn Android, và đó là sự thật của nền tảng: iPhone không có
    * nút Quay lại.
    */
-  it('danh sách phím không có phím nguồn, và iOS ít hơn Android', async () => {
+  it('danh sách phím không có phím nguồn; iPhone không có Quay lại và Tab', async () => {
     const { CONTROL_KEYS_BY_PLATFORM } = await import('../../protocol/control.js');
     assert.deepEqual([...CONTROL_KEYS_BY_PLATFORM.android].sort(), [
-      'back', 'delete', 'enter', 'home', 'recents', 'tab',
+      'back', 'delete', 'enter', 'home', 'notifications', 'quick_settings', 'recents', 'tab',
+      'volume_down', 'volume_up',
     ]);
-    assert.deepEqual([...CONTROL_KEYS_BY_PLATFORM.ios].sort(), ['delete', 'enter', 'home']);
+    assert.deepEqual([...CONTROL_KEYS_BY_PLATFORM.ios].sort(), [
+      'delete', 'enter', 'home', 'notifications', 'quick_settings',
+      'volume_down', 'volume_up',
+    ]);
     for (const keys of Object.values(CONTROL_KEYS_BY_PLATFORM)) {
       for (const key of keys) assert.doesNotMatch(key, /power|sleep|lock/i);
     }

@@ -25,7 +25,7 @@
 import { get, request } from 'node:http';
 import { FrameDeduper, MjpegSplitter } from './mjpeg.js';
 import type { ScreenSize, ScreenStreamHandle, ScreenStreamSink } from './androidControl.js';
-import type { IosSigning } from '../protocol/control.js';
+import type { ControlAppOp, ControlOrientation, IosSigning } from '../protocol/control.js';
 import { friendlyError } from '../core/friendlyError.js';
 
 const APPIUM = { host: '127.0.0.1', port: Number(process.env.TESTPILOT_APPIUM_PORT ?? 4723) };
@@ -308,7 +308,24 @@ function forget(udid: string, open?: Session): void {
   void pending.then((current) => { if (current.id === open.id) sessions.delete(udid); }, () => undefined);
 }
 
-async function session(udid: string, signing?: IosSigning, verify = false): Promise<Session> {
+/**
+ * Chữ ký WDA đã biết cho từng máy — để MỌI đường mở phiên đều mang nó.
+ *
+ * Từng chỉ có `screenSize` và `startScreenStream` truyền chữ ký; một phiên mở
+ * từ đường khác (chụp màn hình, mở URL, khi phiên cũ vừa chết) thì mở TRẦN, và
+ * trên iPhone thật Appium quay về đường xcodebuild rồi hỏng với code 65 — dù
+ * WDA đã cài sẵn trên máy. Người gọi báo chữ ký qua `rememberSigning` trước
+ * mỗi thao tác (xem control.ts).
+ */
+const signings = new Map<string, IosSigning>();
+
+export function rememberSigning(udid: string, signing: IosSigning | undefined): void {
+  if (signing) signings.set(udid, signing);
+}
+
+async function session(udid: string, signingArg?: IosSigning, verify = false): Promise<Session> {
+  rememberSigning(udid, signingArg);
+  const signing = signingArg ?? signings.get(udid);
   const cached = sessions.get(udid);
   if (cached && verify) {
     const open = await cached.catch(() => undefined);
@@ -525,14 +542,89 @@ export async function typeText(udid: string, text: string): Promise<void> {
  * `CONTROL_KEYS_BY_PLATFORM` trong protocol. Và không có `power`: khoá màn
  * hình một chiếc máy ở phòng khác từ web là thứ không ai gỡ được từ xa.
  */
+/**
+ * Cử chỉ hệ thống của iOS, theo phần trăm màn hình (điểm, hướng hiện tại).
+ *
+ * Trên iPhone Face ID, Đa nhiệm / Thông báo / Trung tâm điều khiển không có
+ * phím — chúng là cú vuốt bắt đầu SÁT MÉP màn hình. Bắt đầu cách mép vài điểm
+ * là cuộn nội dung app, không phải cử chỉ hệ thống.
+ */
+const GESTURES: Record<'recents' | 'notifications' | 'quick_settings', {
+  from: [number, number]; to: [number, number]; durationMs: number; holdMs: number;
+}> = {
+  // Vuốt lên từ thanh Home rồi GIỮ: nhả ngay là về màn hình chính.
+  recents: { from: [0.5, 0.999], to: [0.5, 0.6], durationMs: 400, holdMs: 800 },
+  // Nửa trái mép trên là Trung tâm thông báo, góc phải là Trung tâm điều khiển.
+  notifications: { from: [0.3, 0.001], to: [0.3, 0.6], durationMs: 300, holdMs: 0 },
+  quick_settings: { from: [0.92, 0.001], to: [0.92, 0.6], durationMs: 300, holdMs: 0 },
+};
+
+const HARDWARE: Record<'volume_up' | 'volume_down', string> = {
+  volume_up: 'volumeUp',
+  volume_down: 'volumeDown',
+};
+
 export async function pressKey(udid: string, key: string): Promise<void> {
   if (key === 'home') {
     await script(udid, 'mobile: pressButton', { name: 'home' });
     return;
   }
+  if (key === 'volume_up' || key === 'volume_down') {
+    await script(udid, 'mobile: pressButton', { name: HARDWARE[key] });
+    return;
+  }
+  if (key === 'recents' || key === 'notifications' || key === 'quick_settings') {
+    const { screen } = await session(udid);
+    const g = GESTURES[key];
+    const at = ([fx, fy]: [number, number]) => ({
+      x: Math.round(fx * (screen.width - 1)),
+      y: Math.round(fy * (screen.height - 1)),
+    });
+    await pointer(udid, [
+      { type: 'pointerMove', duration: 0, ...at(g.from) },
+      { type: 'pointerDown', button: 0 },
+      { type: 'pointerMove', duration: g.durationMs, ...at(g.to) },
+      ...(g.holdMs > 0 ? [{ type: 'pause', duration: g.holdMs }] : []),
+      { type: 'pointerUp', button: 0 },
+    ]);
+    return;
+  }
   const value = KEY_CHARS[key];
   if (!value) throw new Error(`Phím "${key}" không dùng được trên iOS.`);
   await script(udid, 'mobile: keys', { keys: [value] });
+}
+
+/** Mã app iOS hợp lệ — thứ duy nhất được phép đi vào terminate/activate. */
+const BUNDLE_ID = /^[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)+$/;
+
+export async function rotate(udid: string, orientation: ControlOrientation): Promise<void> {
+  const open = await session(udid);
+  await appium('POST', `/session/${open.id}/orientation`,
+    { orientation: orientation === 'landscape' ? 'LANDSCAPE' : 'PORTRAIT' }, 30_000);
+  // Toạ độ chạm đi theo hướng HIỆN TẠI: đọc lại kích thước, không thì mọi cú
+  // chạm sau khi xoay rơi sai chỗ. Luồng hình mở lại sẽ đọc đúng con số này.
+  const rect = await appium<{ width: number; height: number }>(
+    'GET', `/session/${open.id}/window/rect`, undefined, 30_000,
+  );
+  open.screen = { width: rect.width, height: rect.height, overridden: false };
+}
+
+export async function openUrl(udid: string, url: string): Promise<void> {
+  // `mobile: deepLink` mở cả https (vào Safari) lẫn scheme riêng của app.
+  await script(udid, 'mobile: deepLink', { url });
+}
+
+export async function appControl(udid: string, appId: string, op: ControlAppOp): Promise<void> {
+  if (!BUNDLE_ID.test(appId)) throw new Error(`"${appId}" không phải bundle id iOS hợp lệ.`);
+  await script(udid, 'mobile: terminateApp', { bundleId: appId });
+  if (op === 'restart') await script(udid, 'mobile: activateApp', { bundleId: appId });
+}
+
+/** Ảnh PNG đúng độ phân giải của máy — không phải khung MJPEG đã thu nhỏ. */
+export async function screenshot(udid: string): Promise<Buffer> {
+  const open = await session(udid);
+  const base64 = await appium<string>('GET', `/session/${open.id}/screenshot`, undefined, 30_000);
+  return Buffer.from(base64, 'base64');
 }
 
 /**

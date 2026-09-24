@@ -32,7 +32,9 @@
  * Đo bằng `dumpsys gfxinfo`: 101ms/khung khi không cửa sổ, 42ms khi có.
  */
 import { spawn, type ChildProcess } from 'node:child_process';
-import { CONTROL_KEYS, isControlKey, type ControlKey } from '../protocol/control.js';
+import {
+  CONTROL_KEYS, isControlKey, type ControlAppOp, type ControlKey, type ControlOrientation,
+} from '../protocol/control.js';
 import {
   ACTION_DOWN,
   ACTION_MOVE,
@@ -111,14 +113,33 @@ const BIT_RATE = 2_000_000;
  */
 const MAX_FPS = 30;
 
+/**
+ * Hai "phím" mở thanh trạng thái không phải phím: KEYCODE_NOTIFICATION có mã,
+ * nhưng nhiều bản ROM bỏ qua nó. `cmd statusbar` là lệnh của chính hệ thống,
+ * chạy như nhau trên mọi máy từ Android 7.
+ */
+type StatusBarKey = 'notifications' | 'quick_settings';
+type KeyEventKey = Exclude<ControlKey, StatusBarKey>;
+
+const STATUS_BAR: Record<StatusBarKey, string> = {
+  notifications: 'expand-notifications',
+  quick_settings: 'expand-settings',
+};
+
+function isStatusBarKey(key: ControlKey): key is StatusBarKey {
+  return key in STATUS_BAR;
+}
+
 /** Mã phím Android, cho đường scrcpy — nó nhận số, không nhận tên. */
-const KEYCODES: Record<ControlKey, number> = {
+const KEYCODES: Record<KeyEventKey, number> = {
   back: 4,
   home: 3,
   enter: 66,
   delete: 67,
   tab: 61,
   recents: 187,
+  volume_up: 24,
+  volume_down: 25,
 };
 
 export interface ScreenSize {
@@ -229,15 +250,26 @@ export function parseScreenSize(output: string): ScreenSize | undefined {
   const physical = /Physical size:\s*(\d+)x(\d+)/.exec(output);
   const picked = override ?? physical;
   if (!picked) return undefined;
+  // `wm size` luôn in kích thước theo chiều DỌC tự nhiên của máy, kể cả khi
+  // màn hình đang nằm ngang. Toạ độ chạm thì đi theo hướng hiện tại — nên sau
+  // nút Xoay, không đổi chiều ở đây là mọi cú chạm rơi sai chỗ.
+  const rotation = Number(/SurfaceOrientation:\s*(\d)/.exec(output)?.[1] ?? 0);
+  const sideways = rotation === 1 || rotation === 3;
+  const width = Number(picked[1]);
+  const height = Number(picked[2]);
   return {
-    width: Number(picked[1]),
-    height: Number(picked[2]),
+    width: sideways ? height : width,
+    height: sideways ? width : height,
     overridden: override !== null,
   };
 }
 
 export async function screenSize(udid: string): Promise<ScreenSize> {
-  const size = parseScreenSize(await run(['shell', 'wm', 'size'], udid));
+  // Một lần gọi adb cho cả hai con số. `; true` ở cuối: grep không thấy dòng
+  // nào thì thoát mã 1, và máy không in hướng (emulator cũ) vẫn phải chạy.
+  const size = parseScreenSize(await run(
+    ['shell', 'wm size; dumpsys input 2>/dev/null | grep -m1 SurfaceOrientation; true'], udid,
+  ));
   if (!size) throw new Error(`Không đọc được kích thước màn hình của "${udid}".`);
   return size;
 }
@@ -503,13 +535,15 @@ export function stopAllScreenStreams(): void {
  * một phím vào `CONTROL_KEYS` mà quên mã ở đây thì TYPECHECK đỏ, không phải
  * người dùng bấm rồi mới biết.
  */
-const KEYS: Record<ControlKey, string> = {
+const KEYS: Record<KeyEventKey, string> = {
   back: 'KEYCODE_BACK',
   home: 'KEYCODE_HOME',
   enter: 'KEYCODE_ENTER',
   delete: 'KEYCODE_DEL',
   tab: 'KEYCODE_TAB',
   recents: 'KEYCODE_APP_SWITCH',
+  volume_up: 'KEYCODE_VOLUME_UP',
+  volume_down: 'KEYCODE_VOLUME_DOWN',
 };
 
 export function controlKeys(): string[] {
@@ -634,6 +668,10 @@ export async function pressKey(udid: string, key: string): Promise<void> {
   if (!isControlKey(key)) {
     throw new Error(`Phím "${key}" không có trong danh sách cho phép.`);
   }
+  if (isStatusBarKey(key)) {
+    await run(['shell', 'cmd', 'statusbar', STATUS_BAR[key]], udid);
+    return;
+  }
   const live = sessionFor(udid);
   if (live) {
     live.scrcpy!.send(keyMessage(KEY_DOWN, KEYCODES[key]));
@@ -641,6 +679,67 @@ export async function pressKey(udid: string, key: string): Promise<void> {
     return;
   }
   await run(['shell', 'input', 'keyevent', KEYS[key]], udid);
+}
+
+/**
+ * Bọc một chuỗi cho shell của MÁY. `adb shell` nối mọi tham số thành MỘT dòng
+ * lệnh rồi đưa cho `sh` trên điện thoại — nên một URL có `;` hay `$(...)` mà
+ * không bọc là một lệnh chạy trên máy dùng chung.
+ */
+export function shellQuote(value: string): string {
+  return `'${value.replace(/'/g, `'\\''`)}'`;
+}
+
+/** Tên gói Android hợp lệ — thứ duy nhất được phép đi vào `am` và `monkey`. */
+const PACKAGE = /^[A-Za-z][\w]*(\.[A-Za-z][\w]*)+$/;
+
+export async function rotate(udid: string, orientation: ControlOrientation): Promise<void> {
+  // Tắt tự xoay trước: bật nó thì cảm biến của máy nằm trên bàn xoay ngược lại
+  // ngay sau đó.
+  await run(['shell', 'settings put system accelerometer_rotation 0; '
+    + `settings put system user_rotation ${orientation === 'landscape' ? 1 : 0}`], udid);
+}
+
+export async function openUrl(udid: string, url: string): Promise<void> {
+  const out = await run(
+    ['shell', `am start -a android.intent.action.VIEW -d ${shellQuote(url)}`], udid, 15_000,
+  );
+  // `am start` thoát mã 0 cả khi không mở được gì, và chỉ nói điều đó bằng chữ.
+  if (/Error:|unable to resolve Intent/i.test(out)) {
+    throw new Error(`Máy không có app nào mở được ${url}.`);
+  }
+}
+
+export async function appControl(udid: string, appId: string, op: ControlAppOp): Promise<void> {
+  if (!PACKAGE.test(appId)) throw new Error(`"${appId}" không phải tên gói Android hợp lệ.`);
+  await run(['shell', 'am', 'force-stop', appId], udid);
+  if (op === 'restart') {
+    const out = await run(
+      ['shell', 'monkey', '-p', appId, '-c', 'android.intent.category.LAUNCHER', '1'], udid, 15_000,
+    );
+    if (/No activities found|monkey aborted/i.test(out)) {
+      throw new Error(`App ${appId} chưa được cài trên máy này.`);
+    }
+  }
+}
+
+/** Ảnh PNG đúng độ phân giải của máy — không phải khung video đã thu nhỏ. */
+export function screenshot(udid: string, timeoutMs = 15_000): Promise<Buffer> {
+  return new Promise((resolve, reject) => {
+    const chunks: Buffer[] = [];
+    let stderr = '';
+    const child = adb(['exec-out', 'screencap', '-p'], udid);
+    const timer = setTimeout(() => child.kill('SIGTERM'), timeoutMs);
+    child.stdout?.on('data', (buf: Buffer) => chunks.push(buf));
+    child.stderr?.on('data', (buf: Buffer) => { stderr += buf.toString(); });
+    child.on('error', (err) => { clearTimeout(timer); reject(err); });
+    child.on('close', (code) => {
+      clearTimeout(timer);
+      const png = Buffer.concat(chunks);
+      if (code === 0 && png.subarray(0, 4).toString('hex') === '89504e47') return resolve(png);
+      reject(new Error(stderr.trim() || 'Máy không trả về ảnh chụp màn hình.'));
+    });
+  });
 }
 
 /**

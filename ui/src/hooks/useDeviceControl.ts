@@ -16,6 +16,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { api } from '@/api/client';
 import { ROUTES } from '@/api/routes';
+import { friendlyError, friendlyStatus } from '@friendlyError';
 import { AnnexBAssembler, codecFromAnnexB, decodeBase64 } from '@/lib/h264';
 
 export interface ControlScreen {
@@ -34,16 +35,8 @@ export type ControlPlatform = 'android' | 'ios';
  */
 export type StreamCodec = 'h264' | 'mjpeg';
 
-export interface ControlAction {
-  kind: 'tap' | 'swipe' | 'text' | 'key';
-  x?: number;
-  y?: number;
-  toX?: number;
-  toY?: number;
-  durationMs?: number;
-  text?: string;
-  key?: string;
-}
+/** Kiểu của CHÍNH hợp đồng, không phải một bản chép lỏng hơn. */
+export type ControlAction = import('@core/protocol/control.js').ControlAction;
 
 interface Lease {
   id: string;
@@ -356,9 +349,10 @@ export function useDeviceControl(canvas: React.RefObject<HTMLCanvasElement | nul
     }
   }, [teardown]);
 
-  const send = useCallback(async (action: ControlAction) => {
+  /** `true` khi máy đã nhận thao tác — người gọi cần biết để làm bước tiếp (xoay → mở lại luồng). */
+  const send = useCallback(async (action: ControlAction): Promise<boolean> => {
     const lease = leaseRef.current;
-    if (!lease) return;
+    if (!lease) return false;
     try {
       await api.post(ROUTES.controlInput, {
         deviceId: lease.deviceId,
@@ -374,13 +368,68 @@ export function useDeviceControl(canvas: React.RefObject<HTMLCanvasElement | nul
           ? { ...prev, lastActionError: (err as Error).message }
           : prev
       ));
-      return;
+      return false;
     }
     setState((prev) => {
       if (prev.phase !== 'holding' || !prev.lastActionError) return prev;
       const { lastActionError: _cleared, ...rest } = prev;
       return rest;
     });
+    return true;
+  }, []);
+
+  /**
+   * Mở lại luồng hình, giữ nguyên lượt giữ máy.
+   *
+   * Sau khi xoay, kích thước màn hình đổi chiều: luồng cũ vẫn mang kích thước
+   * dọc trong `meta`, và mọi cú chạm sẽ quy đổi theo con số ấy — rơi sai chỗ.
+   * Mở lại là cách duy nhất để nhận `meta` mới.
+   */
+  const reconnect = useCallback(() => {
+    const lease = leaseRef.current;
+    const platform = platformRef.current;
+    if (!lease || !platform) return;
+    teardown();
+    setState((prev) => (prev.phase === 'holding'
+      ? { phase: 'holding', lease, platform, frames: 0 }
+      : prev));
+    open(lease, platform);
+  }, [open, teardown]);
+
+  /**
+   * Chụp màn hình đúng độ phân giải của máy rồi tải về.
+   *
+   * Tải bằng `fetch` chứ không bằng một link: lỗi (hết lượt giữ, máy khoá…) thì
+   * link sẽ mở ra một trang JSON trơ trọi; ở đây nó hiện đúng chỗ mọi lỗi thao
+   * tác khác hiện, và phiên vẫn sống.
+   */
+  const captureScreenshot = useCallback(async (): Promise<boolean> => {
+    const lease = leaseRef.current;
+    const platform = platformRef.current;
+    if (!lease || !platform) return false;
+    const params = new URLSearchParams({ deviceId: lease.deviceId, leaseId: lease.id, platform });
+    try {
+      const res = await fetch(`${ROUTES.controlScreenshot}?${params.toString()}`);
+      if (!res.ok) {
+        const body = (await res.json().catch(() => ({}))) as { error?: string };
+        throw new Error(body.error ? friendlyError(body.error) : friendlyStatus(res.status));
+      }
+      const blob = await res.blob();
+      const name = /filename="([^"]+)"/.exec(res.headers.get('content-disposition') ?? '')?.[1]
+        ?? 'man-hinh.png';
+      const href = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = href;
+      link.download = name;
+      link.click();
+      setTimeout(() => URL.revokeObjectURL(href), 10_000);
+      return true;
+    } catch (err) {
+      setState((prev) => (prev.phase === 'holding'
+        ? { ...prev, lastActionError: friendlyError(err) }
+        : prev));
+      return false;
+    }
   }, []);
 
   // Nhịp tim. Ngừng nhịp là mất máy sau 60 giây, nên lỗi gia hạn phải hiện ra
@@ -413,5 +462,5 @@ export function useDeviceControl(canvas: React.RefObject<HTMLCanvasElement | nul
     };
   }, [teardown]);
 
-  return { state, hold, release, send };
+  return { state, hold, release, send, reconnect, captureScreenshot };
 }

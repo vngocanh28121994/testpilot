@@ -130,6 +130,7 @@ export const ROUTE_POLICY: Record<string, Role> = {
   // thấy nó trước khi có quyền giữ.
   'GET /api/device/targets': 'viewer',
   'GET /api/device/control/stream': 'runner_user',
+  'GET /api/device/control/screenshot': 'runner_user',
   'POST /api/device/control/input': 'runner_user',
 
   /* ── Đường của runner: token thay cho phiên. Xem RUNNER_ROUTES ở trên ── */

@@ -77,6 +77,7 @@ export const ROUTES = {
   // SSE-over-POST qua `streamJob`). Màn điều khiển mở nó bằng `EventSource`.
   controlStream: '/api/device/control/stream',
   controlInput: '/api/device/control/input',
+  controlScreenshot: '/api/device/control/screenshot',
 } as const;
 
 /** 10 route SSE-over-POST. Đi qua streamJob(), không qua api.post(). */

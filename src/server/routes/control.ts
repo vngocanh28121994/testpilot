@@ -218,6 +218,39 @@ export const controlRoutes: RouteTable = {
    * kiểm lại biên, vì một toạ độ ngoài màn hình là dấu hiệu client tính sai
    * chứ không phải ý muốn của người dùng.
    */
+  /**
+   * Ảnh chụp màn hình ĐÚNG độ phân giải của máy, để tải về.
+   *
+   * Không cắt từ khung video: khung ấy đã thu nhỏ (iOS còn 30%, emulator còn
+   * 432px chiều ngang) để luồng chạy mượt — đủ để nhìn, không đủ để đính vào
+   * báo lỗi. Cùng luật giữ máy với luồng hình: chỉ người đang giữ mới chụp được.
+   */
+  'GET /api/device/control/screenshot': async (_req, res, url, ctx) => {
+    const deviceId = url.searchParams.get('deviceId')?.trim();
+    const leaseId = url.searchParams.get('leaseId')?.trim();
+    const platform = platformOf(url.searchParams.get('platform'));
+    if (!deviceId || !leaseId || !platform) {
+      return json(res, 400, { error: 'Thiếu deviceId, leaseId hoặc platform.' });
+    }
+    const held = await heldBy(ctx, deviceId, leaseId);
+    if (!held.ok) return json(res, held.status, { error: held.error });
+    const target = await controlTarget(ctx.configFile, platform, deviceId);
+    let png: Buffer;
+    try {
+      png = await localRunner.control.screenshot(target);
+    } catch (err) {
+      return json(res, 502, { error: (err as Error).message });
+    }
+    const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+    res.writeHead(200, {
+      'content-type': 'image/png',
+      'content-length': png.length,
+      'content-disposition': `attachment; filename="man-hinh-${stamp}.png"`,
+      'cache-control': 'no-store',
+    });
+    res.end(png);
+  },
+
   'POST /api/device/control/input': async (req, res, _url, ctx) => {
     const body = await readJson<{
       deviceId?: string; leaseId?: string; platform?: unknown; action?: unknown;
@@ -259,6 +292,15 @@ export const controlRoutes: RouteTable = {
         case 'key':
           await localRunner.control.pressKey(target, action.key);
           break;
+        case 'rotate':
+          await localRunner.control.rotate(target, action.orientation);
+          break;
+        case 'open_url':
+          await localRunner.control.openUrl(target, action.url);
+          break;
+        case 'app':
+          await localRunner.control.appControl(target, action.op);
+          break;
       }
     } catch (err) {
       // Lỗi từ `adb` là lỗi của THIẾT BỊ, không phải của request: máy vừa rút
@@ -275,9 +317,11 @@ export const controlRoutes: RouteTable = {
  * nhau. Config hỏng không chặn simulator: nó không cần chữ ký.
  */
 async function controlTarget(configFile: string, platform: ControlPlatform, udid: string): Promise<ControlTarget> {
-  if (platform !== 'ios') return { platform, udid };
   const cfg = await loadConfig(configFile).catch(() => undefined);
   if (!cfg) return { platform, udid };
+  if (platform === 'android') {
+    return { platform, udid, ...(cfg.android.appPackage ? { appId: cfg.android.appPackage } : {}) };
+  }
   const ios = cfg.ios;
   const signing: IosSigning = {
     ...(ios.teamId ? { teamId: ios.teamId, signingId: ios.signingId ?? 'Apple Development' } : {}),
@@ -286,5 +330,10 @@ async function controlTarget(configFile: string, platform: ControlPlatform, udid
     ...(ios.usePrebuiltWDA ? { usePrebuiltWDA: true } : {}),
     ...(ios.derivedDataPath ? { derivedDataPath: ios.derivedDataPath } : {}),
   };
-  return { platform, udid, ...(Object.keys(signing).length > 0 ? { iosSigning: signing } : {}) };
+  return {
+    platform,
+    udid,
+    ...(Object.keys(signing).length > 0 ? { iosSigning: signing } : {}),
+    ...(ios.bundleId ? { appId: ios.bundleId } : {}),
+  };
 }
