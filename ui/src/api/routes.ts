@@ -10,6 +10,9 @@
  * `lib/streamJob.ts` chứ không qua `api/client.ts`.
  */
 export const ROUTES = {
+  authMe: '/api/auth/me',
+  authLogin: '/api/auth/login',
+  authLogout: '/api/auth/logout',
   state: '/api/state',
   config: '/api/config',
   history: '/api/history',

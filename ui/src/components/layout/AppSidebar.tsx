@@ -1,5 +1,5 @@
 import { Link, useRouterState } from '@tanstack/react-router';
-import { ChevronRight } from 'lucide-react';
+import { ChevronRight, LogOut, UserRound } from 'lucide-react';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import {
   DropdownMenu,
@@ -12,6 +12,7 @@ import {
 import {
   Sidebar,
   SidebarContent,
+  SidebarFooter,
   SidebarGroup,
   SidebarGroupLabel,
   SidebarHeader,
@@ -25,6 +26,7 @@ import {
   useSidebar,
 } from '@/components/ui/sidebar';
 import { IN_PROGRESS, NAV_GROUPS, type NavItem } from '@/lib/nav';
+import { logout, useAuth } from '@/hooks/useAuth';
 
 /**
  * 14 mục điều hướng, chia nhóm theo khuôn NavGroup của sen (SidebarGroup +
@@ -79,8 +81,53 @@ export function AppSidebar() {
         </nav>
       </SidebarContent>
 
+      <AccountFooter />
+
       <SidebarRail />
     </Sidebar>
+  );
+}
+
+const ROLE_LABEL: Record<string, string> = {
+  viewer: 'chỉ xem',
+  runner_user: 'chạy test',
+  maintainer: 'duyệt kịch bản',
+  admin: 'quản trị',
+};
+
+/**
+ * Đang dùng bằng tài khoản nào, và nút thoát.
+ *
+ * Chỉ ở chế độ server: bản chạy một mình không có đăng nhập, và một nút
+ * "Đăng xuất" không làm gì là thứ bản cũ từng có (nó chỉ gọi alert()).
+ */
+function AccountFooter() {
+  const auth = useAuth();
+  const identity = auth.data?.mode === 'server' ? auth.data.identity : null;
+  if (!identity) return null;
+  const who = identity.email ?? identity.userId;
+  return (
+    <SidebarFooter>
+      <SidebarMenu>
+        <SidebarMenuItem>
+          <div className="flex items-center gap-2 px-2 py-1.5 text-xs group-data-[collapsible=icon]:hidden">
+            <UserRound className="size-4 shrink-0" aria-hidden="true" />
+            <span className="min-w-0 flex-1">
+              <span className="block truncate font-medium">{who}</span>
+              <span className="text-muted-foreground block truncate">
+                {ROLE_LABEL[identity.role] ?? identity.role}
+              </span>
+            </span>
+          </div>
+        </SidebarMenuItem>
+        <SidebarMenuItem>
+          <SidebarMenuButton tooltip="Đăng xuất" onClick={() => void logout()}>
+            <LogOut className="shrink-0" />
+            <span className="flex-1 truncate">Đăng xuất</span>
+          </SidebarMenuButton>
+        </SidebarMenuItem>
+      </SidebarMenu>
+    </SidebarFooter>
   );
 }
 

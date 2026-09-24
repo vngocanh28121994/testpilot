@@ -1,3 +1,4 @@
+import { authHandlers } from './auth';
 import { stateHandlers } from './state';
 import { healingHandlers } from './healing';
 import { configHandlers } from './config';
@@ -18,6 +19,7 @@ import { vocabularyHandlers } from './vocabulary';
  * secrets. DoD của mỗi trang đã có ô "MSW handler cho mọi route trang đó gọi".
  */
 export const handlers = [
+  ...authHandlers,
   ...stateHandlers,
   ...healingHandlers,
   ...configHandlers,
