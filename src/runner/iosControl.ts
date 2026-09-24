@@ -33,12 +33,22 @@ const MJPEG_PORT = Number(process.env.TESTPILOT_MJPEG_PORT ?? 9100);
 /**
  * Tốc độ khung và tỉ lệ thu nhỏ của luồng MJPEG.
  *
- * 5 khung/giây cho một màn hình mà người ta đang đọc là đủ, và ở tỉ lệ 30% thì
- * một khung nặng 63 KB thay vì 135 KB. Cộng với phép bỏ trùng, một phiên xem
- * màn hình tĩnh gần như không tốn băng thông.
+ * Đo trên iPhone 12 Pro Max (iOS 26.6.1), màn hình đang vuốt liên tục, tỉ lệ 30%
+ * (ảnh 385×834, ~95 KB/khung):
+ *
+ *   đặt  5 → nhận  4.8 khung/s,  457 KB/s
+ *   đặt 10 → nhận  9.5 khung/s,  904 KB/s
+ *   đặt 15 → nhận 13.8 khung/s, 1308 KB/s
+ *   đặt 20 → nhận 17.6 khung/s, 1684 KB/s
+ *   đặt 30 → nhận 19.2 khung/s, 1807 KB/s
+ *
+ * Trần ~19 khung/s nằm ở phía máy: đổi tỉ lệ 20%/50%/100% vẫn chỉ 18–19. Nên 20
+ * là chỗ dừng — 30 chỉ thêm 1.6 khung. Mức 5 cũ trông giật rõ khi vuốt hay
+ * chuyển màn, dù đủ cho người đứng đọc. Màn hình đứng yên thì phép bỏ trùng
+ * vẫn giữ băng thông gần bằng 0.
  */
 const MJPEG_SETTINGS = {
-  mjpegServerFramerate: 5,
+  mjpegServerFramerate: 20,
   mjpegServerScreenshotQuality: 25,
   mjpegScalingFactor: 30,
 };
