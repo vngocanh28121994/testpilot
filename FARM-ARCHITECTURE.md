@@ -300,9 +300,18 @@ Quy tắc:
   - Worker nhúng trong máy chủ bỏ qua `appBuild`: nó chung đĩa và chung config với máy chủ, nên bản
     trong config của nó đã là bản đúng. Đường chạy tại chỗ dùng hằng ngày không đổi gì.
 
-  Chưa gửi được: bản `.app` của simulator iOS (một THƯ MỤC, cần đóng gói), và lượt song song bắc cả
-  Android lẫn iOS (một trường không chứa được hai bản build). Cả hai dừng bằng câu nói rõ lý do khi máy
-  nằm ở runner khác; máy cắm ở chính máy chủ thì chạy như trước.
+  **Bản `.app` của simulator iOS** là một THƯ MỤC, nên máy chủ đóng gói nó thành `tar.gz` — một lần
+  cho mỗi phiên bản, nhớ theo dấu vân tay của mọi file bên trong (build lại bằng Xcode ghi đè file bên
+  trong mà không nhất thiết đổi thời điểm sửa của thư mục gốc). `tar` chứ không zip: có ở cả macOS lẫn
+  Linux, và giữ symlink trong framework cùng bit thực thi — mất bit ấy, simulator cài xong rồi từ chối
+  mở app. Runner kiểm từng mục trong gói TRƯỚC khi mở (không `../`, không đường dẫn tuyệt đối, mọi
+  thứ nằm trong thư mục `.app`), mở một lần vào đệm, và chỉ tin đệm khi có dấu `.complete` ghi sau
+  cùng. Không để Appium tự giải `.zip`: nó giải lại ở MỖI phiên. Đo với `WebDriverAgentRunner-Runner.app`
+  thật (20 MB): đóng gói 657 ms còn 6 MB, lần sau 2 ms; runner tải và mở 125 ms; `diff -r` giống hệt,
+  `codesign --verify --deep --strict` hợp lệ, 11/11 file thực thi giữ bit.
+
+  Còn chưa gửi được: lượt song song bắc cả Android lẫn iOS (một trường không chứa được hai bản build) —
+  dừng bằng câu nói rõ lý do khi máy nằm ở runner khác.
 
 ---
 

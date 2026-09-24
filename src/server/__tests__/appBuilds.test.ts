@@ -51,12 +51,12 @@ describe('bản build cho một job', () => {
     if (!found.ok) assert.match(found.reason, /không có trên máy chủ/);
   });
 
-  it('bản .app của simulator là thư mục — chưa gửi được, và nói vì sao', async () => {
+  it('thư mục .app khai cho ANDROID thì từ chối — .app chỉ là của simulator iOS', async () => {
     const app = path.join(tmp, 'App.app');
     await mkdir(app);
-    const found = await describeBuild(cfg({ ios: { app } }), undefined, 'ios');
+    const found = await describeBuild(cfg({ android: { app } }), undefined, 'android', path.join(tmp, 'a'));
     assert.equal(found.ok, false);
-    if (!found.ok) assert.match(found.reason, /không phải một file \.apk\/\.ipa đơn/);
+    if (!found.ok) assert.match(found.reason, /không phải bản \.app của simulator iOS/);
   });
 
   it('chưa có bản build nào thì chỉ đường', async () => {
@@ -73,5 +73,59 @@ describe('bản build cho một job', () => {
     const second = await describeBuild(cfg({ android: { app: apk } }), undefined, 'android');
     assert.ok(first.ok && second.ok);
     assert.notEqual(first.build.sha256, second.build.sha256);
+  });
+});
+
+/**
+ * Bản `.app` của simulator là một THƯ MỤC: máy chủ đóng gói nó, một lần cho
+ * mỗi phiên bản.
+ */
+describe('bản .app của simulator', () => {
+  async function makeBundle(name = 'Test.app') {
+    const app = path.join(tmp, name);
+    await mkdir(path.join(app, 'Frameworks'), { recursive: true });
+    await writeFile(path.join(app, 'Test'), '#!/bin/sh\necho chạy\n', { mode: 0o755 });
+    await writeFile(path.join(app, 'Info.plist'), '<plist/>');
+    await writeFile(path.join(app, 'Frameworks', 'lib.dylib'), 'thư viện');
+    return app;
+  }
+
+  it('đóng gói thành tar.gz, và gói mang đúng tên thư mục', async () => {
+    const app = await makeBundle();
+    const archives = path.join(tmp, 'archives');
+    const found = await describeBuild(cfg({ ios: { app } }), undefined, 'ios', archives);
+    assert.ok(found.ok, found.ok ? '' : found.reason);
+    assert.equal(found.build.packed, 'tar.gz');
+    assert.equal(found.build.name, 'Test.app');
+    assert.match(found.build.key, /\.tar\.gz$/);
+  });
+
+  it('không đổi gì thì không đóng gói lại — cùng gói, cùng hash', async () => {
+    const app = await makeBundle();
+    const archives = path.join(tmp, 'archives');
+    const a = await describeBuild(cfg({ ios: { app } }), undefined, 'ios', archives);
+    const b = await describeBuild(cfg({ ios: { app } }), undefined, 'ios', archives);
+    assert.ok(a.ok && b.ok);
+    assert.equal(a.build.sha256, b.build.sha256);
+    assert.equal(a.build.key, b.build.key);
+  });
+
+  it('một file BÊN TRONG đổi thì gói mới — gói cũ không được gửi thay bản mới', async () => {
+    // Build lại bằng Xcode ghi đè file bên trong; thời điểm sửa của thư mục
+    // gốc thì không nhất thiết đổi.
+    const app = await makeBundle();
+    const archives = path.join(tmp, 'archives');
+    const a = await describeBuild(cfg({ ios: { app } }), undefined, 'ios', archives);
+    await writeFile(path.join(app, 'Frameworks', 'lib.dylib'), 'thư viện bản mới hơn');
+    const b = await describeBuild(cfg({ ios: { app } }), undefined, 'ios', archives);
+    assert.ok(a.ok && b.ok);
+    assert.notEqual(a.build.sha256, b.build.sha256);
+  });
+
+  it('thư mục không phải .app thì không đóng gói', async () => {
+    const dir = path.join(tmp, 'build-folder');
+    await mkdir(dir);
+    const found = await describeBuild(cfg({ ios: { app: dir } }), undefined, 'ios', path.join(tmp, 'a'));
+    assert.equal(found.ok, false);
   });
 });

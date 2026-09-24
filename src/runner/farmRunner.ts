@@ -165,6 +165,7 @@ export function farmRunner(options: FarmRunnerOptions): Runner {
     },
     builds: {
       readAppVersion: () => notHere('đọc phiên bản app'),
+      packBundle: () => notHere('đóng gói bản .app'),
     },
   } as Runner;
 }

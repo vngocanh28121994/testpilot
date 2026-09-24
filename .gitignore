@@ -16,6 +16,15 @@ docs/
 .testpilot/sessions/
 .testpilot/users/
 
+# Thư mục chạy của job và bản build: dựng lúc chạy, dọn lúc xong, và bản build
+# thì mỗi bản vài trăm MB — không bao giờ thuộc về repo.
+#   jobs/            thư mục riêng của từng job mang snapshot (runner)
+#   builds/          đệm bản build tải từ máy chủ (runner)
+#   build-archives/  gói .app của simulator đã đóng để gửi đi (máy chủ)
+.testpilot/jobs/
+.testpilot/builds/
+.testpilot/build-archives/
+
 # Workflow history written by the UI.
 registry/history.json
 

@@ -228,13 +228,16 @@ export const runRoutes: RouteTable = {
     );
     const only = platforms.size === 1 ? [...platforms][0] : undefined;
     let appBuild: AppBuildRef | undefined;
-    if (body.appSource === 'upload' && (only === 'android' || only === 'ios')) {
+    // Chỉ tra khi bản build CÓ THỂ phải đi qua mạng: có máy nằm ở runner
+    // khác, hoặc không nêu máy nào (không biết runner nào sẽ nhận). Mọi máy
+    // cắm ở chính máy chủ thì bỏ qua hẳn — tra nghĩa là băm 200 MB, hay đóng
+    // gói cả một bản `.app` của simulator, cho một lượt chạy không gửi gì đi
+    // đâu. Đường tại chỗ giữ nguyên như trước.
+    const mayTravel = anyRemote || (body.devices ?? []).length === 0;
+    if (body.appSource === 'upload' && mayTravel && (only === 'android' || only === 'ios')) {
       const found = await describeBuild(await loadConfig(ctx.configFile), body.env, only);
       if (found.ok) appBuild = found.build;
-      // Không gửi được bản build thì CHỈ chặn khi máy nằm ở runner khác. Máy
-      // cắm ở chính máy chủ vẫn chạy như trước — kể cả simulator iOS với bản
-      // `.app` là một thư mục, thứ chưa gửi qua mạng được nhưng ở đây thì chẳng
-      // cần gửi đi đâu.
+      // Không gửi được thì CHỈ chặn khi chắc chắn máy nằm ở runner khác.
       else if (anyRemote) return json(res, 400, { error: found.reason });
     }
 

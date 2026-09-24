@@ -8,7 +8,9 @@ import { describe, it, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { existsSync } from 'node:fs';
-import { mkdtemp, readdir, readFile, rm, utimes, writeFile } from 'node:fs/promises';
+import { execFile } from 'node:child_process';
+import { mkdir, mkdtemp, readdir, readFile, readlink, rm, stat, symlink, utimes, writeFile } from 'node:fs/promises';
+import { promisify } from 'node:util';
 import os from 'node:os';
 import path from 'node:path';
 import { buildFetcher } from '../appBuild.js';
@@ -95,5 +97,93 @@ describe('tải bản build về runner', () => {
     assert.equal(left.length, 3);
     assert.ok(existsSync(fresh));
     assert.equal(left.includes(`${old[0]}.apk`), false, 'bản cũ nhất phải bị bỏ');
+  });
+});
+
+/**
+ * Bản `.app` của simulator: một gói `tar.gz`, mở một lần vào đệm.
+ *
+ * Gói ở đây dựng bằng `tar` THẬT: thứ cần đo là symlink và bit thực thi đi qua
+ * được nguyên vẹn — mất bit thực thi, simulator cài xong rồi từ chối mở app
+ * với một câu không nhắc gì tới quyền file.
+ */
+describe('tải bản .app về runner', () => {
+  const run = promisify(execFile);
+
+  async function packedBundle(extra: string[] = [], rewrite?: string) {
+    const src = path.join(tmp, 'src');
+    const app = path.join(src, 'Test.app');
+    await mkdir(path.join(app, 'Frameworks'), { recursive: true });
+    await writeFile(path.join(app, 'Test'), '#!/bin/sh\n', { mode: 0o755 });
+    await writeFile(path.join(app, 'Frameworks', 'lib.dylib'), 'thư viện');
+    await symlink('lib.dylib', path.join(app, 'Frameworks', 'Current'));
+    for (const name of extra) await writeFile(path.join(src, name), 'lạc');
+    const archive = path.join(tmp, 'app.tar.gz');
+    await run('tar', [
+      '-czf', archive, '-C', src,
+      ...(rewrite ? ['-P', '-s', rewrite] : []),
+      'Test.app', ...extra,
+    ], { env: { ...process.env, COPYFILE_DISABLE: '1' } });
+    const bytes = await readFile(archive);
+    const build: AppBuildRef = {
+      key: 'x', name: 'Test.app', packed: 'tar.gz',
+      sha256: createHash('sha256').update(bytes).digest('hex'), size: bytes.length,
+    };
+    const calls: string[] = [];
+    const fetchImpl = (async (url: string | URL | Request) => {
+      calls.push(String(url));
+      return new Response(bytes);
+    }) as unknown as typeof fetch;
+    return { build, fetchImpl, calls };
+  }
+
+  it('mở vào đệm, giữ nguyên bit thực thi và symlink', async () => {
+    const { build, fetchImpl } = await packedBundle();
+    const cacheDir = path.join(tmp, 'cache');
+    const fetchBuild = buildFetcher({ serverUrl: 'https://cp', token: 't', name: 'lap', cacheDir, fetchImpl });
+    const app = await fetchBuild('job-1', build, () => {});
+    assert.equal(path.basename(app), 'Test.app');
+    assert.equal((await stat(path.join(app, 'Test'))).mode & 0o111, 0o111, 'mất bit thực thi');
+    assert.equal(await readlink(path.join(app, 'Frameworks', 'Current')), 'lib.dylib');
+    // Gói tạm và thư mục dựng dở không được nằm lại.
+    assert.deepEqual(await readdir(cacheDir), [build.sha256]);
+  });
+
+  it('mở một lần: lần sau dùng đệm, không tải, không giải lại', async () => {
+    const { build, fetchImpl, calls } = await packedBundle();
+    const cacheDir = path.join(tmp, 'cache');
+    const fetchBuild = buildFetcher({ serverUrl: 'https://cp', token: 't', name: 'lap', cacheDir, fetchImpl });
+    const first = await fetchBuild('job-1', build, () => {});
+    const second = await fetchBuild('job-2', build, () => {});
+    assert.equal(first, second);
+    assert.equal(calls.length, 1);
+  });
+
+  it('mục ../ trong gói thì KHÔNG mở, và không ghi gì ra ngoài', async () => {
+    // Hash khớp chỉ nói gói đúng là thứ máy chủ gửi — không nói máy chủ không
+    // bị chiếm. `../../evil.txt` là ghi file tuỳ ý lên laptop người khác.
+    const { build, fetchImpl } = await packedBundle(['x.txt'], ',^x.txt,../../evil.txt,');
+    const cacheDir = path.join(tmp, 'deep', 'cache');
+    const fetchBuild = buildFetcher({ serverUrl: 'https://cp', token: 't', name: 'lap', cacheDir, fetchImpl });
+    await assert.rejects(fetchBuild('job-1', build, () => {}), /nằm ngoài Test\.app/);
+    assert.equal(existsSync(path.join(tmp, 'evil.txt')), false);
+    assert.deepEqual(await readdir(cacheDir), [], 'không để lại gói hay thư mục dựng dở');
+  });
+
+  it('mục nằm ngoài thư mục .app thì cũng không mở', async () => {
+    const { build, fetchImpl } = await packedBundle(['lac.txt']);
+    const fetchBuild = buildFetcher({
+      serverUrl: 'https://cp', token: 't', name: 'lap', cacheDir: path.join(tmp, 'cache'), fetchImpl,
+    });
+    await assert.rejects(fetchBuild('job-1', build, () => {}), /nằm ngoài Test\.app/);
+  });
+
+  it('tên gói không phải .app thì từ chối trước khi chạm mạng', async () => {
+    const { build, fetchImpl, calls } = await packedBundle();
+    const fetchBuild = buildFetcher({
+      serverUrl: 'https://cp', token: 't', name: 'lap', cacheDir: path.join(tmp, 'cache'), fetchImpl,
+    });
+    await assert.rejects(fetchBuild('job-1', { ...build, name: '../evil.app' }, () => {}), /không phải một thư mục \.app/);
+    assert.equal(calls.length, 0);
   });
 });

@@ -42,6 +42,7 @@ import {
 } from './control.js';
 import type { ControlTarget } from '../protocol/control.js';
 import type { PrereqAndroidDevice } from './prereq.js';
+import { packAppBundle } from './bundle.js';
 import {
   iosDeviceNames,
   openIosSettings,
@@ -127,6 +128,14 @@ export interface RunnerFarmApi {
 /** Đọc thông tin từ file build trên máy — cần `aapt`, nên thuộc runner. */
 export interface RunnerBuildsApi {
   readAppVersion(file: string): ReturnType<typeof readAppVersion>;
+  /**
+   * Đóng gói một thư mục `.app` của simulator để gửi sang runner ở xa.
+   *
+   * Thêm ngày 24/09/2026, và là một QUYẾT ĐỊNH chứ không phải tiện tay: máy
+   * chủ cần một gói để gửi, mà control plane không được tự chạy lệnh. Việc
+   * này chỉ đọc một thư mục bản build đã nằm trên máy và ghi đúng một file.
+   */
+  packBundle(dir: string, dest: string): Promise<void>;
 }
 
 /**
@@ -214,6 +223,7 @@ export const localRunner: Runner = {
   },
   builds: {
     readAppVersion: (file) => readAppVersion(file),
+    packBundle: (dir, dest) => packAppBundle(dir, dest),
   },
   control: {
     devices: () => controlDevices(),

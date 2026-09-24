@@ -85,6 +85,16 @@ describe('ranh giới control plane', () => {
   });
 
   /**
+   * Nhóm `builds` cũng là danh sách đóng. `packBundle` được thêm có chủ ý —
+   * máy chủ cần một gói `.app` để gửi sang runner ở xa mà không được tự chạy
+   * `tar` — và lần thêm sau cũng phải là một quyết định để lại dấu ở đây.
+   */
+  it('RunnerBuildsApi vẫn là danh sách đóng', async () => {
+    const { localRunner } = await import('../../runner/index.js');
+    assert.deepEqual(Object.keys(localRunner.builds).sort(), ['packBundle', 'readAppVersion']);
+  });
+
+  /**
    * Nhóm `control` là nhóm gắt nhất, vì nó đưa cho phía bên kia quyền điều
    * khiển một chiếc điện thoại thật đang cắm trên máy của một con người: gõ
    * được vào ứng dụng đang mở, bấm được nút xác nhận.

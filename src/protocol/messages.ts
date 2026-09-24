@@ -233,8 +233,15 @@ export interface AppBuildRef {
   key: string;
   /** Tên file, để giữ đúng đuôi `.apk` / `.ipa` — Appium đọc đuôi để biết cách cài. */
   name: string;
+  /** Hash và cỡ của ĐÚNG những byte đi qua mạng — với bản đóng gói là của gói. */
   sha256: string;
   size: number;
+  /**
+   * Bản build là một THƯ MỤC — `.app` của simulator iOS — nên thứ đi qua mạng
+   * là một gói `tar.gz` của nó, và `name` là tên thư mục sau khi mở gói.
+   * Vắng mặt nghĩa là một file đơn, gửi nguyên.
+   */
+  packed?: 'tar.gz';
 }
 
 export interface JobSnapshot {
