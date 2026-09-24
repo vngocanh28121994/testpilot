@@ -43,6 +43,10 @@ export interface RemoteDevice {
   /** Máy tính ấy chạy được nền tảng này không. `undefined` là CHƯA ĐO. */
   ready?: boolean;
   reason?: string;
+  /** Nút sửa được ngay từ web, do chính runner ấy báo. */
+  fix?: 'appium';
+  /** Tunnel cho WebView, đo trên máy ấy (chỉ iOS). */
+  tunnel?: { ok: boolean; detail: string };
 }
 
 export interface RemoteRunRequest {
@@ -97,6 +101,8 @@ export function remoteRunsFor(ctx: RouteContext): RemoteRuns {
         ...(runner ? { runnerName: runner.name } : {}),
         offline: device.state === 'offline' || runner?.state !== 'online',
         ...(prereq ? { ready: prereq.ok, ...(prereq.reason ? { reason: prereq.reason } : {}) } : {}),
+        ...(prereq?.fix ? { fix: prereq.fix } : {}),
+        ...(prereq?.tunnel ? { tunnel: prereq.tunnel } : {}),
       };
     },
 
@@ -188,12 +194,21 @@ export function remotePreflight(
       // Chặn ở đây là chặn một chiếc máy hoàn toàn tốt; nếu nó thật sự thiếu
       // gì, runner sẽ tự từ chối job kèm câu nói việc cần làm.
       ok: device.ready !== false,
+      ...(device.ready === false && device.fix ? { fix: device.fix } : {}),
       detail: device.ready === false
         ? (device.reason ?? `${where} chưa chạy được ${platform}.`)
         : device.ready === undefined
           ? `${where} chưa báo trạng thái môi trường; runner sẽ tự kiểm lúc nhận job.`
           : `${where} sẵn sàng chạy ${platform}.`,
     },
+    // Tunnel đo trên CHÍNH máy cắm iPhone. Không có dòng này thì một iPhone ở
+    // laptop người khác không bao giờ hiện "tunnel chưa chạy" — và nút bật nó.
+    ...(platform === 'ios' && device.tunnel ? [{
+      name: 'Tunnel cho WebView (iOS 17+)',
+      ok: device.tunnel.ok,
+      ...(device.tunnel.ok ? {} : { fix: 'ios-tunnel' as const }),
+      detail: device.tunnel.ok ? `${device.tunnel.detail} (trên ${where})` : device.tunnel.detail,
+    }] : []),
     // Bản build đi sang runner ở xa: nói tên và cỡ, vì lần đầu nó là vài trăm
     // MB qua mạng và người bấm chạy nên biết vì sao bước đầu tiên lâu.
     ...(build ? [build.ok
@@ -210,5 +225,6 @@ export function remotePreflight(
     ok: checks.every((check) => check.ok),
     checks,
     device: device.udid,
+    host: { name: where, remote: true },
   };
 }

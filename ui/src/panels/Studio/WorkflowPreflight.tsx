@@ -121,7 +121,12 @@ export function WorkflowPreflight({
             <div className="text-sm font-medium">
               {LABEL[platform]} — {result.ok ? 'sẵn sàng' : 'chưa chạy được'}
             </div>
-            <PreflightChecks checks={result.checks} />
+            <PreflightChecks
+              checks={result.checks}
+              // Nút sửa làm trên ĐÚNG máy cắm thiết bị — máy chủ hay laptop của
+              // người dùng — và nói trước là máy nào.
+              target={{ platform: result.platform, device: result.device, host: result.host }}
+            />
             {/* Cùng một lý do với ô chọn máy ngay dưới: câu hỏi được hỏi ngay
                 tại chỗ phát hiện ra nó. Workflow dùng chung `resolveDevice`
                 với màn Local Runner, nên máy chưa khai làm hỏng cả hai chỗ

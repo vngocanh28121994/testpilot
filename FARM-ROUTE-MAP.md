@@ -13,7 +13,7 @@ file nào. Kiến trúc: [FARM-ARCHITECTURE.md](FARM-ARCHITECTURE.md) · Kế ho
 | **R** | Runner. Chạm thiết bị hoặc tiến trình cục bộ; **không** được tồn tại trên control plane |
 | **LOCAL** | Chỉ còn ở chế độ `embedded`. Chế độ server phải trả 404 |
 
-Đếm: **CP 67 · JOB 8 · R 13 · LOCAL 1** — tổng 89. (`GET /api/device/control/screenshot` tải ảnh chụp đúng độ phân giải của máy đang giữ; `GET /api/runner/build` cho runner tải bản build của job nó đang giữ; P3.5 không thêm route nào; P3.4 thêm năm route `/api/runner/*`; P4.4b thêm bốn route registry/proposal; P4.2 thêm ba route chia sẻ máy; P2.5 thêm ba route artifact; `POST /api/devices/register` thêm máy đang cắm vào config.)
+Đếm: **CP 68 · JOB 8 · R 13 · LOCAL 1** — tổng 90. (`POST /api/prereq/fix` làm việc chuẩn bị — tunnel, Appium, Cài đặt iOS — trên ĐÚNG máy cắm thiết bị: tại chỗ nếu là máy chủ, qua job `prereq` nếu là runner khác; `GET /api/device/control/screenshot` tải ảnh chụp đúng độ phân giải của máy đang giữ; `GET /api/runner/build` cho runner tải bản build của job nó đang giữ; P3.5 không thêm route nào; P3.4 thêm năm route `/api/runner/*`; P4.4b thêm bốn route registry/proposal; P4.2 thêm ba route chia sẻ máy; P2.5 thêm ba route artifact; `POST /api/devices/register` thêm máy đang cắm vào config.)
 
 > **Thêm ngày 2026-09-24.** `GET /api/runner/build?job=<id>` — **R**, token runner. Runner KHÔNG gửi
 > đường dẫn nào: nó đưa mã job, máy chủ tra bản build từ chính job ấy (thứ máy chủ đã tính lúc đặt

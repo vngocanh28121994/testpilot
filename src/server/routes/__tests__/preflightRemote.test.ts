@@ -79,3 +79,33 @@ describe('preflight cho máy ở runner khác', () => {
     }
   });
 });
+
+describe('remotePreflight — tunnel và máy làm việc sửa', () => {
+  /**
+   * iPhone cắm ở laptop người khác từng chỉ có hai dòng kiểm tra: "thiết bị
+   * còn đó" và "máy tính sẵn sàng". Không dòng tunnel, không nút sửa — và nút
+   * sửa duy nhất ở chỗ khác lại mở Terminal trên máy chủ.
+   */
+  it('có dòng tunnel đo trên máy ấy, kèm nút sửa, và nói rõ máy nào sẽ làm', async () => {
+    const { remotePreflight } = await import('../../remoteRuns.js');
+    const result = remotePreflight('ios', {
+      udid: 'IPHONE-1', label: 'iPhone 15', runnerId: 'runner:x', runnerName: 'Laptop của Bình',
+      offline: false, ready: true,
+      tunnel: { ok: false, detail: 'Tunnel chưa chạy.' },
+    });
+    const tunnel = result.checks.find((c) => c.name.startsWith('Tunnel'));
+    assert.equal(tunnel?.ok, false);
+    assert.equal(tunnel?.fix, 'ios-tunnel');
+    assert.deepEqual(result.host, { name: 'Laptop của Bình', remote: true });
+  });
+
+  it('Appium của máy ấy chưa chạy: nút khởi động hiện ở dòng máy tính', async () => {
+    const { remotePreflight } = await import('../../remoteRuns.js');
+    const result = remotePreflight('android', {
+      udid: 'R5C', label: 'Galaxy', runnerId: 'runner:x', runnerName: 'Laptop của Bình',
+      offline: false, ready: false, reason: 'Appium chưa chạy trên máy này.', fix: 'appium',
+    });
+    const host = result.checks.find((c) => c.name === 'Máy tính giữ thiết bị');
+    assert.equal(host?.fix, 'appium');
+  });
+});

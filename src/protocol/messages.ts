@@ -191,7 +191,20 @@ export interface JobSpec {
   snapshot?: JobSnapshot;
   /** Lối ra mạng runner phải dựng TRƯỚC và dọn SAU, kể cả khi job bị huỷ (P6). */
   network?: { profile: string; config?: Record<string, unknown> };
+  /** Job `prereq`: việc chuẩn bị môi trường, làm trên CHÍNH máy cắm thiết bị. */
+  prep?: { op: PrepOp };
 }
+
+/**
+ * Việc chuẩn bị mà máy chủ được phép nhờ một runner làm — danh sách ĐÓNG.
+ *
+ * Không có "chạy lệnh này": một máy chủ bị chiếm mà sai khiến được dòng lệnh
+ * trên laptop có Xcode và keychain của từng người là chuyện khác hẳn với chuẩn
+ * bị môi trường. Mỗi việc ở đây là một hàm cố định của runner.
+ */
+export type PrepOp = 'start_appium' | 'restart_appium' | 'ios_tunnel' | 'ios_trust';
+
+export const PREP_OPS: readonly PrepOp[] = ['start_appium', 'restart_appium', 'ios_tunnel', 'ios_trust'];
 
 export interface RunSuiteParams {
   platform: string;

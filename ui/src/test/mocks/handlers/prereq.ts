@@ -14,6 +14,12 @@ export const prereqHandlers = [
       ['done', { ok: true }],
     ]),
   ),
+  http.post(STREAM_ROUTES.prereqFix, () =>
+    sse([
+      ['log', '[prep] Làm trên máy chủ (test).'],
+      ['done', { ok: true }],
+    ]),
+  ),
   http.post(STREAM_ROUTES.prereqAppiumRestart, () => sse([['done', { ok: true }]])),
   http.post(STREAM_ROUTES.prereqDriver, () =>
     sse([['log', 'Đang cài driver…'], ['done', { ok: true }]]),

@@ -167,6 +167,7 @@ export const ROUTE_POLICY: Record<string, Role> = {
   'POST /api/prereq/driver': 'runner_user',
   'POST /api/prereq/ios-trust': 'runner_user',
   'POST /api/prereq/ios-tunnel': 'runner_user',
+  'POST /api/prereq/fix': 'runner_user',
   // Tải build lên và chọn nguồn app: ảnh hưởng tới lượt chạy của người khác
   // trong cùng môi trường, nhưng nó là việc thường ngày của người chạy test.
   'POST /api/app/upload': 'runner_user',

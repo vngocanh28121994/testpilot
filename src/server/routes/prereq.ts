@@ -11,7 +11,10 @@
  * và app Cài đặt trên chính chiếc máy đang chạy. Ở chế độ `server` chúng phải
  * biến mất; FARM-ROUTE-MAP.md xếp chúng vào nhóm LOCAL.
  */
-import { applyEnv, devicesOf, loadConfig, saveConfig } from '../../config.js';
+import os from 'node:os';
+import { applyEnv, devicesOf, loadConfig, saveConfig, type TestPilotConfig } from '../../config.js';
+import { PREP_OPS, type PrepOp } from '../../protocol/messages.js';
+import { waitForClose } from './run.js';
 import { attachedDevices } from '../../core/attachedDevices.js';
 import { registerDevices } from '../../core/deviceSync.js';
 import { preflight } from '../../core/preflight.js';
@@ -69,6 +72,77 @@ export const prereqRoutes: RouteTable = {
   'POST /api/prereq/ios-trust': async (_req, res, _url, ctx) =>
     json(res, 200, await localRunner.prereq.openIosSettings(await loadConfig(ctx.configFile))),
 
+  /**
+   * Sửa môi trường cho ĐÚNG chiếc máy cắm thiết bị — không phải máy chủ.
+   *
+   * Các nút cũ (`/api/prereq/ios-tunnel`, `/appium`…) luôn làm trên tiến trình
+   * máy chủ. Ở chế độ server, người ngồi ở laptop có iPhone cắm vào bấm "Mở
+   * Terminal" thì Terminal bật lên trên máy chủ, ở phòng khác. Route này hỏi
+   * thiết bị nằm ở đâu:
+   *
+   * - cắm ở chính máy chủ (hoặc không nói máy nào) → làm tại chỗ, như trước;
+   * - cắm ở runner khác → đặt một job `prereq` nhắm đúng thiết bị ấy, runner
+   *   đang cắm nó nhận và làm trên máy của nó; log chảy về đây.
+   */
+  'POST /api/prereq/fix': async (req, res, _url, ctx) => {
+    const body = await readJson<{ op?: string; platform?: string; device?: string }>(req);
+    const op = body.op as PrepOp;
+    if (!PREP_OPS.includes(op)) {
+      return json(res, 400, { error: `Việc chuẩn bị "${String(body.op)}" không có.` });
+    }
+    const platform = body.platform === 'android' || body.platform === 'ios' ? body.platform : undefined;
+    const cfg = await loadConfig(ctx.configFile);
+    const udid = body.device && platform
+      ? devicesOf(cfg, platform).find((item) => item.id === body.device)?.udid ?? body.device
+      : undefined;
+    const there = udid ? await remoteRunsFor(ctx).locate(udid) : undefined;
+
+    if (!there) {
+      return stream(res, async (log) => {
+        log(`[prep] Làm trên máy chủ (${os.hostname()}).`);
+        await localPrep(op, cfg, log);
+      });
+    }
+
+    return stream(res, async (log) => {
+      const where = there.runnerName ?? there.runnerId;
+      if (there.offline) {
+        throw new Error(`${where} — máy tính đang cắm ${there.label} — đang tắt hoặc mất liên lạc. `
+          + 'Mở lại runner trên máy đó rồi thử lại.');
+      }
+      log(`[prep] Giao cho ${where}: việc này làm trên máy đang cắm ${there.label}.`);
+      const job = await ctx.repos.queue.create({
+        orgId: ctx.identity.orgId,
+        kind: 'prereq',
+        createdBy: ctx.identity.userId,
+        spec: {
+          orgId: ctx.identity.orgId,
+          kind: 'prereq',
+          createdBy: ctx.identity.userId,
+          timeoutMs: 5 * 60_000,
+          deviceTokens: [`${platform}:${there.udid}`],
+          prep: { op },
+        },
+      });
+      const offLog = await ctx.repos.queue.onLog(job.id, log);
+      try {
+        const closed = await waitForClose(ctx.repos.queue, job.id, log);
+        if (closed?.state !== 'succeeded') {
+          // Runner bản cũ (trước job `prereq`) trả đúng câu này. Nói thẳng việc
+          // cần làm, thay vì để người dùng đoán vì sao nút không có tác dụng.
+          if (/chưa chạy được job loại "prereq"/.test(closed?.error ?? '')) {
+            throw new Error(`Runner trên ${where} là bản cũ, chưa làm được việc chuẩn bị từ web. `
+              + 'Cài lại runner bản mới trên máy đó (build/runner-handoff/HUONG-DAN.md), '
+              + 'hoặc chạy lệnh tunnel ngay trên máy ấy bằng nút "Chép lệnh".');
+          }
+          throw new Error(closed?.error ?? `${where} không làm được việc này.`);
+        }
+      } finally {
+        offLog();
+      }
+    });
+  },
+
   'POST /api/prereq/driver': async (req, res) => {
     const { driver } = await readJson<{ driver: string }>(req);
     return stream(res, (log) => localRunner.prereq.installDriver(driver, log));
@@ -107,7 +181,13 @@ export const prereqRoutes: RouteTable = {
         return json(res, 200, remotePreflight(platform, there, build));
       }
     }
-    return json(res, 200, await preflight(platform, cfg, device));
+    return json(res, 200, {
+      ...(await preflight(platform, cfg, device)),
+      host: {
+        name: process.env.TESTPILOT_MODE === 'server' ? `Máy chủ (${os.hostname()})` : `Máy này (${os.hostname()})`,
+        remote: false,
+      },
+    });
   },
 
   /**
@@ -150,3 +230,16 @@ export const prereqRoutes: RouteTable = {
     return json(res, 200, { added });
   },
 };
+
+/** Việc chuẩn bị trên CHÍNH máy chủ — cùng những hàm mà các nút cũ gọi. */
+async function localPrep(op: PrepOp, cfg: TestPilotConfig, log: (line: string) => void): Promise<void> {
+  if (op === 'start_appium') return localRunner.prereq.startAppium(log);
+  if (op === 'restart_appium') return localRunner.prereq.restartAppium(log);
+  const opened = op === 'ios_tunnel'
+    ? await localRunner.prereq.openTunnelTerminal()
+    : await localRunner.prereq.openIosSettings(cfg);
+  if (!opened.ok) throw new Error(opened.error ?? 'Không mở được.');
+  log(op === 'ios_tunnel'
+    ? '[prep] Đã mở Terminal với lệnh tunnel. Nhập mật khẩu máy ở cửa sổ đó.'
+    : '[prep] Đã mở Cài đặt trên iPhone. Bấm Tin cậy trên máy.');
+}

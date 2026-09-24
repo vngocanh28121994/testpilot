@@ -1,11 +1,10 @@
 import { useEffect, useState } from 'react';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQueryClient } from '@tanstack/react-query';
 import { CheckCircle2, Play, Settings, Terminal, XCircle } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { useStreamJob } from '@/hooks/useStreamJob';
-import { api } from '@/api/client';
-import { ROUTES, STREAM_ROUTES } from '@/api/routes';
+import { STREAM_ROUTES } from '@/api/routes';
 import { IOS_TUNNEL_COMMAND } from '@/lib/tunnel';
 import type { PreflightCheck } from '@core/ui/contracts.js';
 
@@ -16,7 +15,22 @@ import type { PreflightCheck } from '@core/ui/contracts.js';
  * tự, một bên bằng icon; chữ và khoảng cách cũng khác nhau. Cùng một câu trả lời
  * từ cùng một endpoint mà trông như hai thứ khác nhau.
  */
-export function PreflightChecks({ checks }: { checks: PreflightCheck[] }) {
+/**
+ * Máy nào sẽ làm các nút "sửa" — chiếc đang cắm thiết bị.
+ *
+ * Trước đây các nút luôn gọi vào máy chủ: ngồi ở laptop có iPhone cắm vào mà
+ * bấm "Mở Terminal" thì Terminal bật lên ở máy chủ, phòng khác. Giờ máy chủ
+ * tự chọn đúng máy (xem `POST /api/prereq/fix`), và màn hình nói trước là máy
+ * nào để không ai phải đoán.
+ */
+export interface FixTarget {
+  platform?: string;
+  /** Id hoặc udid của thiết bị đang kiểm. */
+  device?: string;
+  host?: { name: string; remote: boolean };
+}
+
+export function PreflightChecks({ checks, target }: { checks: PreflightCheck[]; target?: FixTarget }) {
   return (
     <ul className="flex flex-col divide-y">
       {checks.map((check) => (
@@ -30,9 +44,9 @@ export function PreflightChecks({ checks }: { checks: PreflightCheck[] }) {
             <span className="text-sm whitespace-pre-line">
               <b>{check.name}:</b> {check.detail}
             </span>
-            {!check.ok && check.fix === 'appium' && <StartAppium />}
-            {!check.ok && check.fix === 'ios-tunnel' && <StartIosTunnel />}
-            {!check.ok && check.fix === 'ios-trust' && <OpenIosSettings />}
+            {!check.ok && check.fix === 'appium' && <FixButton op="start_appium" target={target} />}
+            {!check.ok && check.fix === 'ios-tunnel' && <StartIosTunnel target={target} />}
+            {!check.ok && check.fix === 'ios-trust' && <FixButton op="ios_trust" target={target} />}
           </div>
         </li>
       ))}
@@ -40,36 +54,67 @@ export function PreflightChecks({ checks }: { checks: PreflightCheck[] }) {
   );
 }
 
-/**
- * Bật Appium ngay tại chỗ báo là nó chưa chạy.
- *
- * Công cụ này bật được Appium — nó có sẵn endpoint làm đúng việc đó. Bảo người
- * dùng đi mở một terminal khác là đẩy sang cho họ một việc mà mình làm được,
- * ngay tại màn hình đã biết chính xác thứ đang thiếu là gì.
- */
-function StartAppium() {
-  const job = useStreamJob('preflight-appium', STREAM_ROUTES.prereqAppium);
-  const client = useQueryClient();
+type FixOp = 'start_appium' | 'ios_tunnel' | 'ios_trust';
 
-  // Bật xong thì dò lại, để dòng đỏ ở trên tự chuyển sang xanh — chứ không bắt
-  // người dùng đoán xem đã xong chưa rồi tự bấm "Kiểm tra lại".
+const FIX_TEXT: Record<FixOp, { idle: string; busy: string; done: string; Icon: typeof Play }> = {
+  start_appium: {
+    idle: 'Khởi động Appium', busy: 'Đang khởi động Appium…',
+    done: 'Appium đã chạy.', Icon: Play,
+  },
+  ios_tunnel: {
+    idle: 'Mở Terminal và chạy', busy: 'Đang mở Terminal…',
+    done: 'Đã mở Terminal. Nhập mật khẩu máy ở cửa sổ đó, rồi dò lại môi trường ở trên.', Icon: Terminal,
+  },
+  ios_trust: {
+    idle: 'Mở Cài đặt trên máy', busy: 'Đang mở Cài đặt…',
+    done: 'Đã mở Cài đặt trên máy. Bấm Tin cậy xong thì dò lại giúp nhé.', Icon: Settings,
+  },
+};
+
+/** "Làm trên: …" — nói TRƯỚC khi bấm, vì chỗ việc xảy ra có thể là máy khác. */
+function WhereNote({ target, op }: { target?: FixTarget; op: FixOp }) {
+  const host = target?.host;
+  if (!host) return null;
+  const text = op === 'ios_tunnel'
+    ? host.remote
+      ? `Terminal sẽ mở trên ${host.name} — máy đang cắm iPhone. Người ngồi ở máy đó nhập mật khẩu.`
+      : `Terminal sẽ mở trên ${host.name} — máy đang cắm iPhone. Cần người ở máy đó nhập mật khẩu.`
+    : `Làm trên ${host.name} — máy đang cắm thiết bị.`;
+  return <span className="text-muted-foreground text-xs">{text}</span>;
+}
+
+/**
+ * Một nút sửa, chạy trên ĐÚNG máy cắm thiết bị. Xong thì dò lại, để dòng đỏ
+ * tự chuyển xanh — không bắt người dùng đoán rồi tự bấm "Kiểm tra lại".
+ */
+function FixButton({ op, target }: { op: FixOp; target?: FixTarget }) {
+  const job = useStreamJob(`preflight-fix-${op}`, STREAM_ROUTES.prereqFix);
+  const client = useQueryClient();
+  const text = FIX_TEXT[op];
+
   useEffect(() => {
-    if (job.status === 'done') void client.invalidateQueries({ queryKey: ['preflight'] });
-  }, [job.status, client]);
+    if (job.status !== 'done') return;
+    if (op !== 'start_appium') toast.success(text.done);
+    void client.invalidateQueries({ queryKey: ['preflight'] });
+  }, [job.status, client, op, text.done]);
 
   const running = job.status === 'running';
-
   return (
     <div className="flex flex-col items-start gap-1.5">
-      <Button size="sm" variant="outline" disabled={running} onClick={() => job.start()}>
-        <Play className="size-4" />
-        {running ? 'Đang khởi động Appium…' : 'Khởi động Appium'}
+      <WhereNote target={target} op={op} />
+      <Button
+        size="sm"
+        variant="outline"
+        disabled={running}
+        onClick={() => job.start({ op, platform: target?.platform, device: target?.device })}
+      >
+        <text.Icon className="size-4" />
+        {running ? text.busy : text.idle}
       </Button>
-      {/* Dòng log cuối, không phải cả khối log: đủ để biết nó đang tới đâu mà
-          không biến một dòng kiểm tra thành một cửa sổ terminal. */}
       {job.status === 'error' && (
-        <span className="text-destructive text-xs">{job.error ?? 'Không khởi động được Appium.'}</span>
+        <span className="text-destructive text-xs">{job.error ?? 'Không làm được việc này.'}</span>
       )}
+      {/* Dòng log cuối, không phải cả khối: đủ biết đang tới đâu. */}
       {running && job.logs.length > 0 && (
         <span className="text-muted-foreground text-xs">{job.logs[job.logs.length - 1]}</span>
       )}
@@ -78,40 +123,17 @@ function StartAppium() {
 }
 
 /**
- * Mở Terminal với lệnh dựng tunnel đã điền sẵn.
- *
- * Gắn vào chính dòng kiểm tra, không phải vào một màn hình cụ thể: trước đây nút
- * này chỉ có ở Local Runner, nên workflow nói đúng lý do dừng nhưng không cho
- * người dùng chỗ nào để chữa — phải nhớ ra là mở sang màn khác.
+ * Mở Terminal với lệnh dựng tunnel đã điền sẵn — trên máy đang cắm iPhone.
  *
  * Không hỏi mật khẩu ở đây, và đó là chủ đích: xem chú thích ở
- * openTunnelTerminal() trong src/ui/server.ts.
+ * openTunnelTerminal() trong src/runner/prereq.ts. Kèm nút chép lệnh, cho ai
+ * đang ngồi ngay ở máy ấy muốn tự chạy.
  */
-function StartIosTunnel() {
-  const client = useQueryClient();
+function StartIosTunnel({ target }: { target?: FixTarget }) {
   const [copied, setCopied] = useState(false);
-  const open = useMutation({
-    mutationFn: () => api.post<{ ok: boolean; error?: string }>(ROUTES.prereqIosTunnel),
-    onSuccess: (result) => {
-      if (!result.ok) {
-        toast.error(result.error ?? 'Không mở được Terminal.');
-        return;
-      }
-      toast.success('Đã mở Terminal. Nhập mật khẩu máy ở cửa sổ đó, rồi bấm “Kiểm tra lại”.');
-      // Không tự chuyển xanh được: tunnel chỉ chạy sau khi người dùng gõ mật
-      // khẩu, mà chuyện đó xảy ra ngoài tầm nhìn của tool. Dò lại một lượt để
-      // ai gõ nhanh thì thấy ngay, còn lại thì nút "Kiểm tra lại" lo nốt.
-      void client.invalidateQueries({ queryKey: ['preflight'] });
-    },
-    onError: (err) => toast.error((err as Error).message),
-  });
-
   return (
-    <div className="flex flex-wrap items-center gap-2">
-      <Button size="sm" variant="outline" disabled={open.isPending} onClick={() => open.mutate()}>
-        <Terminal className="size-4" />
-        {open.isPending ? 'Đang mở Terminal…' : 'Mở Terminal và chạy'}
-      </Button>
+    <div className="flex flex-col items-start gap-1.5">
+      <FixButton op="ios_tunnel" target={target} />
       <Button
         size="sm"
         variant="ghost"
@@ -128,34 +150,5 @@ function StartIosTunnel() {
         {copied ? 'Đã chép' : 'Chép lệnh'}
       </Button>
     </div>
-  );
-}
-
-/**
- * Mở sẵn Cài đặt trên chiếc iPhone đang cắm, cho bước tin cậy chứng chỉ.
- *
- * Nút này không tự chữa được — nút Tin cậy nằm trên máy và chỉ ngón tay người
- * dùng bấm được. Nó rút ngắn phần làm hộ được: cầm máy lên là đã ở Cài đặt.
- */
-function OpenIosSettings() {
-  const client = useQueryClient();
-  const open = useMutation({
-    mutationFn: () => api.post<{ ok: boolean; error?: string }>(ROUTES.prereqIosTrust),
-    onSuccess: (result) => {
-      if (!result.ok) {
-        toast.error(result.error ?? 'Không mở được Cài đặt trên máy.');
-        return;
-      }
-      toast.success('Đã mở Cài đặt trên máy. Bấm Tin cậy xong thì dò lại giúp nhé.');
-      void client.invalidateQueries({ queryKey: ['preflight'] });
-    },
-    onError: (err) => toast.error((err as Error).message),
-  });
-
-  return (
-    <Button size="sm" variant="outline" disabled={open.isPending} onClick={() => open.mutate()}>
-      <Settings className="size-4" />
-      {open.isPending ? 'Đang mở Cài đặt…' : 'Mở Cài đặt trên máy'}
-    </Button>
   );
 }

@@ -18,7 +18,7 @@ import { resolveDevices, runnerPlatforms, type AttachedDevice } from '../server/
 import { measurePrereq, refuseReason, type PrereqByPlatform } from './prereqReport.js';
 import type { JobRecord, JobQueue } from '../server/queue/queue.js';
 import { LeaseTakenError, type Lease, type LeaseHolder, type LeaseRepo } from '../server/db/repo.js';
-import type { JobResult } from '../protocol/messages.js';
+import { PREP_OPS, type JobResult } from '../protocol/messages.js';
 import { localRunner, type Runner } from './index.js';
 
 export interface WorkerDeps {
@@ -229,6 +229,11 @@ async function run(
   prereq: PrereqByPlatform,
 ): Promise<void> {
   const log = (line: string): void => { void deps.queue.appendLog(job.id, line); };
+
+  if (job.kind === 'prereq') {
+    await runPrep(job, deps, runner, attached, log);
+    return;
+  }
 
   if (job.kind !== 'run_suite') {
     // Nói rõ chưa làm, thay vì nhận rồi im lặng không chạy gì. `gen`,
@@ -566,6 +571,64 @@ function outcomeToResult(
     type: 'job.result', jobId, state: 'failed',
     error: `Test kết thúc với lỗi (mã ${outcome.code}).`,
   };
+}
+
+/**
+ * Việc chuẩn bị môi trường, làm trên CHÍNH máy này — máy đang cắm thiết bị.
+ *
+ * Trước đây mọi nút chuẩn bị (bật tunnel, bật Appium, mở Cài đặt iOS) gọi
+ * thẳng vào tiến trình máy chủ: người ngồi ở laptop có iPhone cắm vào bấm
+ * "Mở Terminal" thì Terminal bật lên trên máy chủ, ở phòng khác.
+ *
+ * Không giữ chỗ thiết bị: bật tunnel hay Appium không đụng vào màn hình máy,
+ * và bắt nó chờ người đang điều khiển máy là chặn đúng thứ người ấy cần.
+ */
+async function runPrep(
+  job: JobRecord,
+  deps: WorkerDeps,
+  runner: Runner,
+  attached: AttachedDevice[],
+  log: (line: string) => void,
+): Promise<void> {
+  const op = job.spec.prep?.op;
+  if (!op || !PREP_OPS.includes(op)) {
+    await close(deps, job, {
+      type: 'job.result', jobId: job.id, state: 'failed',
+      error: `Việc chuẩn bị "${String(op)}" không có trong danh sách runner làm được.`,
+    });
+    return;
+  }
+  const cfg = await (deps.config?.() ?? loadConfig(deps.configFile));
+  // Việc này dành cho máy đang cắm thiết bị ấy. Không phải máy này thì trả về
+  // hàng đợi cho đúng runner nhận — y như job chạy test.
+  const resolved = resolveDevices(job.spec, cfg, attached);
+  if (!resolved.ok) {
+    if (resolved.wait) {
+      await deps.queue.defer(job.id, resolved.reason, deps.deferMs ?? 5_000);
+      return;
+    }
+    await close(deps, job, { type: 'job.result', jobId: job.id, state: 'failed', error: resolved.reason });
+    return;
+  }
+
+  try {
+    if (op === 'start_appium') await runner.prereq.startAppium(log);
+    else if (op === 'restart_appium') await runner.prereq.restartAppium(log);
+    else {
+      const opened = op === 'ios_tunnel'
+        ? await runner.prereq.openTunnelTerminal()
+        : await runner.prereq.openIosSettings(cfg);
+      if (!opened.ok) throw new Error(opened.error ?? 'Không mở được.');
+      log(op === 'ios_tunnel'
+        ? '[prep] Đã mở Terminal với lệnh tunnel trên máy này. Nhập mật khẩu máy ở cửa sổ đó.'
+        : '[prep] Đã mở Cài đặt trên iPhone. Bấm Tin cậy trên máy.');
+    }
+    await close(deps, job, { type: 'job.result', jobId: job.id, state: 'succeeded' });
+  } catch (err) {
+    await close(deps, job, {
+      type: 'job.result', jobId: job.id, state: 'failed', error: (err as Error).message,
+    });
+  }
 }
 
 async function close(deps: WorkerDeps, job: JobRecord, result: JobResult): Promise<void> {

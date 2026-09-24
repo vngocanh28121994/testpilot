@@ -632,7 +632,12 @@ function PreflightCard({
               <CheckedAt at={checkedAt || undefined} busy={fetching} />
             </div>
 
-            <PreflightChecks checks={result.checks} />
+            <PreflightChecks
+              checks={result.checks}
+              // Nút sửa làm trên ĐÚNG máy cắm thiết bị — máy chủ hay laptop của
+              // người dùng — và nói trước là máy nào.
+              target={{ platform: result.platform, device: result.device, host: result.host }}
+            />
 
             {/* Máy đang cắm mà config chưa khai. Đặt NGAY DƯỚI bảng kiểm, vì
                 đó là chỗ người dùng vừa đọc dòng "2 máy sẵn sàng" rồi không

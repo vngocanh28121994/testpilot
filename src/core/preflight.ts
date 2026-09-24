@@ -78,6 +78,12 @@ export interface PreflightResult {
    * nhìn màn hình không có lý do gì để biết.
    */
   unregistered?: UnregisteredDevice[];
+  /**
+   * Máy tính sẽ làm các nút "sửa" (bật tunnel, Appium…) — chiếc đang cắm thiết
+   * bị. Có để giao diện nói trước "Terminal sẽ mở trên …", thay vì để người
+   * ngồi ở máy này bấm rồi thấy nó bật lên ở máy khác.
+   */
+  host?: { name: string; remote: boolean };
 }
 
 /** Một chiếc máy đang cắm mà config chưa khai. */

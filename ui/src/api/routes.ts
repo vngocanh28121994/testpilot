@@ -91,6 +91,8 @@ export const STREAM_ROUTES = {
   prereqAppium: '/api/prereq/appium',
   prereqAppiumRestart: '/api/prereq/appium/restart',
   prereqDriver: '/api/prereq/driver',
+  // Việc chuẩn bị cho ĐÚNG máy cắm thiết bị — máy chủ hay runner của người dùng.
+  prereqFix: '/api/prereq/fix',
 } as const;
 
 export type StreamRoute = (typeof STREAM_ROUTES)[keyof typeof STREAM_ROUTES];

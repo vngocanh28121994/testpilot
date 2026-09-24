@@ -11,12 +11,21 @@
  * ngay với câu nói rõ việc cần làm.
  */
 import type { Runner } from './index.js';
+import { iosTunnelCheck } from '../core/preflight.js';
 
 export interface PrereqReport {
   /** Nền tảng này chạy được không. */
   ok: boolean;
   /** Vì sao không, viết cho người sẽ đi sửa nó. */
   reason?: string;
+  /** Nút sửa được ngay từ web, khi có — việc sẽ làm trên CHÍNH máy này. */
+  fix?: 'appium';
+  /**
+   * Tunnel cho WebView (iOS 17+), đo trên máy này. Chỉ để báo, KHÔNG làm
+   * `ok` sai: app native chạy được không cần nó, và từ chối job vì một thứ
+   * lượt chạy có thể không dùng tới là từ chối nhầm.
+   */
+  tunnel?: { ok: boolean; detail: string };
   at: string;
 }
 
@@ -39,10 +48,12 @@ export async function measurePrereq(runner: Runner, now = new Date()): Promise<P
     : 'Appium chưa chạy trên máy này. Mở màn Local Runner rồi bấm khởi động Appium, '
       + 'hoặc chạy `appium` trong một terminal.';
 
-  report.android = appiumReason ? { ok: false, reason: appiumReason, at } : { ok: true, at };
+  report.android = appiumReason
+    ? { ok: false, reason: appiumReason, fix: 'appium', at }
+    : { ok: true, at };
 
   if (appiumReason) {
-    report.ios = { ok: false, reason: appiumReason, at };
+    report.ios = { ok: false, reason: appiumReason, fix: 'appium', at };
     return report;
   }
 
@@ -51,9 +62,14 @@ export async function measurePrereq(runner: Runner, now = new Date()): Promise<P
   const xcode = await runner.prereq.xcode().catch((err: Error) => ({
     ok: false, reason: err.message,
   }));
+  // Tunnel đo ở ĐÂY, trên máy cắm iPhone: máy chủ không nhìn được tunnel của
+  // laptop người khác, và trước đây màn chuẩn bị chỉ biết tunnel của máy chủ.
+  const tunnel = process.platform === 'darwin'
+    ? await iosTunnelCheck().then((c) => ({ ok: c.ok, detail: c.detail })).catch(() => undefined)
+    : undefined;
   report.ios = xcode.ok
-    ? { ok: true, at }
-    : { ok: false, reason: xcode.reason ?? 'Xcode chưa dùng được.', at };
+    ? { ok: true, at, ...(tunnel ? { tunnel } : {}) }
+    : { ok: false, reason: xcode.reason ?? 'Xcode chưa dùng được.', at, ...(tunnel ? { tunnel } : {}) };
 
   return report;
 }

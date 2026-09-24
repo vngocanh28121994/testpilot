@@ -1,4 +1,8 @@
 import { describe, expect, it } from 'vitest';
+import { http } from 'msw';
+import { server } from '@/test/mocks/server';
+import { sse } from '@/test/mocks/sse';
+import { STREAM_ROUTES } from '@/api/routes';
 import userEvent from '@testing-library/user-event';
 import { screen, waitFor } from '@testing-library/react';
 import { renderWithProviders } from '@/test/utils';
@@ -56,7 +60,7 @@ describe('PreflightChecks', () => {
     await user.click(screen.getByRole('button', { name: 'Khởi động Appium' }));
 
     await waitFor(() =>
-      expect(useJobStore.getState().jobs['preflight-appium']?.status).toBe('done'),
+      expect(useJobStore.getState().jobs['preflight-fix-start_appium']?.status).toBe('done'),
     );
   });
 
@@ -65,7 +69,7 @@ describe('PreflightChecks', () => {
     useJobStore.setState((state) => ({
       jobs: {
         ...state.jobs,
-        'preflight-appium': {
+        'preflight-fix-start_appium': {
           logs: [],
           run: null,
           status: 'error',
@@ -77,5 +81,33 @@ describe('PreflightChecks', () => {
       },
     }));
     expect(await screen.findByText('Cổng 4723 đang bị chiếm.')).toBeInTheDocument();
+  });
+
+  /**
+   * Nút sửa nói TRƯỚC là việc sẽ làm trên máy nào. Trước đây người ngồi ở
+   * laptop có iPhone bấm "Mở Terminal" và Terminal bật lên ở máy chủ.
+   */
+  it('nói trước Terminal sẽ mở trên máy nào', () => {
+    renderWithProviders(
+      <PreflightChecks
+        checks={[{ name: 'Tunnel cho WebView (iOS 17+)', ok: false, fix: 'ios-tunnel', detail: 'Chưa chạy.' }]}
+        target={{ platform: 'ios', device: 'IPHONE-1', host: { name: 'Laptop của Bình', remote: true } }}
+      />,
+    );
+    expect(screen.getByText(/Terminal sẽ mở trên Laptop của Bình/)).toBeInTheDocument();
+  });
+
+  it('gửi kèm thiết bị, để máy chủ chọn đúng máy làm việc', async () => {
+    const user = userEvent.setup();
+    let sent: unknown;
+    server.use(http.post(STREAM_ROUTES.prereqFix, async ({ request }) => {
+      sent = await request.json();
+      return sse([['done', { ok: true }]]);
+    }));
+    renderWithProviders(
+      <PreflightChecks checks={[APPIUM_DOWN]} target={{ platform: 'ios', device: 'IPHONE-1' }} />,
+    );
+    await user.click(screen.getByRole('button', { name: 'Khởi động Appium' }));
+    await waitFor(() => expect(sent).toEqual({ op: 'start_appium', platform: 'ios', device: 'IPHONE-1' }));
   });
 });
