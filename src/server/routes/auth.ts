@@ -11,7 +11,7 @@
 import { loadConfig } from '../../config.js';
 import { json, serverMode } from '../http.js';
 import { FileMemberDirectory, type MemberDirectory } from '../auth/members.js';
-import { LoginAttempts, OidcClient, oidcConfigFromEnv } from '../auth/oidc.js';
+import { LoginAttempts, OidcClient, oidcConfigFromEnv, SIGNED_OUT_STATE } from '../auth/oidc.js';
 import type { Identity } from '../auth/roles.js';
 import { clearedSessionCookie, sessionCookie, sessionIdFromCookie } from '../auth/session.js';
 import type { RouteTable } from './types.js';
@@ -100,6 +100,9 @@ export const authRoutes: RouteTable = {
 
     const state = url.searchParams.get('state') ?? '';
     const code = url.searchParams.get('code') ?? '';
+    // Vừa đăng xuất ở nhà cung cấp xong (xem `logoutUrl`): không có gì để đổi
+    // lấy phiên, chỉ việc về trang chủ — nơi màn đăng nhập đang chờ.
+    if (state === SIGNED_OUT_STATE && !code) return redirect(res, '/');
     const attempt = attempts.take(state);
     if (!attempt || !code) {
       // `state` không khớp là dấu hiệu của CSRF hoặc của một cú bấm lại trên
@@ -151,19 +154,25 @@ export const authRoutes: RouteTable = {
    * đăng xuất ở nhà cung cấp — `end_session_endpoint` có sẵn trong discovery
    * nếu về sau cần thêm nút ấy.
    *
-   * Hệ quả cần biết: đăng nhập lại ngay sau đó sẽ KHÔNG hỏi mật khẩu, vì phiên
-   * SSO còn sống. Đó là hành vi đúng của SSO, không phải lỗi.
+   * Đổi 2026-09-24: đăng xuất giờ trả kèm `redirect` — địa chỉ đăng xuất ở
+   * nhà cung cấp — và giao diện chuyển sang đó. Chỉ xoá phiên của ta thì bấm
+   * Đăng nhập lại sẽ tự vào đúng tài khoản cũ mà không hỏi gì (phiên SSO còn
+   * sống), và người dùng không có cách nào đổi sang tài khoản khác — đúng
+   * chuyện đã xảy ra khi thử bốn vai trên máy chủ nội bộ.
    */
   'POST /api/auth/logout': async (req, res, _url, ctx) => {
     const id = sessionIdFromCookie(req.headers.cookie);
     // Thu hồi ở PHÍA SERVER, không chỉ xoá cookie. Xoá cookie là bảo trình
     // duyệt quên đi; bản sao mã phiên ở đâu đó vẫn đăng nhập được.
     if (id) await ctx.sessions.revoke(id);
+    // Nhà cung cấp không trả lời thì vẫn đăng xuất được ở phía ta — chỉ là lần
+    // đăng nhập sau có thể tự vào lại tài khoản cũ.
+    const providerLogout = await client()?.logoutUrl().catch(() => undefined);
     res.writeHead(200, {
       'content-type': 'application/json; charset=utf-8',
       'set-cookie': clearedSessionCookie(),
     });
-    res.end(JSON.stringify({ ok: true }));
+    res.end(JSON.stringify({ ok: true, ...(providerLogout ? { redirect: providerLogout } : {}) }));
   },
 };
 

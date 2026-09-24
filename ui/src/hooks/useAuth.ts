@@ -32,7 +32,14 @@ export function goToLogin(): void {
   window.location.assign(`${ROUTES.authLogin}?returnTo=${encodeURIComponent(here)}`);
 }
 
+/**
+ * Đăng xuất cả ở TestPilot lẫn ở nhà cung cấp đăng nhập.
+ *
+ * Chỉ xoá phiên của TestPilot thì lần bấm Đăng nhập sau tự vào lại đúng tài
+ * khoản cũ (phiên SSO còn sống) — không đổi được sang tài khoản khác.
+ */
 export async function logout(): Promise<void> {
-  await api.post(ROUTES.authLogout).catch(() => undefined);
-  window.location.assign('/');
+  const result = await api.post<{ ok: boolean; redirect?: string }>(ROUTES.authLogout)
+    .catch(() => undefined);
+  window.location.assign(result?.redirect ?? '/');
 }

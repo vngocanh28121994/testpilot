@@ -59,6 +59,9 @@ interface Jwk {
  */
 const CACHE_TTL_MS = 5 * 60 * 1000;
 
+/** Đánh dấu lượt quay về callback sau khi đăng xuất ở nhà cung cấp. */
+export const SIGNED_OUT_STATE = 'signed-out';
+
 export class OidcClient {
   private discovery?: { at: number; value: Discovery };
   private jwks?: { at: number; keys: Jwk[] };
@@ -220,6 +223,25 @@ export class OidcClient {
 
   async endSessionUrl(): Promise<string | undefined> {
     return (await this.discover()).end_session_endpoint;
+  }
+
+  /**
+   * Địa chỉ đăng xuất ở nhà cung cấp, quay về callback của ta với
+   * `state=${SIGNED_OUT_STATE}`.
+   *
+   * Quay về CALLBACK chứ không về trang chủ: nhà cung cấp chỉ chấp nhận địa chỉ
+   * đã khai, và callback là địa chỉ duy nhất chắc chắn đã khai (Keycloak mặc
+   * định `post.logout.redirect.uris = +`, tức là dùng lại danh sách callback).
+   * Nhờ vậy đổi IP máy chủ không phải sửa thêm gì ở Keycloak.
+   */
+  async logoutUrl(): Promise<string | undefined> {
+    const endpoint = await this.endSessionUrl();
+    if (!endpoint) return undefined;
+    const url = new URL(endpoint);
+    url.searchParams.set('client_id', this.config.clientId);
+    url.searchParams.set('post_logout_redirect_uri', this.config.redirectUri);
+    url.searchParams.set('state', SIGNED_OUT_STATE);
+    return url.toString();
   }
 }
 
