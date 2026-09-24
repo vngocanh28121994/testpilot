@@ -1658,7 +1658,7 @@ export class NativeUiDriver implements UiDriver {
     // Native pickers have no <select>: open the control, then tap the option by label.
     await (h as NativeHandle).el.click();
     const opt = await this.find({ strategy: 'label', value: option, weight: 1, origin: 'authored' });
-    if (!opt) throw new Error(`Option "${option}" did not appear after opening the picker.`);
+    if (!opt) throw new Error(`Đã mở danh sách chọn nhưng không thấy lựa chọn "${option}". Kiểm tra lại chữ trong kịch bản có khớp đúng với trên màn hình không.`);
     await this.tap(opt);
   }
 

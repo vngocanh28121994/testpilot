@@ -17,6 +17,8 @@
  * tệp này vẫn hiển thị đẹp.
  */
 
+import { friendlyError } from '@friendlyError';
+
 export type FailureKind =
   | 'provider_busy'
   | 'provider_auth'
@@ -171,7 +173,8 @@ export function describeFailure(raw: string | null | undefined): Failure {
     title: 'Workflow dừng giữa chừng',
     // Không bịa ra lời trấn an cho thứ mình không nhận dạng được: đưa nguyên
     // câu lỗi, vì lúc này nó là thông tin tốt nhất đang có.
-    detail: text.length > 200 ? `${text.slice(0, 200)}…` : text,
+    // Bộ dịch chung trả nguyên văn khi nó cũng không nhận ra.
+    detail: (() => { const said = friendlyError(text); return said.length > 400 ? `${said.slice(0, 400)}…` : said; })(),
     hint: 'Xem log bên dưới để biết bước cuối cùng đã chạy.',
     retryable: true,
     raw: text,

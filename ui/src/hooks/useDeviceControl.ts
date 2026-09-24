@@ -227,7 +227,11 @@ export function useDeviceControl(canvas: React.RefObject<HTMLCanvasElement | nul
       if (!codec) return;
       const decoder = new VideoDecoder({
         output: draw,
-        error: (err) => setState({ phase: 'error', message: err.message }),
+        error: (err) => setState({
+          phase: 'error',
+          message: 'Trình duyệt không giải mã được hình từ máy. Bấm Giữ máy lại; nếu vẫn lỗi, '
+            + `thử Chrome hoặc Edge bản mới. Chi tiết kỹ thuật: ${err.message}`,
+        }),
       });
       decoder.configure({ codec, optimizeForLatency: true });
       decoderRef.current = decoder;
@@ -309,7 +313,11 @@ export function useDeviceControl(canvas: React.RefObject<HTMLCanvasElement | nul
       // EventSource tự nối lại, nhưng nếu lease đã mất thì lần nối lại sẽ nhận
       // 409 và lặp mãi. Đóng hẳn và nói ra, để người dùng bấm giữ máy lần nữa.
       teardown();
-      setState({ phase: 'error', message: 'Mất kết nối tới luồng màn hình.' });
+      setState({
+        phase: 'error',
+        message: 'Mất kết nối tới luồng màn hình — máy chủ vừa khởi động lại, mạng rớt, hoặc '
+          + 'lượt giữ máy đã hết. Bấm Giữ máy lại.',
+      });
     };
   }, [canvas, decode, drawJpeg, teardown]);
 

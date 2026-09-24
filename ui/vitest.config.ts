@@ -9,6 +9,8 @@ export default defineConfig({
     alias: {
       '@': path.resolve(import.meta.dirname, './src'),
       '@evidence': path.resolve(import.meta.dirname, '../src/report/evidenceView.ts'),
+      // Cùng lý do: câu lỗi thân thiện phải giống nhau ở server và giao diện.
+      '@friendlyError': path.resolve(import.meta.dirname, '../src/core/friendlyError.ts'),
     },
   },
   test: {

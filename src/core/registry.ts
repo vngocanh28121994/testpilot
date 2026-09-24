@@ -176,7 +176,10 @@ export class Registry {
       // Resolver will ask Playwright/Appium discovery to locate it at runtime.
       const hasAnyCandidate = Object.values(el.candidates).some((items) => (items?.length ?? 0) > 0);
       if (!hasAnyCandidate) return [];
-      throw new Error(`Element "${id}" has no ${platform} locator candidates.`);
+      throw new Error(
+        `Element "${id}" chưa có locator nào cho ${platform} — chỉ có cho nền tảng khác. `
+        + `Mở màn Kịch bản/Registry và thêm locator ${platform} cho element này, hoặc để AI tìm lại.`,
+      );
     }
     return list;
   }

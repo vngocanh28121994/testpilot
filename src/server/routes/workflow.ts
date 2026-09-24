@@ -62,6 +62,7 @@ import { applyForm } from './studio.js';
 import { readFeatureCoverage, saveFeatureCoverageAudit } from './state.js';
 import { json, readJson, stream } from '../http.js';
 import type { RouteTable } from './types.js';
+import { friendlyError } from '../../core/friendlyError.js';
 
 export interface StudioForm {
   sources?: string[];
@@ -437,7 +438,7 @@ export async function continueWorkflow(
         (line) => record(`[${platform}] ${line}`),
       );
       remoteJobs.push({ platform, ...result });
-      if (result.error) record(`[${platform}] ${result.error}`);
+      if (result.error) record(`[${platform}] ${friendlyError(result.error)}`);
       return {
         code: result.state === 'succeeded' ? 0 : 1,
         stopped: result.state === 'cancelled',

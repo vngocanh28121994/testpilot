@@ -38,6 +38,8 @@ export default defineConfig(() => ({
       // HTML report phải dùng cùng quy tắc evidence nhưng hàng rào @core bên
       // dưới vẫn chặn mọi value import khác từ backend.
       '@evidence': path.resolve(import.meta.dirname, '../src/report/evidenceView.ts'),
+      // Cùng lý do: câu lỗi thân thiện phải giống nhau ở server và giao diện.
+      '@friendlyError': path.resolve(import.meta.dirname, '../src/core/friendlyError.ts'),
       // KHÔNG khai báo alias '@core' ở đây, dù tsconfig.app.json có. Cố ý:
       // '@core/*' chỉ được dùng với `import type`, thứ bị xoá sạch lúc build.
       // Nếu ai đó lỡ import một *giá trị* từ backend, Vite phải gãy ngay tại

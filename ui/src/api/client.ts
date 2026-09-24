@@ -1,4 +1,5 @@
 import type { ApiValidationError } from '@core/ui/contracts.js';
+import { friendlyError, friendlyStatus } from '@friendlyError';
 
 /**
  * Lỗi từ tầng API, mang theo đủ ngữ cảnh để nơi khác quyết định được.
@@ -43,14 +44,31 @@ async function unwrap<T>(res: Response, path: string): Promise<T> {
   if (!res.ok) {
     const e = raw as Partial<ApiValidationError>;
     const issues = Array.isArray(e.issues) ? e.issues : [];
-    const message = issues.length ? issues.join('\n') : (e.error ?? res.statusText);
+    // `statusText` ("Internal Server Error", "Bad Gateway") là tiếng Anh và không
+    // nói việc cần làm; máy chủ không gửi câu nào thì tự nói theo mã.
+    const message = issues.length
+      ? issues.join('\n')
+      : e.error ? friendlyError(e.error) : friendlyStatus(res.status);
     throw new ApiRequestError(message, path, res.status, issues);
   }
   return raw as T;
 }
 
+/**
+ * `fetch` ném `TypeError: Failed to fetch` khi máy chủ không trả lời — đang khởi
+ * động lại, hay mạng rớt. Câu ấy không nói gì với người dùng; đổi nó thành câu
+ * nói được việc cần làm, và mang `status` 0 để policy retry vẫn nhận ra.
+ */
+async function send(path: string, init?: RequestInit): Promise<Response> {
+  try {
+    return await fetch(path, init);
+  } catch (err) {
+    throw new ApiRequestError(friendlyError(err), path, 0);
+  }
+}
+
 async function request<T>(method: string, path: string, body?: unknown): Promise<T> {
-  const res = await fetch(path, {
+  const res = await send(path, {
     method,
     ...(body === undefined
       ? {}
@@ -64,8 +82,8 @@ export const api = {
   post: <T>(path: string, body?: unknown) => request<T>('POST', path, body ?? {}),
   put: <T>(path: string, body: unknown) => request<T>('PUT', path, body),
   getText: async (path: string) => {
-    const res = await fetch(path);
-    if (!res.ok) throw new ApiRequestError(res.statusText, path, res.status);
+    const res = await send(path);
+    if (!res.ok) throw new ApiRequestError(friendlyStatus(res.status), path, res.status);
     return res.text();
   },
 };

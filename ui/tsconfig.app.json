@@ -45,6 +45,7 @@
     "paths": {
       "@/*": ["./src/*"],
       "@evidence": ["../src/report/evidenceView.ts"],
+      "@friendlyError": ["../src/core/friendlyError.ts"],
       // Chỉ để TS đọc type của backend. Vite KHÔNG có alias tương ứng (§6.1c).
       "@core/*": ["../src/*"]
     }

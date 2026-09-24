@@ -16,6 +16,7 @@ import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { stagesDone, type WorkflowRun } from '../core/history.js';
+import { friendlyError } from '../core/friendlyError.js';
 
 /**
  * Chế độ chạy.
@@ -58,9 +59,18 @@ export const MIME: Record<string, string> = {
 };
 
 export function json(res: ServerResponse, status: number, body: unknown): void {
-  const payload = JSON.stringify(body);
+  // MỌI câu lỗi trả về giao diện đi qua đây — kể cả lỗi ném ra từ một route
+  // quên try/catch (xem `listen`). Dịch tại một cửa thay vì nhớ dịch ở từng
+  // route trong gần trăm route.
+  const payload = JSON.stringify(status >= 400 ? withFriendlyError(body) : body);
   res.writeHead(status, { 'content-type': 'application/json; charset=utf-8' });
   res.end(payload);
+}
+
+function withFriendlyError(body: unknown): unknown {
+  if (!body || typeof body !== 'object' || Array.isArray(body)) return body;
+  const error = (body as { error?: unknown }).error;
+  return typeof error === 'string' ? { ...body, error: friendlyError(error) } : body;
 }
 
 export async function readJson<T>(req: IncomingMessage): Promise<T> {
@@ -132,7 +142,7 @@ export async function stream(
     } catch {
       // Keep the original failure visible even when persisting its history fails.
     }
-    send('error', (err as Error).message);
+    send('error', friendlyError(err));
     send('done', { ok: false });
   }
   res.end();

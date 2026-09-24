@@ -11,7 +11,7 @@ export function toRelativePlaywrightLocator(
   candidate: LocatorCandidate,
 ): Locator {
   const spec = parseRelativeRowLocator(candidate.value);
-  if (!spec) throw new Error(`Invalid relative locator: ${candidate.value}`);
+  if (!spec) throw new Error(`Locator tương đối "${candidate.value}" viết sai cú pháp. Sửa locator này ở màn Registry.`);
 
   const rows = root.locator(ROW_SELECTOR);
   const row = rows.filter({ has: root.getByText(spec.rowText, { exact: true }) });

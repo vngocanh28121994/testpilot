@@ -1,5 +1,6 @@
 import type { JobFrame, WorkflowRun } from '@core/ui/contracts.js';
 import { ApiRequestError } from '@/api/client';
+import { friendlyError, friendlyStatus } from '@friendlyError';
 
 /**
  * Đọc một stream SSE-over-POST. Thuần logic — không React, không DOM.
@@ -21,17 +22,26 @@ export async function streamJob(
    */
   method: 'POST' | 'GET' = 'POST',
 ): Promise<{ lastRun: WorkflowRun | null; ok: boolean }> {
-  const res = await fetch(path, {
-    method,
-    ...(method === 'POST'
-      ? { headers: { 'content-type': 'application/json' }, body: JSON.stringify(body ?? {}) }
-      : {}),
-    signal,
-  });
+  let res: Response;
+  try {
+    res = await fetch(path, {
+      method,
+      ...(method === 'POST'
+        ? { headers: { 'content-type': 'application/json' }, body: JSON.stringify(body ?? {}) }
+        : {}),
+      signal,
+    });
+  } catch (err) {
+    // Huỷ chủ động không phải lỗi để dịch: nơi gọi nhận ra nó qua `name`.
+    if ((err as Error).name === 'AbortError') throw err;
+    throw new ApiRequestError(friendlyError(err), path, 0);
+  }
 
   if (!res.ok || !res.body) {
     const data = (await res.json().catch(() => ({}))) as { error?: string };
-    throw new ApiRequestError(data.error ?? res.statusText, path, res.status);
+    throw new ApiRequestError(
+      data.error ? friendlyError(data.error) : friendlyStatus(res.status), path, res.status,
+    );
   }
 
   const reader = res.body.getReader();
@@ -74,7 +84,7 @@ export async function streamJob(
           lastRun = data as WorkflowRun;
           onFrame({ type: 'run', run: lastRun });
         } else if (event === 'error') {
-          failure = String(data);
+          failure = friendlyError(String(data));
           onFrame({ type: 'error', message: failure });
         } else if (event === 'done') {
           ok = Boolean((data as { ok?: boolean }).ok);

@@ -26,6 +26,7 @@ import { get, request } from 'node:http';
 import { FrameDeduper, MjpegSplitter } from './mjpeg.js';
 import type { ScreenSize, ScreenStreamHandle, ScreenStreamSink } from './androidControl.js';
 import type { IosSigning } from '../protocol/control.js';
+import { friendlyError } from '../core/friendlyError.js';
 
 const APPIUM = { host: '127.0.0.1', port: Number(process.env.TESTPILOT_APPIUM_PORT ?? 4723) };
 /**
@@ -276,26 +277,9 @@ async function openSession(udid: string, signing?: IosSigning): Promise<Session>
  * Giữ nguyên câu gốc ở cuối để ai cần vẫn tra được.
  */
 export function explainWdaStart(message: string): string {
-  // WDA cài sẵn (`usePreinstalledWDA`): iOS không mở app nào khi màn hình đang
-  // khoá, và câu của Appium chôn điều đó giữa mười dòng mã lỗi.
-  if (/could not be, unlocked|Description = Locked/i.test(message)) {
-    return 'iPhone đang khoá màn hình nên iOS không cho mở WebDriverAgent. Mở khoá máy '
-      + '(và để máy sáng) rồi bấm Giữ máy lại. '
-      + `Nguyên văn: ${message}`;
-  }
-  if (/xcodebuild failed with code 70/i.test(message)) {
-    return 'iPhone từ chối cài WebDriverAgent — thường là vì provisioning profile đã hết hạn '
-      + '(Apple ID miễn phí chỉ cho 7 ngày). Dựng lại WDA một lần để Xcode cấp profile mới: '
-      + 'tạm tắt ios.usePrebuiltWDA rồi mở lại, hoặc chạy `bash scripts/prepare-wda.sh`. '
-      + `Nguyên văn: ${message}`;
-  }
-  if (/xcodebuild failed with code 65/i.test(message)) {
-    return 'WebDriverAgent đã cài nhưng iPhone không cho mở — thường là chứng chỉ nhà phát '
-      + 'triển chưa được tin cậy. Trên điện thoại: Cài đặt › Cài đặt chung › VPN & Quản lý '
-      + 'thiết bị › chọn chứng chỉ › Tin cậy, mở khoá máy, rồi bấm Giữ máy lại. '
-      + `Nguyên văn: ${message}`;
-  }
-  return message;
+  // Câu chữ nằm ở bộ dịch lỗi chung, để lỗi WDA đọc giống nhau dù đi qua
+  // màn điều khiển hay qua một lượt chạy test.
+  return friendlyError(message);
 }
 
 /**
@@ -415,7 +399,11 @@ export async function startScreenStream(
   req.on('error', (err) => {
     if (state.stopped) return;
     for (const each of state.sinks) {
-      each.fail(`Không mở được luồng MJPEG ở cổng ${open.mjpegPort}: ${err.message}. Bấm Giữ máy lại để mở phiên mới.`);
+      each.fail(
+        'Mất kết nối với luồng hình của iPhone — phiên điều khiển đã đóng (thường vì một lượt test '
+        + 'vừa dùng máy). Bấm Giữ máy lại để mở phiên mới. '
+        + `Chi tiết kỹ thuật: cổng ${open.mjpegPort}, ${err.message}`,
+      );
     }
     streams.delete(udid);
     // Cổng không ai nghe = phiên đã chết. Quên nó, để lần giữ máy sau mở phiên

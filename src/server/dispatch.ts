@@ -136,5 +136,5 @@ export async function dispatch(
 
   if (await serveStaticRequest(req, res, url)) return;
 
-  json(res, 404, { error: `No route for ${route}` });
+  json(res, 404, { error: `Máy chủ không có chức năng ${route} — giao diện và máy chủ có thể đang khác phiên bản. Tải lại trang.` });
 }

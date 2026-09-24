@@ -16,6 +16,7 @@
  */
 import { checkAction, type ControlPlatform, type ControlTarget, type IosSigning } from '../../protocol/control.js';
 import { loadConfig } from '../../config.js';
+import { friendlyError } from '../../core/friendlyError.js';
 import { allows } from '../auth/roles.js';
 import { codecFor } from '../../runner/control.js';
 import { localRunner } from '../../runner/index.js';
@@ -153,7 +154,7 @@ export const controlRoutes: RouteTable = {
       closed = true;
       clearInterval(timer);
       stop();
-      send('ended', { reason });
+      send('ended', { reason: friendlyError(reason) });
       end();
     };
 

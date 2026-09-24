@@ -1190,7 +1190,7 @@ async function loadFeatures(
   if (featureFile && files.length === 0) {
     throw new Error(`Không tìm thấy feature được workflow tạo: ${featureFile}.`);
   }
-  if (files.length === 0) throw new Error(`No .feature files in ${path.resolve(dir)}.`);
+  if (files.length === 0) throw new Error(`Không có file .feature nào trong ${path.resolve(dir)}. Sinh kịch bản ở App Automation Studio hoặc kiểm tra paths.features trong cấu hình.`);
   const reviews = await ScenarioReviewStore.load(reviewPath);
   const features = await Promise.all(
     files.map(async (f) => {

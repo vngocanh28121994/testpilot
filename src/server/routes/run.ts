@@ -28,6 +28,7 @@ import { describeBuild, type BuildLookup } from '../appBuilds.js';
 import { LOCAL_HOST_RUNNER } from '../remoteRuns.js';
 import type { JobQueue, JobRecord } from '../queue/queue.js';
 import type { RouteTable } from './types.js';
+import { friendlyError } from '../../core/friendlyError.js';
 
 /** Trạng thái mà job không đổi nữa. */
 const CLOSED = ['succeeded', 'failed', 'cancelled', 'interrupted'];
@@ -336,7 +337,7 @@ export const runRoutes: RouteTable = {
           // KHÔNG ném khi job `failed`: một lượt test đỏ không phải lỗi của
           // request, và dòng log đã nói rõ. Ném ở đây sẽ biến mọi lượt có test
           // fail thành một toast lỗi chồng lên chính cái log đang nói điều đó.
-          if (closed?.state === 'interrupted') say(`[job] ${closed.error ?? 'Job bị bỏ dở.'}`);
+          if (closed?.state === 'interrupted') say(`[job] ${closed.error ? friendlyError(closed.error) : 'Job bị bỏ dở.'}`);
         } finally {
           offLog();
         }

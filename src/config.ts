@@ -715,11 +715,11 @@ export async function loadConfig(
 ): Promise<TestPilotConfig> {
   const abs = path.resolve(file);
   if (!existsSync(abs)) {
-    throw new Error(`No config at ${abs}. Copy testpilot.config.example.json and edit it.`);
+    throw new Error(`Chưa có file cấu hình ${abs}. Chép testpilot.config.example.json thành file này rồi sửa theo máy của bạn.`);
   }
   const parsed = ConfigSchema.safeParse(JSON.parse(await readFile(abs, 'utf8')));
   if (!parsed.success) {
-    throw new Error(`${abs} is invalid:\n${parsed.error.issues.map(fmt).join('\n')}`);
+    throw new Error(`File cấu hình ${abs} có chỗ sai:\n${parsed.error.issues.map(fmt).join('\n')}`);
   }
   return parsed.data;
 }
@@ -734,7 +734,7 @@ export async function saveConfig(
 ): Promise<void> {
   const parsed = ConfigSchema.safeParse(cfg);
   if (!parsed.success) {
-    throw new Error(`Refusing to save an invalid config:\n${parsed.error.issues.map(fmt).join('\n')}`);
+    throw new Error(`Chưa lưu cấu hình vì có chỗ sai:\n${parsed.error.issues.map(fmt).join('\n')}`);
   }
   await writeFile(path.resolve(file), JSON.stringify(parsed.data, null, 2) + '\n', 'utf8');
 }
