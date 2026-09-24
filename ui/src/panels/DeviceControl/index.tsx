@@ -22,6 +22,8 @@ import {
   CardTitle,
 } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { cn } from '@/lib/utils';
 import {
   ArrowRightToLine,
   Bell,
@@ -356,34 +358,48 @@ export default function DeviceControlPanel() {
                 trong lúc mắt vẫn đang nhìn màn hình bên trái, nên chúng cần một
                 chỗ cố định, và một hàng ngang tự xuống dòng thì thứ tự nút đổi
                 theo bề rộng cửa sổ. */}
+            {/* Nút vuông chỉ có icon, tên hiện khi rê chuột — như các device
+                farm khác. Cột hẹp để màn hình máy được rộng chỗ; nhóm cách nhau
+                bằng một vạch mảnh thay cho tiêu đề chữ. Tên vẫn nằm trong
+                `aria-label` cho trình đọc màn hình, và trong tooltip cho mắt. */}
             <div
               aria-label="Thao tác"
               role="group"
-              className="flex w-44 shrink-0 flex-col gap-3"
+              className="flex shrink-0 flex-col items-center gap-2"
             >
-              {toolsFor(state.platform).map((group) => (
-                <div key={group.title} role="group" aria-label={group.title} className="flex flex-col gap-1">
-                  <span className="text-muted-foreground px-1 text-[11px] font-medium uppercase tracking-wide">
-                    {group.title}
-                  </span>
+              {toolsFor(state.platform).map((group, index) => (
+                <div
+                  key={group.title}
+                  role="group"
+                  aria-label={group.title}
+                  className={cn(
+                    'flex flex-col gap-1.5',
+                    index > 0 && 'border-t pt-2',
+                  )}
+                >
                   {group.items.map((item) => {
                     const label = item.action === 'rotate'
                       ? (landscape ? 'Xoay về dọc' : 'Xoay ngang')
                       : labelOf(item, state.platform);
+                    const busy = busyTool === item.id;
                     return (
-                      <Button
-                        key={item.id}
-                        size="sm"
-                        variant="outline"
-                        className="h-8 justify-start gap-2"
-                        disabled={busyTool === item.id}
-                        onClick={() => void runTool(item)}
-                      >
-                        {busyTool === item.id
-                          ? <Loader2 className="size-4 shrink-0 animate-spin" aria-hidden />
-                          : <item.Icon className="size-4 shrink-0" aria-hidden />}
-                        {label}
-                      </Button>
+                      <Tooltip key={item.id}>
+                        <TooltipTrigger asChild>
+                          <Button
+                            size="icon"
+                            variant="outline"
+                            className="size-9"
+                            aria-label={label}
+                            disabled={busy}
+                            onClick={() => void runTool(item)}
+                          >
+                            {busy
+                              ? <Loader2 className="size-4 animate-spin" aria-hidden />
+                              : <item.Icon className="size-4" aria-hidden />}
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent side="right" sideOffset={6}>{label}</TooltipContent>
+                      </Tooltip>
                     );
                   })}
                 </div>
