@@ -35,6 +35,29 @@ export type ControlPlatform = 'android' | 'ios';
  */
 export type StreamCodec = 'h264' | 'mjpeg';
 
+/**
+ * Vì sao trang này không xem được màn hình Android — và làm gì.
+ *
+ * Bộ giải mã H.264 (WebCodecs) chỉ bật trên trang AN TOÀN: HTTPS hoặc
+ * localhost. Câu cũ bảo "Chrome hoặc Edge thì xem được" — sai với chính bản
+ * thử đang chạy: mọi máy con vào máy chủ qua `http://<IP>` đều không có bộ
+ * giải mã, kể cả Chrome. Đo được: cùng một Chrome, `http://10.33.86.240:4300`
+ * cho `VideoDecoder` undefined, `http://localhost:4300` thì có.
+ */
+export function noVideoDecoderMessage(
+  secure = typeof window !== 'undefined' ? window.isSecureContext : true,
+  origin = typeof location !== 'undefined' ? location.origin : '',
+): string {
+  if (!secure) {
+    return `Trang đang mở qua HTTP thường (${origin}), nên trình duyệt tắt bộ giải mã video (WebCodecs) `
+      + 'mà màn Android cần — kể cả Chrome. iPhone vẫn xem được. Cách tạm cho bản thử: trong Chrome mở '
+      + 'chrome://flags/#unsafely-treat-insecure-origin-as-secure, thêm '
+      + `${origin}, chọn Enabled rồi khởi động lại Chrome. Bản triển khai dùng HTTPS sẽ không gặp.`;
+  }
+  return 'Trình duyệt này chưa giải mã được video H.264 trong trang (cần WebCodecs). '
+    + 'Dùng Chrome, Edge hoặc Safari bản mới.';
+}
+
 /** Kiểu của CHÍNH hợp đồng, không phải một bản chép lỏng hơn. */
 export type ControlAction = import('@core/protocol/control.js').ControlAction;
 
@@ -326,11 +349,7 @@ export function useDeviceControl(canvas: React.RefObject<HTMLCanvasElement | nul
     // WebCodecs chỉ cần cho Android (H.264). iOS gửi JPEG, mà mọi trình duyệt
     // đều vẽ được — nên chặn cả hai ở đây là từ chối một thứ chạy được.
     if (device.platform === 'android' && typeof VideoDecoder === 'undefined') {
-      setState({
-        phase: 'error',
-        message: 'Trình duyệt này chưa giải mã được H.264 trong trang (cần WebCodecs). '
-          + 'Chrome hoặc Edge thì xem được.',
-      });
+      setState({ phase: 'error', message: noVideoDecoderMessage() });
       return;
     }
     try {
