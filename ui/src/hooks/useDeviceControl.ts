@@ -13,11 +13,12 @@
  *  4. **Nhả máy** khi rời trang. Nếu tab đóng đột ngột thì không kịp nhả, và
  *     lúc ấy TTL 60 giây là thứ dọn hộ — chính xác là lý do TTL tồn tại.
  */
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState, useMemo } from 'react';
 import { api, ApiRequestError } from '@/api/client';
 import { ROUTES } from '@/api/routes';
 import { friendlyError, friendlyStatus } from '@friendlyError';
 import { AnnexBAssembler, codecFromAnnexB, decodeBase64 } from '@/lib/h264';
+import { latestOnly } from '@/lib/latestOnly';
 
 export interface ControlScreen {
   width: number;
@@ -220,16 +221,19 @@ export function useDeviceControl(canvas: React.RefObject<HTMLCanvasElement | nul
    * làm giao diện khựng. Và khung được đóng lại sau khi vẽ, vì bitmap giữ bộ
    * nhớ ngoài vùng thu gom rác của JS — cùng cái bẫy với `VideoFrame`.
    */
-  const drawJpeg = useCallback(async (bytes: Uint8Array) => {
+  /**
+   * Vẽ ảnh JPEG MỚI NHẤT — một lần giải mã tại một thời điểm, ảnh cũ thì bỏ.
+   *
+   * Bản đầu giải mã MỌI ảnh tới, song song, không chờ nhau. Ở 5 khung/giây của
+   * WDA điều đó vô hại. Ở 30 khung/giây qua USB thì hai chuyện xảy ra: giải
+   * mã xong không theo thứ tự tới — một ảnh CŨ có thể vẽ đè lên ảnh mới, hình
+   * giật lùi — và khi máy khách bận, các lần giải mã chồng lên nhau thành một
+   * hàng chờ, màn hình trễ dần sau điện thoại. Xem lib/latestOnly.ts.
+   */
+  const drawJpeg = useMemo(() => latestOnly(async (bytes: Uint8Array) => {
     const node = canvas.current;
     if (!node) return;
-    let bitmap: ImageBitmap | undefined;
-    try {
-      bitmap = await createImageBitmap(new Blob([bytes as BlobPart], { type: 'image/jpeg' }));
-    } catch {
-      // Một khung hỏng không đáng làm đứt cả phiên: khung sau sẽ vẽ lại.
-      return;
-    }
+    const bitmap = await createImageBitmap(new Blob([bytes as BlobPart], { type: 'image/jpeg' }));
     if (node.width !== bitmap.width || node.height !== bitmap.height) {
       node.width = bitmap.width;
       node.height = bitmap.height;
@@ -238,7 +242,7 @@ export function useDeviceControl(canvas: React.RefObject<HTMLCanvasElement | nul
     bitmap.close();
     framesRef.current += 1;
     noteFirstFrame();
-  }, [canvas, noteFirstFrame]);
+  }), [canvas, noteFirstFrame]);
 
   /**
    * Giải mã một đơn vị truy cập và vẽ nó.
@@ -319,7 +323,7 @@ export function useDeviceControl(canvas: React.RefObject<HTMLCanvasElement | nul
       // iOS: mỗi sự kiện là MỘT ảnh JPEG trọn vẹn. Không có bộ giải mã nào để
       // dựng, không có khung khoá để chờ — vẽ thẳng.
       if (codecRef.current === 'mjpeg') {
-        void drawJpeg(bytes);
+        drawJpeg(bytes);
         return;
       }
       for (const unit of assemblerRef.current.push(bytes)) decode(unit);
