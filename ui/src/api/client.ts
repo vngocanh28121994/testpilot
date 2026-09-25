@@ -21,12 +21,22 @@ export class ApiRequestError extends Error {
    */
   printed = false;
 
-  constructor(message: string, path: string, status: number, issues: string[] = []) {
+  /**
+   * Phần còn lại của thân lỗi — những cờ máy chủ gửi kèm để giao diện quyết
+   * định (vd. `sameUser` của POST /api/device/lease). Rỗng khi không có.
+   */
+  readonly details: Record<string, unknown>;
+
+  constructor(
+    message: string, path: string, status: number, issues: string[] = [],
+    details: Record<string, unknown> = {},
+  ) {
     super(message);
     this.name = 'ApiRequestError';
     this.path = path;
     this.status = status;
     this.issues = issues;
+    this.details = details;
   }
 }
 
@@ -49,7 +59,7 @@ async function unwrap<T>(res: Response, path: string): Promise<T> {
     const message = issues.length
       ? issues.join('\n')
       : e.error ? friendlyError(e.error) : friendlyStatus(res.status);
-    throw new ApiRequestError(message, path, res.status, issues);
+    throw new ApiRequestError(message, path, res.status, issues, (raw ?? {}) as Record<string, unknown>);
   }
   return raw as T;
 }

@@ -14,7 +14,7 @@
  *     lúc ấy TTL 60 giây là thứ dọn hộ — chính xác là lý do TTL tồn tại.
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { api } from '@/api/client';
+import { api, ApiRequestError } from '@/api/client';
 import { ROUTES } from '@/api/routes';
 import { friendlyError, friendlyStatus } from '@friendlyError';
 import { AnnexBAssembler, codecFromAnnexB, decodeBase64 } from '@/lib/h264';
@@ -70,7 +70,15 @@ export type ControlState =
        */
       lastActionError?: string;
     }
-  | { phase: 'error'; message: string };
+  | {
+    phase: 'error';
+    message: string;
+    /**
+     * Chính người này đang giữ máy ở tab hay máy tính khác: màn hình hiện nút
+     * "Giữ ở đây" để chuyển sang, thay vì bắt họ đi tìm tab kia.
+     */
+    takeOver?: ControlDevice;
+  };
 
 /** Gia hạn mỗi 30 giây; lease sống 60. Một nhịp lỡ vẫn còn một nhịp dự phòng. */
 const RENEW_MS = 30_000;
@@ -314,7 +322,7 @@ export function useDeviceControl(canvas: React.RefObject<HTMLCanvasElement | nul
     };
   }, [canvas, decode, drawJpeg, teardown]);
 
-  const hold = useCallback(async (device: ControlDevice) => {
+  const hold = useCallback(async (device: ControlDevice, opts: { takeOver?: boolean } = {}) => {
     // WebCodecs chỉ cần cho Android (H.264). iOS gửi JPEG, mà mọi trình duyệt
     // đều vẽ được — nên chặn cả hai ở đây là từ chối một thứ chạy được.
     if (device.platform === 'android' && typeof VideoDecoder === 'undefined') {
@@ -327,7 +335,7 @@ export function useDeviceControl(canvas: React.RefObject<HTMLCanvasElement | nul
     }
     try {
       const { lease } = await api.post<{ lease: Lease }>(
-        ROUTES.deviceLease, { deviceId: device.udid },
+        ROUTES.deviceLease, { deviceId: device.udid, ...(opts.takeOver ? { takeOver: true } : {}) },
       );
       leaseRef.current = lease;
       platformRef.current = device.platform;
@@ -335,7 +343,12 @@ export function useDeviceControl(canvas: React.RefObject<HTMLCanvasElement | nul
       setState({ phase: 'holding', lease, platform: device.platform, frames: 0 });
       open(lease, device.platform);
     } catch (err) {
-      setState({ phase: 'error', message: (err as Error).message });
+      const sameUser = err instanceof ApiRequestError && err.details.sameUser === true;
+      setState({
+        phase: 'error',
+        message: (err as Error).message,
+        ...(sameUser ? { takeOver: device } : {}),
+      });
     }
   }, [open]);
 

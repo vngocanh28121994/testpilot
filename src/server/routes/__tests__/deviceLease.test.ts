@@ -131,18 +131,45 @@ describe('POST /api/device/lease', () => {
     devices = new MemoryDeviceRegistry();
   });
 
-  it('máy đang chạy test thì nói thế; cùng người bấm lại là gia hạn', async () => {
+  it('máy đang chạy test thì nói thế', async () => {
     const leases = new MemoryLeaseRepo();
     await leases.acquire('dev-1', { kind: 'job', jobId: 'j-1' });
     const byJob = await call('POST /api/device/lease', ME, leases, { deviceId: 'dev-1' });
     assert.match(String(byJob.body.error), /đang chạy một lượt test/);
 
-    const mine = new MemoryLeaseRepo();
-    await mine.acquire('dev-2', { kind: 'human', userId: 'user-1' });
-    // Tab thứ hai cùng người: repo coi là gia hạn, nên giả lập bằng một mã phiên khác.
-    const other = { ...ME, userId: 'user-1' };
-    const out = await call('POST /api/device/lease', other, mine, { deviceId: 'dev-2' });
-    assert.equal(out.status, 200, 'cùng người bấm lại là gia hạn, không phải xung đột');
+  });
+
+  /**
+   * Hai máy tính cùng đăng nhập `runner` từng cùng cầm MỘT lượt giữ và cùng
+   * điều khiển một iPhone: kho lease coi "cùng người giữ lại" là gia hạn.
+   */
+  it('cùng người giữ lần hai (tab/máy khác): 409 và mời chuyển sang, không dùng chung', async () => {
+    const leases = new MemoryLeaseRepo();
+    const first = await call('POST /api/device/lease', ME, leases, { deviceId: 'dev-2' });
+    const second = await call('POST /api/device/lease', ME, leases, { deviceId: 'dev-2' });
+    assert.equal(first.status, 200);
+    assert.equal(second.status, 409);
+    assert.equal(second.body.sameUser, true);
+    assert.match(String(second.body.error), /tab hoặc máy tính khác.*Giữ ở đây/);
+  });
+
+  it('"Giữ ở đây": lượt MỚI, khác mã — chỗ cũ mất quyền', async () => {
+    const leases = new MemoryLeaseRepo();
+    const first = await call('POST /api/device/lease', ME, leases, { deviceId: 'dev-2' });
+    const moved = await call('POST /api/device/lease', ME, leases, { deviceId: 'dev-2', takeOver: true });
+    const oldId = (first.body.lease as { id: string }).id;
+    const newId = (moved.body.lease as { id: string }).id;
+    assert.equal(moved.status, 200);
+    assert.notEqual(newId, oldId);
+    assert.equal((await leases.find('dev-2'))?.id, newId);
+  });
+
+  it('takeOver KHÔNG giật được máy của người khác', async () => {
+    const leases = new MemoryLeaseRepo();
+    await call('POST /api/device/lease', ME, leases, { deviceId: 'dev-3' });
+    const out = await call('POST /api/device/lease', YOU, leases, { deviceId: 'dev-3', takeOver: true });
+    assert.equal(out.status, 409);
+    assert.notEqual(out.body.sameUser, true);
   });
 });
 

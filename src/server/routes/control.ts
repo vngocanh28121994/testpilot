@@ -40,6 +40,14 @@ async function heldBy(
   // client vẫn đang dựa trên một lượt giữ CŨ — và cái nó tưởng mình thấy trên
   // màn hình có thể là việc của người khác.
   if (lease.id !== leaseId) {
+    // Cùng người giữ lượt MỚI: họ vừa bấm "Giữ ở đây" ở tab hay máy khác.
+    if (lease.holder.kind === 'human' && lease.holder.userId === ctx.identity.userId) {
+      return {
+        ok: false,
+        status: 409,
+        error: 'Máy đã được chuyển sang tab hoặc máy tính khác của bạn. Bấm Giữ máy để lấy lại về đây.',
+      };
+    }
     return { ok: false, status: 409, error: 'Lượt giữ chỗ đã đổi. Tải lại rồi giữ máy lần nữa.' };
   }
   if (lease.holder.kind !== 'human' || lease.holder.userId !== ctx.identity.userId) {

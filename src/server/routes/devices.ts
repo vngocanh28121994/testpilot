@@ -183,9 +183,35 @@ export const deviceRoutes: RouteTable = {
   },
 
   'POST /api/device/lease': async (req, res, _url, ctx) => {
-    const body = await readJson<{ deviceId?: string }>(req);
+    const body = await readJson<{ deviceId?: string; takeOver?: boolean }>(req);
     const deviceId = body.deviceId?.trim();
     if (!deviceId) return json(res, 400, { error: 'Thiếu deviceId.' });
+
+    /**
+     * Một lần bấm Giữ máy là MỘT lượt giữ — kể cả với cùng một người.
+     *
+     * Kho lease coi "cùng người giữ lại" là gia hạn. Đúng cho nhịp tim, sai cho
+     * lần bấm Giữ máy thứ hai: hai máy tính đăng nhập cùng tài khoản đã cùng
+     * cầm MỘT lượt giữ và cùng điều khiển một chiếc iPhone — người này chạm,
+     * màn hình người kia nhảy theo. Nên ở đây, cùng người mà đã có lượt giữ còn
+     * sống thì TỪ CHỐI, trừ khi họ chủ động chuyển sang chỗ mới (`takeOver`) —
+     * cần cho lúc lỡ đóng tab hay tải lại trang, để khỏi chờ lượt cũ hết hạn.
+     */
+    const current = await ctx.repos.leases.find(deviceId);
+    if (current?.holder.kind === 'human' && current.holder.userId === ctx.identity.userId) {
+      if (!body.takeOver) {
+        const device = await ctx.devices.find(deviceId, viewer(ctx),
+          await ctx.grants.forUser(ctx.identity.orgId, ctx.identity.userId)).catch(() => undefined);
+        return json(res, 409, {
+          error: `Bạn đang giữ ${device?.label ?? deviceId} ở một tab hoặc máy tính khác. `
+            + 'Bấm "Giữ ở đây" để chuyển sang đây — màn hình ở chỗ kia sẽ dừng.',
+          sameUser: true,
+        });
+      }
+      // Chuyển chỗ: nhả lượt cũ rồi giữ lượt MỚI, khác mã. Chỗ kia nhận ra ở
+      // lần kiểm lease kế tiếp (mã đổi) và dừng màn hình của nó.
+      await ctx.repos.leases.release(current.id);
+    }
 
     try {
       return json(res, 200, { lease: view(await ctx.repos.leases.acquire(deviceId, me(ctx))) });

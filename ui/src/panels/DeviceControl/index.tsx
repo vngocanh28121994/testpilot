@@ -312,9 +312,15 @@ export default function DeviceControlPanel() {
         {state.phase === 'error' && (
           <div
             role="alert"
-            className="border-destructive text-destructive bg-card rounded-md border p-3 text-sm"
+            className="border-destructive text-destructive bg-card flex flex-wrap items-center gap-3 rounded-md border p-3 text-sm"
           >
-            {state.message}
+            <span className="min-w-0 flex-1">{state.message}</span>
+            {/* Chính mình đang giữ ở chỗ khác: chuyển sang đây bằng một cú bấm. */}
+            {state.takeOver && (
+              <Button size="sm" onClick={() => state.takeOver && void hold(state.takeOver, { takeOver: true })}>
+                Giữ ở đây
+              </Button>
+            )}
           </div>
         )}
 
