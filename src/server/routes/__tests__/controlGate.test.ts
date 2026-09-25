@@ -181,7 +181,9 @@ describe('cửa lease của màn điều khiển', () => {
 
     const out = await stream(person('u1'), leases, `?platform=android&deviceId=${DEV}&leaseId=${first.id}`);
     assert.equal(out.status, 409);
-    assert.match(String(out.body.error), /đã đổi/);
+    // Cùng người giữ lượt mới = họ vừa chuyển máy sang tab/máy khác: nói đúng
+    // điều đó, thay vì "lượt giữ đã đổi" chung chung.
+    assert.match(String(out.body.error), /chuyển sang tab hoặc máy tính khác của bạn/);
   });
 
   /**
