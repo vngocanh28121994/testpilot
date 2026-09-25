@@ -170,6 +170,13 @@ export interface ScreenStreamHandle {
    * Vắng mặt với người xem đầu tiên: luồng của họ vốn đã bắt đầu từ đầu.
    */
   readonly primer?: Buffer;
+  /**
+   * Phần đầu luồng TẠI THỜI ĐIỂM GỌI — cấu hình và khung khoá gần nhất, cùng
+   * mọi thứ sau nó. Để dựng lại hình cho MỘT người xem vừa bị bỏ bớt dữ liệu
+   * vì nhận không kịp (xem route luồng hình). Vắng mặt khi luồng không có trạng
+   * thái để dựng lại (MJPEG của iOS: mỗi khung là một ảnh trọn vẹn).
+   */
+  resync?(): Buffer | undefined;
   stop(): void;
 }
 
@@ -426,6 +433,7 @@ export async function startScreenStream(
     return {
       frame: existing.frame,
       primer: existing.primer.primer(),
+      resync: () => existing.primer.primer(),
       stop: () => detach(udid, sink),
     };
   }
@@ -445,7 +453,7 @@ export async function startScreenStream(
   // quyền chạy `app_process` — hai thứ có môi trường chặn — nên một lần hỏng ở
   // đây phải thành "chậm hơn", không thành "không xem được màn hình".
   if (await attachScrcpy(udid, state)) {
-    return { frame: state.frame, stop: () => detach(udid, sink) };
+    return { frame: state.frame, resync: () => state.primer.primer(), stop: () => detach(udid, sink) };
   }
 
   const launch = (first: boolean): void => {
@@ -500,7 +508,7 @@ export async function startScreenStream(
   };
   launch(true);
 
-  return { frame, stop: () => detach(udid, sink) };
+  return { frame, resync: () => state.primer.primer(), stop: () => detach(udid, sink) };
 }
 
 function detach(udid: string, sink: ScreenStreamSink): void {

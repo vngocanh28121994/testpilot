@@ -19,6 +19,7 @@ import { loadConfig } from '../../config.js';
 import { friendlyError } from '../../core/friendlyError.js';
 import { allows } from '../auth/roles.js';
 import { codecFor } from '../../runner/control.js';
+import { streamPacer } from '../streamPacer.js';
 import { localRunner } from '../../runner/index.js';
 import type { Lease } from '../db/repo.js';
 import type { ControlTargetsResponse } from '../../ui/contracts.js';
@@ -169,15 +170,24 @@ export const controlRoutes: RouteTable = {
     // khiển để lại một tiến trình adb sống mãi.
     req.on('close', () => finish('Người xem đã đóng.'));
 
+    // Nhịp gửi của RIÊNG người xem này: nhận không kịp thì bỏ bớt cho họ,
+    // không dồn vào bộ nhớ máy chủ. Xem streamPacer.ts — chú thích cũ ở đây
+    // ghi "8 KB/s không làm đầy bộ đệm", sai từ khi luồng iOS lên ~1,7 MB/s.
+    let resync: (() => Buffer | undefined) | undefined;
+    const pacer = streamPacer({
+      mode: codecFor(platform) === 'mjpeg' ? 'mjpeg' : 'h264',
+      write: (chunk) => { send('video', chunk.toString('base64')); },
+      restart: () => { send('restart', { at: new Date().toISOString(), reason: 'catch-up' }); },
+      backlog: () => res.writableLength,
+      onDrain: (fn) => { res.once('drain', () => { if (!closed) fn(); }); },
+      resync: () => resync?.(),
+    });
+
     try {
       const handle = await localRunner.control.startScreenStream(target, {
         chunk: (data) => {
           if (closed) return;
-          // `write` trả false khi bộ đệm socket đã đầy — nghĩa là người xem
-          // nhận chậm hơn máy phát. Bỏ mảnh thì video hỏng hình, nên cứ gửi:
-          // 8 KB/s không làm đầy được bộ đệm của một kết nối còn sống, và một
-          // kết nối đã chết thì `close` ở trên đã lo.
-          send('video', data.toString('base64'));
+          pacer.push(data);
         },
         restart: () => { if (!closed) send('restart', { at: new Date().toISOString() }); },
         fail: (message) => finish(message),
@@ -192,6 +202,7 @@ export const controlRoutes: RouteTable = {
       // một luồng H.264 không có khung khoá, nên trắng màn không báo lỗi.
       if (closed) return handle.stop();
       stop = handle.stop;
+      resync = handle.resync?.bind(handle);
       send('meta', {
         deviceId,
         platform,
