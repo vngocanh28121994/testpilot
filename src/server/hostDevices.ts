@@ -59,7 +59,10 @@ export function startHostDevices(deps: HostDeviceDeps): { stop(): void } {
       { id: LOCAL_HOST_RUNNER, orgId: deps.orgId, visibility: 'shared' },
       devices
         .filter((device) => device.platform === 'android' || device.platform === 'ios')
-        .map((device) => ({ platform: device.platform, udid: device.udid, label: device.label })),
+        .map((device) => ({
+          platform: device.platform, udid: device.udid, label: device.label,
+          ...(device.unavailable ? { unavailable: device.unavailable } : {}),
+        })),
     ).catch((err: Error) => {
       console.error('[host] không báo được danh sách thiết bị:', err.message);
     });

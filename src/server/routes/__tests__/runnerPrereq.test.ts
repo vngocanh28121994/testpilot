@@ -20,6 +20,7 @@ import type { RouteContext } from '../types.js';
 
 describe('runner báo môi trường của máy nó', () => {
   let runners: MemoryRunnerRegistry;
+  let devices: MemoryDeviceRegistry;
   let id: string;
 
   async function report(body: unknown) {
@@ -35,7 +36,7 @@ describe('runner báo môi trường của máy nó', () => {
       identity: { userId: id, orgId: 'org-1', email: 'r@x.dev', role: 'runner_user' },
       repos: {} as unknown as Repos,
       runners,
-      devices: new MemoryDeviceRegistry(),
+      devices,
       grants: new MemoryDeviceGrants(),
       sessions: new MemorySessionStore(),
     };
@@ -47,6 +48,7 @@ describe('runner báo môi trường của máy nó', () => {
 
   beforeEach(async () => {
     runners = new MemoryRunnerRegistry();
+    devices = new MemoryDeviceRegistry();
     const made = await runners.create({
       orgId: 'org-1', name: 'laptop', mode: 'personal',
       ownerUserId: 'an', visibility: 'private',
@@ -98,5 +100,37 @@ describe('runner báo môi trường của máy nó', () => {
       prereq: { web: { ok: false, reason: 'x'.repeat(5_000), at: 'now' } },
     });
     assert.equal((await runners.find(id))?.prereq?.web?.reason?.length, 500);
+  });
+
+  /**
+   * Gợi ý sửa và tunnel từng bị bộ lọc này vứt đi: máy ở laptop người dùng
+   * không bao giờ hiện "tunnel chưa chạy" hay nút sửa trên web.
+   */
+  it('giữ gợi ý sửa Appium và trạng thái tunnel đo trên máy ấy', async () => {
+    await report({
+      devices: [],
+      prereq: {
+        android: { ok: false, reason: 'Appium chưa chạy.', fix: 'appium', at: 'now' },
+        ios: { ok: true, at: 'now', tunnel: { ok: false, detail: 'Tunnel chưa chạy.', service: true } },
+      },
+    });
+    const stored = (await runners.find(id))?.prereq;
+    assert.equal(stored?.android?.fix, 'appium');
+    assert.deepEqual(stored?.ios?.tunnel, { ok: false, detail: 'Tunnel chưa chạy.', service: true });
+  });
+
+  it('gợi ý sửa lạ bị bỏ, không đi lên màn hình người khác', async () => {
+    await report({ devices: [], prereq: { android: { ok: false, fix: 'rm -rf', at: 'now' } } });
+    assert.equal((await runners.find(id))?.prereq?.android?.fix, undefined);
+  });
+
+  /** Cắm máy mới chưa cho phép gỡ lỗi USB: vẫn vào sổ, tắt, kèm việc cần làm. */
+  it('máy chưa dùng được vào sổ ở trạng thái tắt, kèm lý do', async () => {
+    await report({
+      devices: [{ platform: 'android', udid: 'R5CY', label: 'Máy Android R5CY', unavailable: 'Chưa cho phép gỡ lỗi USB.' }],
+    });
+    const [device] = await devices.list({ userId: 'an', orgId: 'org-1', isAdmin: true });
+    assert.equal(device?.state, 'offline');
+    assert.equal(device?.unavailable, 'Chưa cho phép gỡ lỗi USB.');
   });
 });

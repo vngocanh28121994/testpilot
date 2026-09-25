@@ -115,7 +115,7 @@ export class RemoteJobQueue implements JobQueue {
    * quan sát được ở phía server.
    */
   async reportDevices(
-    devices: Array<{ platform: string; udid: string; label: string }>,
+    devices: Array<{ platform: string; udid: string; label: string; unavailable?: string }>,
     prereq?: unknown,
   ): Promise<void> {
     // Tình trạng môi trường đi CÙNG chuyến, không có nhịp riêng: hai nhịp

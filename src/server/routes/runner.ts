@@ -224,21 +224,28 @@ export const runnerRoutes: RouteTable = {
    */
   'POST /api/runner/devices': async (req, res, _url, ctx) => {
     const body = await readJson<{
-      devices?: Array<{ platform?: string; udid?: string; label?: string }>;
-      prereq?: Record<string, { ok?: boolean; reason?: string; at?: string }>;
+      devices?: Array<{ platform?: string; udid?: string; label?: string; unavailable?: string }>;
+      prereq?: Parameters<typeof sanePrereq>[0];
     }>(req);
 
     const runner = await ctx.runners.find(ctx.identity.userId);
     if (!runner) return json(res, 404, { error: 'Runner này không còn trong sổ.' });
 
     const devices = (body.devices ?? [])
-      .filter((device): device is { platform: 'android' | 'ios'; udid: string; label?: string } =>
+      .filter((device): device is {
+        platform: 'android' | 'ios'; udid: string; label?: string; unavailable?: string;
+      } =>
         (device.platform === 'android' || device.platform === 'ios')
         && typeof device.udid === 'string' && device.udid.length > 0)
       .map((device) => ({
         platform: device.platform,
         udid: device.udid,
         label: device.label?.trim() || device.udid,
+        // Lý do máy chưa dùng được — chuỗi từ runner, cắt ngắn: nó đi thẳng lên
+        // màn hình của người khác.
+        ...(typeof device.unavailable === 'string' && device.unavailable.trim()
+          ? { unavailable: device.unavailable.trim().slice(0, 500) }
+          : {}),
       }));
 
     await ctx.devices.report({
@@ -291,15 +298,32 @@ export const runnerRoutes: RouteTable = {
  * HTTP — kể cả khi nó đến kèm một token hợp lệ. Ba nền tảng, và chỉ ba.
  */
 function sanePrereq(
-  raw: Record<string, { ok?: boolean; reason?: string; at?: string }>,
+  raw: Record<string, {
+    ok?: boolean; reason?: string; at?: string; fix?: unknown;
+    tunnel?: { ok?: unknown; detail?: unknown; service?: unknown };
+  }>,
 ): PrereqByPlatform {
   const clean: PrereqByPlatform = {};
   for (const platform of ['web', 'android', 'ios'] as const) {
     const report = raw[platform];
     if (!report || typeof report.ok !== 'boolean') continue;
+    const tunnel = report.tunnel;
     clean[platform] = {
       ok: report.ok,
       ...(typeof report.reason === 'string' ? { reason: report.reason.slice(0, 500) } : {}),
+      // Gợi ý sửa và tunnel: từng bị bỏ ở đây, nên máy ở laptop người dùng
+      // không bao giờ hiện "tunnel chưa chạy" hay nút sửa. Chỉ nhận đúng giá
+      // trị đã biết — chuỗi từ runner đi thẳng lên màn hình của người khác.
+      ...(report.fix === 'appium' ? { fix: 'appium' as const } : {}),
+      ...(tunnel && typeof tunnel.ok === 'boolean' && typeof tunnel.detail === 'string'
+        ? {
+          tunnel: {
+            ok: tunnel.ok,
+            detail: tunnel.detail.slice(0, 500),
+            ...(tunnel.service === true ? { service: true } : {}),
+          },
+        }
+        : {}),
       at: typeof report.at === 'string' ? report.at : new Date().toISOString(),
     };
   }

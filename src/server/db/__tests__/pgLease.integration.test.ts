@@ -223,4 +223,17 @@ describe('PgLeaseRepo', () => {
     await devices.report(runner, []); // rút máy ra
     assert.equal(await leases.find(udid), undefined);
   });
+
+  it('máy cắm mà chưa dùng được: tắt kèm lý do; cho phép rồi thì sống lại, hết lý do', async () => {
+    const runner = { id: `run-${ORG}`, orgId: ORG, visibility: 'shared' as const };
+    const devices = new PgDeviceRegistry(async () => pool);
+    const udid = `UNAUTH-${ORG}`;
+    await devices.report(runner, [{ platform: 'android', udid, label: 'Máy Android', unavailable: 'Chưa cho phép gỡ lỗi USB.' }]);
+    let row = (await pool.query('SELECT state, state_reason FROM device WHERE udid = $1', [udid])).rows[0];
+    assert.deepEqual(row, { state: 'offline', state_reason: 'Chưa cho phép gỡ lỗi USB.' });
+
+    await devices.report(runner, [{ platform: 'android', udid, label: 'Galaxy S25' }]);
+    row = (await pool.query('SELECT state, state_reason FROM device WHERE udid = $1', [udid])).rows[0];
+    assert.deepEqual(row, { state: 'idle', state_reason: null });
+  });
 });

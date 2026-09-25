@@ -32,6 +32,7 @@ const STATUS_TONE: Record<DeviceStatus, string> = {
   free: 'bg-(--tint-pass) text-status-pass',
   held: 'bg-(--tint-warn) text-status-flaky',
   testing: 'bg-primary/10 text-primary',
+  attention: 'bg-(--tint-warn) text-status-flaky',
   offline: 'bg-muted text-muted-foreground',
 };
 
@@ -88,7 +89,11 @@ export function DeviceInventory({
           active={!filter.status}
           onClick={() => setFilterAndReset({ ...filter, status: undefined })}
         />
-        {(['free', 'held', 'testing', 'offline'] as const).map((status) => (
+        {(['free', 'held', 'testing', 'attention', 'offline'] as const)
+          // "Cần xử lý" chỉ hiện khi có máy cần xử lý: một ô 0 thường trực là
+          // thứ người ta học cách nhìn xuyên qua.
+          .filter((status) => status !== 'attention' || summary.attention > 0)
+          .map((status) => (
           <SummaryChip
             key={status}
             label={STATUS_LABEL[status]}
@@ -258,6 +263,10 @@ function DeviceRow({ row, job, secondsLeft, reclaim, onControl }: {
           <span>{device.label}</span>
         </div>
         <div className="text-muted-foreground text-xs">{device.udid}</div>
+        {/* Việc cần làm, ngay dưới tên máy: người vừa cắm máy đang tìm đúng câu này. */}
+        {device.unavailable && (
+          <div className="text-status-flaky mt-1 max-w-md text-xs whitespace-normal">{device.unavailable}</div>
+        )}
       </TableCell>
       <TableCell>
         <span className={cn('rounded-full px-2 py-0.5 text-xs font-medium', STATUS_TONE[status])}>

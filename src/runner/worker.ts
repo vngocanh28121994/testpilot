@@ -161,7 +161,7 @@ export function startWorker(deps: WorkerDeps): WorkerHandle {
   };
   const attached = async (): Promise<AttachedDevice[]> => {
     if (Date.now() - snapshot.at < 10_000) return snapshot.devices;
-    let devices: Array<{ platform: string; udid: string }> = [];
+    let devices: Array<{ platform: string; udid: string; unavailable?: string }> = [];
     try {
       devices = await runner.control.devices();
     } catch {
@@ -177,6 +177,9 @@ export function startWorker(deps: WorkerDeps): WorkerHandle {
     snapshot = {
       at: Date.now(),
       devices: devices
+        // Máy cắm mà CHƯA dùng được (chưa cho phép gỡ lỗi USB…) không phải
+        // "đang cắm" với worker: nhận job cho nó là hỏng ngay bước đầu.
+        .filter((device) => !device.unavailable)
         .filter((device) => device.platform === 'android' || device.platform === 'ios')
         .map((device) => ({ platform: device.platform as 'android' | 'ios', udid: device.udid })),
     };

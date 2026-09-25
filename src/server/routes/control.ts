@@ -118,10 +118,12 @@ export const controlRoutes: RouteTable = {
           udid: device.udid,
           // Máy đang tắt vẫn hiện, kèm lý do: biến mất khỏi danh sách và đang
           // tắt là hai câu khác nhau, và người dùng cần câu thứ hai.
-          label: device.state === 'offline' ? `${device.label} · đang tắt` : device.label,
+          label: device.state === 'offline' && !device.unavailable ? `${device.label} · đang tắt` : device.label,
           ...(device.ownerUserId === ctx.identity.userId ? { mine: true } : {}),
           ...(owner ? { runnerName: owner.name } : {}),
           offline: device.state === 'offline' || owner?.state !== 'online',
+          // Cắm mà chưa dùng được: nói việc cần làm (chưa cho phép gỡ lỗi USB…).
+          ...(device.unavailable ? { unavailable: device.unavailable } : {}),
           // `undefined` nghĩa là CHƯA ĐO, khác hẳn với "đo rồi, hỏng". Màn
           // hình phải nói hai chuyện ấy khác nhau, nếu không người ta sẽ đi
           // sửa một chiếc máy hoàn toàn tốt vừa khởi động xong.

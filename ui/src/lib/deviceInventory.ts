@@ -11,15 +11,18 @@
 import type { ControlDeviceView, DeviceLeaseView } from '@core/ui/contracts.js';
 import { groupByMachine, type MachineGroup } from './deviceGroups';
 
-export type DeviceStatus = 'free' | 'held' | 'testing' | 'offline';
+export type DeviceStatus = 'free' | 'held' | 'testing' | 'attention' | 'offline';
 
 /** Thứ tự trong mỗi nhóm: thứ người ta tìm nhất lên đầu. */
-const STATUS_ORDER: Record<DeviceStatus, number> = { free: 0, held: 1, testing: 2, offline: 3 };
+const STATUS_ORDER: Record<DeviceStatus, number> = {
+  free: 0, held: 1, testing: 2, attention: 3, offline: 4,
+};
 
 export const STATUS_LABEL: Record<DeviceStatus, string> = {
   free: 'Rảnh',
   held: 'Đang giữ',
   testing: 'Đang chạy test',
+  attention: 'Cần xử lý',
   offline: 'Tắt',
 };
 
@@ -34,6 +37,9 @@ export interface InventoryRow {
  * đọc cần biết nó KHÔNG dùng được, không cần biết ai từng cầm nó.
  */
 export function statusOf(device: ControlDeviceView, lease?: DeviceLeaseView): DeviceStatus {
+  // Cắm vào mà chưa dùng được (chưa cho phép gỡ lỗi USB…) KHÔNG phải "tắt":
+  // nó đang cắm, và chỉ chờ một cú bấm trên điện thoại.
+  if (device.unavailable) return 'attention';
   if (device.offline) return 'offline';
   if (!lease) return 'free';
   return lease.holder.kind === 'job' ? 'testing' : 'held';
@@ -53,7 +59,7 @@ export function inventory(
 export type Summary = Record<DeviceStatus | 'total', number>;
 
 export function summarize(rows: InventoryRow[]): Summary {
-  const out: Summary = { total: rows.length, free: 0, held: 0, testing: 0, offline: 0 };
+  const out: Summary = { total: rows.length, free: 0, held: 0, testing: 0, attention: 0, offline: 0 };
   for (const row of rows) out[row.status] += 1;
   return out;
 }

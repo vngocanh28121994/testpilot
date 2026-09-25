@@ -799,6 +799,11 @@ export interface ControlDeviceView {
   /** Máy đang tắt, hoặc máy tính nó cắm vào đang tắt. */
   offline?: boolean;
   /**
+   * Cắm vào nhưng CHƯA dùng được, và việc cần làm — "chưa bấm Cho phép gỡ lỗi
+   * USB". Có mặt thì `offline` cũng là `true`.
+   */
+  unavailable?: string;
+  /**
    * Máy tính ấy chạy được nền tảng này không, theo phép đo CỦA CHÍNH NÓ.
    *
    * Vắng mặt nghĩa là CHƯA ĐO — một runner vừa khởi động thì chưa kịp, và

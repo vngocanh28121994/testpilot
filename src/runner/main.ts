@@ -118,6 +118,8 @@ async function main(): Promise<void> {
     const devices = await localRunner.control.devices().catch(() => []);
     platforms = runnerPlatforms(
       devices
+        // Máy cắm mà chưa dùng được không làm máy tính này "chạy được" nền tảng ấy.
+        .filter((device) => !device.unavailable)
         .filter((device) => device.platform === 'android' || device.platform === 'ios')
         .map((device) => ({ platform: device.platform, udid: device.udid })),
     );
@@ -189,7 +191,10 @@ async function main(): Promise<void> {
     await queue.reportDevices(
       seen
         .filter((device) => device.platform === 'android' || device.platform === 'ios')
-        .map((device) => ({ platform: device.platform, udid: device.udid, label: device.label })),
+        .map((device) => ({
+          platform: device.platform, udid: device.udid, label: device.label,
+          ...(device.unavailable ? { unavailable: device.unavailable } : {}),
+        })),
       // Phép đo của WORKER, không phải một phép đo thứ hai: hai phép đo song
       // song sẽ lệch nhau, và lúc ấy màn hình nói "Appium đang chạy" trong khi
       // worker vừa từ chối một job vì Appium không chạy.

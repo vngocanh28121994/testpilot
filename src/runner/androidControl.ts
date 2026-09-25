@@ -757,18 +757,56 @@ export function screenshot(udid: string, timeoutMs = 15_000): Promise<Buffer> {
  * nhãn đọc được: màn điều khiển không cần biết máy nào đang `unauthorized`,
  * vì không giữ chỗ được thì cũng không chạm được.
  */
-export async function attachedDevices(): Promise<Array<{ udid: string; label: string }>> {
-  const output = await run(['devices', '-l'], '', 8_000).catch(() => '');
-  const ids = output.split('\n').slice(1)
+/**
+ * Vì sao một chiếc máy adb THẤY mà chưa dùng được — viết cho người đang cầm nó.
+ *
+ * Từng bị bỏ lặng lẽ: cắm máy mới vào, điện thoại hỏi "Cho phép gỡ lỗi USB?"
+ * mà chưa ai bấm, và danh sách thiết bị không hiện gì — người dùng không biết
+ * máy có được nhận hay không, càng không biết việc cần làm nằm trên điện thoại.
+ */
+const ADB_STATE_REASON: Record<string, string> = {
+  unauthorized: 'Điện thoại chưa cho phép gỡ lỗi USB từ máy tính này. Mở khoá điện thoại, bấm '
+    + '"Cho phép" ở hộp thoại gỡ lỗi USB (nên tick "Luôn cho phép từ máy tính này"). Không thấy '
+    + 'hộp thoại thì rút cáp cắm lại.',
+  offline: 'adb thấy máy nhưng không nói chuyện được. Rút cáp cắm lại; vẫn vậy thì khởi động lại điện thoại.',
+  'no permissions': 'Máy tính không có quyền truy cập cổng USB của điện thoại. Cắm cổng khác, hoặc đổi '
+    + 'chế độ USB trên điện thoại sang "Truyền tệp".',
+};
+
+/**
+ * Đọc `adb devices -l`: máy dùng được (`usable`), và máy chưa dùng được kèm
+ * nhãn và lý do. Hàm thuần — kiểm được không cần điện thoại.
+ */
+export function parseAdbDevices(output: string): Array<
+  | { udid: string; usable: true }
+  | { udid: string; usable: false; label: string; unavailable: string }
+> {
+  return output.split('\n').slice(1)
     .map((line) => line.trim()).filter(Boolean)
     .map((line) => line.split(/\s+/))
-    .filter(([, state]) => state === 'device')
-    .map(([id]) => id!)
-    .filter(Boolean);
+    .filter(([udid]) => Boolean(udid))
+    .map(([udid, ...rest]) => {
+      const state = rest[0] ?? '';
+      if (state === 'device') return { udid: udid!, usable: true as const };
+      // `model:` có trong `-l` khi adb đã đọc được máy; với máy chưa cho phép
+      // thì không có, nên dùng số sê-ri.
+      const model = rest.find((part) => part.startsWith('model:'))?.slice('model:'.length).replace(/_/g, ' ');
+      const reasonKey = state === 'no' ? 'no permissions' : state;
+      return {
+        udid: udid!,
+        usable: false as const,
+        label: model ? `${model} · ${udid}` : `Máy Android ${udid}`,
+        unavailable: ADB_STATE_REASON[reasonKey] ?? `adb báo máy ở trạng thái "${rest.join(' ')}".`,
+      };
+    });
+}
 
-  return Promise.all(ids.map(async (udid) => {
-    const props = parseProps(await run(['shell', 'getprop'], udid, 5_000).catch(() => ''));
-    return { udid, label: deviceLabel(udid, props) };
+export async function attachedDevices(): Promise<Array<{ udid: string; label: string; unavailable?: string }>> {
+  const output = await run(['devices', '-l'], '', 8_000).catch(() => '');
+  return Promise.all(parseAdbDevices(output).map(async (entry) => {
+    if (!entry.usable) return { udid: entry.udid, label: entry.label, unavailable: entry.unavailable };
+    const props = parseProps(await run(['shell', 'getprop'], entry.udid, 5_000).catch(() => ''));
+    return { udid: entry.udid, label: deviceLabel(entry.udid, props) };
   }));
 }
 

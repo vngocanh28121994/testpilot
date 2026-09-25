@@ -27,7 +27,13 @@ describe('deviceInventory', () => {
   const rows = inventory(DEVICES, LEASES);
 
   it('tổng quan trả lời "còn máy nào rảnh không" mà không đọc bảng', () => {
-    expect(summarize(rows)).toEqual({ total: 5, free: 2, held: 1, testing: 1, offline: 1 });
+    expect(summarize(rows)).toEqual({ total: 5, free: 2, held: 1, testing: 1, attention: 0, offline: 1 });
+  });
+
+  it('cắm mà chưa cho phép gỡ lỗi USB: "cần xử lý", không phải "tắt"', () => {
+    const r = inventory([dev('r5c', { offline: true, unavailable: 'Chưa cho phép gỡ lỗi USB.' })], []);
+    expect(r[0]!.status).toBe('attention');
+    expect(summarize(r).attention).toBe(1);
   });
 
   it('máy tắt là "tắt", kể cả khi còn lượt giữ cũ', () => {

@@ -119,6 +119,11 @@ export function stopAllScreenStreams(): void {
 export interface ControlDevice extends ControlTarget {
   /** Chuỗi người đọc: tên máy, phiên bản hệ điều hành, thật hay giả lập. */
   label: string;
+  /**
+   * Máy cắm vào nhưng CHƯA dùng được, và vì sao — viết cho người cầm máy
+   * ("chưa bấm Cho phép gỡ lỗi USB"). Vắng mặt nghĩa là dùng được.
+   */
+  unavailable?: string;
 }
 
 /**

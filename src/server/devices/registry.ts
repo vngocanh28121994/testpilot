@@ -25,6 +25,12 @@ export interface ReportedDevice {
   udid: string;
   /** Tên đọc được: "Pixel 7 · Android 16 · emulator". */
   label: string;
+  /**
+   * Cắm vào nhưng CHƯA dùng được, và việc cần làm — "chưa bấm Cho phép gỡ lỗi
+   * USB". Máy như vậy vào sổ ở trạng thái `offline` kèm lý do, thay vì biến
+   * mất: người vừa cắm máy cần biết hệ thống đã thấy nó, và đang chờ gì.
+   */
+  unavailable?: string;
 }
 
 export interface DeviceRecord extends ReportedDevice {

@@ -34,7 +34,8 @@ export class MemoryDeviceRegistry implements DeviceRegistry {
       // quyền RIÊNG chồng lên trên — xem `grants.ts`; nó chỉ thêm quyền, và
       // không đổi dòng này.
       visibility: runner.visibility,
-      state: 'idle' as const,
+      // Cắm mà chưa dùng được: tắt, kèm lý do (`unavailable` đi theo `...device`).
+      state: device.unavailable ? 'offline' as const : 'idle' as const,
       updatedAt: now.toISOString(),
     })));
   }

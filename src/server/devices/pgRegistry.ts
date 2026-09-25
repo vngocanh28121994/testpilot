@@ -29,6 +29,7 @@ interface Row {
   udid: string | null;
   visibility: DeviceVisibility;
   state: string;
+  state_reason: string | null;
   updated_at: Date | string;
   owner_user_id: string | null;
 }
@@ -46,6 +47,7 @@ function hydrate(row: Row): DeviceRecord {
     // cái kia thuộc về LEASE — một chiếc máy đang bị giữ vẫn là một chiếc máy
     // đang cắm. Gộp về `idle` để hai nguồn không nói hai chuyện khác nhau.
     state: row.state === 'offline' || row.state === 'quarantined' ? row.state : 'idle',
+    ...(row.state === 'offline' && row.state_reason ? { unavailable: row.state_reason } : {}),
     updatedAt: row.updated_at instanceof Date ? row.updated_at.toISOString() : row.updated_at,
   };
 }
@@ -80,18 +82,23 @@ export class PgDeviceRegistry implements DeviceRegistry {
       for (const device of devices) {
         await client.query(
           `INSERT INTO device
-             (id, runner_id, org_id, platform, name, udid, visibility, state, updated_at)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, 'idle', $8)
+             (id, runner_id, org_id, platform, name, udid, visibility, state, state_reason, updated_at)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $9, $10, $8)
            ON CONFLICT (id) DO UPDATE SET
              org_id = EXCLUDED.org_id, platform = EXCLUDED.platform, name = EXCLUDED.name,
              udid = EXCLUDED.udid, visibility = EXCLUDED.visibility,
-             updated_at = EXCLUDED.updated_at,
-             -- Báo lên nghĩa là đang cắm: một máy từng bị đánh dấu tắt thì sống
-             -- lại. Trạng thái khác (cách ly) là quyết định của người, giữ nguyên.
-             state = CASE WHEN device.state = 'offline' THEN 'idle' ELSE device.state END`,
+             updated_at = EXCLUDED.updated_at, state_reason = EXCLUDED.state_reason,
+             -- Báo lên mà CHƯA dùng được (chưa cho phép gỡ lỗi USB…) thì tắt,
+             -- kèm lý do. Báo lên và dùng được thì một máy từng tắt sống lại.
+             -- Trạng thái khác (cách ly) là quyết định của người, giữ nguyên.
+             state = CASE
+               WHEN EXCLUDED.state = 'offline' THEN 'offline'
+               WHEN device.state = 'offline' THEN 'idle'
+               ELSE device.state END`,
           [
             idOf(runner.id, device.udid), runner.id, runner.orgId, device.platform,
             device.label, device.udid, runner.visibility, now.toISOString(),
+            device.unavailable ? 'offline' : 'idle', device.unavailable ?? null,
           ],
         );
       }
