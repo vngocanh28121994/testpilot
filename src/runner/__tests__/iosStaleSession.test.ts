@@ -61,4 +61,19 @@ describe('phiên điều khiển iOS đã chết thì mở phiên mới', () => 
     await ios.screenSize(udid);
     assert.deepEqual(opened, ['s1', 's2'], 'phiên chết thì mở phiên mới');
   });
+
+  /**
+   * Khởi động lại TestPilot (nạp bản sửa) từng kéo theo mở lại WDA trên
+   * iPhone — và iOS hỏi lại mật khẩu cho phép điều khiển tự động; không ai
+   * nhập thì web "loading mãi". Phiên cũ còn sống thì phải dùng lại.
+   */
+  it('tiến trình mới, phiên cũ còn sống: dùng lại, KHÔNG mở WDA lần nữa', async () => {
+    const { writeSessionRecord, screenSize } = await import('../iosControl.js');
+    const udid = '00008101-DUNGLAI';
+    await writeSessionRecord(udid, { id: 's-cu', mjpegPort: 9999 });
+    const before = opened.length;
+    const screen = await screenSize(udid);
+    assert.equal(opened.length, before, 'không được mở phiên mới');
+    assert.equal(screen.width, 428);
+  });
 });

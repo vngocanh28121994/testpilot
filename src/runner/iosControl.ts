@@ -195,33 +195,71 @@ export function signingCaps(signing: IosSigning | undefined): Record<string, unk
  */
 export const SESSION_RECORD = '.testpilot/control-sessions.json';
 
-export async function readSessionRecord(file = SESSION_RECORD): Promise<Record<string, string>> {
+/** Một phiên đã mở, đủ để DÙNG LẠI sau khi tiến trình khởi động lại. */
+export interface SessionRecord {
+  id: string;
+  mjpegPort: number;
+}
+
+/** Bản cũ chỉ lưu mã phiên (chuỗi) — đọc được, nhưng không dùng lại được. */
+type StoredSession = string | SessionRecord;
+
+export async function readSessionRecord(file = SESSION_RECORD): Promise<Record<string, StoredSession>> {
   const { readFile } = await import('node:fs/promises');
   try {
     const parsed = JSON.parse(await readFile(file, 'utf8')) as unknown;
-    return parsed && typeof parsed === 'object' ? parsed as Record<string, string> : {};
+    return parsed && typeof parsed === 'object' ? parsed as Record<string, StoredSession> : {};
   } catch {
     return {};
   }
 }
 
 export async function writeSessionRecord(
-  udid: string, sessionId: string | undefined, file = SESSION_RECORD,
+  udid: string, session: StoredSession | undefined, file = SESSION_RECORD,
 ): Promise<void> {
   const { mkdir, writeFile } = await import('node:fs/promises');
   const path = await import('node:path');
   const record = await readSessionRecord(file);
-  if (sessionId) record[udid] = sessionId;
+  if (session) record[udid] = session;
   else delete record[udid];
   await mkdir(path.dirname(path.resolve(file)), { recursive: true });
   await writeFile(file, JSON.stringify(record, null, 2) + '\n', 'utf8');
 }
 
+/**
+ * Phiên cũ còn sống thì DÙNG LẠI — không mở lại WebDriverAgent.
+ *
+ * Mở lại WDA trên iPhone thật không miễn phí: iOS có thể hỏi lại mật khẩu để
+ * cho phép điều khiển tự động, và chừng nào chưa ai nhập trên điện thoại thì
+ * WDA chạy mà không phục vụ — web "loading mãi" rồi hết giờ. Với một máy chủ
+ * dùng chung, người ở xa không nhập được. Khởi động lại TestPilot (nạp bản
+ * sửa, đổi cấu hình) vì thế không được kéo theo khởi động lại WDA.
+ */
+async function reuseSession(record: StoredSession | undefined): Promise<Session | undefined> {
+  if (!record || typeof record === 'string') return undefined;
+  try {
+    const rect = await appium<{ width: number; height: number }>(
+      'GET', `/session/${record.id}/window/rect`, undefined, 15_000,
+    );
+    return {
+      id: record.id,
+      screen: { width: rect.width, height: rect.height, overridden: false },
+      mjpegPort: record.mjpegPort,
+    };
+  } catch {
+    return undefined;
+  }
+}
+
 async function openSession(udid: string, signing?: IosSigning): Promise<Session> {
   const stale = (await readSessionRecord())[udid];
+  const reused = await reuseSession(stale);
+  if (reused) return reused;
   if (stale) {
-    // Phiên đã hết hạn thì Appium trả 404 — cũng là kết quả mong muốn.
-    await appium('DELETE', `/session/${stale}`, undefined, 30_000).catch(() => undefined);
+    // Không dùng lại được (đã chết, hay bản ghi kiểu cũ): đóng hẳn, để nó
+    // không giữ cổng chuyển tiếp. Đã hết hạn thì Appium trả 404 — cũng được.
+    const staleId = typeof stale === 'string' ? stale : stale.id;
+    await appium('DELETE', `/session/${staleId}`, undefined, 30_000).catch(() => undefined);
     await writeSessionRecord(udid, undefined).catch(() => undefined);
   }
   const mjpegPort = MJPEG_PORT_OVERRIDE ?? await freePort();
@@ -247,7 +285,7 @@ async function openSession(udid: string, signing?: IosSigning): Promise<Session>
       firstMatch: [{}],
     },
   });
-  await writeSessionRecord(udid, created.sessionId).catch(() => undefined);
+  await writeSessionRecord(udid, { id: created.sessionId, mjpegPort }).catch(() => undefined);
   const rect = await appium<{ width: number; height: number }>(
     'GET', `/session/${created.sessionId}/window/rect`, undefined, 30_000,
   );
