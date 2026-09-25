@@ -150,6 +150,12 @@ export class MemoryJobQueue implements JobQueue {
     return { ...waiting };
   }
 
+  async cancelQueued(id: string, reason: string): Promise<JobRecord | undefined> {
+    const record = this.jobs.get(id);
+    if (!record || record.state !== 'queued') return undefined;
+    return this.finish(id, { type: 'job.result', jobId: id, state: 'cancelled', error: reason });
+  }
+
   async release(id: string, reason: string): Promise<JobRecord | undefined> {
     const record = this.jobs.get(id);
     if (!record || !OPEN.includes(record.state)) return undefined;

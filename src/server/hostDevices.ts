@@ -24,7 +24,7 @@ import type { DeviceRegistry } from './devices/registry.js';
 import type { RunnerRegistry } from './runners/registry.js';
 import { LOCAL_HOST_RUNNER } from './remoteRuns.js';
 import { localRunner } from '../runner/index.js';
-import { startWorker } from '../runner/worker.js';
+import { maxJobsFromEnv, startWorker } from '../runner/worker.js';
 
 /** Cùng nhịp với runner ở xa: đủ nhanh để cắm máy vào là thấy. */
 export const DEVICE_REPORT_MS = 10_000;
@@ -81,6 +81,7 @@ export function startHostDevices(deps: HostDeviceDeps): { stop(): void } {
     leases: deps.leases,
     runnerId: deps.workerRunnerId ?? LOCAL_HOST_RUNNER,
     configFile: deps.configFile,
+    maxJobs: maxJobsFromEnv(),
   });
 
   // MỘT phép đo, hai nơi đọc: chính phép đo mà worker dùng để từ chối job.

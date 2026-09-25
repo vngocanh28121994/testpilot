@@ -7,6 +7,7 @@ import { FlakeDetector, type FlakePolicy } from '../flaky/detector.js';
 import { HealingStore } from '../healing/HealingStore.js';
 import type { ElementRegistry, RunReport } from './types.js';
 import type { RuntimeRegistryData } from '../discovery/RuntimeRegistry.js';
+import { withFileLock } from './fileLock.js';
 
 /**
  * What one run of the suite learned, parked next to its report.
@@ -95,8 +96,17 @@ export interface MergeSummary {
  * A run directory missing its learned.json is reported rather than skipped in
  * silence — it means that device wrote nothing, and a suite quietly learning
  * from two devices out of three is the failure this whole path exists to avoid.
+ *
+ * "Single-process" stopped being true on its own once a runner could run
+ * several jobs at once: two jobs finishing together are two merges in two
+ * processes (the worker, and each job's run-parallel). The file lock is what
+ * keeps them in sequence.
  */
-export async function mergeRunLearnings(opts: {
+export async function mergeRunLearnings(opts: MergeOptions): Promise<MergeSummary> {
+  return withFileLock(mergeLockPath(opts.registryPath), () => mergeUnlocked(opts));
+}
+
+export interface MergeOptions {
   runDirs: string[];
   runsRoot: string;
   registryPath: string;
@@ -104,7 +114,14 @@ export async function mergeRunLearnings(opts: {
   flakeDbPath: string;
   healingDbPath: string;
   flakePolicy: FlakePolicy;
-}): Promise<MergeSummary> {
+}
+
+/** Next to the registry, so every process merging into it agrees on one lock. */
+export function mergeLockPath(registryPath: string): string {
+  return path.join(path.dirname(path.resolve(registryPath)), '.merge.lock');
+}
+
+async function mergeUnlocked(opts: MergeOptions): Promise<MergeSummary> {
   const summary: MergeSummary = {
     runIds: [],
     elementsMerged: 0,

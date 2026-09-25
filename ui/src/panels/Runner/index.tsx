@@ -53,6 +53,7 @@ import type {
   PreflightResponse,
   ReportView,
 } from '@core/ui/contracts.js';
+import { describeStop, jobIdsIn, type StopResponse } from '@/lib/stopJobs';
 
 const PAGE_DESCRIPTION = 'Chạy bộ test ngay trên máy này, trước khi đẩy lên farm.';
 
@@ -328,8 +329,12 @@ export default function RunnerPanel() {
 
   const stop = async () => {
     try {
-      await api.post<{ ok: boolean }>(ROUTES.runStop);
-      toast.success('Đã gửi yêu cầu dừng test.');
+      // Chỉ những job của lượt đang xem — xem lib/stopJobs.ts.
+      const jobIds = jobIdsIn(job.logs);
+      const res = await api.post<StopResponse>(ROUTES.runStop, jobIds.length > 0 ? { jobIds } : undefined);
+      const said = describeStop(res);
+      if (said.tone === 'warn') toast.warning(said.text);
+      else toast.success(said.text);
     } catch (error) {
       toast.error((error as Error).message);
     }

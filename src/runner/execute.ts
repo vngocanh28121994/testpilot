@@ -121,6 +121,12 @@ export function runSuite(
    * Bỏ trống là config thường của máy này.
    */
   configFile?: string,
+  /**
+   * Dừng RIÊNG lượt này. Từ khi một runner chạy nhiều job cùng lúc, `stopSuite`
+   * — dừng mọi thứ máy này đang chạy — là sai cho gần như mọi trường hợp: mất
+   * chỗ giữ một chiếc máy không được làm đứt lượt chạy trên chiếc bên cạnh.
+   */
+  signal?: AbortSignal,
 ): Promise<RunSuiteOutcome> {
   return new Promise<RunSuiteOutcome>((resolve, reject) => {
     const { bin, entry } = cliCommand('run');
@@ -143,6 +149,7 @@ export function runSuite(
     log(`$ tsx ${args.join(' ')}`);
 
     const child = spawn(bin, args, { env: process.env });
+    stopOnAbort(child, signal);
     // Tag từ UI đã mang sẵn dấu @; thêm một cái nữa thành "@@feature-dang-nhap"
     // trong danh sách lượt chạy đang sống.
     const label = `${platform}${device ? ` · ${device}` : ''}${tag ? ` · ${tag.startsWith('@') ? tag : `@${tag}`}` : ''}`;
@@ -250,8 +257,10 @@ export function runSuiteParallel(
   appSource?: 'device' | 'upload',
   /** Config của riêng job — xem `runSuite`. `run-parallel` chuyển nó cho từng lượt con. */
   configFile?: string,
-) {
-  return new Promise<void>((resolve, reject) => {
+  /** Dừng riêng lượt này — xem `runSuite`. */
+  signal?: AbortSignal,
+): Promise<{ code: number | null; stopped: boolean }> {
+  return new Promise((resolve, reject) => {
     const { bin, entry } = cliCommand('run-parallel');
     const args = [
       entry,
@@ -267,6 +276,7 @@ export function runSuiteParallel(
     log(`$ tsx ${args.join(' ')}`);
 
     const child = spawn(bin, args, { env: process.env });
+    stopOnAbort(child, signal);
     track(child, 'src/cli/run-parallel.ts', `run song song ${platform}`);
     const pipe = (chunk: Buffer) =>
       chunk.toString().split('\n').filter(Boolean).map(cleanLog).forEach(log);
@@ -283,9 +293,27 @@ export function runSuiteParallel(
             ? '\n⊘ Test đã bị dừng.'
             : `\n✗ Có thiết bị fail (mã ${code}) — xem log theo tiền tố [tên máy] ở trên.`,
       );
-      resolve();
+      resolve({ code, stopped });
     });
   });
+}
+
+/**
+ * Gửi SIGTERM cho đúng một tiến trình khi `signal` bị huỷ.
+ *
+ * SIGTERM chứ không SIGKILL, như `stopSuite`: `run.ts` còn phải đóng phiên
+ * Appium của nó, và `run-parallel` còn phải chuyển tín hiệu cho từng máy rồi
+ * gộp phần đã học được.
+ */
+function stopOnAbort(child: ReturnType<typeof spawn>, signal: AbortSignal | undefined): void {
+  if (!signal) return;
+  const kill = (): void => { if (child.exitCode === null) child.kill('SIGTERM'); };
+  if (signal.aborted) {
+    kill();
+    return;
+  }
+  signal.addEventListener('abort', kill, { once: true });
+  child.on('close', () => signal.removeEventListener('abort', kill));
 }
 
 /**

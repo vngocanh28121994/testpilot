@@ -29,6 +29,7 @@ import { LOCAL_HOST_RUNNER } from '../remoteRuns.js';
 import type { JobQueue, JobRecord } from '../queue/queue.js';
 import type { RouteTable } from './types.js';
 import { friendlyError } from '../../core/friendlyError.js';
+import { stopLocalJob } from '../../runner/jobControl.js';
 
 /** Trạng thái mà job không đổi nữa. */
 const CLOSED = ['succeeded', 'failed', 'cancelled', 'interrupted'];
@@ -345,7 +346,33 @@ export const runRoutes: RouteTable = {
     });
   },
 
-  'POST /api/run/stop': async (_req, res) => json(res, 200, await localRunner.run.stop()),
+  /**
+   * Dừng job — RIÊNG những job người bấm đã đặt.
+   *
+   * Không kèm `jobIds` thì giữ hành vi cũ: dừng mọi thứ máy này đang chạy.
+   * Đúng khi một runner chỉ chạy một job; sai từ khi mỗi thiết bị chạy một
+   * job, vì nút Dừng của người A sẽ cắt ngang lượt chạy của người B. Giao diện
+   * gửi `jobIds` của chính lượt nó đang xem.
+   *
+   * Mỗi job một kết quả, nói bằng lời: job còn chờ thì huỷ luôn, job đang chạy
+   * ở máy này thì dừng, job chạy ở máy khác thì nói thẳng là chưa dừng từ xa
+   * được — thay vì trả "đã dừng" cho một lượt vẫn đang bấm vào điện thoại.
+   */
+  'POST /api/run/stop': async (req, res, _url, ctx) => {
+    const body = await readJson<{ jobIds?: unknown }>(req).catch(() => ({} as { jobIds?: unknown }));
+    const ids = Array.isArray(body.jobIds)
+      ? [...new Set(body.jobIds.filter((id): id is string => typeof id === 'string' && id.length > 0))].slice(0, 50)
+      : [];
+    if (ids.length === 0) return json(res, 200, await localRunner.run.stop());
+
+    const isAdmin = allows(ctx.identity.role, 'admin');
+    const results: StopResult[] = [];
+    for (const id of ids) {
+      results.push(await stopJob(ctx.repos.queue, id, ctx.identity, isAdmin));
+    }
+    const stopped = results.filter((r) => r.outcome === 'cancelled' || r.outcome === 'stopping').length;
+    return json(res, 200, { stopped: stopped > 0, results });
+  },
 
   /**
    * Hàng đợi: cái gì đang chờ, cái gì đang chạy, cái gì vừa xong.
@@ -402,3 +429,47 @@ export const runRoutes: RouteTable = {
     return;
   },
 };
+
+export interface StopResult {
+  jobId: string;
+  outcome: 'cancelled' | 'stopping' | 'finished' | 'elsewhere' | 'forbidden' | 'missing';
+  message: string;
+}
+
+const CANCELLED_WHILE_QUEUED = 'Đã huỷ khi job còn đang chờ trong hàng đợi.';
+
+/** Dừng một job, và nói bằng lời chuyện gì đã xảy ra với nó. */
+export async function stopJob(
+  queue: JobQueue,
+  id: string,
+  identity: { orgId: string; userId: string },
+  isAdmin: boolean,
+): Promise<StopResult> {
+  const job = await queue.find(id);
+  if (!job || job.orgId !== identity.orgId) {
+    return { jobId: id, outcome: 'missing', message: 'Không tìm thấy job này — có thể nó đã bị dọn.' };
+  }
+  if (job.createdBy !== identity.userId && !isAdmin) {
+    return {
+      jobId: id, outcome: 'forbidden',
+      message: 'Job này do người khác đặt. Chỉ người đặt hoặc admin mới dừng được.',
+    };
+  }
+  if (CLOSED.includes(job.state)) {
+    return { jobId: id, outcome: 'finished', message: 'Job đã kết thúc trước đó.' };
+  }
+  if (job.state === 'queued') {
+    if (await queue.cancelQueued?.(id, CANCELLED_WHILE_QUEUED)) {
+      return { jobId: id, outcome: 'cancelled', message: CANCELLED_WHILE_QUEUED };
+    }
+    // Vừa có runner nhận ngay giữa hai câu lệnh: đi tiếp đường job đang chạy.
+  }
+  if (stopLocalJob(id)) {
+    return { jobId: id, outcome: 'stopping', message: 'Đang dừng lượt chạy.' };
+  }
+  return {
+    jobId: id, outcome: 'elsewhere',
+    message: 'Job đang chạy trên một máy khác (runner riêng) — hệ thống chưa dừng từ xa được. '
+      + 'Dừng trên chính máy đó, hoặc đợi lượt chạy xong.',
+  };
+}

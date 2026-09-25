@@ -25,7 +25,7 @@ import { uploadRuns } from './artifacts.js';
 import { readToken } from './credentials.js';
 import { ProtocolMismatchError, RemoteJobQueue } from './remote.js';
 import { applyUpdate, EXIT_UPDATED, planUpdate } from './update.js';
-import { startWorker } from './worker.js';
+import { maxJobsFromEnv, startWorker } from './worker.js';
 import { buildFetcher } from './appBuild.js';
 
 /** Đẩy log đi mỗi nửa giây. Đủ nhanh để người xem thấy gần như tức thì. */
@@ -147,6 +147,7 @@ async function main(): Promise<void> {
     runnerId: name,
     configFile,
     runner,
+    maxJobs: maxJobsFromEnv(),
     // Device Farm tự quản thiết bị của nó: không udid để giữ chỗ, và việc xếp
     // hàng đợi máy xảy ra bên trong AWS.
     managesOwnDevices: mode === 'farm',

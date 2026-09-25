@@ -413,4 +413,21 @@ export function logContract(
     assert.deepEqual(states, ['running', 'succeeded']);
     off();
   });
+
+  it('huỷ được job CÒN CHỜ, và không huỷ được job đã có runner nhận', async () => {
+    const queue = await fresh();
+    assert.ok(queue.cancelQueued, 'mọi hàng đợi phía máy chủ phải huỷ được job còn chờ');
+    const waiting = await queue.create(androidJob());
+    const cancelled = await queue.cancelQueued!(waiting.id, 'Người dùng huỷ.');
+    assert.equal(cancelled?.state, 'cancelled');
+    assert.equal((await queue.find(waiting.id))?.error, 'Người dùng huỷ.');
+    // Đã huỷ thì không runner nào nhận được nữa.
+    assert.equal(await queue.claim({ runnerId: 'a' }), undefined);
+
+    // Job đã chạy: câu ghi phải TỪ CHỐI, không đè "đã huỷ" lên một lượt đang bấm.
+    const running = await queue.create(androidJob());
+    await queue.claim({ runnerId: 'a' });
+    assert.equal(await queue.cancelQueued!(running.id, 'muộn'), undefined);
+    assert.equal((await queue.find(running.id))?.state, 'running');
+  });
 }

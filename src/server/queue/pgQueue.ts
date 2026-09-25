@@ -167,6 +167,17 @@ export class PgJobQueue implements JobQueue {
     return rows[0] ? toRecord(rows[0]) : undefined;
   }
 
+  async cancelQueued(id: string, reason: string): Promise<JobRecord | undefined> {
+    const { rows } = await this.pool.query<JobRow>(
+      `UPDATE job SET state = 'cancelled', finished_at = $3, error = $4, result = $5
+       WHERE org_id = $1 AND id = $2 AND state = 'queued'
+       RETURNING *`,
+      [this.orgId, id, new Date().toISOString(), reason,
+        { type: 'job.result', jobId: id, state: 'cancelled', error: reason } satisfies JobResult],
+    );
+    return rows[0] ? toRecord(rows[0]) : undefined;
+  }
+
   async release(id: string, reason: string): Promise<JobRecord | undefined> {
     const { rows } = await this.pool.query<JobRow>(
       `UPDATE job

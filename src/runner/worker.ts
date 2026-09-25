@@ -7,9 +7,17 @@
  * worker ấy ở cách đó ba dòng code. Nhờ vậy cùng một vòng lặp chạy được ở máy
  * có thiết bị cắm vào, cách server một mạng LAN, mà không đổi một dòng nào.
  *
- * Vòng lặp cố tình ngu: đòi một job, chạy xong mới đòi tiếp. Chạy song song
- * nhiều job trên một máy là việc của lease (P3.2) — ở đây mà làm thì hai job
- * sẽ tranh cùng một chiếc điện thoại, và không ai phân xử.
+ * Mỗi thiết bị một job: worker nhận thêm job khi còn chỗ — số máy đang cắm,
+ * cộng một chỗ cho job web. Bản đầu cố tình chạy từng job một, chờ lease (P3.2) phân xử việc
+ * hai job tranh một chiếc điện thoại. Lease đã có — giữ chỗ theo từng udid,
+ * tất cả hoặc không — nên chạy tuần tự chỉ còn là một hàng chờ vô cớ: iPhone
+ * rảnh mà job iOS vẫn đứng sau một lượt Android dài mười lăm phút.
+ *
+ * Hai thứ phải đổi theo, vì chúng từng mặc định "chỉ có một lượt":
+ *  - Dừng: mỗi job có bộ huỷ riêng ([jobControl.ts](./jobControl.ts)), không
+ *    còn `stopSuite` giết mọi thứ máy này đang chạy.
+ *  - Ghi kho dùng chung: lượt chạy luôn hoãn ghi, rồi worker gộp lại dưới một
+ *    khoá tệp — hai lượt xong cùng lúc không còn ghi đè lên nhau.
  */
 import { loadConfig, type TestPilotConfig } from '../config.js';
 import { prepareJobWorkspace, type JobApp, type JobWorkspace } from './jobWorkspace.js';
@@ -20,7 +28,9 @@ import type { JobRecord, JobQueue } from '../server/queue/queue.js';
 import { LeaseTakenError, type Lease, type LeaseHolder, type LeaseRepo } from '../server/db/repo.js';
 import { PREP_OPS, type JobResult } from '../protocol/messages.js';
 import { friendlyError } from '../core/friendlyError.js';
+import { mergeRunLearnings } from '../core/learned.js';
 import { localRunner, type Runner } from './index.js';
+import { trackJob, untrackJob } from './jobControl.js';
 
 export interface WorkerDeps {
   queue: JobQueue;
@@ -60,6 +70,14 @@ export interface WorkerDeps {
    * hơn: để test mô tả được những config khác với config của chính dự án này.
    */
   config?: () => Promise<TestPilotConfig>;
+  /**
+   * Chạy tối đa bao nhiêu job cùng lúc. Bỏ trống là số máy đang cắm CỘNG MỘT:
+   * mỗi thiết bị một job, thêm một chỗ cho job web — job web không cần điện
+   * thoại nào, và bắt nó đứng sau một lượt iOS dài là đúng cái hàng chờ vô cớ
+   * mà worker này bỏ đi. Lease vẫn là chỗ bảo đảm hai job không chạy trên cùng
+   * một máy — con số này chỉ là trần tải của máy tính.
+   */
+  maxJobs?: number;
   /** Nhịp hỏi hàng đợi. Nhỏ thì job chạy nhanh hơn, to thì đỡ tốn CPU khi rỗi. */
   pollMs?: number;
   /** Nhịp gia hạn lease. Phải nhỏ hơn TTL 60 giây, và có lề cho một nhịp lỡ. */
@@ -112,8 +130,10 @@ export interface WorkerDeps {
 
 export interface WorkerHandle {
   stop(): void;
-  /** Job đang chạy, để test và để `/api/jobs` nói được ai đang làm gì. */
+  /** Một job đang chạy (job nhận sớm nhất) — giữ cho nơi gọi cũ. */
   current(): string | undefined;
+  /** Mọi job đang chạy trên worker này. */
+  running(): string[];
   /**
    * Phép đo môi trường gần nhất — thứ worker vẫn dùng để TỪ CHỐI job.
    *
@@ -124,11 +144,28 @@ export interface WorkerHandle {
   environment(): PrereqByPlatform;
 }
 
+/**
+ * Trần số job chạy cùng lúc, đặt bằng `TESTPILOT_MAX_JOBS`.
+ *
+ * Mặc định (không đặt) là mỗi thiết bị một job, cộng một chỗ cho job web. Đặt khi máy tính yếu hơn số
+ * điện thoại cắm vào nó — ví dụ `2` cho một laptop cắm sáu máy. Giá trị không
+ * đọc được thì bỏ qua và nói ra, thay vì lặng lẽ chạy tuần tự.
+ */
+export function maxJobsFromEnv(env: NodeJS.ProcessEnv = process.env): number | undefined {
+  const raw = env.TESTPILOT_MAX_JOBS?.trim();
+  if (!raw) return undefined;
+  const value = Number(raw);
+  if (Number.isInteger(value) && value >= 1) return value;
+  console.warn(`[worker] TESTPILOT_MAX_JOBS="${raw}" không phải số nguyên dương — dùng mặc định: mỗi thiết bị một job.`);
+  return undefined;
+}
+
 export function startWorker(deps: WorkerDeps): WorkerHandle {
   const runner = deps.runner ?? localRunner;
   let stopped = false;
-  let busy = false;
-  let current: string | undefined;
+  /** Đang hỏi hàng đợi — để hai nhịp liền nhau không cùng đòi một lúc. */
+  let claiming = false;
+  const running = new Set<string>();
 
   /**
    * Ảnh chụp máy đang cắm, làm mới nhiều nhất mười giây một lần.
@@ -187,28 +224,41 @@ export function startWorker(deps: WorkerDeps): WorkerHandle {
     return snapshot.devices;
   };
 
+  /**
+   * Vòng lặp KHÔNG được chết vì một job hỏng: nó còn phải phục vụ job sau.
+   * Nhưng im lặng thì cũng không được — một worker đã chết và một worker đang
+   * rỗi trông giống hệt nhau từ ngoài.
+   */
+  const broken = (err: unknown): void => {
+    console.error('[worker] vòng lặp hỏng:', (err as Error).message);
+  };
+
   const tick = async (): Promise<void> => {
-    if (stopped || busy) return;
-    busy = true;
+    if (stopped || claiming) return;
+    claiming = true;
     try {
       const devices = await attached();
       await environment();
+      if (running.size >= (deps.maxJobs ?? devices.length + 1)) return;
       const job = await deps.queue.claim({
         runnerId: deps.runnerId,
         platforms: deps.platforms ?? runnerPlatforms(devices),
         ...(deps.maxPerUser !== undefined ? { maxPerUser: deps.maxPerUser } : {}),
       });
       if (!job) return;
-      current = job.id;
-      await run(job, deps, runner, devices, prereq.report);
+      running.add(job.id);
+      const abort = trackJob(job.id);
+      // KHÔNG chờ: job chạy trong nền, nhịp sau nhận tiếp job cho máy khác.
+      void run(job, deps, runner, devices, prereq.report, abort)
+        .catch(broken)
+        .finally(() => {
+          running.delete(job.id);
+          untrackJob(job.id);
+        });
     } catch (err) {
-      // Vòng lặp KHÔNG được chết vì một job hỏng: nó còn phải phục vụ job sau.
-      // Nhưng im lặng thì cũng không được — một worker đã chết và một worker
-      // đang rỗi trông giống hệt nhau từ ngoài.
-      console.error('[worker] vòng lặp hỏng:', (err as Error).message);
+      broken(err);
     } finally {
-      current = undefined;
-      busy = false;
+      claiming = false;
     }
   };
 
@@ -219,7 +269,8 @@ export function startWorker(deps: WorkerDeps): WorkerHandle {
 
   return {
     stop: () => { stopped = true; clearInterval(timer); },
-    current: () => current,
+    current: () => running.values().next().value,
+    running: () => [...running],
     environment: () => prereq.report,
   };
 }
@@ -231,6 +282,8 @@ async function run(
   runner: Runner,
   attached: AttachedDevice[],
   prereq: PrereqByPlatform,
+  /** Bộ huỷ của RIÊNG job này — nút Dừng, hoặc mất chỗ giữ máy. */
+  abort: AbortController = new AbortController(),
 ): Promise<void> {
   // Giữ vài chục dòng cuối: khi lượt chạy hỏng, câu lỗi của job phải nói
   // được VÌ SAO — không chỉ "mã 1" (xem `outcomeToResult`).
@@ -351,7 +404,9 @@ async function run(
         if (still) continue;
         lost ??= `Mất chỗ giữ thiết bị ${lease.deviceId}.`;
         log(`[job] ${lost} Đang dừng lượt chạy.`);
-        await runner.run.stop().catch(() => undefined);
+        // Chỉ lượt NÀY. `runner.run.stop()` dừng mọi thứ máy này đang chạy —
+        // kể cả job của người khác trên những chiếc máy vẫn còn giữ chỗ.
+        abort.abort();
         return;
       }
     })();
@@ -410,15 +465,24 @@ async function run(
 
     if (picked.length > 1) {
       // Nhiều máy: cùng đường mà nút "chạy" vẫn đi, không phải một đường thứ hai.
+      // `run-parallel` tự gộp phần học được, dưới cùng khoá tệp với worker.
       const platforms = [...new Set(picked.map((device) => device.platform))].join(',');
       const tokens = picked.map((device) => `${device.platform}:${device.id}`);
-      await runner.run.startParallel(
+      const outcome = await runner.run.startParallel(
         platforms, tokens, params.tag, Boolean(params.includeQuarantined), log,
-        params.env, params.appSource, workspace?.configFile,
+        params.env, params.appSource, workspace?.configFile, abort.signal,
       );
       await close(deps, job, lost
         ? { type: 'job.result', jobId: job.id, state: 'interrupted', error: lost }
-        : { type: 'job.result', jobId: job.id, state: 'succeeded' });
+        // Bản giả trong test cũ không trả gì: coi như xong, như trước đây.
+        : outcome && (outcome.stopped || abort.signal.aborted)
+          ? { type: 'job.result', jobId: job.id, state: 'cancelled', error: 'Lượt chạy đã bị dừng.' }
+          : outcome && outcome.code !== 0 && outcome.code !== 2
+            ? {
+              type: 'job.result', jobId: job.id, state: 'failed',
+              error: `Có thiết bị không đạt (mã ${outcome.code}) — xem log theo tiền tố [tên máy].`,
+            }
+            : { type: 'job.result', jobId: job.id, state: 'succeeded' });
       return;
     }
 
@@ -442,6 +506,11 @@ async function run(
       });
       return;
     }
+    // Snapshot thì LUÔN gửi phần học được về máy chủ: registry của lượt này
+    // là bản chép trong thư mục job, và nó bị xoá khi job xong. Ghi thẳng vào
+    // đó là học xong rồi vứt. Hoãn thì phần học được nằm ở thư mục lượt chạy
+    // và đi về máy chủ qua `registryProposal`, như mọi runner đứng riêng.
+    const propose = deps.deferSharedWrites || Boolean(job.spec.snapshot);
     const outcome = await runner.run.startSuite(
       one?.platform ?? params.platform,
       params.tag,
@@ -453,18 +522,17 @@ async function run(
       params.feature,
       undefined,
       params.appSource,
-      // Snapshot thì LUÔN hoãn ghi: registry của lượt này là bản chép trong
-      // thư mục job, và nó bị xoá khi job xong. Ghi thẳng vào đó là học xong
-      // rồi vứt. Hoãn thì phần học được nằm ở thư mục lượt chạy và đi về máy
-      // chủ qua `registryProposal`, như mọi runner đứng riêng.
-      deps.deferSharedWrites || Boolean(job.spec.snapshot),
+      // LUÔN hoãn ghi, kể cả khi kho dùng chung nằm ngay trên máy này: một job
+      // khác có thể xong cùng lúc, và hai lượt ghi đè cả tệp thì lượt sau xoá
+      // phần lượt trước. Worker gộp lại bên dưới, dưới khoá tệp.
+      true,
       workspace?.configFile,
+      abort.signal,
     );
 
-    const learned = await harvest(
-      { ...deps, deferSharedWrites: deps.deferSharedWrites || Boolean(job.spec.snapshot) },
-      runner, outcome.runDirs, log,
-    );
+    const learned = propose
+      ? await harvest({ ...deps, deferSharedWrites: true }, runner, outcome.runDirs, log)
+      : await mergeHere(deps, outcome.runDirs, log);
     // TRƯỚC khi đóng job: người mở kết quả ngay lúc nó chuyển sang "xong" phải
     // thấy được report. Đẩy sau khi đóng nghĩa là có một khoảng thời gian màn
     // hình nói đã xong mà bấm vào thì chưa có gì.
@@ -528,6 +596,40 @@ async function hold(
   }
   log(`[job] Đã giữ chỗ: ${deviceIds.join(', ')}.`);
   return { ok: true, leases };
+}
+
+/**
+ * Gộp phần lượt chạy học được vào kho dùng chung TRÊN MÁY NÀY.
+ *
+ * Đường của worker nhúng trong máy chủ (và bản local): kho nằm ngay trên đĩa,
+ * nên gộp thẳng — cùng hàm `run-parallel` dùng, dưới cùng một khoá tệp.
+ *
+ * Hỏng ở đây KHÔNG làm hỏng job, cùng lý do với `harvest`: lượt chạy đã xong
+ * và kết quả đã có. Nhưng phải nói ra, vì mất phần học được mà im lặng là thứ
+ * cả cơ chế này sinh ra để chống.
+ */
+async function mergeHere(
+  deps: WorkerDeps,
+  runDirs: string[],
+  log: (line: string) => void,
+): Promise<undefined> {
+  if (runDirs.length === 0) return undefined;
+  try {
+    const cfg = await (deps.config?.() ?? loadConfig(deps.configFile));
+    const summary = await mergeRunLearnings({
+      runDirs,
+      runsRoot: cfg.paths.runs,
+      registryPath: cfg.paths.registry,
+      runtimeRegistryPath: 'registry/runtime-registry.json',
+      flakeDbPath: cfg.paths.flakeDb,
+      healingDbPath: cfg.paths.healingDb,
+      flakePolicy: cfg.flake,
+    });
+    for (const skip of summary.skipped) log(`[job] ⚠ ${skip.runId}: ${skip.reason}`);
+  } catch (err) {
+    log(`[job] ⚠ Không ghi được phần lượt chạy học được vào registry: ${friendlyError(err)}`);
+  }
+  return undefined;
 }
 
 /**

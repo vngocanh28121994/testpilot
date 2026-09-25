@@ -58,3 +58,6 @@ dist-runner/
 .env.server
 .env.server.*
 !.env.server.example
+
+# Khoá gộp kết quả giữa các lượt chạy song song (src/core/fileLock.ts)
+.merge.lock

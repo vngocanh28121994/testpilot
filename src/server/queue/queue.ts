@@ -102,6 +102,19 @@ export interface JobQueue {
   defer(id: string, reason: string, delayMs: number): Promise<JobRecord | undefined>;
 
   /**
+   * Huỷ một job CÒN ĐANG CHỜ. `undefined` nếu job không còn ở `queued` — đã có
+   * runner nhận, hoặc đã xong — và lúc ấy người gọi phải dừng nó theo đường
+   * của job đang chạy.
+   *
+   * Tách khỏi `finish` vì `finish` ghi bất kể trạng thái: gọi nó cho một job
+   * vừa được nhận ở giây trước là đánh dấu "đã huỷ" một lượt vẫn đang bấm vào
+   * điện thoại. Điều kiện `state = 'queued'` phải nằm TRONG câu ghi.
+   *
+   * Tuỳ chọn: hàng đợi phía runner đứng riêng không huỷ hộ ai.
+   */
+  cancelQueued?(id: string, reason: string): Promise<JobRecord | undefined>;
+
+  /**
    * Trả job về hàng đợi để máy khác nhận.
    *
    * Dùng khi runner từ chối vì lý do CỦA RIÊNG NÓ — hết đĩa, mất mạng. Lý do

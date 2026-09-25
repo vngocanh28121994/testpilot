@@ -16,6 +16,7 @@ import { parseIosXml } from '../discovery/NativeObservationAdapter.js';
 import { DOM_OBSERVE_SCRIPT, observeDomInPage, type RawEl } from './domObserve.js';
 import { isContainerElement } from '../discovery/UiObservation.js';
 import { checkAppVersion } from './appVersion.js';
+import { sessionPort } from './sessionPorts.js';
 
 const execAsync = promisify(execCb);
 
@@ -334,6 +335,21 @@ export class NativeUiDriver implements UiDriver {
       await this.clearBlockingDialogs();
       await this.killWebViewApps();
     }
+    // Cổng phía máy tính của phiên này — xem [sessionPorts.ts](./sessionPorts.ts).
+    // iOS không có udid, hoặc udid dạng simulator, giữ đúng hành vi cũ.
+    const simulator = !isAndroid
+      && (!this.opts.udid || /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(this.opts.udid));
+    const bridge = await sessionPort(
+      isAndroid ? 'android' : 'ios',
+      isAndroid ? this.opts.systemPort : this.opts.wdaLocalPort,
+      { simulator },
+    );
+    if (bridge.moved) {
+      console.log(
+        `[native] Cổng ${isAndroid ? 'systemPort' : 'wdaLocalPort'} ${bridge.moved.from} đang bận `
+        + `(thường là một lượt chạy khác trên máy này) — lượt này dùng cổng ${bridge.moved.to}.`,
+      );
+    }
     try {
     this.browser = await remote({
       hostname: this.opts.hostname ?? '127.0.0.1',
@@ -378,11 +394,11 @@ export class NativeUiDriver implements UiDriver {
         // of these, and adding them unasked would change which handset Appium
         // picks and which ports it binds.
         ...(this.opts.udid ? { 'appium:udid': this.opts.udid } : {}),
-        ...(isAndroid && this.opts.systemPort
-          ? { 'appium:systemPort': this.opts.systemPort }
+        ...(isAndroid && bridge.port
+          ? { 'appium:systemPort': bridge.port }
           : {}),
-        ...(!isAndroid && this.opts.wdaLocalPort
-          ? { 'appium:wdaLocalPort': this.opts.wdaLocalPort }
+        ...(!isAndroid && bridge.port
+          ? { 'appium:wdaLocalPort': bridge.port }
           : {}),
         ...(this.opts.app ? { 'appium:app': this.opts.app } : {}),
         ...(this.opts.app && this.opts.enforceAppInstall

@@ -441,9 +441,8 @@ describe('worker và chỗ giữ thiết bị', () => {
     const leases = new MemoryLeaseRepo();
     const job = await queue.create(androidJob(['android:emulator-5554']));
 
-    let stopped = 0;
-    let release: (() => void) | undefined;
-    const slow = new Promise<void>((resolve) => { release = resolve; });
+    let stopAll = 0;
+    let aborted = 0;
     const runner = {
       run: {
         parseDeviceToken: (token: string) => {
@@ -457,12 +456,16 @@ describe('worker và chỗ giữ thiết bị', () => {
       // `--device` nhận đúng cái tên ấy — cùng hành vi mà `isNamedDevice: true`
       // mô tả trước đây.
       configIdFor: async (picked: { id: string }) => picked.id,
-        startSuite: async () => {
-          await slow;
-          return { code: 0, stopped: true, reportPaths: [], runDirs: [] };
+        // Lượt chạy chỉ kết thúc khi bộ huỷ RIÊNG của nó bị gọi — tham số
+        // cuối, như `runSuite` thật.
+        startSuite: async (...args: unknown[]) => {
+          const signal = args[12] as AbortSignal;
+          await new Promise<void>((resolve) => signal.addEventListener('abort', () => resolve(), { once: true }));
+          aborted += 1;
+          return { code: null, stopped: true, reportPaths: [], runDirs: [] };
         },
         startParallel: async () => undefined as never,
-        stop: async () => { stopped += 1; release?.(); return { stopped: 1 } as never; },
+        stop: async () => { stopAll += 1; return { stopped: 1 } as never; },
       },
       control: {
         devices: async () => [{ platform: 'android' as const, udid: 'emulator-5554', label: 'x' }],
@@ -482,7 +485,9 @@ describe('worker và chỗ giữ thiết bị', () => {
       await leases.release(lease.id);
 
       assert.equal(await settled(queue, job.id), 'interrupted');
-      assert.ok(stopped > 0, 'phải DỪNG lượt chạy, không chỉ ghi nhận');
+      assert.equal(aborted, 1, 'phải DỪNG lượt chạy, không chỉ ghi nhận');
+      // Dừng mọi thứ máy này đang chạy là cắt luôn job của người khác.
+      assert.equal(stopAll, 0, 'chỉ dừng lượt của job này, không gọi dừng tất cả');
       assert.match((await queue.find(job.id))?.error ?? '', /Mất chỗ giữ thiết bị/);
     } finally {
       worker.stop();
@@ -947,6 +952,236 @@ describe('worker: song song cả Android lẫn iOS với bản đã tải lên',
       assert.equal(await settled(queue, job.id), 'failed');
       assert.equal(ran, false);
       assert.match((await queue.find(job.id))?.error ?? '', /bản build ios/);
+    } finally {
+      worker.stop();
+    }
+  });
+});
+
+describe('worker: mỗi thiết bị một job', () => {
+  /**
+   * Runner giả có HAI máy Android và một cổng chặn: mọi lượt chạy đứng chờ ở
+   * cổng cho tới khi bài test mở, hoặc tới khi bộ huỷ riêng của nó bị gọi. Nhờ
+   * vậy bài test đếm được bao nhiêu lượt đang chạy CÙNG LÚC.
+   */
+  function gatedRunner(devices = ['emulator-5554', 'emulator-5556']) {
+    let open: () => void = () => undefined;
+    const gate = new Promise<void>((resolve) => { open = resolve; });
+    const state = { live: 0, peak: 0, started: [] as string[], defer: [] as unknown[], stopAll: 0 };
+    const runner = {
+      run: {
+        parseDeviceToken: (token: string) => {
+          const [platform, ...rest] = token.split(':');
+          return { platform, id: rest.join(':') } as { platform: 'android'; id: string };
+        },
+        isNamedDevice: async () => true,
+        configIdFor: async (picked: { id: string }) => picked.id,
+        startSuite: async (...args: unknown[]) => {
+          const device = args[5] as string;
+          const signal = args[12] as AbortSignal | undefined;
+          state.started.push(device);
+          state.defer.push(args[10]);
+          state.live += 1;
+          state.peak = Math.max(state.peak, state.live);
+          const stopped = await Promise.race([
+            gate.then(() => false),
+            new Promise<boolean>((resolve) => signal?.addEventListener('abort', () => resolve(true), { once: true })),
+          ]);
+          state.live -= 1;
+          return { code: stopped ? null : 0, stopped, reportPaths: [], runDirs: [] };
+        },
+        startParallel: async () => undefined as never,
+        stop: async () => { state.stopAll += 1; return { stopped: 1 } as never; },
+      },
+      control: {
+        devices: async () => devices.map((udid) => ({ platform: 'android' as const, udid, label: udid })),
+      },
+      prereq: {
+        appiumStatus: async () => ({ running: true, managed: true }),
+        xcode: async () => ({ ok: true }),
+      },
+    } as unknown as Runner;
+    return { runner, state, open: () => open() };
+  }
+
+  async function until(check: () => boolean | Promise<boolean>, within = 2_000): Promise<void> {
+    const deadline = Date.now() + within;
+    while (!(await check())) {
+      if (Date.now() > deadline) throw new Error('hết giờ chờ điều kiện');
+      await new Promise((resolve) => setTimeout(resolve, 5));
+    }
+  }
+
+  it('hai job trên hai máy chạy CÙNG LÚC, không xếp hàng sau nhau', async () => {
+    const queue = new MemoryJobQueue();
+    const a = await queue.create(androidJob(['android:emulator-5554']));
+    const b = await queue.create(androidJob(['android:emulator-5556']));
+    const { runner, state, open } = gatedRunner();
+    const worker = startWorker({
+      queue, leases: new MemoryLeaseRepo(), runnerId: 'local', configFile: 'x.json', config, pollMs: 5, runner,
+    });
+    try {
+      // Cả hai phải bắt đầu TRƯỚC khi lượt nào xong — cổng còn đóng.
+      await until(() => state.live === 2);
+      assert.deepEqual([...state.started].sort(), ['emulator-5554', 'emulator-5556']);
+      assert.equal(worker.running().length, 2);
+      open();
+      assert.equal(await settled(queue, a.id), 'succeeded');
+      assert.equal(await settled(queue, b.id), 'succeeded');
+    } finally {
+      worker.stop();
+    }
+  });
+
+  it('hai job cùng MỘT máy thì job sau chờ, không chạy chồng', async () => {
+    const queue = new MemoryJobQueue();
+    const a = await queue.create(androidJob(['android:emulator-5554']));
+    const b = await queue.create(androidJob(['android:emulator-5554']));
+    const { runner, state, open } = gatedRunner();
+    const worker = startWorker({
+      queue, leases: new MemoryLeaseRepo(), runnerId: 'local', configFile: 'x.json', config,
+      pollMs: 5, deferMs: 10, runner,
+    });
+    try {
+      await until(() => state.live === 1);
+      // Cho job thứ hai vài vòng để thử — nó phải bị hoãn vì máy đang bận.
+      await new Promise((resolve) => setTimeout(resolve, 60));
+      assert.equal(state.peak, 1, 'không được có hai lượt chạy trên một máy');
+      open();
+      assert.equal(await settled(queue, a.id), 'succeeded');
+      assert.equal(await settled(queue, b.id), 'succeeded');
+      assert.equal(state.peak, 1);
+    } finally {
+      worker.stop();
+    }
+  });
+
+  it('trần maxJobs giữ số lượt chạy cùng lúc, kể cả khi còn máy rảnh', async () => {
+    const queue = new MemoryJobQueue();
+    const a = await queue.create(androidJob(['android:emulator-5554']));
+    const b = await queue.create(androidJob(['android:emulator-5556']));
+    const { runner, state, open } = gatedRunner();
+    const worker = startWorker({
+      queue, leases: new MemoryLeaseRepo(), runnerId: 'local', configFile: 'x.json', config,
+      pollMs: 5, maxJobs: 1, runner,
+    });
+    try {
+      await until(() => state.live === 1);
+      await new Promise((resolve) => setTimeout(resolve, 60));
+      assert.equal(state.peak, 1);
+      open();
+      assert.equal(await settled(queue, a.id), 'succeeded');
+      assert.equal(await settled(queue, b.id), 'succeeded');
+    } finally {
+      worker.stop();
+    }
+  });
+
+  it('dừng một job KHÔNG dừng job đang chạy trên máy bên cạnh', async () => {
+    const { stopLocalJob } = await import('../jobControl.js');
+    const queue = new MemoryJobQueue();
+    const a = await queue.create(androidJob(['android:emulator-5554']));
+    const b = await queue.create(androidJob(['android:emulator-5556']));
+    const { runner, state, open } = gatedRunner();
+    const worker = startWorker({
+      queue, leases: new MemoryLeaseRepo(), runnerId: 'local', configFile: 'x.json', config, pollMs: 5, runner,
+    });
+    try {
+      await until(() => state.live === 2);
+      assert.equal(stopLocalJob(a.id), true);
+      assert.equal(await settled(queue, a.id), 'cancelled');
+      // Job kia vẫn đang chạy, và chưa ai gọi "dừng tất cả".
+      assert.equal((await queue.find(b.id))?.state, 'running');
+      assert.equal(state.stopAll, 0);
+      open();
+      assert.equal(await settled(queue, b.id), 'succeeded');
+      // Job đã xong thì không còn trong sổ để dừng nữa.
+      await until(() => worker.running().length === 0);
+      assert.equal(stopLocalJob(b.id), false);
+    } finally {
+      worker.stop();
+    }
+  });
+
+  it('lượt chạy luôn hoãn ghi kho dùng chung — worker gộp lại sau, dưới khoá', async () => {
+    const queue = new MemoryJobQueue();
+    const job = await queue.create(androidJob(['android:emulator-5554']));
+    const { runner, state, open } = gatedRunner();
+    open();
+    const worker = startWorker({
+      queue, leases: new MemoryLeaseRepo(), runnerId: 'local', configFile: 'x.json', config, pollMs: 5, runner,
+    });
+    try {
+      assert.equal(await settled(queue, job.id), 'succeeded');
+      assert.deepEqual(state.defer, [true]);
+    } finally {
+      worker.stop();
+    }
+  });
+});
+
+describe('maxJobsFromEnv', () => {
+  it('đọc số nguyên dương, bỏ qua giá trị hỏng', async () => {
+    const { maxJobsFromEnv } = await import('../worker.js');
+    assert.equal(maxJobsFromEnv({}), undefined);
+    assert.equal(maxJobsFromEnv({ TESTPILOT_MAX_JOBS: '3' }), 3);
+    const warn = console.warn;
+    console.warn = () => undefined;
+    try {
+      assert.equal(maxJobsFromEnv({ TESTPILOT_MAX_JOBS: '0' }), undefined);
+      assert.equal(maxJobsFromEnv({ TESTPILOT_MAX_JOBS: 'hai' }), undefined);
+    } finally {
+      console.warn = warn;
+    }
+  });
+});
+
+describe('worker: job web không đứng sau lượt chạy trên điện thoại', () => {
+  it('một máy cắm vẫn còn chỗ cho một job web chạy song song', async () => {
+    const queue = new MemoryJobQueue();
+    let open: () => void = () => undefined;
+    const gate = new Promise<void>((resolve) => { open = resolve; });
+    let live = 0;
+    let peak = 0;
+    const runner = {
+      run: {
+        parseDeviceToken: (token: string) => {
+          const [platform, ...rest] = token.split(':');
+          return { platform, id: rest.join(':') } as { platform: 'android'; id: string };
+        },
+        isNamedDevice: async () => true,
+        configIdFor: async (picked: { id: string }) => picked.id,
+        startSuite: async () => {
+          live += 1;
+          peak = Math.max(peak, live);
+          await gate;
+          live -= 1;
+          return { code: 0, stopped: false, reportPaths: [], runDirs: [] };
+        },
+        startParallel: async () => undefined as never,
+        stop: async () => ({ stopped: 0 }) as never,
+      },
+      control: { devices: async () => [{ platform: 'android' as const, udid: 'emulator-5554', label: 'x' }] },
+      prereq: {
+        appiumStatus: async () => ({ running: true, managed: true }),
+        xcode: async () => ({ ok: true }),
+      },
+    } as unknown as Runner;
+    const phone = await queue.create(androidJob(['android:emulator-5554']));
+    const web = await queue.create({
+      ...androidJob(),
+      spec: { ...androidJob().spec, run: { platform: 'web', tag: '@smoke' } },
+    });
+    const worker = startWorker({
+      queue, leases: new MemoryLeaseRepo(), runnerId: 'local', configFile: 'x.json', config, pollMs: 5, runner,
+    });
+    try {
+      const deadline = Date.now() + 2_000;
+      while (live < 2 && Date.now() < deadline) await new Promise((resolve) => setTimeout(resolve, 5));
+      assert.equal(peak, 2, 'job web phải chạy cùng lúc với lượt trên điện thoại');
+      open();
+      assert.equal(await settled(queue, phone.id), 'succeeded');
+      assert.equal(await settled(queue, web.id), 'succeeded');
     } finally {
       worker.stop();
     }
