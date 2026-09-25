@@ -18,6 +18,7 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import type { RunnersResponse, RunnerView } from '@core/ui/contracts.js';
+import { when } from '@/lib/datetime';
 
 /** Cùng nhịp với bảng thiết bị ngay trên: hai nhịp khác nhau trong một màn
  *  hình làm hai nửa của cùng một sự thật lệch nhau trước mắt người đọc. */
@@ -128,6 +129,19 @@ function PlatformCell({
   platform: 'web' | 'android' | 'ios';
 }) {
   const report = runner.prereq?.[platform];
+  /**
+   * Máy KHÔNG chạy thì kết quả đo là CŨ — lần cuối máy còn sống. Từng hiện
+   * "sẵn sàng" màu xanh cho một máy đã tắt từ hai ngày trước: người đọc tin là
+   * đặt job lên đó được. Giờ hiện mờ, nói rõ là kết quả lần đo cuối và lúc nào.
+   */
+  if (report && runner.state !== 'online') {
+    return (
+      <span className="text-muted-foreground flex items-center gap-1 text-xs" title={`Đo lúc ${when(report.at)}`}>
+        <CircleHelp className="size-3.5" aria-hidden />
+        {report.ok ? 'sẵn sàng' : 'chưa chạy được'} lúc {when(report.at)}
+      </span>
+    );
+  }
   if (!report) {
     return (
       <span className="text-muted-foreground flex items-center gap-1 text-xs">

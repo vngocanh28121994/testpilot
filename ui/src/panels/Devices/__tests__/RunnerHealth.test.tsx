@@ -46,6 +46,23 @@ describe('Máy chạy test', () => {
     expect(within(row).getByText('Xcode chưa chọn đường dẫn.')).toBeInTheDocument();
   });
 
+  /**
+   * Máy tắt từ 23/09 từng hiện "sẵn sàng" màu xanh ở cả ba cột — kết quả đo
+   * của lần cuối nó còn sống, trình bày như trạng thái hiện tại.
+   */
+  it('máy đã tắt: kết quả đo là CŨ — hiện mờ kèm lúc đo, không "sẵn sàng" như đang sống', async () => {
+    withRunners({
+      ...base,
+      state: 'offline',
+      prereq: { web: { ok: true, at: '2026-09-23T03:05:36.828Z' } },
+    });
+    await renderWithRouter(<RunnerHealth />);
+
+    const row = (await screen.findByText('laptop-an')).closest<HTMLElement>('tr')!;
+    expect(within(row).queryByText('sẵn sàng')).not.toBeInTheDocument();
+    expect(within(row).getByText(/sẵn sàng lúc/)).toBeInTheDocument();
+  });
+
   it('chưa đo thì nói "chưa đo", không nói "hỏng"', async () => {
     withRunners({ ...base, mode: 'farm', state: 'online' });
     await renderWithRouter(<RunnerHealth />);
