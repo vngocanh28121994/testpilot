@@ -61,3 +61,4 @@ dist-runner/
 
 # Khoá gộp kết quả giữa các lượt chạy song song (src/core/fileLock.ts)
 .merge.lock
+.testpilot/bin/

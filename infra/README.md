@@ -100,6 +100,25 @@ TESTPILOT_MAX_JOBS=2
 0,8–1,5 GB RAM (Appium, driver, tiến trình test). Hai iPhone cùng chạy cần hai
 `wdaLocalPort` khác nhau — không khai thì hệ thống tự lấy cổng rảnh.
 
+### Màn hình iPhone qua USB: cho phép một lần trên máy chủ
+
+Màn Điều khiển lấy hình iPhone qua cáp USB (30 khung/giây, nét hơn đường cũ
+qua WebDriverAgent). macOS coi màn hình iPhone là một **camera**, nên lần đầu có
+người giữ một chiếc iPhone, máy chủ hiện hộp thoại:
+
+> "TestPilot Screen Capture" muốn truy cập camera
+
+Admin bấm **Cho phép** trên máy chủ. Đã lỡ bấm Từ chối thì bật lại ở Cài đặt hệ
+thống › Quyền riêng tư & Bảo mật › Camera. App này chỉ đọc màn hình iPhone cắm
+cáp, không dùng camera của máy Mac. Chưa cho phép thì màn Điều khiển vẫn chạy
+bằng đường cũ, chậm hơn.
+
+Runner tự dựng app ở `.testpilot/bin/` khi cần (cần Xcode). Dựng trước bằng tay:
+
+```bash
+bash scripts/build-ios-screen.sh
+```
+
 ### Tunnel iOS trên máy chủ: cài làm dịch vụ, một lần
 
 iPhone iOS 17+ cần một tunnel chạy bằng quyền root cho WebView. Mở Terminal và gõ

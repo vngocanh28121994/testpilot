@@ -21,9 +21,15 @@
  * Toạ độ ở đây là ĐIỂM (point), không phải pixel: `window/rect` của WDA trả
  * 402x874 trong khi ảnh chụp là 1206x2622. W3C actions đi theo điểm, nên đó là
  * hệ toạ độ mà control plane công bố ra ngoài.
+ *
+ * Từ 25/09/2026 HÌNH của iPhone thật đi qua cáp USB ([iosScreen.ts](./iosScreen.ts)),
+ * WDA chỉ còn lo phần chạm. MJPEG của WDA ở dưới là đường lui: simulator, máy
+ * cắm qua Wi-Fi, hay máy chủ chưa cho phép quyền camera.
  */
 import { get, request } from 'node:http';
 import { FrameDeduper, MjpegSplitter } from './mjpeg.js';
+import { StreamPrimer } from './h264.js';
+import { startUsbScreen, type UsbScreen } from './iosScreen.js';
 import type { ScreenSize, ScreenStreamHandle, ScreenStreamSink } from './androidControl.js';
 import type { ControlAppOp, ControlOrientation, IosSigning } from '../protocol/control.js';
 import { friendlyError } from '../core/friendlyError.js';
@@ -83,6 +89,27 @@ const MJPEG_SETTINGS = {
   mjpegServerFramerate: 20,
   mjpegServerScreenshotQuality: 25,
   mjpegScalingFactor: 30,
+};
+
+/**
+ * Cài đặt của phiên điều khiển — MJPEG ở trên, cộng hai cái cho phần chạm.
+ *
+ * Mặc định, sau mỗi thao tác XCTest chờ app "đứng yên" và chờ hết animation
+ * rồi mới trả lời. Với một bài test đó là điều muốn; với một người đang bấm
+ * trên màn điều khiển thì đó là độ trễ thuần: màn hình đã đổi (họ THẤY nó đổi
+ * qua luồng hình) mà lệnh sau vẫn phải xếp hàng chờ. Đo trên iPhone 12 Pro
+ * Max, iOS 26, trung vị 8 lần:
+ *
+ *   chạm   726 ms → 613 ms
+ *   vuốt  1075 ms → 954 ms
+ *
+ * Phần còn lại là thời gian XCTest trên máy tự xử lý một thao tác: gọi thẳng
+ * WDA bỏ qua Appium cũng chỉ 608 ms, và đường USB tới WDA chỉ mất ~7 ms.
+ */
+const SESSION_SETTINGS = {
+  ...MJPEG_SETTINGS,
+  waitForIdleTimeout: 0,
+  animationCoolOffTimeout: 0,
 };
 
 interface Session {
@@ -241,6 +268,10 @@ async function reuseSession(record: StoredSession | undefined): Promise<Session 
     const rect = await appium<{ width: number; height: number }>(
       'GET', `/session/${record.id}/window/rect`, undefined, 15_000,
     );
+    // Phiên mở từ bản cũ chưa có phần cài đặt cho chạm. Hỏng thì bỏ qua: phiên
+    // vẫn dùng được, chỉ chậm hơn một chút.
+    await appium('POST', `/session/${record.id}/appium/settings`, { settings: SESSION_SETTINGS }, 15_000)
+      .catch(() => undefined);
     return {
       id: record.id,
       screen: { width: rect.width, height: rect.height, overridden: false },
@@ -290,7 +321,7 @@ async function openSession(udid: string, signing?: IosSigning): Promise<Session>
     'GET', `/session/${created.sessionId}/window/rect`, undefined, 30_000,
   );
   await appium('POST', `/session/${created.sessionId}/appium/settings`,
-    { settings: MJPEG_SETTINGS }, 30_000);
+    { settings: SESSION_SETTINGS }, 30_000);
 
   return {
     id: created.sessionId,
@@ -397,6 +428,176 @@ const streams = new Map<string, {
   close?: () => void;
 }>();
 
+/* ── Luồng hình qua USB ───────────────────────────────────────────────── */
+
+/**
+ * Một app quay màn hình cho một chiếc máy, chung cho mọi người xem.
+ *
+ * Người xem được chia theo dạng ảnh họ nhận: H.264 cho trình duyệt giải mã
+ * được, JPEG cho trang mở qua HTTP thường. App chỉ mã hoá dạng đang có người
+ * xem — xem [iosScreen.ts](./iosScreen.ts).
+ */
+interface UsbState {
+  screen: UsbScreen;
+  h264: Set<ScreenStreamSink>;
+  jpeg: Set<ScreenStreamSink>;
+  /** SPS/PPS và khung khoá gần nhất, cho người xem H.264 vào sau. */
+  primer: StreamPrimer;
+  /** Hẹn tắt app khi người xem cuối rời đi — xem `detachUsb`. */
+  linger?: ReturnType<typeof setTimeout>;
+}
+
+const usbStreams = new Map<string, UsbState>();
+const usbStarting = new Map<string, Promise<UsbState | undefined>>();
+/**
+ * Lần hỏng gần nhất, theo máy. Hỏng vì chưa có quyền camera hay máy cắm qua
+ * Wi-Fi thì lần giữ máy ngay sau cũng hỏng y như vậy; thử lại mỗi lần là thêm
+ * một giây chờ vô ích trước khi rơi về đường cũ.
+ */
+const usbFailed = new Map<string, number>();
+const USB_RETRY_MS = 60_000;
+/**
+ * Giữ app sống một lúc sau khi người xem cuối rời đi. Xoay màn hình là đóng
+ * rồi mở lại luồng ngay lập tức; dựng lại app mỗi lần như thế là thêm một
+ * giây màn hình trắng.
+ */
+const USB_LINGER_MS = 10_000;
+
+/** Tên người dùng đặt cho chiếc máy — thứ AVFoundation dùng để gọi nó. */
+async function deviceNameOf(udid: string): Promise<string | undefined> {
+  const found = (await devicectlDevices()).find((device) => device.udid === udid);
+  return found?.deviceName;
+}
+
+async function usbStream(udid: string): Promise<UsbState | undefined> {
+  const running = usbStreams.get(udid);
+  if (running) return running;
+  // Simulator không có "cáp USB"; tắt hẳn khi cần so với đường cũ.
+  if (isSimulatorUdid(udid) || process.platform !== 'darwin'
+    || process.env.TESTPILOT_IOS_USB_SCREEN === '0') return undefined;
+  const failedAt = usbFailed.get(udid);
+  if (failedAt !== undefined && Date.now() - failedAt < USB_RETRY_MS) return undefined;
+
+  let starting = usbStarting.get(udid);
+  if (!starting) {
+    starting = (async () => {
+      const name = await deviceNameOf(udid);
+      if (!name) throw new Error('devicectl không trả tên của chiếc iPhone này.');
+      const state: UsbState = {
+        h264: new Set(),
+        jpeg: new Set(),
+        primer: new StreamPrimer(),
+        screen: undefined as unknown as UsbScreen,
+      };
+      state.screen = await startUsbScreen(name, {
+        onInfo: () => {
+          // Máy vừa xoay: khổ khung đổi, bộ giải mã phía trình duyệt phải dựng
+          // lại từ khung khoá kế tiếp, và phần giữ cũ không còn dùng được.
+          state.primer = new StreamPrimer();
+          for (const each of state.h264) each.restart();
+        },
+        onH264: (data) => {
+          for (const each of state.h264) each.chunk(data);
+          state.primer.push(data);
+        },
+        onJpeg: (data) => {
+          for (const each of state.jpeg) each.chunk(data);
+        },
+        onClose: (reason) => {
+          usbStreams.delete(udid);
+          for (const each of [...state.h264, ...state.jpeg]) each.fail(reason);
+        },
+      });
+      usbStreams.set(udid, state);
+      usbFailed.delete(udid);
+      return state;
+    })().catch((err: Error) => {
+      // NÓI RA vì sao, rồi đi đường cũ — cùng tinh thần scrcpy → screenrecord.
+      usbFailed.set(udid, Date.now());
+      console.error(`[control] iPhone ${udid}: không quay được màn hình qua USB, dùng MJPEG của WDA. `
+        + err.message);
+      return undefined;
+    }).finally(() => usbStarting.delete(udid));
+    usbStarting.set(udid, starting);
+  }
+  return starting;
+}
+
+function attachUsb(
+  udid: string,
+  state: UsbState,
+  sink: ScreenStreamSink,
+  prefer: 'h264' | 'mjpeg',
+  points: { width: number; height: number },
+): ScreenStreamHandle {
+  if (state.linger) {
+    clearTimeout(state.linger);
+    delete state.linger;
+  }
+  const stop = (): void => detachUsb(udid, sink);
+  if (prefer === 'h264') {
+    if (state.h264.size === 0) {
+      // Phần giữ từ lần bật trước đã cũ; app sẽ gửi khung khoá mới ngay.
+      state.primer = new StreamPrimer();
+      state.screen.want('h264', true);
+    }
+    const primer = state.primer.primer();
+    state.h264.add(sink);
+    return {
+      codec: 'h264',
+      frame: state.screen.info.h264,
+      ...(primer ? { primer } : {}),
+      resync: () => state.primer.primer(),
+      stop,
+    };
+  }
+  if (state.jpeg.size === 0) state.screen.want('jpeg', true);
+  state.jpeg.add(sink);
+  // Ảnh JPEG vẽ thẳng lên khung; toạ độ đi theo ĐIỂM như đường MJPEG cũ.
+  return { codec: 'mjpeg', frame: points, stop };
+}
+
+function detachUsb(udid: string, sink: ScreenStreamSink): void {
+  const state = usbStreams.get(udid);
+  if (!state) return;
+  if (state.h264.delete(sink) && state.h264.size === 0) state.screen.want('h264', false);
+  if (state.jpeg.delete(sink) && state.jpeg.size === 0) state.screen.want('jpeg', false);
+  if (state.h264.size > 0 || state.jpeg.size > 0 || state.linger) return;
+  state.linger = setTimeout(() => {
+    if (state.h264.size > 0 || state.jpeg.size > 0) return;
+    usbStreams.delete(udid);
+    state.screen.stop();
+  }, USB_LINGER_MS);
+  state.linger.unref?.();
+}
+
+/**
+ * Luồng hình cho một người xem: qua USB khi được, MJPEG của WDA khi không.
+ *
+ * `prefer` là dạng người xem GIẢI MÃ ĐƯỢC — H.264 chỉ khi trình duyệt có
+ * WebCodecs. Kết quả nằm ở `handle.codec`: người gọi phải đọc nó, không đoán,
+ * vì đường cũ chỉ có JPEG.
+ */
+export async function startScreenStream(
+  udid: string,
+  sink: ScreenStreamSink,
+  signing?: IosSigning,
+  prefer: 'h264' | 'mjpeg' = 'mjpeg',
+): Promise<ScreenStreamHandle> {
+  const usbRunning = usbStreams.get(udid);
+  if (usbRunning) {
+    const open = await session(udid, signing, true);
+    return attachUsb(udid, usbRunning, sink, prefer, open.screen);
+  }
+  if (!streams.has(udid)) {
+    // WDA vẫn cần: nó lo phần chạm, và cho kích thước màn hình theo ĐIỂM.
+    const open = await session(udid, signing, true);
+    const usb = await usbStream(udid);
+    if (usb) return attachUsb(udid, usb, sink, prefer, open.screen);
+  }
+  return startWdaStream(udid, sink, signing);
+}
+
 /**
  * Mở luồng MJPEG của WDA, một tiến trình đọc cho một chiếc máy.
  *
@@ -404,7 +605,7 @@ const streams = new Map<string, {
  * từ cùng một bộ chụp, nên hai người xem mở hai kết nối là nhân đôi công việc
  * của chiếc máy. Dùng chung một kết nối và phát tiếp cho mọi người xem.
  */
-export async function startScreenStream(
+async function startWdaStream(
   udid: string,
   sink: ScreenStreamSink,
   signing?: IosSigning,
@@ -412,7 +613,7 @@ export async function startScreenStream(
   const existing = streams.get(udid);
   if (existing) {
     existing.sinks.add(sink);
-    return { frame: existing.frame, stop: () => detach(udid, sink) };
+    return { codec: 'mjpeg', frame: existing.frame, stop: () => detach(udid, sink) };
   }
 
   const open = await session(udid, signing, true);
@@ -467,7 +668,7 @@ export async function startScreenStream(
   });
   state.close = () => req.destroy();
 
-  return { frame: state.frame, stop: () => detach(udid, sink) };
+  return { codec: 'mjpeg', frame: state.frame, stop: () => detach(udid, sink) };
 }
 
 function detach(udid: string, sink: ScreenStreamSink): void {
@@ -488,6 +689,11 @@ function detach(udid: string, sink: ScreenStreamSink): void {
  * đầu ở lần chạy sau; Appium tự dọn sau mười phút im lặng.
  */
 export function stopAllScreenStreams(): void {
+  for (const [udid, state] of usbStreams) {
+    if (state.linger) clearTimeout(state.linger);
+    state.screen.stop();
+    usbStreams.delete(udid);
+  }
   for (const [udid, state] of streams) {
     state.stopped = true;
     state.close?.();
@@ -701,6 +907,15 @@ const KEY_CHARS: Record<string, string> = {
  * không bao giờ nói khác nhau về cùng một chiếc máy.
  */
 export async function connectedIphones(): Promise<Array<{ udid: string; label: string }>> {
+  return (await devicectlDevices()).map((device) => ({
+    udid: device.udid,
+    label: [device.name ?? 'iPhone', device.osVersion && `iOS ${device.osVersion}`]
+      .filter(Boolean).join(' · '),
+  }));
+}
+
+/** iPhone thật đang cắm, đọc từ `devicectl`. Hỏng thì rỗng — không có máy nào để dùng. */
+async function devicectlDevices(): Promise<ReturnType<typeof import('../core/iosDevices.js').usableFromDevicectl>> {
   const { execFile } = await import('node:child_process');
   const { mkdtemp, readFile, rm } = await import('node:fs/promises');
   const { tmpdir } = await import('node:os');
@@ -713,11 +928,7 @@ export async function connectedIphones(): Promise<Array<{ udid: string; label: s
       execFile('xcrun', ['devicectl', 'list', 'devices', '--json-output', out], { timeout: 20_000 },
         (err) => (err ? reject(err) : resolve()));
     });
-    return usableFromDevicectl(JSON.parse(await readFile(out, 'utf8'))).map((device) => ({
-      udid: device.udid,
-      label: [device.name ?? 'iPhone', device.osVersion && `iOS ${device.osVersion}`]
-        .filter(Boolean).join(' · '),
-    }));
+    return usableFromDevicectl(JSON.parse(await readFile(out, 'utf8')));
   } catch {
     return [];
   } finally {

@@ -157,6 +157,12 @@ export interface ScreenSize {
 }
 
 export interface ScreenStreamHandle {
+  /**
+   * Dạng ảnh THẬT SỰ đang gửi. iOS chọn theo người xem và theo việc quay qua
+   * USB có được hay không, nên người gọi đọc ở đây chứ không suy từ nền tảng.
+   * Vắng mặt là H.264 (Android).
+   */
+  readonly codec?: 'h264' | 'mjpeg';
   /** Kích thước khung video đang gửi — KHÁC kích thước màn hình khi có `--size`. */
   readonly frame: { width: number; height: number };
   /**

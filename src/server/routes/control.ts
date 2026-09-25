@@ -184,24 +184,36 @@ export const controlRoutes: RouteTable = {
     // không dồn vào bộ nhớ máy chủ. Xem streamPacer.ts — chú thích cũ ở đây
     // ghi "8 KB/s không làm đầy bộ đệm", sai từ khi luồng iOS lên ~1,7 MB/s.
     let resync: (() => Buffer | undefined) | undefined;
-    const pacer = streamPacer({
-      mode: codecFor(platform) === 'mjpeg' ? 'mjpeg' : 'h264',
+    // Người xem giải mã được H.264 không (trình duyệt có WebCodecs — trang
+    // HTTPS hoặc localhost). Chỉ iOS chọn theo nó; dạng THẬT SỰ nhận về nằm ở
+    // `handle.codec`, vì iOS rơi về JPEG khi không quay được qua USB.
+    const prefer = url.searchParams.get('h264') === '1' ? 'h264' : undefined;
+    let codec = codecFor(platform);
+    let pacer: ReturnType<typeof streamPacer> | undefined;
+    const pace = (): ReturnType<typeof streamPacer> => pacer ??= streamPacer({
+      mode: codec === 'mjpeg' ? 'mjpeg' : 'h264',
       write: (chunk) => { send('video', chunk.toString('base64')); },
       restart: () => { send('restart', { at: new Date().toISOString(), reason: 'catch-up' }); },
       backlog: () => res.writableLength,
       onDrain: (fn) => { res.once('drain', () => { if (!closed) fn(); }); },
       resync: () => resync?.(),
     });
+    // Mảnh tới TRƯỚC `meta` bị người xem vứt — họ chưa biết dựng bộ giải mã
+    // nào. Với H.264 mảnh đầu là khung khoá, vứt nó là trắng màn tới khung
+    // khoá sau. Giữ lại, phát ngay sau `meta`.
+    let early: Buffer[] | undefined = [];
 
     try {
       const handle = await localRunner.control.startScreenStream(target, {
         chunk: (data) => {
           if (closed) return;
-          pacer.push(data);
+          if (early) { early.push(data); return; }
+          pace().push(data);
         },
         restart: () => { if (!closed) send('restart', { at: new Date().toISOString() }); },
         fail: (message) => finish(message),
-      });
+      }, prefer);
+      codec = handle.codec ?? codec;
       // Người xem có thể đã bỏ đi TRONG lúc mở luồng. Cửa sổ ấy từng gần như
       // bằng không với `screenrecord`; với scrcpy nó là khoảng hai giây rưỡi,
       // vì phải dựng một tiến trình Java trên máy Android.
@@ -218,7 +230,7 @@ export const controlRoutes: RouteTable = {
         platform,
         // Người xem phải biết mình đang nhận kiểu ảnh nào TRƯỚC khung đầu
         // tiên: H.264 cần một bộ giải mã dựng sẵn, còn JPEG thì vẽ thẳng.
-        codec: codecFor(platform),
+        codec,
         screen: await localRunner.control.screenSize(target),
         frame: handle.frame,
       });
@@ -226,6 +238,9 @@ export const controlRoutes: RouteTable = {
       // mảnh tới trước nó đều bị vứt. Đây là phần đầu luồng dành cho người vào
       // giữa chừng — thiếu nó thì họ chỉ nhận khung P và ảnh đứng im.
       if (handle.primer) send('video', handle.primer.toString('base64'));
+      const held = early;
+      early = undefined;
+      for (const chunk of held) pace().push(chunk);
     } catch (err) {
       finish((err as Error).message);
     }

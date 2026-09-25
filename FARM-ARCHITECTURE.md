@@ -470,6 +470,34 @@ Và phím thì khác nhau theo nền tảng: iPhone không có nút Quay lại, 
 cho iOS chỉ có `home`, `enter`, `delete`. Giao diện không vẽ nút không tồn tại, thay vì vẽ rồi để
 nó báo lỗi khi bấm.
 
+**Cập nhật 25/09/2026: hình iPhone đi qua cáp USB, WDA chỉ còn lo phần chạm.** macOS có sẵn một
+đường mà QuickTime dùng: iPhone cắm USB hiện ra như một nguồn video (CoreMediaIO/AVFoundation). Một
+app Swift nhỏ ([native/ios-screen](native/ios-screen/main.swift), runner tự dựng khi cần) quay nguồn
+ấy và mã hoá bằng VideoToolbox. Đo trên iPhone 12 Pro Max, iOS 26:
+
+| | MJPEG của WDA | Qua USB |
+|---|---|---|
+| Khung/giây | ~18 | 30 (máy phát tới ~40) |
+| Khổ ảnh | 385×834 (30%) | H.264 720×1560, JPEG 540×1170 |
+| Băng thông | ~1,7 MB/s | H.264 ~146 KB/s · JPEG ~1,5 MB/s |
+| Chụp màn hình trên điện thoại | mỗi khung một lần XCTest chụp | không |
+
+Hai dạng vì WebCodecs chỉ có ở trang HTTPS/localhost: trình duyệt giải mã được thì nhận H.264
+(`?h264=1` trên luồng), trang HTTP thường nhận JPEG. App chỉ mã hoá dạng đang có người xem; dạng
+thật sự gửi đi nằm ở `meta.codec`. Không quay được (chưa có quyền camera, máy cắm qua Wi-Fi,
+simulator, `TESTPILOT_IOS_USB_SCREEN=0`) thì rơi về MJPEG của WDA và ghi lý do vào log.
+
+Hai điều phải biết:
+
+- **Quyền camera, một lần trên máy chủ.** macOS coi màn hình iPhone là camera, nên lần đầu hiện
+  hộp thoại xin quyền cho "TestPilot Screen Capture". App được ký bằng chứng chỉ Apple Development
+  để macOS nhớ quyền qua các lần dựng lại; ký ad-hoc thì mỗi lần dựng là hỏi lại.
+- **Độ trễ chạm KHÔNG giảm nhờ đổi luồng hình.** Đo từ lúc thả chuột tới lúc hình trên web đổi,
+  cùng một cú vuốt: ~516 ms (MJPEG) và ~562 ms (USB) — trong sai số. Phần ấy là XCTest xử lý thao
+  tác trên máy: gọi thẳng WDA bỏ qua Appium vẫn 608 ms, đường USB tới WDA chỉ ~7 ms. Chỗ gỡ được là
+  bỏ phần chờ app đứng yên và chờ hết animation (`waitForIdleTimeout`/`animationCoolOffTimeout` = 0):
+  chạm 726 → 613 ms, vuốt 1075 → 954 ms.
+
 Xem [FARM-PLAN.md](FARM-PLAN.md) P3.7 về lý do không lấy GADS làm hub.
 
 ---

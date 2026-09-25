@@ -70,3 +70,16 @@ describe('usableFromDevicectl — nhãn cho sổ máy', () => {
     assert.deepEqual(attachedFromDevicectl(parsed), ['00008101-00096DA21EF1001E']);
   });
 });
+
+describe('usableFromDevicectl — tên người dùng đặt cho máy', () => {
+  it('mang theo tên máy ("iPhone của Anh") — thứ AVFoundation dùng để gọi màn hình qua USB', () => {
+    const parsed = { result: { devices: [{
+      hardwareProperties: { udid: '00008101-00096DA21EF1001E', marketingName: 'iPhone 12 Pro Max' },
+      connectionProperties: { pairingState: 'paired', tunnelState: 'disconnected' },
+      deviceProperties: { osVersionNumber: '26.6.1', name: 'iPhone của Anh' },
+    }] } };
+    assert.equal(usableFromDevicectl(parsed)[0]?.deviceName, 'iPhone của Anh');
+    // Tên dòng máy vẫn là nhãn trong sổ máy, không bị thay.
+    assert.equal(usableFromDevicectl(parsed)[0]?.name, 'iPhone 12 Pro Max');
+  });
+});

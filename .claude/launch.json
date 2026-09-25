@@ -49,6 +49,15 @@
         "set -a && source .env.server && set +a && npm run ui"
       ],
       "port": 4300
+    },
+    {
+      "name": "testpilot-embedded-4399",
+      "runtimeExecutable": "bash",
+      "runtimeArgs": [
+        "-c",
+        "npm run ui:build && TESTPILOT_UI_PORT=4399 npx tsx src/ui/server.ts"
+      ],
+      "port": 4399
     }
   ]
 }

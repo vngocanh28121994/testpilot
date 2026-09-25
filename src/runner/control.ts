@@ -43,10 +43,15 @@ export function screenSize(target: ControlTarget): Promise<ScreenSize> {
 export function startScreenStream(
   target: ControlTarget,
   sink: ScreenStreamSink,
+  /**
+   * Dạng ảnh người xem giải mã được. Chỉ iOS chọn theo nó: H.264 cần WebCodecs,
+   * mà trang mở qua HTTP thường thì không có. Android luôn là H.264.
+   */
+  prefer?: StreamCodec,
 ): Promise<ScreenStreamHandle> {
   ready(target);
   return target.platform === 'ios'
-    ? ios.startScreenStream(target.udid, sink, target.iosSigning)
+    ? ios.startScreenStream(target.udid, sink, target.iosSigning, prefer ?? codecFor('ios'))
     : android.startScreenStream(target.udid, sink);
 }
 

@@ -43,6 +43,7 @@ import {
   typeText,
   type ControlDevice,
   type ScreenStreamSink,
+  type StreamCodec,
 } from './control.js';
 import type { ControlAppOp, ControlOrientation, ControlTarget } from '../protocol/control.js';
 import type { PrereqAndroidDevice } from './prereq.js';
@@ -181,6 +182,8 @@ export interface RunnerControlApi {
   startScreenStream(
     target: ControlTarget,
     sink: ScreenStreamSink,
+    /** Dạng ảnh người xem giải mã được; kết quả thật ở `handle.codec`. */
+    prefer?: StreamCodec,
   ): ReturnType<typeof startScreenStream>;
   tap(target: ControlTarget, x: number, y: number): Promise<void>;
   swipe(
@@ -250,7 +253,7 @@ export const localRunner: Runner = {
   control: {
     devices: () => controlDevices(),
     screenSize: (target) => screenSize(target),
-    startScreenStream: (target, sink) => startScreenStream(target, sink),
+    startScreenStream: (target, sink, prefer) => startScreenStream(target, sink, prefer),
     tap: (target, x, y) => tap(target, x, y),
     swipe: (target, from, to, durationMs) => swipe(target, from, to, durationMs),
     typeText: (target, text) => typeText(target, text),

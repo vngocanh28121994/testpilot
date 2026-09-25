@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>CFBundleIdentifier</key>
+  <string>dev.testpilot.ios-screen</string>
+  <key>CFBundleName</key>
+  <string>TestPilot Screen Capture</string>
+  <key>CFBundleDisplayName</key>
+  <string>TestPilot Screen Capture</string>
+  <key>CFBundleExecutable</key>
+  <string>TestPilotScreen</string>
+  <key>CFBundlePackageType</key>
+  <string>APPL</string>
+  <key>CFBundleShortVersionString</key>
+  <string>1.0</string>
+  <key>CFBundleVersion</key>
+  <string>1</string>
+  <key>LSMinimumSystemVersion</key>
+  <string>13.0</string>
+  <!-- Không hiện biểu tượng ở Dock: đây là tiến trình nền của máy chủ. -->
+  <key>LSUIElement</key>
+  <true/>
+  <key>NSCameraUsageDescription</key>
+  <string>TestPilot cần xem màn hình iPhone cắm qua cáp USB để hiện lên màn Điều khiển thiết bị. Nó không dùng camera của máy Mac.</string>
+</dict>
+</plist>

@@ -58,6 +58,11 @@ export function noVideoDecoderMessage(
     + 'Dùng Chrome, Edge hoặc Safari bản mới.';
 }
 
+/** Trình duyệt có WebCodecs — chỉ có ở trang HTTPS hoặc localhost. */
+export function canDecodeH264(): boolean {
+  return typeof VideoDecoder !== 'undefined';
+}
+
 /** Kiểu của CHÍNH hợp đồng, không phải một bản chép lỏng hơn. */
 export type ControlAction = import('@core/protocol/control.js').ControlAction;
 
@@ -284,7 +289,11 @@ export function useDeviceControl(canvas: React.RefObject<HTMLCanvasElement | nul
     const source = new EventSource(
       `${ROUTES.controlStream}?platform=${platform}`
         + `&deviceId=${encodeURIComponent(lease.deviceId)}`
-        + `&leaseId=${encodeURIComponent(lease.id)}`,
+        + `&leaseId=${encodeURIComponent(lease.id)}`
+        // Báo máy chủ trình duyệt này giải mã được H.264. iPhone khi ấy gửi
+        // H.264 (mượt hơn, nhẹ hơn ~10 lần); không có thì gửi JPEG. Dạng thật
+        // sự nhận về luôn nằm trong `meta.codec`.
+        + (canDecodeH264() ? '&h264=1' : ''),
     );
     sourceRef.current = source;
 
@@ -348,7 +357,7 @@ export function useDeviceControl(canvas: React.RefObject<HTMLCanvasElement | nul
   const hold = useCallback(async (device: ControlDevice, opts: { takeOver?: boolean } = {}) => {
     // WebCodecs chỉ cần cho Android (H.264). iOS gửi JPEG, mà mọi trình duyệt
     // đều vẽ được — nên chặn cả hai ở đây là từ chối một thứ chạy được.
-    if (device.platform === 'android' && typeof VideoDecoder === 'undefined') {
+    if (device.platform === 'android' && !canDecodeH264()) {
       setState({ phase: 'error', message: noVideoDecoderMessage() });
       return;
     }

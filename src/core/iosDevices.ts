@@ -22,7 +22,7 @@ export interface DevicectlJson {
   result?: { devices?: Array<{
     hardwareProperties?: { udid?: string; marketingName?: string };
     connectionProperties?: { tunnelState?: string; pairingState?: string };
-    deviceProperties?: { osVersionNumber?: string };
+    deviceProperties?: { osVersionNumber?: string; name?: string };
   }> };
 }
 
@@ -40,6 +40,8 @@ export function attachedFromDevicectl(parsed: DevicectlJson): string[] {
  */
 export function usableFromDevicectl(parsed: DevicectlJson): Array<{
   udid: string; name?: string; osVersion?: string;
+  /** Tên người dùng đặt cho máy ("iPhone của Anh") — khác `name`, là tên dòng máy. */
+  deviceName?: string;
 }> {
   return (parsed.result?.devices ?? [])
     .filter((d) => d.connectionProperties?.pairingState === 'paired')
@@ -49,5 +51,6 @@ export function usableFromDevicectl(parsed: DevicectlJson): Array<{
       udid: d.hardwareProperties!.udid!,
       ...(d.hardwareProperties?.marketingName ? { name: d.hardwareProperties.marketingName } : {}),
       ...(d.deviceProperties?.osVersionNumber ? { osVersion: d.deviceProperties.osVersionNumber } : {}),
+      ...(d.deviceProperties?.name ? { deviceName: d.deviceProperties.name } : {}),
     }));
 }
