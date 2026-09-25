@@ -7,8 +7,13 @@
 # (MinIO), địa chỉ runner nối về — đều mang IP ấy. Sửa tay từng chỗ mỗi lần đổi
 # mạng là cách chắc chắn để quên một chỗ.
 #
+# Mặc định dùng TÊN MÁY trong mạng nội bộ (`<LocalHostName>.local`, mDNS) thay
+# cho IP: macOS tự quảng bá tên ấy ở mọi mạng máy vào, nên đổi Wi-Fi KHÔNG phải
+# chạy lại script. Chỉ truyền IP khi mạng chặn mDNS (vài mạng công ty chặn) —
+# lúc đó phải chạy lại mỗi lần đổi mạng.
+#
 # Script làm, theo thứ tự:
-#   1. Tìm IP hiện tại (en0, rồi en1).
+#   1. Lấy địa chỉ: tên máy .local, hoặc IP truyền vào.
 #   2. Viết lại mọi URL trong .env.server sang IP ấy.
 #   3. Cho Keycloak chấp nhận chuyển hướng đăng nhập về IP ấy (qua API quản trị,
 #      không sửa file realm trong git — IP của một mạng Wi-Fi không thuộc về git).
@@ -16,17 +21,26 @@
 #
 # Không khởi động lại server: việc ấy là của người đang chạy nó.
 #
-# Dùng:  bash scripts/server-lan.sh            # tự tìm IP
-#        bash scripts/server-lan.sh 10.0.0.5   # chỉ định IP
+# Dùng:  bash scripts/server-lan.sh            # tên máy .local — làm MỘT lần
+#        bash scripts/server-lan.sh --ip       # IP hiện tại (mạng chặn mDNS)
+#        bash scripts/server-lan.sh 10.0.0.5   # chỉ định địa chỉ
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
 ENV_FILE=".env.server"
 [ -f "$ENV_FILE" ] || { echo "Chưa có $ENV_FILE. Chép từ .env.server.example trước." >&2; exit 1; }
 
-IP="${1:-$(ipconfig getifaddr en0 2>/dev/null || ipconfig getifaddr en1 2>/dev/null || true)}"
-[ -n "$IP" ] || { echo "Không tìm được IP mạng nội bộ của máy này. Máy đang có mạng không?" >&2; exit 1; }
-echo "→ IP máy chủ: $IP"
+case "${1:-}" in
+  "") IP="$(scutil --get LocalHostName).local" ;;
+  --ip) IP="$(ipconfig getifaddr en0 2>/dev/null || ipconfig getifaddr en1 2>/dev/null || true)" ;;
+  *) IP="$1" ;;
+esac
+[ -n "$IP" ] || { echo "Không tìm được địa chỉ mạng nội bộ của máy này. Máy đang có mạng không?" >&2; exit 1; }
+# Chữ THƯỜNG: trình phân tích URL tự viết thường tên máy trong .env.server, còn
+# Keycloak so địa chỉ quay về theo từng ký tự — viết hoa ở một bên là "Invalid
+# redirect_uri" ở lần đăng nhập đầu tiên.
+IP="$(printf '%s' "$IP" | tr '[:upper:]' '[:lower:]')"
+echo "→ địa chỉ máy chủ: $IP"
 
 # 2. .env.server — thay host của đúng ba loại URL, giữ nguyên cổng và đường dẫn.
 node - "$ENV_FILE" "$IP" <<'NODE'
@@ -71,7 +85,7 @@ echo "   Keycloak chấp nhận đăng nhập qua http://$IP:4300"
 # 4. Hướng dẫn cài runner: mọi địa chỉ máy chủ cũ → địa chỉ mới.
 GUIDE="build/runner-handoff/HUONG-DAN.md"
 if [ -f "$GUIDE" ]; then
-  sed -E -i '' "s#http://[0-9.]+:4300#http://$IP:4300#g; s#\*\*http://[0-9.]+:4300\*\*#**http://$IP:4300**#g" "$GUIDE"
+  sed -E -i '' "s#http://[A-Za-z0-9.-]+:4300#http://$IP:4300#g" "$GUIDE"
   echo "   Hướng dẫn runner trỏ về http://$IP:4300"
 fi
 

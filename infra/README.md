@@ -65,14 +65,15 @@ thoảng, mà là một nửa số request.
 ## Thử trên một laptop trong mạng nội bộ
 
 Đổi Wi-Fi là đổi IP, và mọi địa chỉ người khác dùng — đăng nhập Keycloak, link
-tải report, địa chỉ runner nối về — mang IP ấy. Sau mỗi lần đổi mạng:
+tải report, địa chỉ runner nối về — mang địa chỉ ấy. Nên dùng TÊN MÁY
+(`<LocalHostName>.local`, macOS tự quảng bá ở mọi mạng) thay cho IP, một lần:
 
 ```bash
-bash scripts/server-lan.sh      # trỏ .env.server, Keycloak, hướng dẫn runner vào IP hiện tại
+bash scripts/server-lan.sh        # trỏ .env.server, Keycloak, hướng dẫn runner vào tên máy .local
+bash scripts/server-lan.sh --ip   # chỉ khi mạng chặn mDNS: dùng IP, chạy lại mỗi lần đổi mạng
 ```
 
-rồi khởi động lại server. Chỉ dành cho thử nghiệm: máy khác phải cùng mạng, và
-runner đã nối phải đăng nhập lại cho địa chỉ mới. Bản triển khai thật cần một
+rồi khởi động lại server. Chỉ dành cho thử nghiệm: máy khác phải cùng mạng. Bản triển khai thật cần một
 địa chỉ cố định (VPN, hoặc máy chủ có tên miền và HTTPS).
 
 ## Máy chủ cũng cắm điện thoại (device farm nhỏ)
