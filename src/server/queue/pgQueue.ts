@@ -51,6 +51,9 @@ function toRecord(row: JobRow): JobRecord {
   };
 }
 
+/** Dòng log đang chờ ghi, theo job — xem `appendLog`. */
+const pendingLogs = new Map<string, Promise<void>>();
+
 export class PgJobQueue implements JobQueue {
   constructor(
     private readonly pool: Pool,
@@ -205,21 +208,47 @@ export class PgJobQueue implements JobQueue {
    * bỏ qua thay vì nhân đôi.
    */
   async appendLog(id: string, line: string, seq?: number): Promise<void> {
-    const next = seq ?? await this.nextSeq(id);
-    await this.pool.query(
-      `INSERT INTO job_event (job_id, seq, at, type, payload)
-       VALUES ($1, $2, $3, 'log', $4)
-       ON CONFLICT (job_id, seq) DO NOTHING`,
-      [id, next, new Date().toISOString(), { kind: 'log', line }],
-    );
+    if (seq !== undefined) {
+      // Runner ở xa tự đánh số: gửi lại cùng một lô thì DO NOTHING là đúng.
+      await this.pool.query(
+        `INSERT INTO job_event (job_id, seq, at, type, payload)
+         VALUES ($1, $2, $3, 'log', $4)
+         ON CONFLICT (job_id, seq) DO NOTHING`,
+        [id, seq, new Date().toISOString(), { kind: 'log', line }],
+      );
+      return;
+    }
+    // Không có số: xếp hàng theo job rồi mới ghi.
+    //
+    // Từng là "đọc MAX(seq) rồi ghi seq+1 với DO NOTHING". Nhiều dòng in ra
+    // cùng lúc — một thông báo lỗi bảy dòng — đọc được CÙNG một số, dòng đầu
+    // ghi được, các dòng sau bị bỏ lặng lẽ. Đo được thật: lượt Android hỏng vì
+    // Appium thiếu ANDROID_HOME chỉ còn hai trong bảy dòng, mất đúng dòng nói
+    // nguyên nhân. Hàng đợi ở cấp module vì mỗi request dựng một PgJobQueue mới.
+    const previous = pendingLogs.get(id) ?? Promise.resolve();
+    const mine = previous.then(() => this.insertNextLog(id, line));
+    const tail = mine.catch(() => undefined);
+    pendingLogs.set(id, tail);
+    void tail.then(() => { if (pendingLogs.get(id) === tail) pendingLogs.delete(id); });
+    await mine;
   }
 
-  private async nextSeq(id: string): Promise<number> {
-    const { rows } = await this.pool.query<{ seq: number | null }>(
-      'SELECT MAX(seq) AS seq FROM job_event WHERE job_id = $1',
-      [id],
-    );
-    return (rows[0]?.seq ?? 0) + 1;
+  /**
+   * Số thứ tự tính NGAY TRONG câu ghi, thử lại khi đụng: hàng đợi ở trên chỉ
+   * xếp được các dòng của CÙNG tiến trình, còn tiến trình khác ghi cùng job
+   * (hiếm, nhưng có) thì chỉ ràng buộc khoá chính mới phân xử được.
+   */
+  private async insertNextLog(id: string, line: string): Promise<void> {
+    for (let attempt = 0; attempt < 5; attempt += 1) {
+      const { rowCount } = await this.pool.query(
+        `INSERT INTO job_event (job_id, seq, at, type, payload)
+         SELECT $1, COALESCE(MAX(seq), 0) + 1, $2, 'log', $3 FROM job_event WHERE job_id = $1
+         ON CONFLICT (job_id, seq) DO NOTHING`,
+        [id, new Date().toISOString(), { kind: 'log', line }],
+      );
+      if ((rowCount ?? 0) > 0) return;
+    }
+    throw new Error(`Không ghi được dòng log cho job ${id} sau 5 lần thử.`);
   }
 
   /**

@@ -79,6 +79,11 @@ const RULES: Rule[] = [
     test: /device '([^']+)' not found|no devices\/emulators found/i,
     say: (m) => `Không thấy máy Android${m[1] ? ` ${m[1]}` : ''}. Kiểm tra cáp và bấm Tìm lại.`,
   },
+  {
+    test: /Neither ANDROID_HOME nor ANDROID_SDK_ROOT/i,
+    say: () => 'Appium trên máy cắm điện thoại không biết Android SDK nằm đâu (thiếu ANDROID_HOME). '
+      + 'Khởi động lại Appium từ màn Local Runner — TestPilot tự điền biến ấy khi bật Appium.',
+  },
   // ── Kết nối ───────────────────────────────────────────────────────────────
   {
     test: /ECONNREFUSED\s+(?:(127\.0\.0\.1|localhost|::1|\[::1\])|([\w.-]+)):(\d+)/i,

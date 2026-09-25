@@ -358,6 +358,25 @@ export function logContract(
   });
 
   /**
+   * Worker trong máy chủ ghi log KHÔNG kèm số, và không chờ từng dòng: một
+   * thông báo lỗi bảy dòng là bảy lần ghi cùng lúc. Bản Postgres từng đọc
+   * MAX(seq) rồi ghi seq+1 — bảy lần đọc ra cùng một số, và chỉ dòng đầu ghi
+   * được. Lượt Android hỏng vì thiếu ANDROID_HOME mất đúng dòng nói nguyên nhân.
+   */
+  it('nhiều dòng ghi CÙNG LÚC: không mất dòng nào, đúng thứ tự', async () => {
+    const queue = await fresh();
+    const job = await queue.create(androidJob());
+    const lines = Array.from({ length: 30 }, (_, i) => `dòng ${i + 1}`);
+    await Promise.all(lines.map((line) => queue.appendLog(job.id, line)));
+
+    const seen: string[] = [];
+    const off = await queue.onLog(job.id, (line) => seen.push(line));
+    await until(() => seen.length >= lines.length);
+    assert.deepEqual(seen, lines);
+    off();
+  });
+
+  /**
    * Gửi lại một lô đã tới nơi là chuyện BÌNH THƯỜNG của một runner mất mạng.
    * Cùng một `seq` chỉ được ghi một lần, nếu không log nhân đôi sau mỗi lần
    * mạng chập — và người đọc không có cách nào biết dòng nào là thật.

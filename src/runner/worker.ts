@@ -19,6 +19,7 @@ import { measurePrereq, refuseReason, type PrereqByPlatform } from './prereqRepo
 import type { JobRecord, JobQueue } from '../server/queue/queue.js';
 import { LeaseTakenError, type Lease, type LeaseHolder, type LeaseRepo } from '../server/db/repo.js';
 import { PREP_OPS, type JobResult } from '../protocol/messages.js';
+import { friendlyError } from '../core/friendlyError.js';
 import { localRunner, type Runner } from './index.js';
 
 export interface WorkerDeps {
@@ -231,7 +232,14 @@ async function run(
   attached: AttachedDevice[],
   prereq: PrereqByPlatform,
 ): Promise<void> {
-  const log = (line: string): void => { void deps.queue.appendLog(job.id, line); };
+  // Giữ vài chục dòng cuối: khi lượt chạy hỏng, câu lỗi của job phải nói
+  // được VÌ SAO — không chỉ "mã 1" (xem `outcomeToResult`).
+  const recent: string[] = [];
+  const log = (line: string): void => {
+    recent.push(line);
+    if (recent.length > 60) recent.shift();
+    void deps.queue.appendLog(job.id, line);
+  };
 
   if (job.kind === 'prereq') {
     await runPrep(job, deps, runner, attached, log);
@@ -467,7 +475,7 @@ async function run(
       // kết quả của nó không nói được gì. `interrupted` là câu đúng, không
       // phải `cancelled` — không ai bấm dừng cả.
       ? { type: 'job.result', jobId: job.id, state: 'interrupted', error: lost }
-      : { ...outcomeToResult(job.id, outcome), ...(learned ? { registryProposal: learned } : {}) });
+      : { ...outcomeToResult(job.id, outcome, recent), ...(learned ? { registryProposal: learned } : {}) });
   } catch (err) {
     await close(deps, job, {
       type: 'job.result', jobId: job.id, state: 'failed', error: (err as Error).message,
@@ -560,9 +568,45 @@ async function harvest(
   }
 }
 
+/**
+ * Dòng log nói rõ nhất vì sao lượt chạy hỏng — dòng lỗi CUỐI CÙNG.
+ *
+ * "Test kết thúc với lỗi (mã 1)" là câu thật đã hiện cho một lượt Android hỏng
+ * vì Appium thiếu ANDROID_HOME: người đặt job không biết là do máy, do app hay
+ * do kịch bản. Câu lỗi thật nằm ngay trong log; đưa nó lên câu tóm tắt.
+ */
+export function failureHint(lines: string[]): string | undefined {
+  // Kịch bản không đạt: nêu TÊN — "mã 1" không nói được là kịch bản nào.
+  const failed = lines
+    .map((line) => /^\[run:failed\]\s*✗?\s*(.+)$/.exec(line.trim())?.[1])
+    .filter((name): name is string => Boolean(name));
+  if (failed.length > 0) {
+    const names = failed.slice(0, 3).join(', ') + (failed.length > 3 ? ` và ${failed.length - 3} kịch bản khác` : '');
+    return `${failed.length} kịch bản không đạt: ${names}. Mở report để xem ảnh chụp lúc hỏng.`;
+  }
+  // Lỗi làm cả lượt dừng: CLI in `[run] <câu lỗi>` rồi mới tới các dòng hướng
+  // dẫn — lấy đúng dòng đầu ấy, dòng [run] CUỐI CÙNG không phải dòng tóm tắt.
+  for (let i = lines.length - 1; i >= 0; i -= 1) {
+    const line = lines[i]!.trim();
+    if (!line.startsWith('[run] ')) continue;
+    if (/^\[run\] (report ->|\d+ scenario\(s\) failed)/.test(line)) continue;
+    const text = line.slice('[run] '.length);
+    return text.length > 300 ? `${text.slice(0, 300)}…` : text;
+  }
+  // Không có dòng [run] nào: lấy dòng cuối có dấu hiệu lỗi.
+  const pattern = /\b(error|failed|exception|neither)\b|lỗi|thiếu|không (?:được|thể|tìm thấy|mở)|✗/i;
+  for (let i = lines.length - 1; i >= 0; i -= 1) {
+    const line = lines[i]!.trim();
+    if (!line || /Test kết thúc với lỗi|^\[job\]/i.test(line)) continue;
+    if (pattern.test(line)) return line.length > 300 ? `${line.slice(0, 300)}…` : line;
+  }
+  return undefined;
+}
+
 function outcomeToResult(
   jobId: string,
   outcome: { code: number | null; stopped: boolean },
+  recent: string[] = [],
 ): JobResult {
   if (outcome.stopped) {
     return { type: 'job.result', jobId, state: 'cancelled', error: 'Lượt chạy đã bị dừng.' };
@@ -570,9 +614,12 @@ function outcomeToResult(
   if (outcome.code === 0 || outcome.code === 2) {
     return { type: 'job.result', jobId, state: 'succeeded' };
   }
+  const hint = failureHint(recent);
   return {
     type: 'job.result', jobId, state: 'failed',
-    error: `Test kết thúc với lỗi (mã ${outcome.code}).`,
+    error: hint
+      ? `Test kết thúc với lỗi (mã ${outcome.code}): ${friendlyError(hint)}`
+      : `Test kết thúc với lỗi (mã ${outcome.code}) — xem log của lượt chạy để biết chi tiết.`,
   };
 }
 
