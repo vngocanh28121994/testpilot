@@ -88,6 +88,18 @@ thiết bị điều khiển được chúng.
 cá nhân trên laptop từng người vẫn dùng được song song, cho ai muốn cắm thêm
 máy ở chỗ mình.
 
+**Mỗi thiết bị chạy một job riêng.** Máy chủ (và mỗi runner) chạy cùng lúc tối
+đa *số máy đang cắm + 1* job — chỗ thêm dành cho job web. Máy tính yếu hơn số
+điện thoại cắm vào thì đặt trần trong `.env.server` (hoặc môi trường của runner):
+
+```bash
+TESTPILOT_MAX_JOBS=2
+```
+
+Ước lượng tải: mỗi thiết bị đang chạy test cần khoảng 0,5–1 nhân CPU và
+0,8–1,5 GB RAM (Appium, driver, tiến trình test). Hai iPhone cùng chạy cần hai
+`wdaLocalPort` khác nhau — không khai thì hệ thống tự lấy cổng rảnh.
+
 ### Tunnel iOS trên máy chủ: cài làm dịch vụ, một lần
 
 iPhone iOS 17+ cần một tunnel chạy bằng quyền root cho WebView. Mở Terminal và gõ

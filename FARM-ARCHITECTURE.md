@@ -354,6 +354,36 @@ Thuật toán ghép job với thiết bị:
 Job nhiều thiết bị (`runSuiteParallel`, [src/ui/server.ts:559](src/ui/server.ts)) giữ nguyên tinh
 thần: **lấy tất cả lease cùng lúc, hoặc không lấy gì cả**, để tránh hai job chờ chéo nhau.
 
+### Mỗi thiết bị một job (25/09/2026)
+
+Bản đầu của worker cố tình chạy **một job một lúc** trên mỗi runner, chờ lease phân xử việc hai job
+tranh một chiếc máy. Lease đã có, nên chạy tuần tự chỉ còn là một hàng chờ vô cớ: iPhone rảnh mà job
+iOS vẫn đứng sau một lượt Android mười lăm phút. Nay ([src/runner/worker.ts](src/runner/worker.ts)):
+
+- Worker nhận thêm job khi còn chỗ. Số chỗ mặc định = **số máy đang cắm + 1** — chỗ thêm dành cho
+  job web, vốn không cần điện thoại. `TESTPILOT_MAX_JOBS` đặt trần khi máy tính yếu hơn số điện
+  thoại cắm vào. Lease vẫn là thứ bảo đảm hai job không chạy trên cùng một máy: job thứ hai nhắm
+  chiếc máy đang bận thì bị hoãn, như trước.
+- **Dừng theo từng job.** Mỗi job có bộ huỷ riêng ([src/runner/jobControl.ts](src/runner/jobControl.ts));
+  mất lease hay bấm Dừng chỉ gửi SIGTERM cho đúng tiến trình của job ấy. `stopSuite` — giết mọi
+  thứ máy này đang chạy — chỉ còn là đường cũ khi gọi `POST /api/run/stop` không kèm `jobIds`.
+- `POST /api/run/stop` nhận `jobIds`: job còn `queued` thì huỷ (`cancelQueued`, điều kiện
+  `state = 'queued'` nằm trong câu ghi để không đè "đã huỷ" lên job vừa được nhận); job đang chạy
+  ở tiến trình máy chủ thì dừng; job ở runner khác thì trả lời thẳng là chưa dừng từ xa được. Chỉ
+  người đặt job hoặc admin được dừng.
+- **Ghi kho dùng chung.** Lượt chạy luôn `--defer-shared-writes`; worker gộp bằng
+  `mergeRunLearnings`, và hàm ấy nay chạy dưới một khoá tệp giữa các tiến trình
+  ([src/core/fileLock.ts](src/core/fileLock.ts), `registry/.merge.lock`). Hai job xong cùng lúc —
+  hay một job và một `run-parallel` — không còn ghi đè cả tệp lên nhau.
+- **Cổng Appium.** Hai phiên cùng đòi một cổng thì phiên sau không mở được, hoặc lặng lẽ nói chuyện
+  với máy của phiên trước. [src/drivers/sessionPorts.ts](src/drivers/sessionPorts.ts): cổng khai
+  trong config mà đang bận thì đổi sang cổng rảnh và nói ra; iPhone không khai `wdaLocalPort` thì
+  lấy cổng rảnh thay vì 8100 cố định. Android để UiAutomator2 tự chọn; simulator giữ nguyên.
+
+Còn lại, nói thẳng: dừng từ xa một job đang chạy ở **runner riêng** chưa có đường (cần kênh
+`job.cancel` tới runner); `DeviceEnvLog` và `ScenarioReviewStore` vẫn ghi cả tệp ngoài khoá, nhưng
+hiếm khi hai lượt ghi chúng cùng lúc.
+
 ---
 
 ## 6b. Người giữ máy, không chỉ job

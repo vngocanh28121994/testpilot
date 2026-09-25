@@ -241,5 +241,8 @@ nói thẳng điều này, vì đây mới là nguyên nhân thật, không ph�
 
 - **Test data / auth fixture** — chưa có. Sẽ cần trước khi scenario thứ hai xuất hiện.
 - **Vision pass cho Figma** — hiện chỉ đọc tên layer. Ảnh màn hình cần một lượt vision riêng.
-- **Sharding** — hiện chạy tuần tự một device. Song song hoá theo device pool là bước sau.
+- **Sharding** — một lượt chạy vẫn nằm trọn trên một device (hoặc nhân bản lên nhiều device bằng
+  `run-parallel`). Chạy song song NHIỀU JOB đã có: mỗi thiết bị một job
+  ([FARM-ARCHITECTURE.md](FARM-ARCHITECTURE.md), mục "Mỗi thiết bị một job"). Chia một bộ kịch bản
+  ra nhiều máy để xong nhanh hơn thì chưa.
 - **Visual regression** — screenshot mới chỉ dùng để debug, chưa so sánh baseline.

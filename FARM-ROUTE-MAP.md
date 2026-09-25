@@ -161,7 +161,7 @@ file nào. Kiến trúc: [FARM-ARCHITECTURE.md](FARM-ARCHITECTURE.md) · Kế ho
 | Dòng | Route | `kind` | Ghi chú |
 |---|---|---|---|
 | 544 | `POST /api/run` | `run_suite` | **Đổi nghĩa**: trả `jobId` thay vì stream. UI tạo job rồi `attach` — `streamJob()` đã hỗ trợ `GET` ([ui/src/lib/streamJob.ts](ui/src/lib/streamJob.ts)) |
-| 590 | `POST /api/run/stop` | — | Thành `job.cancel` qua relay |
+| 590 | `POST /api/run/stop` | — | Nhận `jobIds`: huỷ job còn chờ, dừng riêng job đang chạy ở máy chủ (25/09/2026). Job ở runner riêng: chờ `job.cancel` qua relay |
 | 417 | `POST /api/gen` | `gen` | Không chạm thiết bị, nhưng vẫn `spawn` CLI → là job. Chạy được trên runner phía server |
 | 408 | `POST /api/studio/save` | `gen` | Cùng đường với `gen` |
 | 438 | `POST /api/workflow/answers` | `workflow` | Orchestration nhiều chặng ([:2377](src/ui/server.ts)) |
