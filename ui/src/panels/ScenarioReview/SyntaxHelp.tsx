@@ -4,6 +4,7 @@ import { Input } from '@/components/ui/input';
 import { api } from '@/api/client';
 import { ROUTES } from '@/api/routes';
 import type { VocabularyResponse } from '@core/ui/contracts.js';
+import { keepFocusInside } from '@/lib/keepFocus';
 
 /** Một dòng gõ được, đã gộp mẫu câu dựng sẵn và action đã duyệt về một dạng. */
 interface Entry {
@@ -101,6 +102,9 @@ export function SyntaxHelp({ onInsert }: { onInsert?: (line: string) => void }) 
     // và người dùng chỉ còn thấy đúng một ô tìm kiếm không bao giờ ra kết quả.
     <div
       className="relative flex shrink-0 flex-col gap-3"
+      // iPad/iPhone: chạm vào mục trong danh sách không được làm ô nhập mất
+      // focus, không thì danh sách đóng trước khi cú chạm thành click.
+      onPointerDown={keepFocusInside}
       onBlur={(event) => {
         // Chỉ đóng khi tiêu điểm rời hẳn cả cụm: bấm vào một dòng trong bảng
         // cũng là một cú blur của ô nhập, đóng lúc đó là nuốt mất cú bấm.

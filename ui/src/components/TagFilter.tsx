@@ -1,6 +1,7 @@
 import { useMemo, useRef, useState } from 'react';
 import { Check, X } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
+import { keepFocusInside } from '@/lib/keepFocus';
 
 /**
  * Chọn nhiều tag để thu hẹp phạm vi một lượt chạy.
@@ -50,6 +51,9 @@ export function TagFilter({
     <div
       ref={box}
       className="relative flex flex-col gap-1"
+      // iPad/iPhone: chạm vào mục trong danh sách không được làm ô nhập mất
+      // focus, không thì danh sách đóng trước khi cú chạm thành click.
+      onPointerDown={keepFocusInside}
       onBlur={(event) => {
         if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setOpen(false);
       }}
