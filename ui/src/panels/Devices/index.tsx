@@ -11,6 +11,7 @@ import { useState } from 'react';
 import { navTitle } from '@/lib/nav';
 import { RunnerAdmin } from './RunnerAdmin';
 import { RunnerHealth } from './RunnerHealth';
+import { DeviceInventory } from './DeviceInventory';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { api } from '@/api/client';
@@ -91,8 +92,6 @@ export default function DevicesPanel() {
     onError: (err: Error) => toast.error(err.message),
   });
 
-  const leaseOf = (udid: string): DeviceLeaseView | undefined =>
-    (leases.data ?? []).find((lease) => lease.deviceId === udid);
   const jobById = (id: string): JobView | undefined =>
     (jobs.data ?? []).find((job) => job.id === id);
 
@@ -141,94 +140,48 @@ export default function DevicesPanel() {
               Chưa máy nào cắm vào. Job cần thiết bị sẽ nằm chờ tới khi có máy — không hỏng.
             </p>
           ) : (
-            <div className="overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Máy</TableHead>
-                    {/* "Ai đang giữ" chứ không phải "Đang bận vì": cột này
-                        trả lời cả khi máy KHÔNG bận, và tiêu đề cũ biến câu
-                        trả lời "rảnh" thành một câu vô nghĩa — "đang bận vì
-                        rảnh". Tiêu đề phải hỏi được câu mà mọi ô đều trả lời. */}
-                    <TableHead>Ai đang giữ</TableHead>
-                    <TableHead>Còn lại</TableHead>
-                    <TableHead />
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {(devices.data ?? []).map((device) => {
-                    const lease = leaseOf(device.udid);
-                    const job = lease?.holder.kind === 'job'
-                      ? jobById(lease.holder.jobId) : undefined;
-                    return (
-                      <TableRow key={device.udid}>
-                        <TableCell>
-                          <div>{device.label}</div>
-                          <div className="text-muted-foreground text-xs">{device.udid}</div>
-                        </TableCell>
-                        <TableCell>
-                          {!lease && <span className="text-muted-foreground">không ai</span>}
-                          {lease?.holder.kind === 'human' && (
-                            // Tên đọc được do máy chủ tra — không phải mã người dùng.
-                            <span>
-                              <b>{lease.holderLabel ?? 'một người dùng khác'}</b> đang điều khiển
-                            </span>
-                          )}
-                          {lease?.holder.kind === 'job' && (
-                            <span>
-                              job đang chạy
-                              {job?.tag ? <> · <code>{job.tag}</code></> : null}
-                              {job?.platform ? ` · ${job.platform}` : ''}
-                            </span>
-                          )}
-                        </TableCell>
-                        <TableCell>
-                          {lease ? `${Math.max(0, secondsLeft(lease))}s` : '—'}
-                        </TableCell>
-                        <TableCell className="text-right">
-                          {lease && reclaiming !== lease.id && (
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => { setReclaiming(lease.id); setReason(''); }}
-                            >
-                              Thu hồi
-                            </Button>
-                          )}
-                          {lease && reclaiming === lease.id && (
-                            <div className="flex items-center justify-end gap-2">
-                              <Input
-                                autoFocus
-                                value={reason}
-                                placeholder="Lý do thu hồi"
-                                aria-label="Lý do thu hồi"
-                                className="h-8 max-w-56"
-                                onChange={(event) => setReason(event.target.value)}
-                              />
-                              <Button
-                                size="sm"
-                                variant="destructive"
-                                disabled={!reason || forceRelease.isPending}
-                                onClick={() => forceRelease.mutate({ leaseId: lease.id, reason })}
-                              >
-                                Xác nhận
-                              </Button>
-                              <Button
-                                size="sm"
-                                variant="ghost"
-                                onClick={() => setReclaiming(undefined)}
-                              >
-                                Thôi
-                              </Button>
-                            </div>
-                          )}
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })}
-                </TableBody>
-              </Table>
-            </div>
+            <DeviceInventory
+              devices={devices.data ?? []}
+              leases={leases.data ?? []}
+              jobById={jobById}
+              secondsLeft={secondsLeft}
+              renderReclaim={(lease) => (
+                <>
+                  {reclaiming !== lease.id && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => { setReclaiming(lease.id); setReason(''); }}
+                    >
+                      Thu hồi
+                    </Button>
+                  )}
+                  {reclaiming === lease.id && (
+                    <div className="flex items-center justify-end gap-2">
+                      <Input
+                        autoFocus
+                        value={reason}
+                        placeholder="Lý do thu hồi"
+                        aria-label="Lý do thu hồi"
+                        className="h-8 max-w-56"
+                        onChange={(event) => setReason(event.target.value)}
+                      />
+                      <Button
+                        size="sm"
+                        variant="destructive"
+                        disabled={!reason || forceRelease.isPending}
+                        onClick={() => forceRelease.mutate({ leaseId: lease.id, reason })}
+                      >
+                        Xác nhận
+                      </Button>
+                      <Button size="sm" variant="ghost" onClick={() => setReclaiming(undefined)}>
+                        Thôi
+                      </Button>
+                    </div>
+                  )}
+                </>
+              )}
+            />
           )}
           </CardContent>
         </Card>

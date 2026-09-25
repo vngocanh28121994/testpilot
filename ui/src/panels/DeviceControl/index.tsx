@@ -8,6 +8,7 @@
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { useSearch } from '@tanstack/react-router';
 import { api } from '@/api/client';
 import { ROUTES } from '@/api/routes';
 import { AppShell } from '@/components/layout/AppShell';
@@ -156,7 +157,9 @@ export function withDistinctLabels(
 export default function DeviceControlPanel() {
   const canvas = useRef<HTMLCanvasElement>(null);
   const { state, hold, release, send, reconnect, captureScreenshot } = useDeviceControl(canvas);
-  const [chosen, setChosen] = useState('');
+  // Chọn sẵn máy khi tới từ nút "Điều khiển" ở danh sách thiết bị.
+  const preselected = useSearch({ strict: false }) as { device?: string };
+  const [chosen, setChosen] = useState(preselected.device ?? '');
   const [text, setText] = useState('');
   const [url, setUrl] = useState('');
   // Hướng hiện tại, để nút Xoay biết xoay sang đâu. Giữ máy lại = về dọc: đó là
