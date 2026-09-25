@@ -727,3 +727,46 @@ h3 {
     animation: none;
   }
 }
+
+/* ============================================================
+   Dấu chạm trên màn Điều khiển thiết bị (panels/DeviceControl/TouchMarks).
+
+   iPhone phản hồi một cú chạm sau ~0,6 giây (XCTest trên máy). Thiếu một dấu
+   hiện NGAY chỗ vừa bấm, người dùng không biết thao tác đã được nhận hay chưa
+   — và bấm lại, thành hai cú chạm xếp hàng. Chỉ opacity/transform.
+   ============================================================ */
+@keyframes touch-mark-fade {
+  from {
+    opacity: 0.9;
+    transform: translate(-50%, -50%) scale(0.6);
+  }
+  to {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(1.4);
+  }
+}
+
+@keyframes touch-trail-fade {
+  from {
+    opacity: 0.85;
+  }
+  to {
+    opacity: 0;
+  }
+}
+
+.touch-mark {
+  animation: touch-mark-fade 700ms ease-out forwards;
+}
+
+.touch-trail {
+  animation: touch-trail-fade 900ms ease-out forwards;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .touch-mark,
+  .touch-trail {
+    animation-duration: 1ms;
+    animation-delay: 600ms;
+  }
+}

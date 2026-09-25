@@ -743,16 +743,41 @@ export async function tap(udid: string, x: number, y: number): Promise<void> {
   ]);
 }
 
+/**
+ * Cú vuốt người dùng vừa làm trên web → cú vuốt iPhone sẽ diễn lại.
+ *
+ * iOS không nhận chạm theo thời gian thực như scrcpy của Android: cả cú vuốt
+ * chỉ gửi xuống được SAU KHI người dùng nhả chuột, và XCTest diễn lại nó từ
+ * đầu. Diễn lại đúng thời lượng người dùng kéo nghĩa là một cú kéo chậm một
+ * giây thành một giây chờ THÊM sau khi nhả tay — log Appium ghi 1741 ms cho
+ * đúng cú kéo ấy, so với ~600 ms cho một cú vuốt nhanh.
+ *
+ * Nên chia hai loại theo ý người dùng, không theo đồng hồ:
+ *  - Vuốt nhanh (≤ 250 ms): hất để cuộn có đà. Giữ nguyên — đà là thứ họ muốn.
+ *  - Kéo chậm: dời nội dung một đoạn rồi dừng. Đi hết quãng trong 250 ms rồi
+ *    GIỮ 80 ms trước khi nhả: tốc độ lúc nhả bằng 0, nên nội dung dừng đúng chỗ
+ *    thay vì trôi tiếp như một cú hất.
+ */
+export const FLICK_MS = 250;
+const SETTLE_MS = 80;
+
+export function swipePlan(durationMs: number): { moveMs: number; holdMs: number } {
+  const wanted = Math.max(1, Math.round(durationMs));
+  return wanted <= FLICK_MS ? { moveMs: wanted, holdMs: 0 } : { moveMs: FLICK_MS, holdMs: SETTLE_MS };
+}
+
 export async function swipe(
   udid: string,
   from: { x: number; y: number },
   to: { x: number; y: number },
   durationMs = 200,
 ): Promise<void> {
+  const plan = swipePlan(durationMs);
   await pointer(udid, [
     { type: 'pointerMove', duration: 0, x: from.x, y: from.y },
     { type: 'pointerDown', button: 0 },
-    { type: 'pointerMove', duration: Math.max(1, Math.round(durationMs)), x: to.x, y: to.y },
+    { type: 'pointerMove', duration: plan.moveMs, x: to.x, y: to.y },
+    ...(plan.holdMs > 0 ? [{ type: 'pause', duration: plan.holdMs }] : []),
     { type: 'pointerUp', button: 0 },
   ]);
 }

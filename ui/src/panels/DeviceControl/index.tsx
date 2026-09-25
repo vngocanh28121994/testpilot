@@ -47,6 +47,8 @@ import {
 import { useDeviceControl, type ControlDevice } from '@/hooks/useDeviceControl';
 import type { ControlKey } from '@core/protocol/control.js';
 import { DRAG_THRESHOLD_PX, isDrag, toScreenPoint } from '@/lib/deviceScale';
+import { TouchMarks } from './TouchMarks';
+import { useTouchMarks } from '@/hooks/useTouchMarks';
 
 /** Chờ lâu hơn thế này thì không còn là "đang mở" nữa, mà là có gì đó hỏng. */
 const SLOW_AFTER_MS = 12_000;
@@ -199,7 +201,8 @@ export default function DeviceControlPanel() {
     if (!target) return;
     void send({ kind: 'open_url', url: target }).then((ok) => { if (ok) setUrl(''); });
   }, [send, url]);
-  const down = useRef<{ x: number; y: number; at: number } | undefined>(undefined);
+  const down = useRef<{ x: number; y: number; at: number; cssX: number; cssY: number } | undefined>(undefined);
+  const touches = useTouchMarks();
 
   const devices = useQuery({
     queryKey: ['control-devices'],
@@ -227,6 +230,12 @@ export default function DeviceControlPanel() {
     down.current = undefined;
     const to = pointAt(event);
     if (!from || !to) return;
+    const box = event.currentTarget.getBoundingClientRect();
+    const cssX = event.clientX - box.left;
+    const cssY = event.clientY - box.top;
+    touches.add(isDrag(from, to)
+      ? { kind: 'swipe', x: from.cssX, y: from.cssY, toX: cssX, toY: cssY }
+      : { kind: 'tap', x: cssX, y: cssY });
     if (isDrag(from, to)) {
       void send({
         kind: 'swipe', x: from.x, y: from.y, toX: to.x, toY: to.y,
@@ -235,7 +244,7 @@ export default function DeviceControlPanel() {
     } else {
       void send({ kind: 'tap', x: to.x, y: to.y });
     }
-  }, [pointAt, send]);
+  }, [pointAt, send, touches]);
 
   return (
     <AppShell
@@ -354,11 +363,17 @@ export default function DeviceControlPanel() {
                 className="bg-muted max-h-[70vh] w-auto touch-none rounded-md border"
                 onPointerDown={(event) => {
                   const at = pointAt(event);
-                  if (at) down.current = { ...at, at: Date.now() };
+                  const box = event.currentTarget.getBoundingClientRect();
+                  if (at) {
+                    down.current = {
+                      ...at, at: Date.now(), cssX: event.clientX - box.left, cssY: event.clientY - box.top,
+                    };
+                  }
                   event.currentTarget.setPointerCapture(event.pointerId);
                 }}
                 onPointerUp={onUp}
               />
+              <TouchMarks marks={touches.marks} />
               {state.frames === 0 && <WaitingForFrames />}
             </div>
 
