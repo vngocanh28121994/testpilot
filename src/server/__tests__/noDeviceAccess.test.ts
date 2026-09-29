@@ -66,6 +66,9 @@ describe('ranh giới control plane', () => {
       'openIosSettings',
       'openTunnelTerminal',
       'restartAppium',
+      // Cài WebDriverAgent lên một iPhone mới (đăng ký máy, ký, cài) — việc
+      // cố định, chỉ nhận cấu hình và udid, không nhận lệnh tuỳ ý.
+      'setupWda',
       'startAppium',
       'tunnelService',
       'xcode',

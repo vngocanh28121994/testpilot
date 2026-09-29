@@ -202,9 +202,20 @@ export interface JobSpec {
  * trên laptop có Xcode và keychain của từng người là chuyện khác hẳn với chuẩn
  * bị môi trường. Mỗi việc ở đây là một hàm cố định của runner.
  */
-export type PrepOp = 'start_appium' | 'restart_appium' | 'ios_tunnel' | 'ios_trust';
+export type PrepOp = 'start_appium' | 'restart_appium' | 'ios_tunnel' | 'ios_trust' | 'ios_wda';
 
-export const PREP_OPS: readonly PrepOp[] = ['start_appium', 'restart_appium', 'ios_tunnel', 'ios_trust'];
+export const PREP_OPS: readonly PrepOp[] = [
+  'start_appium', 'restart_appium', 'ios_tunnel', 'ios_trust', 'ios_wda',
+];
+
+/**
+ * Hạn của một job chuẩn bị. Cài WebDriverAgent lên máy mới gồm một lần build
+ * để Xcode đăng ký máy — đo trên máy thật khoảng hai phút, lâu hơn khi Xcode
+ * phải tải thêm — nên nó cần lâu hơn hẳn các việc bật/tắt còn lại.
+ */
+export function prepTimeoutMs(op: PrepOp): number {
+  return op === 'ios_wda' ? 20 * 60_000 : 5 * 60_000;
+}
 
 export interface RunSuiteParams {
   platform: string;

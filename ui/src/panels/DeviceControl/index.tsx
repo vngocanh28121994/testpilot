@@ -48,6 +48,7 @@ import { useDeviceControl, type ControlDevice } from '@/hooks/useDeviceControl';
 import type { ControlKey } from '@core/protocol/control.js';
 import { DRAG_THRESHOLD_PX, isDrag, toScreenPoint } from '@/lib/deviceScale';
 import { TouchMarks } from './TouchMarks';
+import { StartIosTunnel } from '@/components/PreflightChecks';
 import { useTouchMarks } from '@/hooks/useTouchMarks';
 
 /** Chờ lâu hơn thế này thì không còn là "đang mở" nữa, mà là có gì đó hỏng. */
@@ -85,7 +86,12 @@ const TOOL_GROUPS: Array<{ title: string; items: ToolItem[] }> = [
       // Tam giác, tròn, vuông: đúng ba hình của thanh điều hướng Android.
       { id: 'back', key: 'back', label: 'Quay lại', Icon: ChevronLeft, only: 'android' },
       { id: 'home', key: 'home', label: 'Home', Icon: Circle },
-      { id: 'recents', key: 'recents', label: 'Đa nhiệm', Icon: Square },
+      {
+        id: 'recents', key: 'recents', Icon: Square,
+        // Trên iPhone, WebDriverAgent là một thẻ trong đa nhiệm. Vuốt đóng nó
+        // là mất tay điều khiển (màn hình tự mở lại, nhưng mất vài giây).
+        label: { android: 'Đa nhiệm', ios: 'Đa nhiệm — đừng vuốt đóng thẻ WebDriverAgentRunner' },
+      },
       { id: 'notifications', key: 'notifications', label: 'Thông báo', Icon: Bell },
       {
         id: 'quick_settings', key: 'quick_settings', Icon: SlidersHorizontal,
@@ -332,6 +338,17 @@ export default function DeviceControlPanel() {
               <Button size="sm" onClick={() => state.takeOver && void hold(state.takeOver, { takeOver: true })}>
                 Giữ ở đây
               </Button>
+            )}
+            {/* iPhone không có trong tunnel (cắm sau khi tunnel bật, hoặc rớt
+                cáp): chữa ngay ở đây, trên đúng máy tính đang cắm iPhone —
+                thay vì bắt người dùng đi tìm cửa sổ Terminal và gõ sudo. */}
+            {picked?.platform === 'ios' && /tunnel/i.test(state.message) && (
+              <div className="basis-full text-foreground">
+                <StartIosTunnel target={{ platform: 'ios', device: picked.udid }} />
+                <p className="text-muted-foreground mt-1 text-xs">
+                  Xong thì bấm <b>Giữ máy</b> lại.
+                </p>
+              </div>
             )}
           </div>
         )}

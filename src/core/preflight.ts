@@ -34,7 +34,7 @@ import type { Platform } from './types.js';
  * diện gắn đúng cái nút. Bảo người dùng "chạy `appium` ở một terminal khác"
  * trong khi chính công cụ bật được Appium là đẩy việc của mình sang cho họ.
  */
-export type PreflightFix = 'appium' | 'ios-tunnel' | 'ios-trust';
+export type PreflightFix = 'appium' | 'ios-tunnel' | 'ios-trust' | 'ios-wda';
 
 export interface PreflightCheck {
   /** What was checked, in the operator's language. */
@@ -617,18 +617,17 @@ async function iosPreflight(cfg: TestPilotConfig, override?: string): Promise<Pl
     );
   }
 
-  // Chỉ hỏi khi có máy thật và app là hybrid: simulator không cần tunnel, và
-  // một bộ kịch bản thuần native cũng không.
-  if (cfg.ios.hybrid && physicalNames.length > 0) {
-    checks.push(await iosTunnelCheck());
+  // Hỏi mỗi khi có máy thật — không chỉ khi app hybrid: app native không CẦN
+  // tunnel, nhưng một tunnel đang chạy mà thiếu máy thì làm hỏng cả nó. Xem
+  // iosTunnelCheck. Simulator không đi qua tunnel.
+  if (physicalNames.length > 0) {
+    checks.push(await iosTunnelCheck(wdaCheckUdid(cfg, device), { required: cfg.ios.hybrid }));
   }
 
   // WebDriverAgent: mắt xích ngốn nhiều thời gian nhất của hai ngày vừa rồi.
   // Hỏi thẳng thiết bị ở đây biến một lượt chạy hỏng sau hai phút thành một
   // câu trả lời tức thì, và nói luôn tên mục cần bấm Tin cậy.
-  // udid lấy từ chính cấu hình: đó cũng là máy mà lượt chạy sẽ dùng, nên kiểm
-  // đúng máy đó thay vì máy đầu tiên devicectl liệt kê.
-  const udid = devicesOf(cfg, 'ios').find((d) => d.udid)?.udid;
+  const udid = wdaCheckUdid(cfg, device);
   if (udid && (physicalNames.length > 0 || blockedPhones.length > 0)) {
     checks.push(await iosWdaCheck(cfg, udid));
   }
@@ -636,8 +635,37 @@ async function iosPreflight(cfg: TestPilotConfig, override?: string): Promise<Pl
   return { checks, device, candidates, unregistered };
 }
 
+/**
+ * iPhone mà dòng "WebDriverAgent trên máy" hỏi — ĐÚNG máy đang chọn.
+ *
+ * Bản trước lấy máy đầu tiên trong cấu hình, nên cắm iPhone mới và chọn nó thì
+ * dòng ấy vẫn nói về chiếc máy cũ — kể cả khi máy cũ đã rút ra — và nút cài
+ * thì cài lên máy mới: bấm xong, dòng vẫn đỏ. Chưa chọn được máy nào thì mới
+ * rơi về máy đầu tiên có udid, như trước.
+ */
+export function wdaCheckUdid(cfg: TestPilotConfig, device: string | undefined): string | undefined {
+  const configured = devicesOf(cfg, 'ios');
+  return device
+    ? configured.find((d) => d.id === device)?.udid
+    : configured.find((d) => d.udid)?.udid;
+}
+
 /** Lệnh duy nhất dựng được tunnel; cần sudo nên tool không tự chạy thay được. */
 export const IOS_TUNNEL_COMMAND = 'sudo appium driver run xcuitest tunnel-creation';
+
+/**
+ * Như trên, nhưng DỪNG tunnel cũ trước — cho nút "Mở Terminal và chạy".
+ *
+ * Tunnel của Appium chỉ nhận những iPhone cắm sẵn lúc nó khởi động, nên cách
+ * duy nhất để nó nhận một máy cắm sau là khởi động lại. Mở thêm một tunnel
+ * bên cạnh tunnel cũ thì hai bản tranh nhau sổ đăng ký.
+ *
+ * `[.]` để mẫu KHÔNG khớp chính dòng lệnh `sudo pkill …` (trong đó nó là chữ
+ * `[.]`, không phải dấu chấm) — nếu không, pkill giết luôn tiến trình sudo cha
+ * của nó. Lần sudo thứ hai không hỏi lại mật khẩu.
+ */
+export const IOS_TUNNEL_RESTART_COMMAND =
+  `sudo pkill -f 'tunnel-creation[.]mjs'; sleep 1; ${IOS_TUNNEL_COMMAND}`;
 
 /**
  * Cổng của sổ đăng ký tunnel, nếu script tunnel-creation từng chạy.
@@ -686,19 +714,35 @@ async function tunnelRegistryPort(): Promise<number | undefined> {
  * "Unknown device or simulator UDID" — một câu không nhắc gì tới tunnel. Mất
  * gần một giờ mới lần ra, trong khi một lệnh GET đã trả lời xong.
  */
-async function tunnelsRegistered(port: number): Promise<number | undefined> {
+async function tunnelsRegistered(port: number): Promise<{ count?: number; udids?: string[] } | undefined> {
   try {
     const res = await fetch(`http://127.0.0.1:${port}/remotexpc/tunnels`, {
       signal: AbortSignal.timeout(2_000),
     });
     if (!res.ok) return undefined;
-    const body = (await res.json()) as { metadata?: { totalTunnels?: number } };
-    return body.metadata?.totalTunnels;
+    const body = (await res.json()) as {
+      metadata?: { totalTunnels?: number };
+      tunnels?: Record<string, unknown>;
+    };
+    return {
+      count: body.metadata?.totalTunnels,
+      ...(body.tunnels && typeof body.tunnels === 'object' ? { udids: Object.keys(body.tunnels) } : {}),
+    };
   } catch {
     // Bản Appium khác có thể đổi đường dẫn API. Không đọc được thì im lặng bỏ
     // qua: mất khả năng phát hiện còn hơn báo hỏng cho một tunnel đang tốt.
     return undefined;
   }
+}
+
+/**
+ * Những iPhone tunnel đang giữ. `undefined`: tunnel không chạy, hoặc sổ đổi
+ * dạng — không biết, chứ không phải "không giữ máy nào".
+ */
+export async function tunnelRegistryUdids(): Promise<string[] | undefined> {
+  const port = await tunnelRegistryPort();
+  if (port === undefined || !(await portAccepting(port))) return undefined;
+  return (await tunnelsRegistered(port))?.udids;
 }
 
 /** Có ai đang lắng nghe ở cổng đó không. Số cất lại không có nghĩa là còn sống. */
@@ -725,26 +769,88 @@ function portAccepting(port: number): Promise<boolean> {
  * Appium chỉ ghi một dòng "Tunnel registry port not found" nằm lẫn giữa hàng
  * nghìn dòng khác. Đây là chỗ để nói ra trước khi chạy, thay vì sau khi hỏng.
  */
-export async function iosTunnelCheck(): Promise<PreflightCheck> {
-  const name = 'Tunnel cho WebView (iOS 17+)';
+/**
+ * Tunnel đang chạy nhưng KHÔNG giữ đúng chiếc iPhone sắp dùng.
+ *
+ * Chỉ nói "thiếu" khi biết chắc: có udid để hỏi và đọc được danh sách máy của
+ * tunnel. Bản Appium khác đổi dạng sổ thì im lặng bỏ qua — báo hỏng một tunnel
+ * đang tốt còn tệ hơn không phát hiện.
+ */
+export function tunnelLacks(registry: { udids?: string[] } | undefined, udid: string | undefined): boolean {
+  return Boolean(udid && registry?.udids && !registry.udids.includes(udid));
+}
+
+/** Tên dòng kiểm tra tunnel — một chỗ, cho cả máy chủ lẫn runner ở xa. */
+export const IOS_TUNNEL_CHECK_NAME = 'Tunnel iOS';
+
+/**
+ * Tunnel iOS: có CẦN không, và nếu đang chạy thì có THIẾU máy không.
+ *
+ * Hai câu hỏi khác nhau, vì cách Appium (xcuitest, iOS 18+) tìm iPhone:
+ * `connected-devices-client.js` đọc sổ tunnel TRƯỚC, và đọc được thì CHỈ tin
+ * sổ, bỏ qua USB; không có tunnel mới quay về dò USB. Nên:
+ *
+ *   - tunnel CẦN cho WebView (app hybrid, iOS 17+) — thiếu thì chỉ app hybrid hỏng;
+ *   - tunnel đang chạy mà thiếu máy thì HỎNG MỌI THỨ đi qua Appium với máy ấy,
+ *     kể cả app native và màn Điều khiển: "Unknown device or simulator UDID".
+ *
+ * Tên cũ "Tunnel cho WebView" và việc chỉ kiểm khi app hybrid dạy người ta
+ * đúng điều ngược lại: rằng không làm hybrid thì khỏi quan tâm tunnel.
+ */
+export async function iosTunnelCheck(
+  /** iPhone sắp dùng. Có thì hỏi đúng máy ấy có trong tunnel không, không chỉ đếm. */
+  udid?: string,
+  /** `required: false` — app không hybrid: tunnel không chạy là chuyện bình thường. */
+  opts: { required?: boolean } = {},
+): Promise<PreflightCheck> {
+  const name = IOS_TUNNEL_CHECK_NAME;
+  const required = opts.required ?? true;
   const port = await tunnelRegistryPort();
   if (port !== undefined && (await portAccepting(port))) {
-    const tunnels = await tunnelsRegistered(port);
+    const registry = await tunnelsRegistered(port);
+    const tunnels = registry?.count;
+    // Tunnel của Appium chỉ quét máy MỘT lần, lúc khởi động. iPhone cắm vào
+    // sau đó — hoặc rớt cáp quá lâu — không bao giờ tự vào sổ, và từ iOS 18
+    // Appium chỉ tìm máy qua sổ này: "Unknown device or simulator UDID".
+    // Đếm "giữ 1 máy" thì báo xanh trong khi máy giữ là một chiếc khác.
+    if (tunnels !== 0 && tunnelLacks(registry, udid)) {
+      return {
+        name,
+        ok: false,
+        fix: 'ios-tunnel',
+        detail: `Tunnel đang chạy ở 127.0.0.1:${port} nhưng chưa có iPhone này (đang giữ ${tunnels ?? '?'} máy khác). `
+          + 'Khi tunnel chạy, Appium chỉ tìm iPhone trong tunnel — thiếu máy thì mọi thứ trên máy này hỏng '
+          + '(“Unknown device”), kể cả app không hybrid và màn Điều khiển. '
+          + 'Tunnel chỉ nhận những máy cắm sẵn lúc nó khởi động, nên máy cắm vào sau — hoặc vừa rớt cáp — '
+          + 'phải khởi động lại tunnel. Tunnel cài làm dịch vụ thì việc này tự làm trong khoảng một phút, '
+          + 'khi không có lượt iOS nào đang chạy trên máy này; chưa cài thì bấm nút dưới, hoặc tự chạy: '
+          + `${IOS_TUNNEL_RESTART_COMMAND}. Lưu ý: khởi động lại làm đứt lượt chạy iOS khác đang dùng tunnel.`,
+      };
+    }
     if (tunnels === 0) {
       return {
         name,
         ok: false,
         fix: 'ios-tunnel',
         detail: `Tunnel đang chạy ở 127.0.0.1:${port} nhưng chưa nhận máy nào — thường là do cáp `
-          + 'rớt một nhịp rồi cắm lại. Từ iOS 18 Appium lấy danh sách máy thật từ sổ này, nên máy '
-          + 'sẽ không chạy được dù cáp vẫn cắm. Dừng tunnel cũ (Ctrl-C ở cửa sổ Terminal đó) và '
-          + `chạy lại: ${IOS_TUNNEL_COMMAND}`,
+          + 'rớt một nhịp rồi cắm lại. Khi tunnel chạy, Appium chỉ tìm iPhone trong tunnel, nên máy '
+          + 'không chạy được dù cáp vẫn cắm — kể cả app không hybrid và màn Điều khiển. Khởi động lại '
+          + `tunnel bằng nút dưới, hoặc tự chạy: ${IOS_TUNNEL_RESTART_COMMAND}`,
       };
     }
     return {
       name,
       ok: true,
       detail: `Đang chạy ở 127.0.0.1:${port}${tunnels === undefined ? '' : `, giữ ${tunnels} máy`}.`,
+    };
+  }
+  // Không chạy: Appium quay về dò USB, nên chỉ WebView (app hybrid) là thiếu.
+  if (!required) {
+    return {
+      name,
+      ok: true,
+      detail: 'Không chạy — không cần: app không hybrid (ios.hybrid = false), và không có tunnel thì Appium '
+        + 'tìm iPhone qua USB. Chỉ cần tunnel cho WebView.',
     };
   }
   return {
@@ -755,8 +861,10 @@ export async function iosTunnelCheck(): Promise<PreflightCheck> {
     // đọc được lý do nhưng không có chỗ nào để chữa.
     fix: 'ios-tunnel',
     detail: port === undefined
-      ? `Chưa chạy lần nào. Mở một cửa sổ Terminal riêng, chạy lệnh sau và để nguyên đó: ${IOS_TUNNEL_COMMAND}`
-      : `Cổng ${port} không còn ai nghe — tunnel đã tắt. Chạy lại và giữ cửa sổ: ${IOS_TUNNEL_COMMAND}`,
+      ? 'Chưa chạy lần nào. App hybrid trên iOS 17+ cần tunnel để Appium thấy WebView. Mở một cửa sổ '
+        + `Terminal riêng, chạy lệnh sau và để nguyên đó: ${IOS_TUNNEL_COMMAND}`
+      : `Cổng ${port} không còn ai nghe — tunnel đã tắt, mà app hybrid cần nó cho WebView. Chạy lại và `
+        + `giữ cửa sổ: ${IOS_TUNNEL_COMMAND}`,
   };
 }
 
@@ -810,7 +918,48 @@ export async function iosWdaCheck(
   const apps = await run('xcrun', [
     'devicectl', 'device', 'info', 'apps', '--device', udid, '--quiet', '--json-output', '-',
   ], DEVICE_PROBE_TIMEOUT_MS);
-  const installed = apps.ok && apps.stdout.includes(bundle);
+  // Không đọc được danh sách app (máy vừa rút, simulator, devicectl hết giờ)
+  // KHÔNG phải bằng chứng là chưa cài. Nói "chưa cài" ở đây là đẩy người ta đi
+  // cài lại một thứ đang nằm sẵn trên máy.
+  if (!apps.ok) {
+    return {
+      name,
+      ok: true,
+      detail: `Chưa hỏi được máy này có WebDriverAgent chưa: ${reasonOf(apps.error ?? '') || 'devicectl không trả lời'}. `
+        + 'Mở khoá iPhone rồi bấm Kiểm tra lại.',
+    };
+  }
+  const installed = apps.stdout.includes(bundle);
+  // Dùng lại WDA đã cài: Appium KHÔNG cài gì, nên máy chưa có WDA là lượt chạy
+  // hỏng ngay bước đầu ("… is not installed"). Đây đúng là chỗ một iPhone mới
+  // cắm vào gãy — và trước đây dòng này lại báo xanh.
+  if (!installed && cfg.ios.usePreinstalledWDA) {
+    return {
+      name,
+      ok: false,
+      fix: 'ios-wda',
+      detail: `Chưa cài ${bundle} lên máy này. Máy mới cần cài một lần: bấm nút dưới — tool tự đăng `
+        + 'ký máy với tài khoản Apple (nếu cần), ký và cài, mất 1–4 phút. Giữ iPhone mở khoá.',
+    };
+  }
+  // Dùng bản build dựng sẵn: bản đó chỉ cài được lên máy có trong profile của
+  // nó. Máy mới thì không — và Appium chỉ báo một lỗi cài đặt chung chung.
+  const prebuilt = cfg.ios.usePrebuiltWDA && cfg.ios.derivedDataPath
+    ? path.join(cfg.ios.derivedDataPath, 'Build', 'Products', 'Debug-iphoneos',
+      'WebDriverAgentRunner-Runner.app', 'embedded.mobileprovision')
+    : undefined;
+  if (prebuilt) {
+    const profile = await run('security', ['cms', '-D', '-i', prebuilt]);
+    if (!profile.ok || !profile.stdout.includes(udid)) {
+      return {
+        name,
+        ok: false,
+        fix: 'ios-wda',
+        detail: 'Bản WebDriverAgent dựng sẵn (ios.usePrebuiltWDA) chưa ký cho máy này — máy mới chưa '
+          + 'có trong profile. Bấm nút dưới để đăng ký máy và dựng lại, mất khoảng 2–4 phút.',
+      };
+    }
+  }
   if (!installed) {
     return {
       name,

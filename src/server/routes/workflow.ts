@@ -52,6 +52,8 @@ import {
 import { ScenarioReviewStore, scenarioBlocks } from '../../core/scenarioReview.js';
 import { KnownIssueStore } from '../../core/knownIssues.js';
 import { runGenPipeline } from '../../genspec/pipeline.js';
+import { pullToDisk, pushNew } from '../registrySync.js';
+import type { RegistryRepo } from '../db/repo.js';
 import { tryAuditFeatureCoverage } from '../../genspec/coverage.js';
 import { parseFeature } from '../../steps/binding.js';
 import { mergeRunLearnings } from '../../core/learned.js';
@@ -138,6 +140,8 @@ async function runWorkflow(
   cfg: TestPilotConfig,
   log: (line: string) => void,
   stage: (run: WorkflowRun) => void,
+  /** Registry dùng chung của máy chủ — Postgres ở chế độ server. Xem registrySync.ts. */
+  registryRepo?: Pick<RegistryRepo, 'read' | 'write'>,
 ): Promise<void> {
   const history = await History.load();
   // Chỗ giữ chỗ nói rõ nó là chỗ giữ chỗ. "generated" trông y hệt một tên
@@ -172,6 +176,9 @@ async function runWorkflow(
   };
 
   try {
+    // Pipeline làm việc trên registry ở đĩa: đưa bản của máy chủ xuống trước,
+    // để nó thấy đủ element đã có thay vì sinh bản trùng.
+    if (registryRepo) await pullToDisk(registryRepo, cfg.paths.registry);
     const result = await runGenPipeline(cfg, {
       log: record,
       // Tên tạm ngay khi đọc xong tài liệu, thay vì đợi tới lúc sinh xong
@@ -195,6 +202,14 @@ async function runWorkflow(
         void history.save();
       },
     });
+    // …và đưa element mới lên lại. Thiếu bước này thì kịch bản vừa sinh nói
+    // tới element máy chủ chưa biết — màn duyệt hiện "0 kịch bản".
+    if (registryRepo) {
+      const pushed = await pushNew(registryRepo, cfg.paths.registry);
+      if (pushed.elements + pushed.screens > 0) {
+        record(`Đã thêm ${pushed.elements} element, ${pushed.screens} màn hình vào registry dùng chung.`);
+      }
+    }
     run.generatedFile = path.basename(result.file);
     // The field is optional for end users. Once AI has produced the Gherkin,
     // use its real `Feature:` name in history instead of the placeholder.
@@ -765,7 +780,7 @@ export const workflowRoutes: RouteTable = {
     // Persist before streaming: the form is the config, and a run whose inputs
     // were never saved could not be reproduced from a terminal.
     const cfg = await applyForm(form, ctx.configFile);
-    return stream(res, (log, stage) => runWorkflow(ctx.configFile, cfg, log, stage));
+    return stream(res, (log, stage) => runWorkflow(ctx.configFile, cfg, log, stage, ctx.repos.registry));
   },
 
   'GET /api/workflow/questions': async (req, res, url, ctx) => {

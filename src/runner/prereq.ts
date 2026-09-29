@@ -23,7 +23,7 @@ import net from 'node:net';
 import os from 'node:os';
 import path from 'node:path';
 import { devicesOf, type TestPilotConfig } from '../config.js';
-import { IOS_TUNNEL_COMMAND } from '../core/preflight.js';
+import { IOS_TUNNEL_COMMAND, IOS_TUNNEL_RESTART_COMMAND } from '../core/preflight.js';
 import { attachedFromDevicectl } from '../core/iosDevices.js';
 
 const execFileAsync = promisify(execFile);
@@ -543,7 +543,7 @@ export async function openTunnelTerminal(): Promise<{ ok: boolean; error?: strin
   const script = [
     'tell application "Terminal"',
     '  activate',
-    `  do script ${JSON.stringify(IOS_TUNNEL_COMMAND)}`,
+    `  do script ${JSON.stringify(IOS_TUNNEL_RESTART_COMMAND)}`,
     'end tell',
   ].join('\n');
   try {

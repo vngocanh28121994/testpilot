@@ -10,7 +10,13 @@
  */
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { attachedFromDevicectl, usableFromDevicectl } from '../iosDevices.js';
+import {
+  attachedFromDevicectl,
+  IOS_UNAVAILABLE,
+  iphonesFromDevicectl,
+  usableFromDevicectl,
+  wiredIphones,
+} from '../iosDevices.js';
 
 const UDID = '00008101-00096DA21EF1001E';
 
@@ -81,5 +87,62 @@ describe('usableFromDevicectl — tên người dùng đặt cho máy', () => {
     assert.equal(usableFromDevicectl(parsed)[0]?.deviceName, 'iPhone của Anh');
     // Tên dòng máy vẫn là nhãn trong sổ máy, không bị thay.
     assert.equal(usableFromDevicectl(parsed)[0]?.name, 'iPhone 12 Pro Max');
+  });
+});
+
+/**
+ * iPhone mới cắm vào chưa bấm "Tin cậy" từng biến mất khỏi màn Thiết bị — người
+ * dùng không biết máy có được nhận hay không. Nay nó hiện, kèm việc cần làm.
+ */
+describe('iphonesFromDevicectl — máy cắm mà chưa dùng được', () => {
+  const device = (connection: Record<string, string>, props: Record<string, string> = {}) => ({
+    result: { devices: [{
+      hardwareProperties: { udid: UDID, marketingName: 'iPhone 15' },
+      connectionProperties: connection,
+      deviceProperties: { osVersionNumber: '18.0', ...props },
+    }] },
+  });
+
+  it('chưa ghép đôi: vẫn hiện, kèm lời nhắc bấm Tin cậy', () => {
+    const [found] = iphonesFromDevicectl(device({ pairingState: 'unpaired', tunnelState: 'disconnected' }));
+    assert.equal(found?.udid, UDID);
+    assert.equal(found?.unavailable, IOS_UNAVAILABLE.unpaired);
+  });
+
+  it('chưa bật Chế độ nhà phát triển: vẫn hiện, kèm đường tới công tắc', () => {
+    const [found] = iphonesFromDevicectl(device(
+      { pairingState: 'paired', tunnelState: 'disconnected' },
+      { developerModeStatus: 'disabled' },
+    ));
+    assert.equal(found?.unavailable, IOS_UNAVAILABLE.developerMode);
+  });
+
+  it('sẵn sàng: không có unavailable', () => {
+    const [found] = iphonesFromDevicectl(device(
+      { pairingState: 'paired', tunnelState: 'connected' },
+      { developerModeStatus: 'enabled' },
+    ));
+    assert.equal(found?.unavailable, undefined);
+    assert.equal(found?.name, 'iPhone 15');
+  });
+
+  it('đã rút cáp thì không hiện, dù chưa ghép đôi hay đã ghép đôi', () => {
+    assert.deepEqual(iphonesFromDevicectl(unplugged), []);
+    assert.deepEqual(iphonesFromDevicectl(device({ pairingState: 'unpaired', tunnelState: 'unavailable' })), []);
+  });
+});
+
+describe('wiredIphones — máy tunnel phải giữ', () => {
+  const dev = (udid: string, connection: Record<string, string>) => ({
+    hardwareProperties: { udid }, connectionProperties: connection,
+  });
+  it('chỉ máy cắm cáp, đã ghép đôi, chưa rút', () => {
+    const parsed = { result: { devices: [
+      dev('CAP', { pairingState: 'paired', tunnelState: 'disconnected', transportType: 'wired' }),
+      dev('WIFI', { pairingState: 'paired', tunnelState: 'disconnected', transportType: 'localNetwork' }),
+      dev('RUT', { pairingState: 'paired', tunnelState: 'unavailable' }),
+      dev('CHUA-GHEP', { pairingState: 'unpaired', tunnelState: 'disconnected', transportType: 'wired' }),
+    ] } };
+    assert.deepEqual(wiredIphones(parsed), ['CAP']);
   });
 });

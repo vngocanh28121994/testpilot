@@ -851,15 +851,29 @@ function History({ reports }: { reports: ReportView[] }) {
             </Button>
           )}
         </div>
-        <div className="rounded-lg border">
-          <Table>
+        <div className="min-w-0 overflow-hidden rounded-lg border">
+          <Table className="table-fixed">
+            <colgroup>
+              <col className="w-[25%]" />
+              <col className="w-[18%]" />
+              <col className="w-[29%]" />
+              <col className="w-[8%]" />
+              <col className="w-[8%]" />
+              <col className="w-[12%]" />
+            </colgroup>
             <TableHeader>
               <TableRow>
-                <TableHead>Thời gian</TableHead>
-                <TableHead>Platform</TableHead>
-                <TableHead>Tag</TableHead>
-                <TableHead className="text-right">Pass</TableHead>
-                <TableHead className="text-right">Fail</TableHead>
+                <TableHead className="whitespace-normal">Thời gian</TableHead>
+                <TableHead className="whitespace-normal">Platform</TableHead>
+                <TableHead className="whitespace-normal">Phạm vi</TableHead>
+                <TableHead className="px-1 text-right">
+                  <span className="sm:hidden">P</span>
+                  <span className="hidden sm:inline">Pass</span>
+                </TableHead>
+                <TableHead className="px-1 text-right">
+                  <span className="sm:hidden">F</span>
+                  <span className="hidden sm:inline">Fail</span>
+                </TableHead>
                 <TableHead />
               </TableRow>
             </TableHeader>
@@ -875,14 +889,20 @@ function History({ reports }: { reports: ReportView[] }) {
               )}
               {shown.map((report) => (
                 <TableRow key={report.id}>
-                  <TableCell className="whitespace-nowrap">{when(report.startedAt)}</TableCell>
-                  <TableCell>
+                  <TableCell className="whitespace-normal tabular-nums">
+                    {when(report.startedAt)}
+                  </TableCell>
+                  <TableCell className="whitespace-normal">
                     <StatusPill status={report.platform} />
                   </TableCell>
-                  <TableCell>{report.tag ?? 'tất cả'}</TableCell>
+                  <TableCell className="break-all whitespace-normal">
+                    {report.tag
+                      ?? report.feature
+                      ?? (report.scope === 'all' ? 'Toàn bộ testcase' : 'Không rõ (bản ghi cũ)')}
+                  </TableCell>
                   <TableCell
                     className={cn(
-                      'p-2 text-right tabular-nums',
+                      'px-1 py-2 text-right tabular-nums',
                       (report.counters?.passed ?? 0) > 0 && 'text-status-pass',
                     )}
                   >
@@ -890,13 +910,13 @@ function History({ reports }: { reports: ReportView[] }) {
                   </TableCell>
                   <TableCell
                     className={cn(
-                      'p-2 text-right tabular-nums',
+                      'px-1 py-2 text-right tabular-nums',
                       (report.counters?.failed ?? 0) > 0 && 'text-status-fail',
                     )}
                   >
                     {report.counters?.failed ?? 0}
                   </TableCell>
-                  <TableCell>
+                  <TableCell className="whitespace-normal">
                     <Link
                       to="/runner/history"
                       search={{ runId: report.id }}

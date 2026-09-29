@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { CheckCircle2, Play, Settings, Terminal, XCircle } from 'lucide-react';
+import { CheckCircle2, Download, Play, Settings, Terminal, XCircle } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { useStreamJob } from '@/hooks/useStreamJob';
@@ -47,6 +47,7 @@ export function PreflightChecks({ checks, target }: { checks: PreflightCheck[]; 
             {!check.ok && check.fix === 'appium' && <FixButton op="start_appium" target={target} />}
             {!check.ok && check.fix === 'ios-tunnel' && <StartIosTunnel target={target} />}
             {!check.ok && check.fix === 'ios-trust' && <FixButton op="ios_trust" target={target} />}
+            {!check.ok && check.fix === 'ios-wda' && <FixButton op="ios_wda" target={target} />}
           </div>
         </li>
       ))}
@@ -54,7 +55,7 @@ export function PreflightChecks({ checks, target }: { checks: PreflightCheck[]; 
   );
 }
 
-type FixOp = 'start_appium' | 'ios_tunnel' | 'ios_trust';
+type FixOp = 'start_appium' | 'ios_tunnel' | 'ios_trust' | 'ios_wda';
 
 const FIX_TEXT: Record<FixOp, { idle: string; busy: string; done: string; Icon: typeof Play }> = {
   start_appium: {
@@ -68,6 +69,11 @@ const FIX_TEXT: Record<FixOp, { idle: string; busy: string; done: string; Icon: 
   ios_trust: {
     idle: 'Mở Cài đặt trên máy', busy: 'Đang mở Cài đặt…',
     done: 'Đã mở Cài đặt trên máy. Bấm Tin cậy xong thì dò lại giúp nhé.', Icon: Settings,
+  },
+  ios_wda: {
+    idle: 'Cài WebDriverAgent lên máy', busy: 'Đang cài WebDriverAgent (1–4 phút)…',
+    done: 'Đã cài WebDriverAgent. Nếu dòng dưới báo chưa tin cậy: trên iPhone vào Cài đặt › Cài đặt chung › '
+      + 'VPN & Quản lý thiết bị › Tin cậy.', Icon: Download,
   },
 };
 
@@ -163,7 +169,7 @@ function FixButton({ op, target }: { op: FixOp; target?: FixTarget }) {
  * openTunnelTerminal() trong src/runner/prereq.ts. Kèm nút chép lệnh, cho ai
  * đang ngồi ngay ở máy ấy muốn tự chạy.
  */
-function StartIosTunnel({ target }: { target?: FixTarget }) {
+export function StartIosTunnel({ target }: { target?: FixTarget }) {
   const [copied, setCopied] = useState(false);
   return (
     <div className="flex flex-col items-start gap-1.5">

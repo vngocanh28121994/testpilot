@@ -47,6 +47,7 @@ import {
 } from './control.js';
 import type { ControlAppOp, ControlOrientation, ControlTarget } from '../protocol/control.js';
 import type { PrereqAndroidDevice } from './prereq.js';
+import { setupWda } from './wdaSetup.js';
 import { packAppBundle } from './bundle.js';
 import {
   iosDeviceNames,
@@ -101,6 +102,11 @@ export interface RunnerPrereqApi {
   openIosSettings(cfg: TestPilotConfig): ReturnType<typeof openIosSettings>;
   /** Cài một driver Appium theo tên đã kiểm tra. */
   installDriver(driver: string, log: LogSink): Promise<void>;
+  /**
+   * Cài WebDriverAgent lên MỘT iPhone: đăng ký máy với team nếu cần, ký, cài,
+   * thử mở. Việc một lần cho mỗi máy mới — xem `wdaSetup.ts`.
+   */
+  setupWda(cfg: TestPilotConfig, udid: string, log: LogSink): Promise<void>;
 }
 
 /**
@@ -233,6 +239,7 @@ export const localRunner: Runner = {
     tunnelService: () => tunnelServiceInstalled(),
     openIosSettings: (cfg) => openIosSettings(cfg),
     installDriver: (driver, log) => prereqInstallDriver(driver, log),
+    setupWda: (cfg, udid, log) => setupWda(cfg, udid, log),
   },
   run: {
     startSuite: (...args) => runSuite(...args),

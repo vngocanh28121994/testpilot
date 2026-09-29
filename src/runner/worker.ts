@@ -199,7 +199,7 @@ export function startWorker(deps: WorkerDeps): WorkerHandle {
   };
   const attached = async (): Promise<AttachedDevice[]> => {
     if (Date.now() - snapshot.at < 10_000) return snapshot.devices;
-    let devices: Array<{ platform: string; udid: string; unavailable?: string }> = [];
+    let devices: Array<{ platform: string; udid: string; label?: string; unavailable?: string }> = [];
     try {
       devices = await runner.control.devices();
     } catch {
@@ -219,7 +219,11 @@ export function startWorker(deps: WorkerDeps): WorkerHandle {
         // "đang cắm" với worker: nhận job cho nó là hỏng ngay bước đầu.
         .filter((device) => !device.unavailable)
         .filter((device) => device.platform === 'android' || device.platform === 'ios')
-        .map((device) => ({ platform: device.platform as 'android' | 'ios', udid: device.udid })),
+        .map((device) => ({
+          platform: device.platform as 'android' | 'ios',
+          udid: device.udid,
+          ...(device.label ? { label: device.label } : {}),
+        })),
     };
     return snapshot.devices;
   };
@@ -379,7 +383,12 @@ async function run(
   }
 
   const holder: LeaseHolder = { kind: 'job', jobId: job.id };
-  const held = await hold(resolved.udids, deps, holder, log);
+  const labels = new Map(
+    attached
+      .filter((device) => device.label)
+      .map((device) => [device.udid, device.label!] as const),
+  );
+  const held = await hold(resolved.udids, deps, holder, log, labels);
   if (!held.ok) {
     // HOÃN, không đánh hỏng và cũng không tính là một lần thử: máy đang bận là
     // chuyện tạm thời, và đánh hỏng ở đây nghĩa là người dùng phải bấm lại —
@@ -575,6 +584,7 @@ async function hold(
   deps: WorkerDeps,
   holder: LeaseHolder,
   log: (line: string) => void,
+  labels: ReadonlyMap<string, string> = new Map(),
 ): Promise<{ ok: true; leases: Lease[] } | { ok: false; reason: string }> {
   // Rỗng chỉ còn đúng một nghĩa: job web, không cần thiết bị nào. Mọi đường
   // "không biết máy nào" đã bị `resolveDevices` chặn trước đó.
@@ -594,7 +604,10 @@ async function hold(
       return { ok: false, reason };
     }
   }
-  log(`[job] Đã giữ chỗ: ${deviceIds.join(', ')}.`);
+  // Lease vẫn khoá bằng UDID; log dùng đúng tên mà màn Điều khiển thiết bị
+  // hiển thị. Serial là danh tính máy cho code, không phải tên cho người đọc.
+  const names = deviceIds.map((id) => labels.get(id) ?? 'Thiết bị không rõ tên');
+  log(`[job] Đã giữ chỗ: ${names.join(', ')}.`);
   return { ok: true, leases };
 }
 
@@ -766,7 +779,11 @@ async function runPrep(
   try {
     if (op === 'start_appium') await runner.prereq.startAppium(log);
     else if (op === 'restart_appium') await runner.prereq.restartAppium(log);
-    else if (op === 'ios_tunnel') {
+    else if (op === 'ios_wda') {
+      const udid = resolved.udids[0];
+      if (!udid) throw new Error('Job cài WebDriverAgent không nói iPhone nào.');
+      await runner.prereq.setupWda(cfg, udid, log);
+    } else if (op === 'ios_tunnel') {
       const fixed = await runner.prereq.fixTunnel();
       if (!fixed.ok) throw new Error(fixed.error ?? 'Không bật được tunnel.');
       log(fixed.mode === 'service'

@@ -541,13 +541,15 @@ function attachUsb(
       state.primer = new StreamPrimer();
       state.screen.want('h264', true);
     }
-    const primer = state.primer.primer();
+    // Nguyên khung mỗi gói, nên lấy cả NAL cuối — xem `primer(withTail)`.
+    const primer = state.primer.primer(true);
     state.h264.add(sink);
     return {
       codec: 'h264',
       frame: state.screen.info.h264,
+      framed: true,
       ...(primer ? { primer } : {}),
-      resync: () => state.primer.primer(),
+      resync: () => state.primer.primer(true),
       stop,
     };
   }
@@ -710,26 +712,70 @@ export function stopAllScreenStreams(): void {
  * đã bỏ `/wda/keys` và `/appium/device/press_button`, cả hai trả
  * "unknown command" — một câu không nói gì về việc route đã dời chỗ.
  */
+/**
+ * Lỗi này nghĩa là WebDriverAgent TRÊN IPHONE đã tắt, dù phiên Appium còn sống.
+ *
+ * Đo trên máy thật (iPhone 16 Pro Max, 2026-09-26): mở trình chuyển app trên
+ * màn Điều khiển rồi vuốt đóng một thẻ — thẻ ấy là WebDriverAgentRunner, vì với
+ * `usePreinstalledWDA` nó chạy như một app thường. Từ đó mọi lệnh nhận
+ * "Could not proxy command to the remote server. Original error: socket hang
+ * up", và Appium ghi "Connection was refused to port …" từ phía máy. `alive()`
+ * hỏi Appium nên vẫn thấy phiên sống; bấm lại bao nhiêu lần cũng thế.
+ */
+export function wdaGone(message: string): boolean {
+  return /Could not proxy command to the remote server|Connection was refused to port|ECONNREFUSED 127\.0\.0\.1/i
+    .test(message);
+}
+
+/**
+ * Chạy một lệnh qua phiên; WebDriverAgent đã tắt thì dựng lại phiên — Appium
+ * mở lại WDA trên máy — rồi làm lại lệnh ĐÚNG MỘT lần. Làm lại là an toàn: lệnh
+ * trước không tới được máy (phía máy từ chối kết nối), nên không có cú chạm nào
+ * bị lặp. Hỏng lần hai thì nói việc cần làm, không đẩy nguyên câu tiếng Anh lên.
+ */
+async function withWda<T>(udid: string, run: (open: Session) => Promise<T>): Promise<T> {
+  const open = await session(udid);
+  try {
+    return await run(open);
+  } catch (err) {
+    if (!wdaGone((err as Error).message)) throw err;
+    forget(udid, open);
+    // Xoá cả bản ghi trên đĩa: `openSession` đọc nó và DÙNG LẠI phiên Appium
+    // còn sống — đúng phiên có WDA đã chết — nên thiếu dòng này thì lần thử
+    // lại gửi lệnh vào chỗ cũ.
+    await writeSessionRecord(udid, undefined).catch(() => undefined);
+    await appium('DELETE', `/session/${open.id}`, undefined, 30_000).catch(() => undefined);
+    const fresh = await session(udid);
+    try {
+      return await run(fresh);
+    } catch (again) {
+      if (!wdaGone((again as Error).message)) throw again;
+      throw new Error('WebDriverAgent trên iPhone vừa tắt và không mở lại được — thường vì thẻ '
+        + '"WebDriverAgentRunner" bị vuốt đóng trong trình chuyển app. Mở khoá iPhone, bấm Nhả máy rồi '
+        + `Giữ máy lại. Chi tiết kỹ thuật: ${(again as Error).message}`);
+    }
+  }
+}
+
 async function script(
   udid: string,
   name: string,
   args: Record<string, unknown>,
   timeoutMs = 30_000,
 ): Promise<void> {
-  const open = await session(udid);
-  await appium('POST', `/session/${open.id}/execute/sync`, { script: name, args: [args] }, timeoutMs);
+  await withWda(udid, (open) =>
+    appium('POST', `/session/${open.id}/execute/sync`, { script: name, args: [args] }, timeoutMs));
 }
 
 async function pointer(udid: string, moves: Array<Record<string, unknown>>): Promise<void> {
-  const open = await session(udid);
-  await appium('POST', `/session/${open.id}/actions`, {
+  await withWda(udid, (open) => appium('POST', `/session/${open.id}/actions`, {
     actions: [{
       type: 'pointer',
       id: 'finger1',
       parameters: { pointerType: 'touch' },
       actions: moves,
     }],
-  }, 30_000);
+  }, 30_000));
 }
 
 export async function tap(udid: string, x: number, y: number): Promise<void> {
@@ -884,15 +930,16 @@ export async function pressKey(udid: string, key: string): Promise<void> {
 const BUNDLE_ID = /^[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)+$/;
 
 export async function rotate(udid: string, orientation: ControlOrientation): Promise<void> {
-  const open = await session(udid);
-  await appium('POST', `/session/${open.id}/orientation`,
-    { orientation: orientation === 'landscape' ? 'LANDSCAPE' : 'PORTRAIT' }, 30_000);
-  // Toạ độ chạm đi theo hướng HIỆN TẠI: đọc lại kích thước, không thì mọi cú
-  // chạm sau khi xoay rơi sai chỗ. Luồng hình mở lại sẽ đọc đúng con số này.
-  const rect = await appium<{ width: number; height: number }>(
-    'GET', `/session/${open.id}/window/rect`, undefined, 30_000,
-  );
-  open.screen = { width: rect.width, height: rect.height, overridden: false };
+  await withWda(udid, async (open) => {
+    await appium('POST', `/session/${open.id}/orientation`,
+      { orientation: orientation === 'landscape' ? 'LANDSCAPE' : 'PORTRAIT' }, 30_000);
+    // Toạ độ chạm đi theo hướng HIỆN TẠI: đọc lại kích thước, không thì mọi cú
+    // chạm sau khi xoay rơi sai chỗ. Luồng hình mở lại sẽ đọc đúng con số này.
+    const rect = await appium<{ width: number; height: number }>(
+      'GET', `/session/${open.id}/window/rect`, undefined, 30_000,
+    );
+    open.screen = { width: rect.width, height: rect.height, overridden: false };
+  });
 }
 
 export async function openUrl(udid: string, url: string): Promise<void> {
@@ -908,8 +955,8 @@ export async function appControl(udid: string, appId: string, op: ControlAppOp):
 
 /** Ảnh PNG đúng độ phân giải của máy — không phải khung MJPEG đã thu nhỏ. */
 export async function screenshot(udid: string): Promise<Buffer> {
-  const open = await session(udid);
-  const base64 = await appium<string>('GET', `/session/${open.id}/screenshot`, undefined, 30_000);
+  const base64 = await withWda(udid, (open) =>
+    appium<string>('GET', `/session/${open.id}/screenshot`, undefined, 30_000));
   return Buffer.from(base64, 'base64');
 }
 
@@ -927,25 +974,29 @@ const KEY_CHARS: Record<string, string> = {
 };
 
 /**
- * iPhone thật đang cắm và dùng được — cùng luật với preflight
+ * iPhone thật đang cắm — cùng luật "đang cắm" với preflight
  * (`usableFromDevicectl`), để màn Điều khiển và phép kiểm trước khi chạy
- * không bao giờ nói khác nhau về cùng một chiếc máy.
+ * không bao giờ nói khác nhau về cùng một chiếc máy. Máy chưa dùng được vẫn
+ * có mặt, kèm `unavailable`.
  */
-export async function connectedIphones(): Promise<Array<{ udid: string; label: string }>> {
+export async function connectedIphones(): Promise<Array<{ udid: string; label: string; unavailable?: string }>> {
   return (await devicectlDevices()).map((device) => ({
     udid: device.udid,
     label: [device.name ?? 'iPhone', device.osVersion && `iOS ${device.osVersion}`]
       .filter(Boolean).join(' · '),
+    // Máy cắm mà chưa tin cậy / chưa bật Chế độ nhà phát triển vẫn hiện, kèm
+    // việc cần làm — worker tự bỏ qua nó khi nhận job.
+    ...(device.unavailable ? { unavailable: device.unavailable } : {}),
   }));
 }
 
 /** iPhone thật đang cắm, đọc từ `devicectl`. Hỏng thì rỗng — không có máy nào để dùng. */
-async function devicectlDevices(): Promise<ReturnType<typeof import('../core/iosDevices.js').usableFromDevicectl>> {
+async function devicectlDevices(): Promise<ReturnType<typeof import('../core/iosDevices.js').iphonesFromDevicectl>> {
   const { execFile } = await import('node:child_process');
   const { mkdtemp, readFile, rm } = await import('node:fs/promises');
   const { tmpdir } = await import('node:os');
   const path = await import('node:path');
-  const { usableFromDevicectl } = await import('../core/iosDevices.js');
+  const { iphonesFromDevicectl } = await import('../core/iosDevices.js');
   const dir = await mkdtemp(path.join(tmpdir(), 'tp-devicectl-'));
   const out = path.join(dir, 'devices.json');
   try {
@@ -953,7 +1004,7 @@ async function devicectlDevices(): Promise<ReturnType<typeof import('../core/ios
       execFile('xcrun', ['devicectl', 'list', 'devices', '--json-output', out], { timeout: 20_000 },
         (err) => (err ? reject(err) : resolve()));
     });
-    return usableFromDevicectl(JSON.parse(await readFile(out, 'utf8')));
+    return iphonesFromDevicectl(JSON.parse(await readFile(out, 'utf8')));
   } catch {
     return [];
   } finally {

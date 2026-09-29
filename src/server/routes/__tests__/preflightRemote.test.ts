@@ -99,6 +99,34 @@ describe('remotePreflight — tunnel và máy làm việc sửa', () => {
     assert.deepEqual(result.host, { name: 'Laptop của Bình', remote: true });
   });
 
+  /**
+   * Runner đo tunnel là "đang chạy, giữ 1 máy" — nhưng máy nó giữ không phải
+   * chiếc iPhone này. Appium (iOS 18+) chỉ tin sổ tunnel, nên máy này sẽ báo
+   * "Unknown device". Dòng này phải đỏ, không được xanh theo phép đo chung.
+   */
+  it('tunnel chạy mà không giữ đúng iPhone này thì đỏ, kèm nút sửa', async () => {
+    const { remotePreflight } = await import('../../remoteRuns.js');
+    const result = remotePreflight('ios', {
+      udid: 'IPHONE-16', label: 'iPhone 16', runnerId: 'runner:x', runnerName: 'Laptop của Bình',
+      offline: false, ready: true,
+      tunnel: { ok: true, detail: 'Đang chạy, giữ 1 máy.', udids: ['IPHONE-12'] },
+    });
+    const tunnel = result.checks.find((c) => c.name.startsWith('Tunnel'));
+    assert.equal(tunnel?.ok, false);
+    assert.equal(tunnel?.fix, 'ios-tunnel');
+    assert.match(tunnel?.detail ?? '', /Unknown device/);
+  });
+
+  it('tunnel giữ đúng iPhone này thì xanh', async () => {
+    const { remotePreflight } = await import('../../remoteRuns.js');
+    const result = remotePreflight('ios', {
+      udid: 'IPHONE-16', label: 'iPhone 16', runnerId: 'runner:x',
+      offline: false, ready: true,
+      tunnel: { ok: true, detail: 'Đang chạy.', udids: ['IPHONE-12', 'IPHONE-16'] },
+    });
+    assert.equal(result.checks.find((c) => c.name.startsWith('Tunnel'))?.ok, true);
+  });
+
   it('Appium của máy ấy chưa chạy: nút khởi động hiện ở dòng máy tính', async () => {
     const { remotePreflight } = await import('../../remoteRuns.js');
     const result = remotePreflight('android', {

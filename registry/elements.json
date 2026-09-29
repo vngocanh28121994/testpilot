@@ -153,10 +153,10 @@
         ]
       },
       "health": {
-        "resolutions": 709,
+        "resolutions": 721,
         "heals": 26,
         "winners": {
-          "placeholder:Email / Số tài khoản / Điện thoại": 673,
+          "placeholder:Email / Số tài khoản / Điện thoại": 685,
           "predicate:new UiSelector().className(\"android.widget.EditText\").instance(0)": 10,
           "css:input[type='text']": 25,
           "testId:username": 1
@@ -194,13 +194,14 @@
         ]
       },
       "health": {
-        "resolutions": 673,
+        "resolutions": 685,
         "heals": 0,
         "winners": {
-          "placeholder:Mật khẩu": 665,
+          "placeholder:Mật khẩu": 677,
           "predicate:new UiSelector().className(\"android.widget.EditText\").instance(1)": 8
         }
-      }
+      },
+      "provenance": "generated"
     },
     "login.submitButton": {
       "id": "login.submitButton",
@@ -244,16 +245,17 @@
         ]
       },
       "health": {
-        "resolutions": 644,
+        "resolutions": 656,
         "heals": 1,
         "winners": {
           "role:button": 50,
           "predicate:new UiSelector().className(\"android.widget.Button\").text(\"ĐĂNG NHẬP\")": 8,
-          "css:button.btn-login": 585,
+          "css:button.btn-login": 597,
           "css:section.header-content button.btn-login": 1
         },
         "lastHealedAt": "2026-08-14T07:18:24.612Z"
-      }
+      },
+      "provenance": "generated"
     },
     "login.openAccountLink": {
       "id": "login.openAccountLink",
@@ -364,13 +366,14 @@
         ]
       },
       "health": {
-        "resolutions": 48,
+        "resolutions": 49,
         "heals": 0,
         "winners": {
-          "css:.subtitle-dialog-common": 44,
+          "css:.subtitle-dialog-common": 45,
           "predicate:new UiSelector().textContains(\"không khớp\")": 4
         }
-      }
+      },
+      "provenance": "generated"
     },
     "home.notificationDismiss": {
       "id": "home.notificationDismiss",
@@ -487,10 +490,10 @@
         ]
       },
       "health": {
-        "resolutions": 1156,
+        "resolutions": 1166,
         "heals": 1,
         "winners": {
-          "css:div.search-box": 1155,
+          "css:div.search-box": 1165,
           "placeholder:Tìm kiếm": 1
         },
         "lastHealedAt": "2026-08-14T07:18:31.972Z"
@@ -525,10 +528,10 @@
         ]
       },
       "health": {
-        "resolutions": 1258,
+        "resolutions": 1269,
         "heals": 0,
         "winners": {
-          "placeholder:Tìm tính năng, mã CK...": 1258
+          "placeholder:Tìm tính năng, mã CK...": 1269
         }
       },
       "typeDelay": 100
@@ -821,16 +824,17 @@
         ]
       },
       "health": {
-        "resolutions": 1253,
+        "resolutions": 1265,
         "heals": 2,
         "winners": {
-          "label:Tổng tài sản": 1244,
+          "label:Tổng tài sản": 1256,
           "predicate:new UiSelector().textContains(\"Tổng tài sản\").className(\"android.widget.TextView\")": 7,
           "predicate:new UiSelector().textContains(\"Tổng tài sản\")": 1,
           "xpath://*[not(*) and normalize-space(.)='Tổng tài sản']": 1
         },
         "lastHealedAt": "2026-09-16T08:15:07.353Z"
-      }
+      },
+      "provenance": "generated"
     },
     "priceBoard.oMaCoPhieu": {
       "id": "priceBoard.oMaCoPhieu",
@@ -1090,7 +1094,8 @@
         "winners": {
           "label:Gốc đầu tư": 60
         }
-      }
+      },
+      "provenance": "generated"
     },
     "home.tien": {
       "id": "home.tien",
@@ -2517,14 +2522,14 @@
       },
       "provenance": "generated",
       "health": {
-        "resolutions": 405,
-        "heals": 171,
+        "resolutions": 416,
+        "heals": 182,
         "winners": {
           "role:combobox": 233,
-          "label:Chuyển từ": 171,
+          "label:Chuyển từ": 182,
           "role:combobox:Chuyển từ": 1
         },
-        "lastHealedAt": "2026-09-16T05:50:47.907Z"
+        "lastHealedAt": "2026-09-27T09:35:56.930Z"
       }
     },
     "transfer.availableAmount": {
@@ -2559,10 +2564,10 @@
       },
       "provenance": "generated",
       "health": {
-        "resolutions": 167,
+        "resolutions": 172,
         "heals": 0,
         "winners": {
-          "label:Được chuyển": 167
+          "label:Được chuyển": 172
         }
       }
     },
@@ -2605,14 +2610,14 @@
       },
       "provenance": "generated",
       "health": {
-        "resolutions": 221,
-        "heals": 101,
+        "resolutions": 227,
+        "heals": 107,
         "winners": {
           "role:button": 119,
-          "label:CHUYỂN": 101,
+          "label:CHUYỂN": 107,
           "role:button:CHUYỂN": 1
         },
-        "lastHealedAt": "2026-09-16T05:50:58.186Z"
+        "lastHealedAt": "2026-09-27T09:36:12.734Z"
       }
     },
     "transferConfirm.orderInfo": {
@@ -2647,10 +2652,10 @@
       },
       "provenance": "generated",
       "health": {
-        "resolutions": 123,
+        "resolutions": 124,
         "heals": 0,
         "winners": {
-          "label:Lệnh": 123
+          "label:Lệnh": 124
         }
       }
     },
@@ -2689,10 +2694,10 @@
       },
       "provenance": "generated",
       "health": {
-        "resolutions": 91,
+        "resolutions": 92,
         "heals": 0,
         "winners": {
-          "label:Chuyển từ": 91
+          "label:Chuyển từ": 92
         }
       }
     },
@@ -2735,13 +2740,13 @@
       },
       "provenance": "generated",
       "health": {
-        "resolutions": 30,
-        "heals": 8,
+        "resolutions": 31,
+        "heals": 9,
         "winners": {
           "role:button": 22,
-          "label:QUAY LẠI": 8
+          "label:QUAY LẠI": 9
         },
-        "lastHealedAt": "2026-09-16T05:50:57.005Z"
+        "lastHealedAt": "2026-09-27T09:35:38.905Z"
       }
     },
     "transferConfirm.confirmButton": {
@@ -2783,14 +2788,14 @@
       },
       "provenance": "generated",
       "health": {
-        "resolutions": 75,
-        "heals": 33,
+        "resolutions": 78,
+        "heals": 36,
         "winners": {
           "role:button": 41,
-          "label:XÁC NHẬN": 33,
+          "label:XÁC NHẬN": 36,
           "role:button:XÁC NHẬN": 1
         },
-        "lastHealedAt": "2026-09-16T05:49:45.354Z"
+        "lastHealedAt": "2026-09-27T09:36:17.924Z"
       }
     },
     "transfer.chonTkNhanTien": {
@@ -2810,10 +2815,10 @@
       },
       "provenance": "generated",
       "health": {
-        "resolutions": 437,
+        "resolutions": 448,
         "heals": 0,
         "winners": {
-          "label:Chọn TK nhận tiền": 437
+          "label:Chọn TK nhận tiền": 448
         }
       }
     },
@@ -2834,10 +2839,10 @@
       },
       "provenance": "generated",
       "health": {
-        "resolutions": 255,
+        "resolutions": 262,
         "heals": 0,
         "winners": {
-          "label:Số tiền": 255
+          "label:Số tiền": 262
         }
       }
     },
@@ -2895,14 +2900,14 @@
       },
       "provenance": "discovered",
       "health": {
-        "resolutions": 83,
-        "heals": 38,
+        "resolutions": 87,
+        "heals": 41,
         "winners": {
-          "css:.msg-row-wraper .label-content": 46,
-          "css:.subtitle-dialog-common": 36,
+          "css:.msg-row-wraper .label-content": 49,
+          "css:.subtitle-dialog-common": 37,
           "role:dialog": 1
         },
-        "lastHealedAt": "2026-09-16T05:49:47.619Z"
+        "lastHealedAt": "2026-09-27T09:36:19.656Z"
       }
     },
     "transfer.nutDong": {
@@ -3431,6 +3436,115 @@
         "ios": []
       },
       "provenance": "generated"
+    },
+    "login.forgotPasswordLink": {
+      "id": "login.forgotPasswordLink",
+      "label": "Quên mật khẩu",
+      "screen": "login",
+      "candidates": {
+        "web": [],
+        "android": [],
+        "ios": []
+      },
+      "provenance": "generated"
+    },
+    "login.passwordVisibilityToggle": {
+      "id": "login.passwordVisibilityToggle",
+      "label": "Biểu tượng con mắt hiển thị mật khẩu",
+      "screen": "login",
+      "candidates": {
+        "web": [],
+        "android": [],
+        "ios": []
+      },
+      "provenance": "generated"
+    },
+    "home.bottomNavHome": {
+      "id": "home.bottomNavHome",
+      "label": "Tab Trang chủ",
+      "screen": "home",
+      "candidates": {
+        "web": [],
+        "android": [],
+        "ios": []
+      },
+      "provenance": "generated"
+    },
+    "home.bottomNavMarket": {
+      "id": "home.bottomNavMarket",
+      "label": "Tab Thị trường",
+      "screen": "home",
+      "candidates": {
+        "web": [],
+        "android": [],
+        "ios": []
+      },
+      "provenance": "generated"
+    },
+    "home.bottomNavTrade": {
+      "id": "home.bottomNavTrade",
+      "label": "Tab Giao dịch",
+      "screen": "home",
+      "candidates": {
+        "web": [],
+        "android": [],
+        "ios": []
+      },
+      "provenance": "generated"
+    },
+    "home.logoutButton": {
+      "id": "home.logoutButton",
+      "label": "Nút Đăng xuất",
+      "screen": "home",
+      "candidates": {
+        "web": [],
+        "android": [],
+        "ios": []
+      },
+      "provenance": "generated"
+    },
+    "home.logoutConfirmDialog": {
+      "id": "home.logoutConfirmDialog",
+      "label": "Hộp thoại xác nhận đăng xuất",
+      "screen": "home",
+      "candidates": {
+        "web": [],
+        "android": [],
+        "ios": []
+      },
+      "provenance": "generated"
+    },
+    "home.logoutCancelButton": {
+      "id": "home.logoutCancelButton",
+      "label": "Nút Huỷ trong hộp thoại đăng xuất",
+      "screen": "home",
+      "candidates": {
+        "web": [],
+        "android": [],
+        "ios": []
+      },
+      "provenance": "generated"
+    },
+    "home.xinChao": {
+      "id": "home.xinChao",
+      "label": "Xin chào",
+      "screen": "home",
+      "candidates": {},
+      "provenance": "byproduct"
+    },
+    "home.dongY": {
+      "id": "home.dongY",
+      "label": "Đồng ý",
+      "screen": "home",
+      "candidates": {},
+      "provenance": "byproduct"
+    },
+    "transfer.chuyenTien": {
+      "id": "transfer.chuyenTien",
+      "label": "Chuyển tiền",
+      "screen": "transfer",
+      "candidates": {},
+      "provenance": "byproduct"
     }
   }
 }

@@ -1,0 +1,712 @@
+{
+  "version": 1,
+  "featureFile": "ang-nhap-tcinvest.feature",
+  "generatedAt": "2026-09-26T19:02:28.148Z",
+  "repaired": true,
+  "sourceUnits": 69,
+  "classifiedSources": 69,
+  "requirements": [
+    {
+      "id": "REQ-001",
+      "key": "req:36ef430ea3318ea9d25b",
+      "sourceId": "SRC-004",
+      "priority": "P1",
+      "rule": "Generator, Scenario Review, parser và runner đều phải dùng module tagTaxonomy; prompt không được duy trì danh sách tag độc lập.",
+      "sourceQuote": "Review, parser và runner đều phải dùng module này; prompt không được duy trì một",
+      "expectedResult": "Các thành phần dùng chung module tagTaxonomy, không có danh sách tag riêng trong prompt.",
+      "sourceRef": "docs/TAG_TAXONOMY.md"
+    },
+    {
+      "id": "REQ-002",
+      "key": "req:b990b4d8ad681113c915",
+      "sourceId": "SRC-009",
+      "priority": "P1",
+      "rule": "Tag chức năng dùng @feature-<ten-chuc-nang>, một tag ổn định sinh từ tên chức năng, có thể đặt ở Feature để scenario kế thừa.",
+      "sourceQuote": "| Chức năng | `@feature-<ten-chuc-nang>` | Một tag ổn định, sinh từ tên chức năng; có thể đặt ở Feature để các scenario kế thừa. |",
+      "expectedResult": "Scenario kế thừa tag @feature-* từ Feature.",
+      "sourceRef": "docs/TAG_TAXONOMY.md"
+    },
+    {
+      "id": "REQ-003",
+      "key": "req:23f4b181ffc08f3721e2",
+      "sourceId": "SRC-010",
+      "priority": "P1",
+      "rule": "Mỗi scenario có đúng một tag ưu tiên trong @p0, @p1, @p2.",
+      "sourceQuote": "| Ưu tiên | `@p0`, `@p1`, `@p2` | Đúng một tag trên mỗi scenario. |",
+      "expectedResult": "Scenario có đúng một tag priority.",
+      "sourceRef": "docs/TAG_TAXONOMY.md"
+    },
+    {
+      "id": "REQ-004",
+      "key": "req:fd4c2dcf0f9b012140d7",
+      "sourceId": "SRC-011",
+      "priority": "P1",
+      "rule": "@smoke chỉ dành cho happy path P0; @regression dùng cho bộ chạy.",
+      "sourceQuote": "| Bộ chạy | `@smoke`, `@regression` | `@smoke` chỉ dành cho happy path P0. |",
+      "expectedResult": "Chỉ scenario P0 happy path được gắn @smoke.",
+      "sourceRef": "docs/TAG_TAXONOMY.md"
+    },
+    {
+      "id": "REQ-005",
+      "key": "req:ee869a995414981c2059",
+      "sourceId": "SRC-012",
+      "priority": "P1",
+      "rule": "Mỗi scenario có đúng một tag loại case trong @positive, @negative, @boundary, @business-rule.",
+      "sourceQuote": "| Loại case | `@positive`, `@negative`, `@boundary`, `@business-rule` | Đúng một tag trên mỗi scenario. |",
+      "expectedResult": "Scenario có đúng một tag loại case.",
+      "sourceRef": "docs/TAG_TAXONOMY.md"
+    },
+    {
+      "id": "REQ-006",
+      "key": "req:09a28a07c43bcff1990d",
+      "sourceId": "SRC-013",
+      "priority": "P1",
+      "rule": "Tag nền tảng @web, @android, @ios chỉ thêm khi hành vi nghiệp vụ khác theo nền tảng.",
+      "sourceQuote": "| Nền tảng | `@web`, `@android`, `@ios` | Chỉ thêm khi hành vi nghiệp vụ khác theo nền tảng; không có nghĩa là chạy cả ba. |",
+      "expectedResult": "Tag nền tảng chỉ xuất hiện khi hành vi khác biệt theo nền tảng.",
+      "sourceRef": "docs/TAG_TAXONOMY.md"
+    },
+    {
+      "id": "REQ-007",
+      "key": "req:377aa8a80ee227962e53",
+      "sourceId": "SRC-014",
+      "priority": "P1",
+      "rule": "@diagnostic chỉ dành cho kịch bản chẩn đoán hạ tầng.",
+      "sourceQuote": "| Vận hành | `@diagnostic` | Chỉ dành cho kịch bản chẩn đoán hạ tầng. |",
+      "expectedResult": "Chỉ kịch bản chẩn đoán hạ tầng được gắn @diagnostic.",
+      "sourceRef": "docs/TAG_TAXONOMY.md"
+    },
+    {
+      "id": "REQ-008",
+      "key": "req:032cfb590f6b65c0429e",
+      "sourceId": "SRC-015",
+      "priority": "P1",
+      "rule": "Trạng thái pending, approved, rejected, generated, quarantine và môi trường SIT/UAT/PROD không phải tag.",
+      "sourceQuote": "Trạng thái `pending`, `approved`, `rejected`, `generated`, quarantine và môi",
+      "expectedResult": "Các trạng thái/môi trường này không xuất hiện như tag.",
+      "sourceRef": "docs/TAG_TAXONOMY.md"
+    },
+    {
+      "id": "REQ-009",
+      "key": "req:15cdb3faad45e4f5f4c4",
+      "sourceId": "SRC-016",
+      "priority": "P1",
+      "rule": "trường SIT/UAT/PROD không phải tag.",
+      "sourceQuote": "trường SIT/UAT/PROD không phải tag.",
+      "expectedResult": "trường SIT/UAT/PROD không phải tag.",
+      "sourceRef": "docs/TAG_TAXONOMY.md"
+    },
+    {
+      "id": "REQ-010",
+      "key": "req:846c736c6dece90941a5",
+      "sourceId": "SRC-017",
+      "priority": "P1",
+      "rule": "Trạng thái và môi trường có store/config riêng, không trộn vào bộ lọc nghiệp vụ.",
+      "sourceQuote": "Chúng có store/config riêng và không được",
+      "expectedResult": "Bộ lọc nghiệp vụ không chứa trạng thái/môi trường.",
+      "sourceRef": "docs/TAG_TAXONOMY.md"
+    },
+    {
+      "id": "REQ-011",
+      "key": "req:0aa7f251ce032b4b9ff8",
+      "sourceId": "SRC-018",
+      "priority": "P1",
+      "rule": "trộn vào bộ lọc nghiệp vụ.",
+      "sourceQuote": "trộn vào bộ lọc nghiệp vụ.",
+      "expectedResult": "trộn vào bộ lọc nghiệp vụ.",
+      "sourceRef": "docs/TAG_TAXONOMY.md"
+    },
+    {
+      "id": "REQ-012",
+      "key": "req:792f5a7c7420773fb657",
+      "sourceId": "SRC-020",
+      "priority": "P1",
+      "rule": "Coverage map xác định P0/P1 và scenario thực sự bao phủ requirement.",
+      "sourceQuote": "Coverage map xác định P0/P1 và scenario thực sự bao phủ requirement.",
+      "expectedResult": "Coverage map chỉ ra P0/P1 và scenario bao phủ requirement.",
+      "sourceRef": "docs/TAG_TAXONOMY.md"
+    },
+    {
+      "id": "REQ-013",
+      "key": "req:470c9c2f65a7e2332b13",
+      "sourceId": "SRC-021",
+      "priority": "P1",
+      "rule": "Code gắn tag chức năng, priority và loại case sau coverage audit; không tin tag do model tự viết.",
+      "sourceQuote": "Code gắn tag chức năng, priority và loại case sau coverage audit; không tin tag",
+      "expectedResult": "Tag được gắn bởi code sau audit, không dùng tag model tự sinh.",
+      "sourceRef": "docs/TAG_TAXONOMY.md"
+    },
+    {
+      "id": "REQ-014",
+      "key": "req:eeba9d90547c0a7d997f",
+      "sourceId": "SRC-023",
+      "priority": "P1",
+      "rule": "Parser canonicalize alias trước khi lọc hoặc chạy.",
+      "sourceQuote": "Parser canonicalize alias trước khi lọc hoặc chạy.",
+      "expectedResult": "Alias được chuyển thành canonical tag trước khi lọc/chạy.",
+      "sourceRef": "docs/TAG_TAXONOMY.md"
+    },
+    {
+      "id": "REQ-015",
+      "key": "req:3518e2fec8e928300a8e",
+      "sourceId": "SRC-024",
+      "priority": "P1",
+      "rule": "Tag lạ do người dùng nhập được namespace thành @feature-*, không tạo global tag tuỳ ý.",
+      "sourceQuote": "Tag lạ do người dùng nhập được namespace thành `@feature-*`, không tạo một",
+      "expectedResult": "Tag lạ trở thành @feature-*, không sinh global tag mới.",
+      "sourceRef": "docs/TAG_TAXONOMY.md"
+    },
+    {
+      "id": "REQ-016",
+      "key": "req:436b8e0b2bd230f70104",
+      "sourceId": "SRC-026",
+      "priority": "P1",
+      "rule": "Alias cũ vẫn chạy được để không làm hỏng command/report lịch sử; UI và nội dung mới chỉ hiển thị canonical tag.",
+      "sourceQuote": "Alias cũ vẫn chạy được để không làm hỏng command/report lịch sử, nhưng UI và",
+      "expectedResult": "Alias cũ chạy được; UI/nội dung mới hiển thị canonical tag.",
+      "sourceRef": "docs/TAG_TAXONOMY.md"
+    },
+    {
+      "id": "REQ-017",
+      "key": "req:0c2051e8201ee92c7c68",
+      "sourceId": "SRC-034",
+      "priority": "P1",
+      "rule": "Scenario: Tự động lọc trùng kết quả theo mã và tên doanh nghiệp",
+      "sourceQuote": "Scenario: Tự động lọc trùng kết quả theo mã và tên doanh nghiệp",
+      "expectedResult": "Tự động lọc trùng kết quả theo mã và tên doanh nghiệp",
+      "sourceRef": "docs/TAG_TAXONOMY.md"
+    },
+    {
+      "id": "REQ-018",
+      "key": "req:0d5edc84217199fe8867",
+      "sourceId": "SRC-037",
+      "priority": "P1",
+      "rule": "> **không** mô tả màn hình thật của TCInvest — tôi không có đặc tả của app.",
+      "sourceQuote": "> **không** mô tả màn hình thật của TCInvest — tôi không có đặc tả của app.",
+      "expectedResult": "> **không** mô tả màn hình thật của TCInvest — tôi không có đặc tả của app.",
+      "sourceRef": "docs/dang-nhap.md"
+    },
+    {
+      "id": "REQ-019",
+      "key": "req:a68084141f7c06fc52e2",
+      "sourceId": "SRC-038",
+      "priority": "P1",
+      "rule": "> Mọi tên trường, thông báo lỗi và luồng dưới đây đều là ví dụ hợp lý chứ không",
+      "sourceQuote": "> Mọi tên trường, thông báo lỗi và luồng dưới đây đều là ví dụ hợp lý chứ không",
+      "expectedResult": "> Mọi tên trường, thông báo lỗi và luồng dưới đây đều là ví dụ hợp lý chứ không",
+      "sourceRef": "docs/dang-nhap.md"
+    },
+    {
+      "id": "REQ-020",
+      "key": "req:0f8168a1b208464c67b6",
+      "sourceId": "SRC-039",
+      "priority": "P1",
+      "rule": "> phải sự thật.",
+      "sourceQuote": "> phải sự thật.",
+      "expectedResult": "> phải sự thật.",
+      "sourceRef": "docs/dang-nhap.md"
+    },
+    {
+      "id": "REQ-021",
+      "key": "req:b43a75a43388ff12490e",
+      "sourceId": "SRC-040",
+      "priority": "P1",
+      "rule": "Thay bằng tài liệu thật trước khi tin vào bộ test sinh ra.",
+      "sourceQuote": "Thay bằng tài liệu thật trước khi tin vào bộ test sinh ra.",
+      "expectedResult": "Thay bằng tài liệu thật trước khi tin vào bộ test sinh ra.",
+      "sourceRef": "docs/dang-nhap.md"
+    },
+    {
+      "id": "REQ-022",
+      "key": "req:11e24c2f3cf95e68aa8b",
+      "sourceId": "SRC-047",
+      "priority": "P1",
+      "rule": "Tên đăng nhập bắt buộc.",
+      "sourceQuote": "Tên đăng nhập bắt buộc.",
+      "expectedResult": "Không cho đăng nhập khi thiếu tên đăng nhập.",
+      "sourceRef": "docs/dang-nhap.md"
+    },
+    {
+      "id": "REQ-023",
+      "key": "req:fc815aed778df1d25609",
+      "sourceId": "SRC-048",
+      "priority": "P1",
+      "rule": "Bỏ trống tên đăng nhập rồi bấm Đăng nhập thì hiện lỗi.",
+      "sourceQuote": "Bỏ trống rồi bấm Đăng nhập thì hiện lỗi",
+      "expectedResult": "Hiện lỗi \"Vui lòng nhập tên đăng nhập\" ngay dưới ô tên đăng nhập.",
+      "sourceRef": "docs/dang-nhap.md"
+    },
+    {
+      "id": "REQ-024",
+      "key": "req:54e1ed7c314b7493afe4",
+      "sourceId": "SRC-050",
+      "priority": "P1",
+      "rule": "Mật khẩu bắt buộc, tối thiểu 8 ký tự.",
+      "sourceQuote": "Mật khẩu bắt buộc, tối thiểu 8 ký tự.",
+      "expectedResult": "Mật khẩu dưới 8 ký tự bị từ chối.",
+      "sourceRef": "docs/dang-nhap.md"
+    },
+    {
+      "id": "REQ-025",
+      "key": "req:703f2f74cea4e3494fa9",
+      "sourceId": "SRC-052",
+      "priority": "P1",
+      "rule": "Mật khẩu ngắn hơn 8 ký tự thì hiện lỗi.",
+      "sourceQuote": "\"Mật khẩu phải có ít nhất 8 ký tự\".",
+      "expectedResult": "Hiện \"Mật khẩu phải có ít nhất 8 ký tự\".",
+      "sourceRef": "docs/dang-nhap.md"
+    },
+    {
+      "id": "REQ-026",
+      "key": "req:7692f020f8a53d39a327",
+      "sourceId": "SRC-054",
+      "priority": "P0",
+      "rule": "Đăng nhập đúng thì chuyển sang màn Trang chủ.",
+      "sourceQuote": "Đăng nhập đúng thì chuyển sang màn Trang chủ.",
+      "expectedResult": "Chuyển sang màn Trang chủ.",
+      "sourceRef": "docs/dang-nhap.md"
+    },
+    {
+      "id": "REQ-027",
+      "key": "req:ffee5d13e9522d9c4b66",
+      "sourceId": "SRC-055",
+      "priority": "P1",
+      "rule": "Sai thông tin thì hiện \"Tên đăng nhập hoặc mật khẩu không đúng\", giữ nguyên ô tên đăng nhập và xoá trắng ô mật khẩu.",
+      "sourceQuote": "Sai thông tin thì hiện \"Tên đăng nhập hoặc mật khẩu không đúng\", giữ nguyên",
+      "expectedResult": "Hiện thông báo lỗi, giữ tên đăng nhập, xoá trắng mật khẩu.",
+      "sourceRef": "docs/dang-nhap.md"
+    },
+    {
+      "id": "REQ-028",
+      "key": "req:5cc14d5fbedd8e3d9129",
+      "sourceId": "SRC-057",
+      "priority": "P1",
+      "rule": "Sai 5 lần liên tiếp thì khoá tài khoản 30 phút.",
+      "sourceQuote": "Sai 5 lần liên tiếp thì khoá tài khoản 30 phút, hiện \"Tài khoản tạm thời bị",
+      "expectedResult": "Hiện \"Tài khoản tạm thời bị khoá. Vui lòng thử lại sau 30 phút\".",
+      "sourceRef": "docs/dang-nhap.md"
+    },
+    {
+      "id": "REQ-029",
+      "key": "req:28536d6a24834780ea24",
+      "sourceId": "SRC-060",
+      "priority": "P1",
+      "rule": "Sau khi đăng nhập thành công, Trang chủ hiển thị:",
+      "sourceQuote": "Sau khi đăng nhập thành công, Trang chủ hiển thị:",
+      "expectedResult": "",
+      "sourceRef": "docs/dang-nhap.md"
+    },
+    {
+      "id": "REQ-030",
+      "key": "req:25425cec597dc0412dc4",
+      "sourceId": "SRC-061",
+      "priority": "P1",
+      "rule": "Trang chủ hiển thị lời chào \"Xin chào, <tên nhà đầu tư>\" ở đầu trang.",
+      "sourceQuote": "Lời chào \"Xin chào, <tên nhà đầu tư>\" ở đầu trang.",
+      "expectedResult": "Lời chào hiển thị đúng tên nhà đầu tư.",
+      "sourceRef": "docs/dang-nhap.md"
+    },
+    {
+      "id": "REQ-031",
+      "key": "req:c743d3e65b602343aabc",
+      "sourceId": "SRC-067",
+      "priority": "P1",
+      "rule": "Từ tab Tài khoản, bấm Đăng xuất thì hiện hộp thoại xác nhận với nút Huỷ và Đồng ý.",
+      "sourceQuote": "Từ tab Tài khoản, bấm **Đăng xuất** thì hiện hộp thoại xác nhận với nút",
+      "expectedResult": "Hộp thoại xác nhận hiện với nút Huỷ và Đồng ý.",
+      "sourceRef": "docs/dang-nhap.md"
+    },
+    {
+      "id": "REQ-032",
+      "key": "req:82cd60db62c3d4985003",
+      "sourceId": "SRC-069",
+      "priority": "P0",
+      "rule": "Bấm Đồng ý trong hộp thoại đăng xuất thì quay về màn hình Đăng nhập.",
+      "sourceQuote": "Bấm Đồng ý thì quay về màn hình Đăng nhập.",
+      "expectedResult": "Quay về màn hình Đăng nhập.",
+      "sourceRef": "docs/dang-nhap.md"
+    }
+  ],
+  "audit": {
+    "decision": "repair",
+    "mappings": [
+      {
+        "requirementId": "REQ-001",
+        "requirementKey": "req:36ef430ea3318ea9d25b",
+        "status": "missing",
+        "scenarios": [],
+        "evidence": [],
+        "reason": "Không có scenario kiểm tra việc dùng chung module tagTaxonomy hay prompt không có danh sách tag riêng."
+      },
+      {
+        "requirementId": "REQ-002",
+        "requirementKey": "req:b990b4d8ad681113c915",
+        "status": "covered",
+        "scenarios": [
+          "Đăng nhập thành công chuyển sang màn Trang chủ"
+        ],
+        "evidence": [
+          "@feature-dang-nhap"
+        ],
+        "reason": "Feature có tag @feature-dang-nhap, scenario kế thừa tag này."
+      },
+      {
+        "requirementId": "REQ-003",
+        "requirementKey": "req:23f4b181ffc08f3721e2",
+        "status": "covered",
+        "scenarios": [
+          "Đăng nhập thành công chuyển sang màn Trang chủ",
+          "Bỏ trống tên đăng nhập thì hiện lỗi",
+          "Mật khẩu ngắn hơn 8 ký tự thì hiện lỗi",
+          "Sai thông tin đăng nhập thì hiện lỗi và xoá trắng mật khẩu",
+          "Sai 5 lần liên tiếp thì khoá tài khoản 30 phút",
+          "Trang chủ hiển thị lời chào tên nhà đầu tư",
+          "Bấm Đăng xuất hiện hộp thoại xác nhận",
+          "Xác nhận đăng xuất quay về màn hình Đăng nhập"
+        ],
+        "evidence": [
+          "@p0 @smoke @positive",
+          "@p1 @negative",
+          "@p1 @boundary",
+          "@p1 @business-rule",
+          "@p1 @positive"
+        ],
+        "reason": "Mỗi scenario có đúng một tag priority (@p0 hoặc @p1)."
+      },
+      {
+        "requirementId": "REQ-004",
+        "requirementKey": "req:fd4c2dcf0f9b012140d7",
+        "status": "covered",
+        "scenarios": [
+          "Đăng nhập thành công chuyển sang màn Trang chủ"
+        ],
+        "evidence": [
+          "@p0 @smoke @positive"
+        ],
+        "reason": "Chỉ scenario P0 happy path được gắn @smoke."
+      },
+      {
+        "requirementId": "REQ-005",
+        "requirementKey": "req:ee869a995414981c2059",
+        "status": "covered",
+        "scenarios": [
+          "Đăng nhập thành công chuyển sang màn Trang chủ",
+          "Bỏ trống tên đăng nhập thì hiện lỗi",
+          "Mật khẩu ngắn hơn 8 ký tự thì hiện lỗi",
+          "Sai thông tin đăng nhập thì hiện lỗi và xoá trắng mật khẩu",
+          "Sai 5 lần liên tiếp thì khoá tài khoản 30 phút",
+          "Trang chủ hiển thị lời chào tên nhà đầu tư",
+          "Bấm Đăng xuất hiện hộp thoại xác nhận",
+          "Xác nhận đăng xuất quay về màn hình Đăng nhập"
+        ],
+        "evidence": [
+          "@p0 @smoke @positive",
+          "@p1 @negative",
+          "@p1 @boundary",
+          "@p1 @business-rule",
+          "@p1 @positive"
+        ],
+        "reason": "Mỗi scenario có đúng một tag loại case."
+      },
+      {
+        "requirementId": "REQ-006",
+        "requirementKey": "req:09a28a07c43bcff1990d",
+        "status": "missing",
+        "scenarios": [],
+        "evidence": [],
+        "reason": "Không có scenario kiểm tra tag nền tảng chỉ thêm khi hành vi khác biệt."
+      },
+      {
+        "requirementId": "REQ-007",
+        "requirementKey": "req:377aa8a80ee227962e53",
+        "status": "missing",
+        "scenarios": [],
+        "evidence": [],
+        "reason": "Không có scenario kiểm tra @diagnostic chỉ dành cho kịch bản chẩn đoán hạ tầng."
+      },
+      {
+        "requirementId": "REQ-008",
+        "requirementKey": "req:032cfb590f6b65c0429e",
+        "status": "missing",
+        "scenarios": [],
+        "evidence": [],
+        "reason": "Không có scenario kiểm tra các trạng thái pending, approved, rejected, generated, quarantine không phải tag."
+      },
+      {
+        "requirementId": "REQ-009",
+        "requirementKey": "req:15cdb3faad45e4f5f4c4",
+        "status": "missing",
+        "scenarios": [],
+        "evidence": [],
+        "reason": "Không có scenario kiểm tra môi trường SIT/UAT/PROD không phải tag."
+      },
+      {
+        "requirementId": "REQ-010",
+        "requirementKey": "req:846c736c6dece90941a5",
+        "status": "missing",
+        "scenarios": [],
+        "evidence": [],
+        "reason": "Không có scenario kiểm tra trạng thái và môi trường có store/config riêng, không trộn vào bộ lọc nghiệp vụ."
+      },
+      {
+        "requirementId": "REQ-011",
+        "requirementKey": "req:0aa7f251ce032b4b9ff8",
+        "status": "missing",
+        "scenarios": [],
+        "evidence": [],
+        "reason": "Không có scenario kiểm tra không trộn trạng thái/môi trường vào bộ lọc nghiệp vụ."
+      },
+      {
+        "requirementId": "REQ-012",
+        "requirementKey": "req:792f5a7c7420773fb657",
+        "status": "missing",
+        "scenarios": [],
+        "evidence": [],
+        "reason": "Không có scenario kiểm tra coverage map xác định P0/P1 và scenario bao phủ requirement."
+      },
+      {
+        "requirementId": "REQ-013",
+        "requirementKey": "req:470c9c2f65a7e2332b13",
+        "status": "missing",
+        "scenarios": [],
+        "evidence": [],
+        "reason": "Không có scenario kiểm tra code gắn tag sau coverage audit, không tin tag model tự viết."
+      },
+      {
+        "requirementId": "REQ-014",
+        "requirementKey": "req:eeba9d90547c0a7d997f",
+        "status": "missing",
+        "scenarios": [],
+        "evidence": [],
+        "reason": "Không có scenario kiểm tra parser canonicalize alias trước khi lọc hoặc chạy."
+      },
+      {
+        "requirementId": "REQ-015",
+        "requirementKey": "req:3518e2fec8e928300a8e",
+        "status": "missing",
+        "scenarios": [],
+        "evidence": [],
+        "reason": "Không có scenario kiểm tra tag lạ được namespace thành @feature-*, không tạo global tag tuỳ ý."
+      },
+      {
+        "requirementId": "REQ-016",
+        "requirementKey": "req:436b8e0b2bd230f70104",
+        "status": "missing",
+        "scenarios": [],
+        "evidence": [],
+        "reason": "Không có scenario kiểm tra alias cũ vẫn chạy được và UI/nội dung mới hiển thị canonical tag."
+      },
+      {
+        "requirementId": "REQ-017",
+        "requirementKey": "req:0c2051e8201ee92c7c68",
+        "status": "missing",
+        "scenarios": [],
+        "evidence": [],
+        "reason": "Không có scenario kiểm tra tự động lọc trùng kết quả theo mã và tên doanh nghiệp."
+      },
+      {
+        "requirementId": "REQ-018",
+        "requirementKey": "req:0d5edc84217199fe8867",
+        "status": "missing",
+        "scenarios": [],
+        "evidence": [],
+        "reason": "Không có scenario kiểm tra nội dung không mô tả màn hình thật của TCInvest."
+      },
+      {
+        "requirementId": "REQ-019",
+        "requirementKey": "req:a68084141f7c06fc52e2",
+        "status": "missing",
+        "scenarios": [],
+        "evidence": [],
+        "reason": "Không có scenario kiểm tra tên trường, thông báo lỗi và luồng là ví dụ hợp lý."
+      },
+      {
+        "requirementId": "REQ-020",
+        "requirementKey": "req:0f8168a1b208464c67b6",
+        "status": "missing",
+        "scenarios": [],
+        "evidence": [],
+        "reason": "Không có scenario kiểm tra nội dung không phải sự thật."
+      },
+      {
+        "requirementId": "REQ-021",
+        "requirementKey": "req:b43a75a43388ff12490e",
+        "status": "missing",
+        "scenarios": [],
+        "evidence": [],
+        "reason": "Không có scenario kiểm tra thay bằng tài liệu thật trước khi tin vào bộ test sinh ra."
+      },
+      {
+        "requirementId": "REQ-022",
+        "requirementKey": "req:11e24c2f3cf95e68aa8b",
+        "status": "covered",
+        "scenarios": [
+          "Bỏ trống tên đăng nhập thì hiện lỗi"
+        ],
+        "evidence": [
+          "When I enter \"{{account.tcbs.password}}\" into \"Ô mật khẩu\"",
+          "And I click button \"Nút đăng nhập\"",
+          "Then \"Thông báo lỗi đăng nhập\" shows \"Vui lòng nhập tên đăng nhập\""
+        ],
+        "reason": "Scenario bỏ trống tên đăng nhập và assert lỗi, chứng minh tên đăng nhập bắt buộc."
+      },
+      {
+        "requirementId": "REQ-023",
+        "requirementKey": "req:fc815aed778df1d25609",
+        "status": "covered",
+        "scenarios": [
+          "Bỏ trống tên đăng nhập thì hiện lỗi"
+        ],
+        "evidence": [
+          "When I enter \"{{account.tcbs.password}}\" into \"Ô mật khẩu\"",
+          "And I click button \"Nút đăng nhập\"",
+          "Then \"Thông báo lỗi đăng nhập\" shows \"Vui lòng nhập tên đăng nhập\""
+        ],
+        "reason": "Scenario bỏ trống tên đăng nhập, bấm đăng nhập và assert đúng thông báo lỗi."
+      },
+      {
+        "requirementId": "REQ-024",
+        "requirementKey": "req:54e1ed7c314b7493afe4",
+        "status": "covered",
+        "scenarios": [
+          "Mật khẩu ngắn hơn 8 ký tự thì hiện lỗi"
+        ],
+        "evidence": [
+          "And I click button \"Nút đăng nhập\"",
+          "Then \"Thông báo lỗi đăng nhập\" shows \"Mật khẩu phải có ít nhất 8 ký tự\""
+        ],
+        "reason": "Scenario nhập mật khẩu 7 ký tự và assert lỗi, chứng minh mật khẩu tối thiểu 8 ký tự."
+      },
+      {
+        "requirementId": "REQ-025",
+        "requirementKey": "req:703f2f74cea4e3494fa9",
+        "status": "covered",
+        "scenarios": [
+          "Mật khẩu ngắn hơn 8 ký tự thì hiện lỗi"
+        ],
+        "evidence": [
+          "And I click button \"Nút đăng nhập\"",
+          "Then \"Thông báo lỗi đăng nhập\" shows \"Mật khẩu phải có ít nhất 8 ký tự\""
+        ],
+        "reason": "Scenario assert đúng thông báo lỗi mật khẩu ngắn."
+      },
+      {
+        "requirementId": "REQ-026",
+        "requirementKey": "req:7692f020f8a53d39a327",
+        "status": "covered",
+        "scenarios": [
+          "Đăng nhập thành công chuyển sang màn Trang chủ"
+        ],
+        "evidence": [
+          "When I enter \"{{account.tcbs.username}}\" into \"Ô tên đăng nhập\"",
+          "And I enter \"{{account.tcbs.password}}\" into \"Ô mật khẩu\"",
+          "And I click button \"Nút đăng nhập\"",
+          "Then \"Tổng tài sản\" is visible"
+        ],
+        "reason": "Scenario đăng nhập đúng và assert màn Trang chủ hiển thị."
+      },
+      {
+        "requirementId": "REQ-027",
+        "requirementKey": "req:ffee5d13e9522d9c4b66",
+        "status": "covered",
+        "scenarios": [
+          "Sai thông tin đăng nhập thì hiện lỗi và xoá trắng mật khẩu"
+        ],
+        "evidence": [
+          "Then \"Thông báo lỗi đăng nhập\" shows \"Tên đăng nhập hoặc mật khẩu không đúng\"",
+          "And \"Ô tên đăng nhập\" shows \"{{account.tcbs.username}}\"",
+          "And \"Ô mật khẩu\" equals \"\""
+        ],
+        "reason": "Scenario assert thông báo lỗi, giữ tên đăng nhập và xoá trắng mật khẩu."
+      },
+      {
+        "requirementId": "REQ-028",
+        "requirementKey": "req:5cc14d5fbedd8e3d9129",
+        "status": "covered",
+        "scenarios": [
+          "Sai 5 lần liên tiếp thì khoá tài khoản 30 phút"
+        ],
+        "evidence": [
+          "And I click button \"Nút đăng nhập\"",
+          "Then \"Thông báo lỗi đăng nhập\" shows \"Tài khoản tạm thời bị khoá. Vui lòng thử lại sau 30 phút\""
+        ],
+        "reason": "Scenario thực hiện 5 lần sai và assert thông báo khoá 30 phút."
+      },
+      {
+        "requirementId": "REQ-029",
+        "requirementKey": "req:28536d6a24834780ea24",
+        "status": "unclear",
+        "scenarios": [
+          "Trang chủ hiển thị lời chào tên nhà đầu tư"
+        ],
+        "evidence": [
+          "Then \"Tổng tài sản\" is visible",
+          "And \"Xin chào\" is visible"
+        ],
+        "reason": "Requirement nêu Trang chủ hiển thị nhiều nội dung nhưng scenario chỉ kiểm tra một phần, không rõ đầy đủ."
+      },
+      {
+        "requirementId": "REQ-030",
+        "requirementKey": "req:25425cec597dc0412dc4",
+        "status": "covered",
+        "scenarios": [
+          "Trang chủ hiển thị lời chào tên nhà đầu tư"
+        ],
+        "evidence": [
+          "Then \"Tổng tài sản\" is visible",
+          "And \"Xin chào\" is visible"
+        ],
+        "reason": "Scenario assert lời chào 'Xin chào' hiển thị trên Trang chủ."
+      },
+      {
+        "requirementId": "REQ-031",
+        "requirementKey": "req:c743d3e65b602343aabc",
+        "status": "covered",
+        "scenarios": [
+          "Bấm Đăng xuất hiện hộp thoại xác nhận"
+        ],
+        "evidence": [
+          "When I click button \"Nút Đăng xuất\"",
+          "Then \"Hộp thoại xác nhận đăng xuất\" is visible",
+          "And \"Nút Huỷ trong hộp thoại đăng xuất\" is visible"
+        ],
+        "reason": "Scenario assert hộp thoại xác nhận và nút Huỷ hiển thị."
+      },
+      {
+        "requirementId": "REQ-032",
+        "requirementKey": "req:82cd60db62c3d4985003",
+        "status": "covered",
+        "scenarios": [
+          "Xác nhận đăng xuất quay về màn hình Đăng nhập"
+        ],
+        "evidence": [
+          "When I click button \"Nút Đăng xuất\"",
+          "And I click button \"Đồng ý\"",
+          "Then \"Ô tên đăng nhập\" is visible",
+          "And \"Nút đăng nhập\" is visible"
+        ],
+        "reason": "Scenario bấm Đồng ý và assert quay về màn hình Đăng nhập."
+      }
+    ],
+    "missingRequirementIds": [
+      "REQ-001",
+      "REQ-006",
+      "REQ-007",
+      "REQ-008",
+      "REQ-009",
+      "REQ-010",
+      "REQ-011",
+      "REQ-012",
+      "REQ-013",
+      "REQ-014",
+      "REQ-015",
+      "REQ-016",
+      "REQ-017",
+      "REQ-018",
+      "REQ-019",
+      "REQ-020",
+      "REQ-021",
+      "REQ-029"
+    ]
+  }
+}

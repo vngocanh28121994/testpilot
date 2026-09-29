@@ -95,7 +95,14 @@ describe('file ghi registry ở tầng khác', () => {
     it(`${file} không đọc registry ở tầng route`, () => {
       const source = codeOnly(`src/server/routes/${file}`);
       assert.doesNotMatch(source, /(?<!Action)Registry\.load\(/);
-      assert.doesNotMatch(source, /repos\.registry/);
+      // Ngoại lệ DUY NHẤT: repo được chuyển nguyên cho bước SINH kịch bản, và
+      // mọi đọc/ghi nằm trong registrySync.ts (ghi kèm revision). Pipeline
+      // sinh làm việc trên file ở đĩa; không đồng bộ thì kịch bản vừa sinh nói
+      // tới element Postgres chưa biết — màn duyệt hiện "0 kịch bản". Phép gộp
+      // kết quả CHẠY vẫn là việc của runner (P4.4), không ở đây.
+      const uses = [...source.matchAll(/repos\.registry[^,)\s]*/g)].map((m) => m[0]);
+      assert.deepEqual(uses, uses.length === 0 ? [] : ['repos.registry'],
+        `${file} chỉ được chuyển repos.registry cho runWorkflow, không gọi phương thức nào của nó`);
     });
 
     /** Và phải nói ra chỗ ghi thật nằm ở đâu, kèm giai đoạn sẽ chuyển. */

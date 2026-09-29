@@ -39,6 +39,11 @@ interface Rule {
 const RULES: Rule[] = [
   // ── Thiết bị iOS ──────────────────────────────────────────────────────────
   {
+    test: /WebDriverAgentRunner\.xctrunner is not installed/i,
+    say: () => 'Máy này chưa được cài WebDriverAgent. Ở phần Trước khi chạy, chọn máy rồi bấm "Cài '
+      + 'WebDriverAgent lên máy" (một lần cho mỗi máy mới), rồi bấm Tin cậy trên iPhone.',
+  },
+  {
     test: /xcodebuild failed with code 70/i,
     say: () => 'iPhone từ chối cài WebDriverAgent — thường là vì provisioning profile đã hết hạn '
       + '(Apple ID miễn phí chỉ cho 7 ngày). Chạy `bash scripts/prepare-wda.sh` để ký lại, '

@@ -11,7 +11,7 @@
  * ngay với câu nói rõ việc cần làm.
  */
 import type { Runner } from './index.js';
-import { iosTunnelCheck } from '../core/preflight.js';
+import { iosTunnelCheck, tunnelRegistryUdids } from '../core/preflight.js';
 
 export interface PrereqReport {
   /** Nền tảng này chạy được không. */
@@ -25,7 +25,14 @@ export interface PrereqReport {
    * `ok` sai: app native chạy được không cần nó, và từ chối job vì một thứ
    * lượt chạy có thể không dùng tới là từ chối nhầm.
    */
-  tunnel?: { ok: boolean; detail: string; service?: boolean };
+  tunnel?: {
+    ok: boolean; detail: string; service?: boolean;
+    /**
+     * iPhone tunnel đang giữ. Máy chủ dùng để hỏi đúng từng máy: tunnel chạy
+     * mà thiếu máy thì Appium không thấy máy ấy (iOS 18+ chỉ tin sổ tunnel).
+     */
+    udids?: string[];
+  };
   at: string;
 }
 
@@ -65,8 +72,11 @@ export async function measurePrereq(runner: Runner, now = new Date()): Promise<P
   // Tunnel đo ở ĐÂY, trên máy cắm iPhone: máy chủ không nhìn được tunnel của
   // laptop người khác, và trước đây màn chuẩn bị chỉ biết tunnel của máy chủ.
   const tunnel = process.platform === 'darwin'
-    ? await iosTunnelCheck()
-      .then((c) => ({ ok: c.ok, detail: c.detail, service: runner.prereq.tunnelService() }))
+    ? await Promise.all([iosTunnelCheck(), tunnelRegistryUdids()])
+      .then(([c, udids]) => ({
+        ok: c.ok, detail: c.detail, service: runner.prereq.tunnelService(),
+        ...(udids ? { udids } : {}),
+      }))
       .catch(() => undefined)
     : undefined;
   report.ios = xcode.ok

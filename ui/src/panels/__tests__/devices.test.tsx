@@ -57,6 +57,18 @@ function mock(options: { devices?: unknown[]; leases?: unknown[]; jobs?: unknown
 const show = () => renderWithRouter(<DevicesPanel />, { path: '/devices' });
 
 describe('màn thiết bị', () => {
+  it('dùng cùng hình dạng cache thiết bị với Local Runner và Workflow', async () => {
+    mock({ devices: [DEVICE] });
+    const { queryClient } = await show();
+
+    // Mô phỏng người dùng vừa đi từ một màn khác sang. Hai màn kia lưu nguyên
+    // response vào đúng queryKey này; đây từng là nguyên nhân lỗi `.filter is
+    // not a function` xuất hiện tuỳ theo thứ tự mở màn hình.
+    queryClient.setQueryData(['device-targets'], { devices: [DEVICE] });
+
+    expect(await screen.findByText(DEVICE.label)).toBeInTheDocument();
+  });
+
   it('máy không ai giữ thì nói là không ai', async () => {
     mock({ devices: [DEVICE] });
     await show();
@@ -187,5 +199,44 @@ describe('hàng đợi', () => {
     mock({ jobs: [{ ...JOB, state: 'queued', attempt: 3 }] });
     await show();
     expect(await screen.findByText(/lần 3/)).toBeInTheDocument();
+  });
+});
+
+/**
+ * Hướng dẫn cắm máy mới phải tự MỞ khi có việc, và tự mở đúng tab: người vừa
+ * cắm một chiếc iPhone chưa bấm Tin cậy không nên phải tìm tab iPhone.
+ */
+describe('thẻ Cắm máy mới', () => {
+  const guide = () => screen.findByRole('button', { name: /Cắm máy mới/ });
+
+  it('chưa máy nào cắm thì mở sẵn, ở tab Android', async () => {
+    mock({});
+    await show();
+    await waitFor(async () => expect(await guide()).toHaveAttribute('aria-expanded', 'true'));
+    expect(screen.getByRole('tab', { name: 'Android' })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByText('Bật Gỡ lỗi USB')).toBeInTheDocument();
+  });
+
+  it('iPhone cắm mà chưa dùng được thì mở sẵn ở tab iPhone, kèm số máy', async () => {
+    mock({ devices: [DEVICE, {
+      platform: 'ios', udid: '00008101-AAAA', label: 'iPhone 15',
+      unavailable: 'iPhone chưa tin cậy máy tính này.',
+    }] });
+    await show();
+    await waitFor(async () => expect(await guide()).toHaveAttribute('aria-expanded', 'true'));
+    expect(screen.getByRole('tab', { name: 'iPhone / iPad' })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByText(/1 máy đang cắm mà chưa dùng được/)).toBeInTheDocument();
+    expect(screen.getByText('Tin cậy chứng chỉ nhà phát triển')).toBeInTheDocument();
+  });
+
+  it('mọi máy đều dùng được thì gập lại, bấm là mở', async () => {
+    mock({ devices: [DEVICE] });
+    await show();
+    await screen.findByText(DEVICE.label);
+    expect(await guide()).toHaveAttribute('aria-expanded', 'false');
+    expect(screen.queryByText('Bật Gỡ lỗi USB')).not.toBeInTheDocument();
+
+    await userEvent.click(await guide());
+    expect(screen.getByText('Bật Gỡ lỗi USB')).toBeInTheDocument();
   });
 });

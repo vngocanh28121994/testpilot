@@ -312,7 +312,12 @@ function ReviewBody({ state, search }: { state: StateResponse; search: ScenarioS
             <CardDescription>Các điều kiện dưới đây được AND với nhau.</CardDescription>
           </CardHeader>
           <CardContent>
+            {/* `key` theo bộ lọc trên URL: các ô bên trong là ô KHÔNG điều khiển
+                (defaultValue), chỉ đọc giá trị lúc dựng. Studio chuyển sang đây
+                với file vừa sinh mà màn này đã mở sẵn với file khác thì ô vẫn
+                hiện file cũ — người dùng thấy "0 kịch bản" và một bộ lọc nói dối. */}
             <form
+              key={`${search.q ?? ''}|${search.file ?? ''}|${search.status ?? ''}`}
               className="grid items-end gap-4 md:grid-cols-5"
               onSubmit={(event) => {
                 event.preventDefault();
@@ -514,6 +519,16 @@ function ReviewBody({ state, search }: { state: StateResponse; search: ScenarioS
                               )}
                               <span>{scenario.name}</span>
                             </button>
+                            {/* Bước chưa hiểu, ngay dưới tên: người duyệt thấy
+                                việc cần sửa mà không phải đi tìm log sinh. Bấm
+                                tên để sửa trực tiếp. */}
+                            {scenario.bindErrors && scenario.bindErrors.length > 0 && (
+                              <ul className="text-destructive mt-1 ms-5.5 flex flex-col gap-0.5 text-xs">
+                                {scenario.bindErrors.map((error) => (
+                                  <li key={error}>{error}</li>
+                                ))}
+                              </ul>
+                            )}
                           </TableCell>
                           <TableCell>
                             {scenario.tags.length > 0 ? (

@@ -154,4 +154,23 @@ describe('PopupInterceptor — hộp thoại không đóng được', () => {
     assert.match(báo[0]!, /#mat-dialog-1/);
     assert.match(báo[0]!, /BỘ LỌC TỪ TCBS/);
   });
+
+  it('không cộng dồn các lần popup xuất hiện lại ở testcase sau', async () => {
+    const { page, interceptor } = luonHien();
+    const originalNow = Date.now;
+    let now = 1_000;
+    Date.now = () => now;
+    try {
+      for (let i = 0; i < 3; i += 1) {
+        assert.ok(await interceptor.dismissOne(page, [], { force: true }));
+      }
+      now += 6_000;
+      assert.ok(
+        await interceptor.dismissOne(page, [], { force: true }),
+        'popup mới ở testcase sau phải được đóng lại từ đầu',
+      );
+    } finally {
+      Date.now = originalNow;
+    }
+  });
 });

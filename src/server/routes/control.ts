@@ -233,6 +233,9 @@ export const controlRoutes: RouteTable = {
         codec,
         screen: await localRunner.control.screenSize(target),
         frame: handle.frame,
+        // Mỗi sự kiện `video` là nguyên khung: người xem giải mã ngay ở biên
+        // sự kiện thay vì đoán bằng đồng hồ im lặng (đoán sai = nửa khung).
+        ...(handle.framed ? { framed: true } : {}),
       });
       // SAU `meta`, không trước: người xem dựng bộ giải mã từ `meta`, nên mọi
       // mảnh tới trước nó đều bị vứt. Đây là phần đầu luồng dành cho người vào

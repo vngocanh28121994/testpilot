@@ -25,7 +25,7 @@ describe("Chuyển tiền nội bộ", () => {
     }
   });
 
-  test("Chuyển tiền thành công từ tiểu khoản Ký Quỹ sang Thường", async () => {
+  test("Chuyển tiền thành công từ Ký Quỹ sang tiểu khoản Thường", async () => {
     const ctx = await createPageContext();
     try {
       const transferPage = new TransferPage(ctx);
@@ -45,7 +45,7 @@ describe("Chuyển tiền nội bộ", () => {
     }
   });
 
-  test("Chọn tiểu khoản nguồn và tiểu khoản đích thành công", async () => {
+  test("Chọn đúng tiểu khoản nguồn và tiểu khoản đích", async () => {
     const ctx = await createPageContext();
     try {
       const transferPage = new TransferPage(ctx);
@@ -95,7 +95,7 @@ describe("Chuyển tiền nội bộ", () => {
     }
   });
 
-  test("Số tiền được chuyển thay đổi theo tiểu khoản nguồn được chọn", async () => {
+  test("Số tiền được chuyển thay đổi theo tiểu khoản nguồn", async () => {
     const ctx = await createPageContext();
     try {
       const transferPage = new TransferPage(ctx);
@@ -113,7 +113,7 @@ describe("Chuyển tiền nội bộ", () => {
     }
   });
 
-  test("Nhập số tiền vượt quá số tiền được chuyển thì không cho chuyển", async () => {
+  test("Không cho chuyển khi số tiền vượt quá số tiền được chuyển", async () => {
     const ctx = await createPageContext();
     try {
       const transferPage = new TransferPage(ctx);
@@ -133,7 +133,7 @@ describe("Chuyển tiền nội bộ", () => {
     }
   });
 
-  test("Số tiền hợp lệ thì chuyển sang màn hình xác nhận", async () => {
+  test("Số tiền hợp lệ chuyển sang màn hình xác nhận", async () => {
     const ctx = await createPageContext();
     try {
       const transferPage = new TransferPage(ctx);
@@ -149,13 +149,12 @@ describe("Chuyển tiền nội bộ", () => {
       await transferConfirmPage.assertOrderInfoText("Chuyển tiền");
       await transferConfirmPage.assertSourceAccountText("Thường");
       await transferPage.assertChonTkNhanTienText("Ký Quỹ");
-      await transferPage.assertTienChuyenPhi0Text("1,000");
     } finally {
       await ctx.close();
     }
   });
 
-  test("Bấm Quay lại thì trở lại màn hình Chuyển tiền", async () => {
+  test("Quay lại từ màn hình xác nhận trở về màn hình Chuyển tiền", async () => {
     const ctx = await createPageContext();
     try {
       const transferPage = new TransferPage(ctx);
@@ -169,13 +168,13 @@ describe("Chuyển tiền nội bộ", () => {
       await transferPage.enterSoTien("1000");
       await transferPage.tapSubmitButton();
       await transferConfirmPage.tapBackButton();
-      await transferPage.assertSubmitButtonVisible();
+      await transferPage.assertSoTienVisible();
     } finally {
       await ctx.close();
     }
   });
 
-  test("Sau khi chuyển thành công số tiền được chuyển cập nhật theo số tiền vừa chuyển", async () => {
+  test("Số tiền được chuyển cập nhật sau khi chuyển thành công", async () => {
     const ctx = await createPageContext();
     try {
       const transferPage = new TransferPage(ctx);
@@ -190,6 +189,7 @@ describe("Chuyển tiền nội bộ", () => {
       await transferPage.enterSoTien("1000");
       await transferPage.tapSubmitButton();
       await transferConfirmPage.tapConfirmButton();
+      await transferPage.assertThongBaoText("Chuyển tiền thành công");
       await transferPage.doAvailableAmount();
     } finally {
       await ctx.close();

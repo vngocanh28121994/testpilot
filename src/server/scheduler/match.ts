@@ -25,6 +25,8 @@ import type { Platform } from '../../core/types.js';
 export interface AttachedDevice {
   platform: 'android' | 'ios';
   udid: string;
+  /** Same human-readable name shown by Device Control. */
+  label?: string;
 }
 
 export type Resolution =

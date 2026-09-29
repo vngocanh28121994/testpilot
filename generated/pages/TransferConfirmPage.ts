@@ -45,4 +45,18 @@ export class TransferConfirmPage {
   async assertSourceAccountVisible(): Promise<void> {
     await this.page.assertVisible('transferConfirm.sourceAccount');
   }
+
+  /** Lệnh
+   * @testpilot-element transferConfirm.orderInfo action=assertVisible
+   */
+  async assertOrderInfoVisible(): Promise<void> {
+    await this.page.assertVisible('transferConfirm.orderInfo');
+  }
+
+  /** Nút XÁC NHẬN
+   * @testpilot-element transferConfirm.confirmButton action=assertVisible
+   */
+  async assertConfirmButtonVisible(): Promise<void> {
+    await this.page.assertVisible('transferConfirm.confirmButton');
+  }
 }

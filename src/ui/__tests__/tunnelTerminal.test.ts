@@ -42,7 +42,8 @@ describe('mở Terminal để dựng tunnel', () => {
   });
 
   it('lệnh ghép từ hằng số, không từ thân request', () => {
-    assert.match(handler, /do script \$\{JSON\.stringify\(IOS_TUNNEL_COMMAND\)\}/);
+    // Bản khởi động lại: dừng tunnel cũ rồi chạy lệnh tunnel — vẫn là hằng số.
+    assert.match(handler, /do script \$\{JSON\.stringify\(IOS_TUNNEL_RESTART_COMMAND\)\}/);
     assert.doesNotMatch(handler, /readJson|req\.|body/);
   });
 

@@ -396,6 +396,10 @@ export function slug(s: string): string {
   return (
     s
       .toLowerCase()
+      // "đ" không tách dấu khi NFD — nó là một chữ riêng, không phải "d" có
+      // dấu — nên bị bỏ ở bước dưới: "Đăng nhập TCInvest" thành
+      // "ang-nhap-tcinvest.feature".
+      .replace(/đ/g, 'd')
       .normalize('NFD')
       .replace(/[\u0300-\u036f]/g, '')
       .replace(/[^a-z0-9]+/g, '-')

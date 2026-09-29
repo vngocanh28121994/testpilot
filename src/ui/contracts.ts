@@ -132,6 +132,11 @@ export interface ScenarioSummary {
    * lực. Nói ra thay vì lặng lẽ bỏ, để người gắn hiểu vì sao nó đỏ trở lại.
    */
   knownIssueStale: boolean;
+  /**
+   * Bước chưa hiểu được, mỗi dòng một bước — có mặt khi file có bước lạ. Kịch
+   * bản vẫn được liệt kê để duyệt và sửa; lượt chạy thì chặn nó.
+   */
+  bindErrors?: string[];
 }
 
 /**
@@ -215,7 +220,11 @@ export interface ReportView {
   startedAt: string;
   finishedAt?: string;
   device?: string;
+  /** Feature file selected for a file-scoped run. */
+  feature?: string;
   tag?: string;
+  /** Present only when the run explicitly targeted the complete suite. */
+  scope?: 'all';
   counters?: { passed: number; failed: number; total: number };
   url: string;
   /**

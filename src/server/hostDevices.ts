@@ -25,6 +25,7 @@ import type { RunnerRegistry } from './runners/registry.js';
 import { LOCAL_HOST_RUNNER } from './remoteRuns.js';
 import { localRunner } from '../runner/index.js';
 import { maxJobsFromEnv, startWorker } from '../runner/worker.js';
+import { startTunnelWatch } from '../runner/tunnelWatch.js';
 
 /** Cùng nhịp với runner ở xa: đủ nhanh để cắm máy vào là thấy. */
 export const DEVICE_REPORT_MS = 10_000;
@@ -92,10 +93,15 @@ export function startHostDevices(deps: HostDeviceDeps): { stop(): void } {
   const prereqTimer = setInterval(reportPrereq, DEVICE_REPORT_MS);
   prereqTimer.unref?.();
 
+  // iPhone cắm sau khi tunnel bật (hoặc rớt cáp) không tự vào tunnel — tự
+  // khởi động lại dịch vụ tunnel khi không iPhone nào đang bận. Xem tunnelWatch.ts.
+  const tunnelWatch = startTunnelWatch({ leases: deps.leases });
+
   return {
     stop() {
       clearInterval(deviceTimer);
       clearInterval(prereqTimer);
+      tunnelWatch.stop();
     },
   };
 }

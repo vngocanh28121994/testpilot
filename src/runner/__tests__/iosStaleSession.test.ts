@@ -16,6 +16,10 @@ import { after, before, describe, it } from 'node:test';
 let server: Server;
 const opened: string[] = [];
 const dead = new Set<string>();
+/** Phiên Appium còn sống nhưng WDA trên máy đã tắt: lệnh nào cũng 500 "Could not proxy". */
+const wdaDead = new Set<string>();
+const deleted: string[] = [];
+const actionsOn: string[] = [];
 
 function reply(res: import('node:http').ServerResponse, status: number, value: unknown) {
   res.writeHead(status, { 'content-type': 'application/json' });
@@ -35,6 +39,16 @@ before(async () => {
       }
       const id = /^\/session\/([^/]+)/.exec(url)?.[1];
       if (id && dead.has(id)) return reply(res, 404, { error: 'invalid session id', message: 'gone' });
+      if (id && req.method === 'DELETE') { deleted.push(id); return reply(res, 200, null); }
+      if (id && url.endsWith('/actions')) {
+        if (wdaDead.has(id)) {
+          return reply(res, 500, {
+            error: 'unknown error',
+            message: 'Could not proxy command to the remote server. Original error: socket hang up',
+          });
+        }
+        actionsOn.push(id);
+      }
       if (url.endsWith('/window/rect')) return reply(res, 200, { width: 428, height: 926 });
       return reply(res, 200, null);
     });
@@ -75,5 +89,49 @@ describe('phiên điều khiển iOS đã chết thì mở phiên mới', () => 
     const screen = await screenSize(udid);
     assert.equal(opened.length, before, 'không được mở phiên mới');
     assert.equal(screen.width, 428);
+  });
+});
+
+/**
+ * Lỗi thật trên màn Điều khiển: mở trình chuyển app, vuốt đóng thẻ
+ * WebDriverAgentRunner. Phiên Appium còn sống, WDA trên máy thì không —
+ * mọi cú chạm sau đó báo "socket hang up" mãi, bấm lại không ăn thua.
+ */
+describe('WebDriverAgent trên máy tắt giữa lúc điều khiển', () => {
+  it('tự mở lại WDA rồi làm lại đúng cú chạm ấy một lần', async () => {
+    const ios = await import('../iosControl.js');
+    const udid = '00008140-VUOTDONG';
+    await ios.screenSize(udid);
+    const first = opened[opened.length - 1]!;
+    wdaDead.add(first);
+
+    await ios.tap(udid, 10, 20);
+
+    const second = opened[opened.length - 1]!;
+    assert.notEqual(second, first, 'phải mở phiên mới — Appium mở lại WDA');
+    assert.ok(deleted.includes(first), 'phiên hỏng phải được đóng');
+    assert.deepEqual(actionsOn.filter((id) => id === second).length, 1, 'cú chạm được làm lại đúng một lần');
+  });
+
+  it('WDA vẫn không mở lại được thì nói việc cần làm', async () => {
+    const ios = await import('../iosControl.js');
+    const udid = '00008140-KHONGLEN';
+    await ios.screenSize(udid);
+    // Mọi phiên từ đây đều có WDA chết.
+    const original = opened.length;
+    const kill = setInterval(() => { for (const id of opened.slice(original - 1)) wdaDead.add(id); }, 1);
+    try {
+      wdaDead.add(opened[opened.length - 1]!);
+      await assert.rejects(ios.tap(udid, 1, 1), /Nhả máy rồi Giữ máy lại/);
+    } finally {
+      clearInterval(kill);
+    }
+  });
+
+  it('nhận ra đúng các câu báo WDA đã tắt', async () => {
+    const { wdaGone } = await import('../iosControl.js');
+    assert.ok(wdaGone('Could not proxy command to the remote server. Original error: socket hang up'));
+    assert.ok(wdaGone('Connection was refused to port 60996'));
+    assert.ok(!wdaGone('An element could not be located on the page'));
   });
 });

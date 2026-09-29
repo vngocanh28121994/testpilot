@@ -33,6 +33,9 @@ export interface PopupDismissResult {
 /** Đóng ngần này lần mà hộp thoại vẫn hiện lại thì coi như nó không đóng được. */
 const STUCK_LIMIT = 3;
 
+/** Repeated closes outside this window are separate popup appearances. */
+const STUCK_WINDOW_MS = 5_000;
+
 /** Nghỉ bao lâu trước khi thử lại một hộp thoại đã bị coi là không đóng được. */
 const STUCK_COOLDOWN_MS = 30_000;
 
@@ -62,7 +65,7 @@ export class PopupInterceptor {
    * Đóng mà hộp thoại vẫn còn đó thì lần thứ tư không khác gì lần thứ ba: dừng
    * lại và nói ra, để cái đang chặn lộ diện thay vì bị che sau một vòng lặp.
    */
-  private stuck?: { key: string; times: number };
+  private stuck?: { key: string; times: number; at: number };
 
   constructor(
     private readonly rules: PopupRule[] = [],
@@ -146,9 +149,10 @@ export class PopupInterceptor {
       .catch(() => null) as PopupDismissResult | null;
     if (semantic) {
       const key = `${semantic.root}\u0000${semantic.control}\u0000${semantic.text ?? ''}`;
-      this.stuck = this.stuck?.key === key
-        ? { key, times: this.stuck.times + 1 }
-        : { key, times: 1 };
+      const now = Date.now();
+      this.stuck = this.stuck?.key === key && now - this.stuck.at <= STUCK_WINDOW_MS
+        ? { key, times: this.stuck.times + 1, at: now }
+        : { key, times: 1, at: now };
       if (this.stuck.times > STUCK_LIMIT) {
         // Chỉ nói một lần, rồi im: chính việc lặp lại là thứ đang cần dập.
         if (this.stuck.times === STUCK_LIMIT + 1) {

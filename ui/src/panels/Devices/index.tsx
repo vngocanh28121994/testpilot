@@ -12,6 +12,7 @@ import { navTitle } from '@/lib/nav';
 import { RunnerAdmin } from './RunnerAdmin';
 import { RunnerHealth } from './RunnerHealth';
 import { DeviceInventory } from './DeviceInventory';
+import { NewDeviceGuide } from '@/components/NewDeviceGuide';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { api } from '@/api/client';
@@ -66,7 +67,11 @@ export default function DevicesPanel() {
 
   const devices = useQuery({
     queryKey: ['device-targets'],
-    queryFn: async () => (await api.get<ControlTargetsResponse>(ROUTES.deviceTargets)).devices,
+    // Mọi màn hình dùng cùng queryKey phải giữ cùng một hình dạng cache.
+    // Local Runner và WorkflowPreflight lưu nguyên `{ devices: [...] }`;
+    // nếu màn này chỉ lưu riêng mảng, việc chuyển màn hình sẽ khiến bên nhận
+    // kế tiếp gọi `.filter()` trên một object (hoặc `.devices` trên một mảng).
+    queryFn: () => api.get<ControlTargetsResponse>(ROUTES.deviceTargets),
     refetchInterval: REFRESH_MS,
   });
   const leases = useQuery({
@@ -116,6 +121,10 @@ export default function DevicesPanel() {
 
         <RunnerHealth />
 
+        {/* Ngay trên bảng Thiết bị: người vừa cắm máy nhìn xuống bảng, thấy
+            máy mình chưa dùng được, và trình tự đầy đủ nằm ngay phía trên. */}
+        <NewDeviceGuide devices={devices.data?.devices} />
+
         <Card aria-labelledby="devices-title">
           <CardHeader className="flex flex-row items-center justify-between gap-3">
             <div className="flex flex-col gap-1">
@@ -135,13 +144,13 @@ export default function DevicesPanel() {
             </Button>
           </CardHeader>
           <CardContent>
-          {(devices.data ?? []).length === 0 ? (
+          {(devices.data?.devices ?? []).length === 0 ? (
             <p className="text-muted-foreground text-sm">
               Chưa máy nào cắm vào. Job cần thiết bị sẽ nằm chờ tới khi có máy — không hỏng.
             </p>
           ) : (
             <DeviceInventory
-              devices={devices.data ?? []}
+              devices={devices.data?.devices ?? []}
               leases={leases.data ?? []}
               jobById={jobById}
               secondsLeft={secondsLeft}

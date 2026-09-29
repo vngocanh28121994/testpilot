@@ -137,7 +137,7 @@ function Gate({ run }: { run: RunHistoryEntry }) {
                     { value: 'upload', label: 'Bản build đã tải lên' },
                   ]}
                 />
-                <p className="mt-1 text-xs text-muted-foreground">
+                <p className="mt-2 text-xs text-muted-foreground">
                   Áp dụng cho Android/iOS của workflow này; web không bị ảnh hưởng.
                 </p>
               </div>
@@ -166,10 +166,12 @@ function Gate({ run }: { run: RunHistoryEntry }) {
                   cả khi lượt chạy đã hai ngày tuổi và người ta đã sinh bộ
                   testcase khác từ lâu — banner nói đúng sự thật, chỉ là không
                   có cách nào làm cho nó thôi đúng. */}
+              {/* Viền: không có nó thì nút nằm cạnh nút xanh trông như chữ
+                  thường, không ai nhận ra đó là chỗ bấm được. */}
               <Button
                 size="sm"
-                variant="ghost"
-                className="text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+                variant="outline"
+                className="text-muted-foreground hover:border-destructive/40 hover:bg-destructive/10 hover:text-destructive"
                 disabled={job.status === 'running' || abandon.isPending}
                 onClick={() => abandon.mutate()}
               >

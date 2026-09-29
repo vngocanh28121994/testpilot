@@ -32,7 +32,10 @@ describe('popup hệ điều hành iOS', () => {
 
   it('nhìn thấy popup của SpringBoard và quét lại popup xuất hiện trễ', () => {
     assert.match(nativeSource, /updateSettings\(\{ respectSystemAlerts: true \}\)/);
-    assert.match(nativeSource, /clearBlockingDialogs\(5, isAndroid \? 0 : 3_000\)/);
+    assert.match(
+      nativeSource,
+      /isAndroid \? \(this\.opts\.enforceAppInstall \? 3_000 : 0\) : 3_000/,
+    );
     assert.match(nativeSource, /if \(this\.opts\.platform === 'ios'\) await this\.clearBlockingDialogs\(\)/);
   });
 });

@@ -36,6 +36,19 @@ function nalType(buf: Uint8Array, headerAt: number): number {
 
 const VCL = new Set([1, 2, 3, 4, 5]);
 
+/**
+ * Slice này mở một ảnh MỚI (`first_mb_in_slice == 0`): trường đầu của header
+ * slice là ue(v), và 0 mã hoá thành đúng một bit `1` — bit cao nhất của byte
+ * ngay sau header NAL.
+ *
+ * Một khung có thể chia nhiều slice, mỗi slice một NAL ảnh. Coi mọi NAL ảnh là
+ * khung mới thì khung bị cắt làm nhiều mảnh, và mỗi mảnh đưa vào bộ giải mã là
+ * một lần "Decoder failure".
+ */
+function firstSlice(buf: Uint8Array, headerAt: number): boolean {
+  return ((buf[headerAt + 1] ?? 0) & 0x80) !== 0;
+}
+
 export class AnnexBAssembler {
   private buffer = new Uint8Array(0);
 
@@ -69,11 +82,12 @@ export class AnnexBAssembler {
       const here = nextStartCode(merged, cursor);
       if (!here) break;
       const headerAt = here.at + here.size;
-      if (headerAt >= merged.length) break;
+      // Cần cả byte SAU header: nó nói slice này có mở ảnh mới không.
+      if (headerAt + 1 >= merged.length) break;
       const type = nalType(merged, headerAt);
 
       if (VCL.has(type)) {
-        if (sawPicture) {
+        if (sawPicture && firstSlice(merged, headerAt)) {
           units.push({ data: merged.slice(cut, here.at), key });
           cut = here.at;
           key = false;

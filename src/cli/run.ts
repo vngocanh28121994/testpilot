@@ -175,7 +175,9 @@ async function main(): Promise<void> {
     platform,
     ...(Object.keys(baseCfg.environments).length > 0 ? { env: envName } : {}),
     kind: args.onFarm ? 'farm' : 'run',
+    ...(args.feature ? { feature: args.feature } : {}),
     ...(args.tag ? { tag: args.tag } : {}),
+    ...(!args.feature && !args.tag ? { scope: 'all' as const } : {}),
     status: 'running',
     startedAt,
   });
@@ -218,7 +220,8 @@ async function main(): Promise<void> {
         envLog.get(device.udid!), envName, appUnderTest, envName === baseCfg.defaultEnv, appHash,
       )
     : { reinstall: false, because: '' };
-  const enforceAppInstall = decision.reinstall || (tracksEnv && args.reinstall);
+  const enforceAppInstall = platform !== 'web' && !args.onFarm && !useInstalled
+    && (decision.reinstall || args.reinstall || args.appSource === 'upload');
   if (useInstalled) {
     // Nói ra bản đang nằm trên máy. Không chứng minh được nó thuộc môi trường
     // nào — mọi môi trường chung bundle id — nhưng người chạy biết mình cài gì,
@@ -253,6 +256,7 @@ async function main(): Promise<void> {
     artifactsDir,
     device,
     enforceAppInstall,
+    appUnderTest,
   );
 
   // Wire the discovery pipeline:
@@ -619,7 +623,9 @@ async function main(): Promise<void> {
     id: path.basename(runDir),
     platform,
     kind: args.onFarm ? 'farm' : 'run',
+    ...(args.feature ? { feature: args.feature } : {}),
     ...(args.tag ? { tag: args.tag } : {}),
+    ...(!args.feature && !args.tag ? { scope: 'all' as const } : {}),
     device: driver.device,
     // A run with requested-but-unapproved scenarios is incomplete, never a
     // successful 0/0 baseline. Exit code 2 below keeps the CLI distinction;
@@ -708,6 +714,7 @@ async function makeDriver(
   artifactsDir: string,
   device: DeviceSpec,
   enforceAppInstall: boolean,
+  appUnderTest?: string,
 ): Promise<UiDriver> {
   if (platform === 'web') {
     const { WebUiDriver } = await import('../drivers/web.js');
@@ -751,7 +758,7 @@ async function makeDriver(
       ...(device.udid ? { deviceSerial: device.udid } : {}),
       ...(farmDeviceName() ? { reportedDevice: farmDeviceName()! } : {}),
       // The farm installs the app itself; passing `app` there is an error.
-      ...(onFarm ? {} : cfg.android.app ? { app: cfg.android.app } : {}),
+      ...(onFarm ? {} : appUnderTest ? { app: appUnderTest } : {}),
       ...(enforceAppInstall ? { enforceAppInstall: true } : {}),
       ...(cfg.android.appPackage ? { appPackage: cfg.android.appPackage } : {}),
       ...(cfg.android.appActivity ? { appActivity: cfg.android.appActivity } : {}),
@@ -777,7 +784,7 @@ async function makeDriver(
       : {}),
     ...(device.wdaLocalPort ? { wdaLocalPort: device.wdaLocalPort } : {}),
     ...(farmDeviceName() ? { reportedDevice: farmDeviceName()! } : {}),
-    ...(onFarm ? {} : cfg.ios.app ? { app: cfg.ios.app } : {}),
+    ...(onFarm ? {} : appUnderTest ? { app: appUnderTest } : {}),
     ...(enforceAppInstall ? { enforceAppInstall: true } : {}),
     ...(cfg.ios.bundleId ? { bundleId: cfg.ios.bundleId } : {}),
     // Signing only matters on a real device, and Device Farm signs for us.
@@ -956,10 +963,13 @@ async function explainDriverStart(
   // là sổ rỗng, còn máy thì vẫn cắm, vẫn nhận, vẫn hiện trong Finder — và câu
   // thông báo không hề nhắc tới tunnel. Một buổi sáng đã mất vì chuyện này.
   if (/Unknown device or simulator UDID/i.test(err.message)) {
-    const tunnel = await iosTunnelCheck();
+    const udid = /Unknown device or simulator UDID:?\s*'?([\w-]+)/i.exec(err.message)?.[1];
+    // `required: false`: không có tunnel thì Appium dò USB — lỗi này khi ấy
+    // không do tunnel, và đổ cho tunnel là chỉ sai đường.
+    const tunnel = await iosTunnelCheck(udid, { required: false });
     if (!tunnel.ok) {
       return (
-        'Appium không thấy máy nào, dù cáp vẫn cắm.\n\n'
+        'Appium không thấy iPhone này, dù cáp vẫn cắm.\n\n'
         + `${tunnel.detail}\n\n`
         + 'Từ iOS 18, Appium lấy danh sách máy thật từ sổ đăng ký của tunnel chứ không '
         + 'hỏi USB. Sổ rỗng thì máy coi như không tồn tại.\n\n'
@@ -970,6 +980,16 @@ async function explainDriverStart(
   // Bỏ build thì không còn xcodebuild để hỏng; cái hỏng là bản WDA đã cài không
   // chịu mở cổng. Appium chỉ báo hết giờ chờ /status, không nói vì sao — mà "vì
   // sao" ở đây luôn là cùng một chuyện: runner khởi động rồi tắt ngay.
+  // Chưa cài hẳn — khác với cài rồi mà không mở cổng. Máy mới cắm vào gặp đúng
+  // trường hợp này, và câu "không phản hồi" bên dưới đưa người ta đi sửa nhầm.
+  if (reusingWda && /xctrunner is not installed/i.test(err.message)) {
+    return (
+      'Máy này chưa được cài WebDriverAgent (đang bật ios.usePreinstalledWDA, nên lượt chạy không tự cài).\n\n'
+      + 'Máy mới cần cài một lần: ở phần "Trước khi chạy", chọn máy này rồi bấm "Cài WebDriverAgent lên\n'
+      + 'máy" — tool tự đăng ký máy với tài khoản Apple, ký và cài. Xong thì bấm Tin cậy trên iPhone.\n\n'
+      + `Nguyên văn lỗi: ${err.message}`
+    );
+  }
   if (reusingWda && /wda|webdriveragent|status/i.test(err.message)) {
     return (
       'Bản WebDriverAgent đã cài trên máy không phản hồi (đang bật ios.usePreinstalledWDA).\n\n'

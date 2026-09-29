@@ -19,6 +19,7 @@ import { ROUTES } from '@/api/routes';
 import { friendlyError, friendlyStatus } from '@friendlyError';
 import { AnnexBAssembler, codecFromAnnexB, decodeBase64 } from '@/lib/h264';
 import { latestOnly } from '@/lib/latestOnly';
+import { DecodeRecovery, decodeGiveUpMessage } from '@/lib/decodeRecovery';
 
 export interface ControlScreen {
   width: number;
@@ -146,6 +147,13 @@ export function useDeviceControl(canvas: React.RefObject<HTMLCanvasElement | nul
   const pendingFrame = useRef<VideoFrame | undefined>(undefined);
   const paintRef = useRef<number | undefined>(undefined);
   const codecRef = useRef<StreamCodec>('h264');
+  /**
+   * Máy chủ nói mỗi sự kiện `video` là NGUYÊN khung (iOS qua USB: runner đã
+   * cắt theo gói có độ dài). Khi ấy giải mã ngay ở biên sự kiện, không đoán
+   * bằng đồng hồ im lặng — đoán sai qua Wi-Fi là đưa nửa khung vào bộ giải mã.
+   */
+  const framedRef = useRef(false);
+  const recoveryRef = useRef(new DecodeRecovery());
   const idleRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   const teardown = useCallback(() => {
@@ -157,6 +165,8 @@ export function useDeviceControl(canvas: React.RefObject<HTMLCanvasElement | nul
     framesRef.current = 0;
     toldRef.current = false;
     decodeSeq.current = 0;
+    recoveryRef.current.reset();
+    framedRef.current = false;
     // Khung chưa vẽ cũng phải đóng: nó giữ bộ nhớ ngoài vùng thu gom rác.
     if (paintRef.current !== undefined) cancelAnimationFrame(paintRef.current);
     paintRef.current = undefined;
@@ -259,12 +269,20 @@ export function useDeviceControl(canvas: React.RefObject<HTMLCanvasElement | nul
       const codec = codecFromAnnexB(unit.data);
       if (!codec) return;
       const decoder = new VideoDecoder({
-        output: draw,
-        error: (err) => setState({
-          phase: 'error',
-          message: 'Trình duyệt không giải mã được hình từ máy. Bấm Giữ máy lại; nếu vẫn lỗi, '
-            + `thử Chrome hoặc Edge bản mới. Chi tiết kỹ thuật: ${err.message}`,
-        }),
+        output: (frame) => { recoveryRef.current.drew(); draw(frame); },
+        // Bộ giải mã gặp một mảnh hỏng thì tự ĐÓNG. Phần lớn là một mảnh hỏng
+        // lẻ (mạng khựng giữa khung): bỏ bộ này, dựng bộ mới ở khung khoá kế
+        // tiếp — tối đa hai giây — thay vì bắt người dùng bấm Giữ máy lại.
+        // Hỏng liên tục mới là trình duyệt thật sự không giải mã được.
+        error: (err) => {
+          if (decoderRef.current === decoder) decoderRef.current = undefined;
+          framesRef.current = 0;
+          if (recoveryRef.current.failed()) return;
+          setState({
+            phase: 'error',
+            message: decodeGiveUpMessage(err.message, typeof window === 'undefined' || window.isSecureContext),
+          });
+        },
       });
       decoder.configure({ codec, optimizeForLatency: true });
       decoderRef.current = decoder;
@@ -305,8 +323,10 @@ export function useDeviceControl(canvas: React.RefObject<HTMLCanvasElement | nul
       const meta = JSON.parse((event as MessageEvent<string>).data) as {
         screen: ControlScreen;
         codec: StreamCodec;
+        framed?: boolean;
       };
       codecRef.current = meta.codec;
+      framedRef.current = meta.framed === true;
       setState((prev) => (
         prev.phase === 'holding' ? { ...prev, screen: meta.screen, codec: meta.codec } : prev
       ));
@@ -314,6 +334,12 @@ export function useDeviceControl(canvas: React.RefObject<HTMLCanvasElement | nul
 
     source.addEventListener('video', (event) => {
       const bytes = decodeBase64(JSON.parse((event as MessageEvent<string>).data) as string);
+      // Mỗi sự kiện là nguyên khung: giải mã hết ngay, không chờ khung sau.
+      if (framedRef.current && codecRef.current === 'h264') {
+        for (const unit of assemblerRef.current.push(bytes)) decode(unit);
+        for (const unit of assemblerRef.current.flush()) decode(unit);
+        return;
+      }
       // Màn hình đứng yên thì mảnh kế tiếp có thể không tới trong nhiều giây,
       // và bộ ghép chỉ phát một khung khi thấy khung sau. Hẹn giờ để phát nốt.
       clearTimeout(idleRef.current);

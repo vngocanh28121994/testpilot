@@ -31,7 +31,11 @@ export interface RunMeta {
    */
   env?: string;
   kind: 'run' | 'farm';
+  /** Feature file selected with --feature. Absent means the run was not file-scoped. */
+  feature?: string;
   tag?: string;
+  /** Explicit marker for an intentionally unfiltered run. Absent on legacy records is unknown. */
+  scope?: 'all';
   device?: string;
   status: 'running' | 'passed' | 'failed' | 'interrupted';
   startedAt: string;

@@ -171,4 +171,11 @@ export class TransferPage {
   async doSourceAccount(): Promise<void> {
     await this.page.tap('transfer.sourceAccount');
   }
+
+  /** Chuyển tiền
+   * @testpilot-element transfer.chuyenTien action=focusRegion
+   */
+  async focusChuyenTienRegion(): Promise<void> {
+    await this.page.focusRegion('transfer.chuyenTien');
+  }
 }

@@ -12,20 +12,24 @@ import { StreamPrimer, spsSize } from '../h264.js';
 
 const SPS = 7; const PPS = 8; const IDR = 5; const SLICE = 1;
 
+/**
+ * Phần thân giả của NAL. NAL ảnh (1, 5) mở đầu bằng 0x88 như slice thật đầu
+ * ảnh — first_mb_in_slice = 0, bit cao là 1 — vì StreamPrimer đọc bit ấy.
+ */
+function body(type: number, size: number, firstSlice = true): Buffer {
+  const out = Buffer.alloc(size, type);
+  if ((type === 1 || type === 5) && size > 0) out[0] = firstSlice ? 0x88 : 0x2a;
+  return out;
+}
+
 /** Một NAL với mã bắt đầu bốn byte. */
-function nal(type: number, size = 4): Buffer {
-  return Buffer.concat([
-    Buffer.from([0, 0, 0, 1, type & 0x1f]),
-    Buffer.alloc(size, type),
-  ]);
+function nal(type: number, size = 4, firstSlice = true): Buffer {
+  return Buffer.concat([Buffer.from([0, 0, 0, 1, type & 0x1f]), body(type, size, firstSlice)]);
 }
 
 /** Cùng thế nhưng mã bắt đầu ba byte — bộ mã hoá Android dùng cả hai. */
 function nal3(type: number, size = 4): Buffer {
-  return Buffer.concat([
-    Buffer.from([0, 0, 1, type & 0x1f]),
-    Buffer.alloc(size, type),
-  ]);
+  return Buffer.concat([Buffer.from([0, 0, 1, type & 0x1f]), body(type, size)]);
 }
 
 describe('giữ phần đầu luồng', () => {
@@ -44,6 +48,25 @@ describe('giữ phần đầu luồng', () => {
     primer.push(nal(SLICE));
     const out = primer.primer()!;
     assert.deepEqual(types(out), [SPS, PPS, IDR, SLICE]);
+  });
+
+  /**
+   * Khung khoá chia hai slice, cả hai là NAL loại IDR. Mở nhóm mới ở slice
+   * thứ hai là vứt slice đầu — người vào sau nhận nửa khung khoá.
+   */
+  it('khung khoá nhiều slice giữ đủ mọi slice', () => {
+    const primer = new StreamPrimer();
+    primer.push(Buffer.concat([nal(SPS), nal(PPS), nal(IDR), nal(IDR, 4, false), nal(SLICE)]));
+    primer.push(nal(SLICE));
+    assert.deepEqual(types(primer.primer()!), [SPS, PPS, IDR, IDR, SLICE]);
+  });
+
+  it('luồng đã chia sẵn theo khung (iOS): lấy cả NAL cuối', () => {
+    const primer = new StreamPrimer();
+    primer.push(Buffer.concat([nal(SPS), nal(PPS), nal(IDR)]));
+    primer.push(nal(SLICE));
+    assert.deepEqual(types(primer.primer()!), [SPS, PPS, IDR]);
+    assert.deepEqual(types(primer.primer(true)!), [SPS, PPS, IDR, SLICE]);
   });
 
   it('khung khoá MỚI vứt bỏ khung cũ, không cộng dồn', () => {

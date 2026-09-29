@@ -330,7 +330,9 @@ export class NativeUiDriver implements UiDriver {
     // Must run before the session launches the app: granting a permission does
     // not dismiss a dialog that is already on screen.
     if (isAndroid) {
-      await this.warnOnAppVersionSkew();
+      // A deliberate reinstall replaces the installed build during session
+      // creation; comparing versions before that would report a false skew.
+      if (!this.opts.enforceAppInstall) await this.warnOnAppVersionSkew();
       await this.grantPendingPermissions();
       await this.clearBlockingDialogs();
       await this.killWebViewApps();
@@ -470,7 +472,7 @@ export class NativeUiDriver implements UiDriver {
         // (FLAG_ACTIVITY_REORDER_TO_FRONT) rather than cold-starting and re-triggering
         // any first-launch flows. Requires a debuggable build so Appium can see the
         // WebView context (WebView.setWebContentsDebuggingEnabled(true)).
-        ...(isAndroid && this.opts.isolation === 'restart'
+        ...(isAndroid && this.opts.isolation === 'restart' && !this.opts.enforceAppInstall
           ? {
               'appium:dontStopAppOnReset': true,
               'appium:noReset': true,
@@ -563,7 +565,10 @@ export class NativeUiDriver implements UiDriver {
       // the sheet is visibly covering the app.
       await this.b.updateSettings({ respectSystemAlerts: true }).catch(() => {});
     }
-    await this.clearBlockingDialogs(5, isAndroid ? 0 : 3_000);
+    await this.clearBlockingDialogs(
+      5,
+      isAndroid ? (this.opts.enforceAppInstall ? 3_000 : 0) : 3_000,
+    );
 
     // Do NOT call enterWebview() here — the app has just been attached but no
     // scenario has run yet, so no screen is guaranteed to have a WebView. Each
@@ -1078,12 +1083,23 @@ export class NativeUiDriver implements UiDriver {
       ];
       if (pending.length === 0) return;
 
+      const granted: string[] = [];
       for (const perm of pending) {
         // Install-time permissions cannot be granted this way and simply error;
         // that is expected and not worth reporting.
-        await execAsync(`adb ${serial}shell pm grant ${pkg} ${perm}`).catch(() => {});
+        await execAsync(`adb ${serial}shell pm grant ${pkg} ${perm}`)
+          .then(() => granted.push(perm))
+          .catch(() => {});
       }
-      console.log(`[native] granted ${pending.length} pending runtime permission(s) to ${pkg}`);
+      if (granted.length > 0) {
+        console.log(`[native] granted ${granted.length} pending runtime permission(s) to ${pkg}`);
+      }
+      if (granted.length < pending.length) {
+        console.warn(
+          `[native] could not pre-grant ${pending.length - granted.length}/${pending.length} `
+          + `pending runtime permission(s) to ${pkg}; system dialog handling remains active.`,
+        );
+      }
     } catch (err) {
       console.warn(`[native] permission grant skipped: ${(err as Error).message}`);
     }
@@ -1115,7 +1131,13 @@ export class NativeUiDriver implements UiDriver {
     // context round-trip for ordinary Material/CDK/application dialogs.
     if ((this.inWebview || this.cdpConnected) && this.cdpDriver) {
       const dismissed = await this.cdpDriver.dismissOverlay(protect).catch(() => false);
-      if (dismissed) return true;
+      if (dismissed) {
+        // The app can stack its notification prompt over Android's permission
+        // sheet. Closing the DOM layer exposes the system dialog; sweep now
+        // instead of waiting for the current locator attempt to time out.
+        await this.clearBlockingDialogs(5, 600);
+        return true;
+      }
     }
     // Throttle to once every 5s — rapid NATIVE↔WebView context switching
     // destabilises the UiAutomator2 instrumentation process.
@@ -1227,14 +1249,21 @@ export class NativeUiDriver implements UiDriver {
    */
   private async clearBlockingDialogs(rounds = 5, waitForArrivalMs = 0): Promise<void> {
     if (this.opts.platform !== 'android') return this.clearIosAlerts(rounds, waitForArrivalMs);
-    for (let round = 0; round < rounds; round += 1) {
+    const arrivalDeadline = Date.now() + waitForArrivalMs;
+    let dismissed = 0;
+    while (dismissed < rounds) {
       const focus = await this.focusedWindow();
       const kind = blockingKind(focus, this.opts.appPackage);
-      if (!kind) return;
+      if (!kind) {
+        if (Date.now() >= arrivalDeadline) return;
+        await sleep(300);
+        continue;
+      }
 
       const pressed = kind === 'permission' ? await this.tapNativeButton() : null;
       if (!pressed) await this.pressBack();
       console.log(`[native] dọn cửa sổ hệ thống (${kind})${pressed ? ` bằng "${pressed}"` : ' bằng phím Back'}`);
+      dismissed += 1;
       await sleep(600);
     }
     const left = await this.focusedWindow();

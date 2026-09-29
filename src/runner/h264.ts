@@ -83,7 +83,11 @@ export class StreamPrimer {
       this.config.push(nal);
       return;
     }
-    if (type === NAL_IDR) {
+    // Chỉ slice ĐẦU của khung khoá mở nhóm mới. Một khung có thể chia nhiều
+    // slice, mỗi slice một NAL cùng loại IDR; mở nhóm ở mọi NAL IDR là vứt các
+    // slice trước của CHÍNH khung ấy — người vào sau nhận nửa khung khoá, và
+    // trình duyệt báo "Decoder failure".
+    if (type === NAL_IDR && firstSliceOfPicture(nal)) {
       this.gop = [nal];
       this.gopBytes = nal.length;
       return;
@@ -116,9 +120,17 @@ export class StreamPrimer {
     return this.size;
   }
 
-  primer(): Buffer | undefined {
+  primer(
+    /**
+     * Kèm cả NAL cuối đang chờ. Chỉ đúng khi mỗi mảnh `push` là NGUYÊN khung
+     * (iOS qua USB): khi ấy NAL cuối đã trọn, và bỏ nó là gửi đi khung cuối
+     * thiếu slice — người xem giải mã ngay ở biên sự kiện sẽ báo lỗi.
+     */
+    withTail = false,
+  ): Buffer | undefined {
     if (this.config.length === 0 || this.gop.length === 0) return undefined;
-    return Buffer.concat([...this.config, ...this.gop]);
+    const tail = withTail && this.carry.length > 0 && this.gop.length > 0 ? [this.carry] : [];
+    return Buffer.concat([...this.config, ...this.gop, ...tail]);
   }
 }
 
@@ -144,6 +156,17 @@ function startCodes(data: Buffer): Array<{ at: number }> {
 function typeOf(nal: Buffer): number {
   const offset = nal[2] === 1 ? 3 : 4;
   return (nal[offset] ?? 0) & 0x1f;
+}
+
+/**
+ * Slice này mở một ảnh MỚI (`first_mb_in_slice == 0`).
+ *
+ * Trường đầu của header slice là ue(v); giá trị 0 mã hoá thành đúng một bit
+ * `1`, nên chỉ cần bit cao nhất của byte ngay sau header NAL.
+ */
+export function firstSliceOfPicture(nal: Buffer | Uint8Array): boolean {
+  const offset = nal[2] === 1 ? 3 : 4;
+  return ((nal[offset + 1] ?? 0) & 0x80) !== 0;
 }
 
 /**

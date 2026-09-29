@@ -220,51 +220,62 @@ export async function listFeatures(cfg: TestPilotConfig, registry: Registry) {
       const uri = path.join(cfg.paths.features, name);
       const content = await readFile(uri, 'utf8');
       const coverage = coverageView(await readFeatureCoverage(cfg, name));
+      // Đồng bộ trạng thái duyệt TRƯỚC khi đọc bước: file có bước lạ vẫn phải
+      // có kịch bản trong sổ duyệt, nếu không nó không bao giờ duyệt được.
+      // One-time backwards-compatible migration: scenarios that predate the
+      // review store stay approved. All subsequent edits change their hash
+      // and therefore become pending.
+      const review = reviews.syncFile(name, content, {
+        defaultStatus: 'approved',
+        source: 'legacy',
+      });
+      const byName = new Map(review.map((item) => [item.scenarioName, item]));
+      // Hash của từng khối, để biết nhãn Known issue còn hiệu lực hay đã cũ.
+      const hashes = new Map(scenarioBlocks(content).map((b) => [b.name, b.contentHash]));
+      const view = (spec: ReturnType<typeof parseFeature>, error: string | null) => ({
+        name,
+        content,
+        revision: featureRevision(content),
+        feature: spec.name,
+        background: spec.background.map((s) => `${s.keyword} ${s.text}`),
+        scenarios: spec.scenarios.map((s) => ({
+          id: s.id,
+          name: s.name,
+          tags: s.tags,
+          platforms: s.platforms,
+          steps: s.steps.length,
+          review: byName.get(s.name) ?? null,
+          // Nhãn chỉ được coi là còn hiệu lực khi nội dung chưa đổi; nếu đã
+          // đổi thì trả về `stale` để màn hình mời người ta xem lại thay vì
+          // lặng lẽ bỏ nhãn.
+          knownIssue: known.active(s.id, hashes.get(s.name) ?? '') ?? null,
+          knownIssueStale: Boolean(known.stale(s.id, hashes.get(s.name) ?? '')),
+          ...(s.bindErrors ? { bindErrors: s.bindErrors } : {}),
+        })),
+        coverage,
+        error,
+      });
       try {
-        const spec = parseFeature(uri, content, registry);
-        // One-time backwards-compatible migration: scenarios that predate the
-        // review store stay approved. All subsequent edits change their hash
-        // and therefore become pending.
-        const review = reviews.syncFile(name, content, {
-          defaultStatus: 'approved',
-          source: 'legacy',
-        });
-        const byName = new Map(review.map((item) => [item.scenarioName, item]));
-        // Hash của từng khối, để biết nhãn Known issue còn hiệu lực hay đã cũ.
-        const hashes = new Map(scenarioBlocks(content).map((b) => [b.name, b.contentHash]));
-        return {
-          name,
-          content,
-          revision: featureRevision(content),
-          feature: spec.name,
-          background: spec.background.map((s) => `${s.keyword} ${s.text}`),
-          scenarios: spec.scenarios.map((s) => ({
-            id: s.id,
-            name: s.name,
-            tags: s.tags,
-            platforms: s.platforms,
-            steps: s.steps.length,
-            review: byName.get(s.name) ?? null,
-            // Nhãn chỉ được coi là còn hiệu lực khi nội dung chưa đổi; nếu đã
-            // đổi thì trả về `stale` để màn hình mời người ta xem lại thay vì
-            // lặng lẽ bỏ nhãn.
-            knownIssue: known.active(s.id, hashes.get(s.name) ?? '') ?? null,
-            knownIssueStale: Boolean(known.stale(s.id, hashes.get(s.name) ?? '')),
-          })),
-          coverage,
-          error: null as string | null,
-        };
-      } catch (err) {
-        // Show the file anyway — a binding error is exactly what needs fixing.
-        return {
-          name,
-          content,
-          revision: featureRevision(content),
-          feature: name,
-          scenarios: [],
-          coverage,
-          error: (err as Error).message,
-        };
+        return view(parseFeature(uri, content, registry), null);
+      } catch (strictErr) {
+        // Bước chưa hiểu: đọc lại ở chế độ khoan dung để vẫn LIỆT KÊ kịch bản,
+        // mỗi cái kèm đúng bước hỏng. Bản cũ trả `scenarios: []` ở đây — màn
+        // duyệt hiện "0 kịch bản" cho một file có tám kịch bản đang chờ duyệt,
+        // và không có chỗ nào để mở ra sửa chính lỗi bind ấy.
+        try {
+          return view(parseFeature(uri, content, registry, { lenient: true }), (strictErr as Error).message);
+        } catch (err) {
+          // Lỗi cú pháp Gherkin: không đọc được kịch bản nào. Vẫn hiện file.
+          return {
+            name,
+            content,
+            revision: featureRevision(content),
+            feature: name,
+            scenarios: [],
+            coverage,
+            error: (err as Error).message,
+          };
+        }
       }
     }),
   );
@@ -363,7 +374,9 @@ async function listReports(cfg: TestPilotConfig, referencedIds: ReadonlySet<stri
           startedAt: r.startedAt,
           ...(r.finishedAt ? { finishedAt: r.finishedAt } : {}),
           ...(r.device ? { device: r.device } : {}),
+          ...(r.feature ? { feature: r.feature } : {}),
           ...(r.tag ? { tag: r.tag } : {}),
+          ...(r.scope ? { scope: r.scope } : {}),
           ...(r.counters ? { counters: r.counters } : {}),
           url: `/${[cfg.paths.runs, r.id, 'index.html'].join('/')}`,
           hasLog,

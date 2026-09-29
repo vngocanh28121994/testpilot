@@ -69,8 +69,9 @@ describe('máy cắm rồi mà Appium không thấy', () => {
   it('chỉ sang tunnel thay vì để người dùng đi tìm cáp', () => {
     const source = readFileSync('src/cli/run.ts', 'utf8');
     assert.match(source, /Unknown device or simulator UDID\/i\.test\(err\.message\)/);
-    assert.match(source, /const tunnel = await iosTunnelCheck\(\)/);
-    assert.match(source, /Appium không thấy máy nào, dù cáp vẫn cắm/);
+    // Hỏi đúng chiếc máy trong câu lỗi: tunnel giữ một máy KHÁC cũng là thiếu.
+    assert.match(source, /const tunnel = await iosTunnelCheck\(udid, \{ required: false \}\)/);
+    assert.match(source, /Appium không thấy iPhone này, dù cáp vẫn cắm/);
     // Chỉ nói về tunnel khi tunnel THẬT SỰ hỏng; tunnel tốt thì lỗi này có
     // nguyên nhân khác và đổ cho tunnel là dẫn người dùng đi sai đường.
     assert.match(source, /if \(!tunnel\.ok\) \{/);

@@ -335,6 +335,12 @@ export interface ScenarioSpec {
   name: string;
   tags: string[];
   steps: StepSpec[];
+  /**
+   * Bước chưa hiểu được — chỉ có khi đọc ở chế độ khoan dung (`lenient`), để
+   * màn duyệt vẫn liệt kê kịch bản và chỉ đúng bước cần sửa. Lượt chạy đọc ở
+   * chế độ chặt, nên không bao giờ chạy một kịch bản thiếu bước.
+   */
+  bindErrors?: string[];
   /** Platforms this scenario is allowed to run on, derived from @web/@android/@ios tags. */
   platforms: Platform[];
   /**

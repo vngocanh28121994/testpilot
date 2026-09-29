@@ -19,7 +19,7 @@
       "file": "chuyen-tien-noi-bo.feature",
       "featureId": "chuyen-tien-noi-bo",
       "displayName": "Chuyển tiền nội bộ",
-      "updatedAt": "2026-09-12T19:37:28.260Z"
+      "updatedAt": "2026-09-27T09:28:47.125Z"
     },
     "confluence:digital-horus.atlassian.net:6356993": {
       "sourceKey": "confluence:digital-horus.atlassian.net:6356993",
@@ -30,6 +30,17 @@
       "featureId": "them-moi-template-bao-cao-cua-toi",
       "displayName": "Thêm mới template Báo cáo của tôi",
       "updatedAt": "2026-09-15T11:42:33.566Z"
+    },
+    "docs/TAG_TAXONOMY.md": {
+      "sourceKey": "docs/TAG_TAXONOMY.md",
+      "refs": [
+        "docs/TAG_TAXONOMY.md",
+        "docs/dang-nhap.md"
+      ],
+      "file": "ang-nhap-tcinvest.feature",
+      "featureId": "ang-nhap-tcinvest",
+      "displayName": "Đăng nhập TCInvest",
+      "updatedAt": "2026-09-26T19:02:28.141Z"
     }
   }
 }

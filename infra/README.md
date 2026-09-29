@@ -135,6 +135,12 @@ quy tắc sudoers cho ĐÚNG MỘT lệnh (`launchctl kickstart -k` dịch vụ 
 `sudo bash scripts/install-ios-tunnel-service.sh --uninstall`. Log:
 `/Library/Logs/testpilot-ios-tunnel.log`.
 
+Tunnel của Appium chỉ nhận những iPhone cắm sẵn lúc nó khởi động. Có dịch vụ
+thì máy chủ (và runner) **tự khởi động lại tunnel** khi thấy một iPhone cắm cáp
+mà tunnel chưa giữ — cắm thêm máy là dùng được sau khoảng một phút. Nó chờ tới
+khi không có lượt iOS nào đang chạy trên máy đó (khởi động lại làm đứt lượt
+ấy), và thử tối đa ba lần cho mỗi máy. Log dòng `[tunnel]` ở tiến trình server/runner.
+
 ## Artifact: report, ảnh, video
 
 Ở chế độ `server`, bằng chứng của một lượt chạy **không ở lại trên máy runner**

@@ -166,6 +166,12 @@ export interface ScreenStreamHandle {
   /** Kích thước khung video đang gửi — KHÁC kích thước màn hình khi có `--size`. */
   readonly frame: { width: number; height: number };
   /**
+   * Mỗi mảnh gửi qua sink là NGUYÊN khung (hoặc nhiều khung trọn vẹn). Đúng
+   * với iOS qua USB — app gửi gói có độ dài, mỗi gói một khung. Sai với
+   * `screenrecord`: đó là dòng byte của một ống, cắt ở đâu cũng được.
+   */
+  readonly framed?: boolean;
+  /**
    * Phần đầu luồng cho người xem VÀO SAU — gửi trước mọi mảnh trực tiếp.
    *
    * Trả về đây thay vì tự đẩy vào sink, vì THỨ TỰ chịu lực: người xem phải

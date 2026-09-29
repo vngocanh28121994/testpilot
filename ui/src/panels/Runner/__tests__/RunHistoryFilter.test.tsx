@@ -16,6 +16,7 @@ import RunnerPanel from '@/panels/Runner';
 const reports = [
   { id: 'r-web', platform: 'web', tag: '@smoke', status: 'passed', startedAt: '2026-09-08T03:00:00.000Z', counters: { passed: 3, failed: 0 } },
   { id: 'r-android', platform: 'android', tag: '@feature-x', status: 'failed', startedAt: '2026-09-08T04:00:00.000Z', counters: { passed: 1, failed: 2 } },
+  { id: 'r-workflow', platform: 'android', feature: 'chuyen-tien-noi-bo.feature', status: 'failed', startedAt: '2026-09-08T05:00:00.000Z', counters: { passed: 2, failed: 1 } },
 ];
 
 const render = async () => {
@@ -30,6 +31,48 @@ describe('Lịch sử chạy local — bộ lọc', () => {
     await render();
     expect(await screen.findByText('@feature-x')).toBeInTheDocument();
     expect(screen.getByText('@smoke')).toBeInTheDocument();
+    expect(screen.getByText('chuyen-tien-noi-bo.feature')).toBeInTheDocument();
+  });
+
+  it('không khẳng định chạy toàn bộ khi bản ghi cũ thiếu phạm vi', async () => {
+    server.use(
+      http.get(ROUTES.state, () => HttpResponse.json({
+        ...stateFixture,
+        reports: [{
+          id: 'r-legacy',
+          platform: 'web',
+          status: 'interrupted',
+          startedAt: '2026-09-08T06:00:00.000Z',
+          counters: { passed: 7, failed: 3 },
+        }],
+      })),
+    );
+
+    await renderWithRouter(<RunnerPanel />, { path: '/runner' });
+
+    expect(await screen.findByText('Không rõ (bản ghi cũ)')).toBeInTheDocument();
+    expect(screen.queryByText('Toàn bộ testcase')).not.toBeInTheDocument();
+  });
+
+  it('chỉ hiện toàn bộ testcase khi metadata ghi nhận phạm vi này tường minh', async () => {
+    server.use(
+      http.get(ROUTES.state, () => HttpResponse.json({
+        ...stateFixture,
+        reports: [{
+          id: 'r-all',
+          platform: 'web',
+          scope: 'all',
+          status: 'passed',
+          startedAt: '2026-09-08T07:00:00.000Z',
+          counters: { passed: 20, failed: 0 },
+        }],
+      })),
+    );
+
+    await renderWithRouter(<RunnerPanel />, { path: '/runner' });
+
+    expect(await screen.findByText('Toàn bộ testcase')).toBeInTheDocument();
+    expect(screen.queryByText('Không rõ (bản ghi cũ)')).not.toBeInTheDocument();
   });
 
   it('lọc theo platform', async () => {

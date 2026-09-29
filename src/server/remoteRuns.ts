@@ -15,7 +15,7 @@
  * được mà không cần dựng hàng đợi, sổ máy và sổ runner.
  */
 import type { AppBuilds, JobState } from '../protocol/messages.js';
-import type { PreflightResult } from '../core/preflight.js';
+import { IOS_TUNNEL_CHECK_NAME, tunnelLacks, type PreflightResult } from '../core/preflight.js';
 import { loadConfig } from '../config.js';
 import { describeBuild, type BuildLookup } from './appBuilds.js';
 import { allows } from './auth/roles.js';
@@ -45,8 +45,8 @@ export interface RemoteDevice {
   reason?: string;
   /** Nút sửa được ngay từ web, do chính runner ấy báo. */
   fix?: 'appium';
-  /** Tunnel cho WebView, đo trên máy ấy (chỉ iOS). */
-  tunnel?: { ok: boolean; detail: string; service?: boolean };
+  /** Tunnel iOS, đo trên máy ấy — kèm những iPhone nó đang giữ. */
+  tunnel?: { ok: boolean; detail: string; service?: boolean; udids?: string[] };
 }
 
 export interface RemoteRunRequest {
@@ -203,12 +203,24 @@ export function remotePreflight(
     },
     // Tunnel đo trên CHÍNH máy cắm iPhone. Không có dòng này thì một iPhone ở
     // laptop người khác không bao giờ hiện "tunnel chưa chạy" — và nút bật nó.
-    ...(platform === 'ios' && device.tunnel ? [{
-      name: 'Tunnel cho WebView (iOS 17+)',
-      ok: device.tunnel.ok,
-      ...(device.tunnel.ok ? {} : { fix: 'ios-tunnel' as const }),
-      detail: device.tunnel.ok ? `${device.tunnel.detail} (trên ${where})` : device.tunnel.detail,
-    }] : []),
+    // Tunnel chạy mà THIẾU đúng chiếc iPhone này thì Appium không thấy nó
+    // (iOS 18+ chỉ tin sổ tunnel) — đỏ, dù runner đo tunnel là "đang chạy".
+    ...(platform === 'ios' && device.tunnel ? [
+      tunnelLacks(device.tunnel, device.udid)
+        ? {
+          name: IOS_TUNNEL_CHECK_NAME,
+          ok: false,
+          fix: 'ios-tunnel' as const,
+          detail: `Tunnel trên ${where} đang chạy nhưng chưa có iPhone này — Appium sẽ báo “Unknown device”. `
+            + 'Tunnel chỉ nhận máy cắm sẵn lúc nó khởi động; khởi động lại để nó nhận máy.',
+        }
+        : {
+          name: IOS_TUNNEL_CHECK_NAME,
+          ok: device.tunnel.ok,
+          ...(device.tunnel.ok ? {} : { fix: 'ios-tunnel' as const }),
+          detail: device.tunnel.ok ? `${device.tunnel.detail} (trên ${where})` : device.tunnel.detail,
+        },
+    ] : []),
     // Bản build đi sang runner ở xa: nói tên và cỡ, vì lần đầu nó là vài trăm
     // MB qua mạng và người bấm chạy nên biết vì sao bước đầu tiên lâu.
     ...(build ? [build.ok

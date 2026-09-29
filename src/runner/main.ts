@@ -26,6 +26,7 @@ import { readToken } from './credentials.js';
 import { ProtocolMismatchError, RemoteJobQueue } from './remote.js';
 import { applyUpdate, EXIT_UPDATED, planUpdate } from './update.js';
 import { maxJobsFromEnv, startWorker } from './worker.js';
+import { startTunnelWatch } from './tunnelWatch.js';
 import { buildFetcher } from './appBuild.js';
 
 /** Đẩy log đi mỗi nửa giây. Đủ nhanh để người xem thấy gần như tức thì. */
@@ -179,6 +180,8 @@ async function main(): Promise<void> {
   });
 
   const flusher = setInterval(() => { void queue.flush(); }, FLUSH_MS);
+  // Farm không có tunnel tại chỗ: máy nằm ở AWS.
+  const tunnelWatch = mode === 'farm' ? undefined : startTunnelWatch({ leases: localLeases });
 
   /**
    * Báo danh sách máy theo nhịp, không chỉ một lần lúc chào.
@@ -210,6 +213,7 @@ async function main(): Promise<void> {
       console.log(`[runner] ${signal} — đang đẩy nốt log rồi thoát.`);
       worker.stop();
       clearInterval(flusher);
+      tunnelWatch?.stop();
       clearInterval(reporter);
       const left = await queue.flush();
       if (left > 0) console.error(`[runner] còn ${left} dòng log chưa gửi được.`);

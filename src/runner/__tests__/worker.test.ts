@@ -137,13 +137,19 @@ describe('worker', () => {
     await queue.onLog(job.id, (line) => lines.push(line));
 
     const { runner } = fakeRunner({ code: 0 });
+    runner.control.devices = async () => [{
+      platform: 'android',
+      udid: 'emulator-5554',
+      label: 'Pixel 7 · Android 15 · emulator',
+    }];
     const worker = startWorker({ queue, leases: new MemoryLeaseRepo(), runnerId: 'local', configFile: 'x.json', config, pollMs: 5, runner });
     try {
       await settled(queue, job.id);
       // Dòng đầu là của worker nói về chỗ giữ máy — từ P3.3, một job không nêu
       // máy vẫn giữ được chỗ, vì chiếc máy thật được phân giải từ config và
       // danh sách đang cắm. Phần sau là log của chính lượt chạy.
-      assert.match(lines[0]!, /Đã giữ chỗ/);
+      assert.equal(lines[0], '[job] Đã giữ chỗ: Pixel 7 · Android 15 · emulator.');
+      assert.doesNotMatch(lines[0]!, /emulator-5554/);
       assert.deepEqual(lines.slice(1), ['dòng đầu', 'dòng cuối']);
     } finally {
       worker.stop();

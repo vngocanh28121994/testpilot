@@ -13,7 +13,7 @@
  */
 import os from 'node:os';
 import { applyEnv, devicesOf, loadConfig, saveConfig, type TestPilotConfig } from '../../config.js';
-import { PREP_OPS, type PrepOp } from '../../protocol/messages.js';
+import { PREP_OPS, prepTimeoutMs, type PrepOp } from '../../protocol/messages.js';
 import { waitForClose } from './run.js';
 import { attachedDevices } from '../../core/attachedDevices.js';
 import { registerDevices } from '../../core/deviceSync.js';
@@ -100,7 +100,7 @@ export const prereqRoutes: RouteTable = {
     if (!there) {
       return stream(res, async (log) => {
         log(`[prep] Làm trên máy chủ (${os.hostname()}).`);
-        await localPrep(op, cfg, log);
+        await localPrep(op, cfg, log, udid);
       });
     }
 
@@ -119,7 +119,7 @@ export const prereqRoutes: RouteTable = {
           orgId: ctx.identity.orgId,
           kind: 'prereq',
           createdBy: ctx.identity.userId,
-          timeoutMs: 5 * 60_000,
+          timeoutMs: prepTimeoutMs(op),
           deviceTokens: [`${platform}:${there.udid}`],
           prep: { op },
         },
@@ -233,8 +233,14 @@ export const prereqRoutes: RouteTable = {
 };
 
 /** Việc chuẩn bị trên CHÍNH máy chủ — cùng những hàm mà các nút cũ gọi. */
-async function localPrep(op: PrepOp, cfg: TestPilotConfig, log: (line: string) => void): Promise<void> {
+async function localPrep(
+  op: PrepOp, cfg: TestPilotConfig, log: (line: string) => void, udid?: string,
+): Promise<void> {
   if (op === 'start_appium') return localRunner.prereq.startAppium(log);
+  if (op === 'ios_wda') {
+    if (!udid) throw new Error('Chưa chọn iPhone nào để cài WebDriverAgent. Chọn máy ở phần Trước khi chạy rồi thử lại.');
+    return localRunner.prereq.setupWda(cfg, udid, log);
+  }
   if (op === 'restart_appium') return localRunner.prereq.restartAppium(log);
   if (op === 'ios_tunnel') {
     const fixed = await localRunner.prereq.fixTunnel();

@@ -68,6 +68,7 @@ npm run farm:bundle && npm run farm    # chạy native trên AWS Device Farm
 ```
 
 Yêu cầu: **Node >= 20**. Native cần Appium 2 + `adb` / Xcode tuỳ platform.
+Cài đặt máy chủ, cắm điện thoại mới, và bảng lỗi hay gặp: [PREPARE-ENV.md](PREPARE-ENV.md).
 
 ## 3. Lệnh CLI
 

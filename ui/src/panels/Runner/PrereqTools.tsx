@@ -8,6 +8,7 @@ import { api } from '@/api/client';
 import { ROUTES, STREAM_ROUTES } from '@/api/routes';
 import { useStreamJob } from '@/hooks/useStreamJob';
 import { IOS_TUNNEL_COMMAND } from '@/lib/tunnel';
+import { IosPhoneSettings } from '@/components/NewDeviceGuide';
 import type { PrereqAdbResponse, PrereqIosDevicesResponse, PrereqXcodeResponse } from '@core/ui/contracts.js';
 
 /**
@@ -82,15 +83,15 @@ export function PrereqTools({ platform }: { platform: 'android' | 'ios' }) {
           title="Chuẩn bị trên chính iPhone/iPad"
           note="Ba thiết lập này nằm trên máy, không lệnh nào ở đây đọc lại được — nên chúng được nêu ra thay vì kiểm tra. Đây là lý do thường gặp nhất khiến một bộ cài đúng vẫn hỏng."
         >
-          <IosDeviceSetup />
+          <IosPhoneSettings />
         </Step>
       )}
 
       {platform === 'ios' && (
         <Step
           n={(n += 1)}
-          title="Tunnel cho WebView (iOS 17+)"
-          note="Chỉ cần khi app là hybrid. Từ iOS 17, Appium chỉ với tới Web Inspector qua tunnel này; thiếu nó thì mọi kịch bản hybrid hỏng ngay bước đầu dù máy, app và WebDriverAgent đều đúng."
+          title="Tunnel iOS"
+          note="Cần khi app là hybrid: từ iOS 17, Appium chỉ với tới WebView qua tunnel này. Nhưng khi tunnel ĐANG chạy thì nó phải giữ đủ mọi iPhone đang cắm — Appium (iOS 18+) chỉ tìm máy trong tunnel, nên thiếu máy nào là máy đó báo “Unknown device”, kể cả app không hybrid và màn Điều khiển."
         >
           <TunnelCommand />
         </Step>
@@ -296,7 +297,7 @@ function TunnelCommand() {
           tunnel tắt theo.
         </li>
         <li>
-          Quay lại đây bấm <b className="text-foreground">Kiểm tra lại</b>: dòng “Tunnel cho WebView”
+          Quay lại đây bấm <b className="text-foreground">Kiểm tra lại</b>: dòng “Tunnel iOS”
           phải chuyển sang xanh.
         </li>
       </ol>
@@ -331,64 +332,6 @@ function Step({
         {children}
       </div>
     </div>
-  );
-}
-
-/**
- * Bốn thiết lập nằm trên chính cái điện thoại.
- *
- * Không lệnh nào trên máy tính này đọc lại được, nên chúng được NÊU RA thay vì
- * kiểm tra — và chúng là lý do thường gặp nhất khiến một bộ cài đúng vẫn hỏng:
- * Appium báo một lỗi về WebDriverAgent, còn nguyên nhân thật nằm ở một công tắc
- * trong Cài đặt mà không ai nghĩ tới.
- */
-function IosDeviceSetup() {
-  return (
-    <ol className="text-muted-foreground flex list-decimal flex-col gap-2 ps-4 text-xs">
-      <li>
-        <b className="text-foreground">Tin cậy máy tính</b> — cắm cáp, mở khoá máy, bấm “Tin cậy”
-        rồi nhập mật mã.
-        <div className="mt-0.5">
-          Hộp thoại chỉ hiện khi máy đang mở khoá. Lỡ bấm “Không tin cậy”:{' '}
-          <span className="text-foreground">
-            Cài đặt › Cài đặt chung › Chuyển hoặc Đặt lại iPhone › Đặt lại › Đặt lại Vị trí &amp; Quyền riêng tư
-          </span>
-          , rồi cắm lại.
-        </div>
-      </li>
-      <li>
-        <b className="text-foreground">Chế độ nhà phát triển</b> (iOS 16+) —{' '}
-        <span className="text-foreground">
-          Cài đặt › Quyền riêng tư &amp; Bảo mật › Chế độ nhà phát triển
-        </span>{' '}
-        → bật → khởi động lại máy → xác nhận.
-        <div className="mt-0.5">
-          Mục này chỉ xuất hiện sau khi máy đã cắm vào Xcode một lần, hoặc đã cài một app ký bằng
-          chứng chỉ dev. Máy mới sẽ không thấy dòng đó.
-        </div>
-      </li>
-      <li>
-        <b className="text-foreground">Tự động hoá giao diện</b> —{' '}
-        <span className="text-foreground">
-          Cài đặt › Nhà phát triển › Tự động hoá giao diện (UI Automation)
-        </span>{' '}
-        → bật.
-        <div className="mt-0.5">
-          Đây là công tắc quyết định chuyện máy có hỏi mật mã ở MỖI lượt chạy hay không. Chưa bật thì
-          iOS coi từng phiên XCUITest là một lần cấp quyền riêng, và người chạy phải gõ mật mã giữa
-          chừng — cắm năm máy là năm lần, mỗi lượt. Bật rồi thì chỉ còn đúng một lần cho mỗi máy,
-          lúc cài đặt.
-        </div>
-      </li>
-      <li>
-        <b className="text-foreground">Web Inspector</b> —{' '}
-        <span className="text-foreground">Cài đặt › Safari › Nâng cao › Web Inspector</span>.
-        <div className="mt-0.5">
-          Chỉ cần khi <code>ios.hybrid = true</code>. Không bật thì Appium không thấy WebView context
-          nào, và app hybrid trông như một màn hình rỗng.
-        </div>
-      </li>
-    </ol>
   );
 }
 

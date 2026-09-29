@@ -10,7 +10,7 @@
  */
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { iosWdaCheck, tryRun } from '../preflight.js';
+import { iosWdaCheck, tryRun, wdaCheckUdid } from '../preflight.js';
 import type { TestPilotConfig } from '../../config.js';
 
 const cfg = { ios: { wdaBundleId: 'com.tuoiha17.WebDriverAgentRunner' } } as TestPilotConfig;
@@ -29,6 +29,30 @@ function fakeRun(replies: { apps?: string; processes?: string; launch?: { ok: bo
 }
 
 describe('iosWdaCheck', () => {
+  /**
+   * iPhone mới + WDA cài sẵn: Appium không cài gì, nên thiếu WDA là lượt chạy
+   * hỏng ngay ("… is not installed"). Trước đây dòng này báo xanh.
+   */
+  it('dùng WDA cài sẵn mà máy chưa có thì đỏ, kèm nút cài', async () => {
+    const preinstalled = { ios: { ...cfg.ios, usePreinstalledWDA: true } } as TestPilotConfig;
+    const check = await iosWdaCheck(preinstalled, 'UDID', fakeRun({ apps: '{"apps":[]}' }), async () => undefined);
+    assert.equal(check.ok, false);
+    assert.equal(check.fix, 'ios-wda');
+  });
+
+  it('bản WDA dựng sẵn chưa ký cho máy này thì đỏ, kèm nút cài', async () => {
+    const prebuilt = {
+      ios: { ...cfg.ios, usePrebuiltWDA: true, derivedDataPath: '/dd' },
+    } as TestPilotConfig;
+    const run = async (file: string, args: string[]) => {
+      if (file === 'security') return { ok: true, stdout: '<string>MAY-CU</string>' };
+      return fakeRun({ apps: BUNDLE })(file, args);
+    };
+    const check = await iosWdaCheck(prebuilt, 'MAY-MOI', run, async () => undefined);
+    assert.equal(check.ok, false);
+    assert.equal(check.fix, 'ios-wda');
+  });
+
   it('chưa cài thì không báo đỏ: lượt chạy đầu tiên vốn tự cài', async () => {
     const check = await iosWdaCheck(cfg, 'UDID', fakeRun({ apps: '{"apps":[]}' }), async () => undefined);
     assert.equal(check.ok, true);
@@ -125,5 +149,38 @@ describe('tryRun', () => {
   it('giữ lại cả stdout của lệnh hỏng', async () => {
     const result = await tryRun('sh', ['-c', 'echo đã-in-ra; exit 3']);
     assert.match(result.stdout, /đã-in-ra/);
+  });
+});
+
+/**
+ * Lỗi thật: cắm iPhone 16 mới, chọn nó, dòng WebDriverAgent vẫn hỏi iPhone 12
+ * (máy đầu tiên trong cấu hình, đã rút ra) — nên báo "chưa cài" mãi, kể cả sau
+ * khi nút cài đã cài xong lên chiếc iPhone 16.
+ */
+describe('dòng WebDriverAgent hỏi đúng máy', () => {
+  const two = {
+    ios: {
+      devices: [
+        { id: 'iphone-12', deviceName: 'iPhone 12', udid: 'UDID-12' },
+        { id: 'iphone-16', deviceName: 'iPhone 16', udid: 'UDID-16' },
+      ],
+    },
+  } as unknown as TestPilotConfig;
+
+  it('máy đang chọn, không phải máy đầu danh sách', () => {
+    assert.equal(wdaCheckUdid(two, 'iphone-16'), 'UDID-16');
+  });
+
+  it('chưa chọn máy nào thì mới lấy máy đầu tiên', () => {
+    assert.equal(wdaCheckUdid(two, undefined), 'UDID-12');
+  });
+
+  it('không hỏi được máy thì không kết luận "chưa cài"', async () => {
+    const preinstalled = { ios: { ...cfg.ios, usePreinstalledWDA: true } } as TestPilotConfig;
+    const failing = async () => ({ ok: false, stdout: '', error: 'ERROR: The device is not connected.' });
+    const check = await iosWdaCheck(preinstalled, 'UDID', failing, async () => undefined);
+    assert.equal(check.ok, true);
+    assert.equal(check.fix, undefined);
+    assert.doesNotMatch(check.detail, /Chưa cài/);
   });
 });

@@ -300,7 +300,7 @@ export const runnerRoutes: RouteTable = {
 function sanePrereq(
   raw: Record<string, {
     ok?: boolean; reason?: string; at?: string; fix?: unknown;
-    tunnel?: { ok?: unknown; detail?: unknown; service?: unknown };
+    tunnel?: { ok?: unknown; detail?: unknown; service?: unknown; udids?: unknown };
   }>,
 ): PrereqByPlatform {
   const clean: PrereqByPlatform = {};
@@ -321,6 +321,14 @@ function sanePrereq(
             ok: tunnel.ok,
             detail: tunnel.detail.slice(0, 500),
             ...(tunnel.service === true ? { service: true } : {}),
+            // Chỉ udid đúng dạng, và có trần: đây là dữ liệu runner tự khai.
+            ...(Array.isArray(tunnel.udids)
+              ? {
+                udids: tunnel.udids
+                  .filter((u): u is string => typeof u === 'string' && /^[\w-]{1,64}$/.test(u))
+                  .slice(0, 64),
+              }
+              : {}),
           },
         }
         : {}),

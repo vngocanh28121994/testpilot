@@ -14,7 +14,13 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { describe, it } from 'node:test';
-import { IOS_TUNNEL_COMMAND, iosTunnelCheck, parseDevicectl } from '../preflight.js';
+import {
+  IOS_TUNNEL_COMMAND,
+  IOS_TUNNEL_RESTART_COMMAND,
+  iosTunnelCheck,
+  parseDevicectl,
+  tunnelLacks,
+} from '../preflight.js';
 
 /** Nguyên văn từ máy thật, không phải bảng tự nghĩ ra. */
 const REAL = `Name             Hostname                          Identifier                             State         Model
@@ -133,5 +139,40 @@ describe('điều kiện tunnel iOS', () => {
 
   it('lệnh phải chạy bằng sudo — tool không tự chạy thay được', () => {
     assert.match(IOS_TUNNEL_COMMAND, /^sudo appium driver run xcuitest tunnel-creation$/);
+  });
+});
+
+/**
+ * Lỗi thật: tunnel "giữ 1 máy" nên dòng kiểm tra xanh, nhưng máy nó giữ không
+ * phải chiếc iPhone 16 vừa cắm — Appium báo "Unknown device or simulator UDID".
+ * Tunnel của Appium chỉ quét máy lúc khởi động, nên máy cắm sau không vào sổ.
+ */
+describe('tunnelLacks — tunnel có giữ đúng máy không', () => {
+  it('giữ máy khác thì là thiếu', () => {
+    assert.equal(tunnelLacks({ udids: ['UDID-12'] }, 'UDID-16'), true);
+  });
+
+  it('giữ đúng máy thì không thiếu', () => {
+    assert.equal(tunnelLacks({ udids: ['UDID-12', 'UDID-16'] }, 'UDID-16'), false);
+  });
+
+  it('không đọc được danh sách hoặc không biết máy nào thì không kết luận', () => {
+    assert.equal(tunnelLacks({}, 'UDID-16'), false);
+    assert.equal(tunnelLacks(undefined, 'UDID-16'), false);
+    assert.equal(tunnelLacks({ udids: ['UDID-12'] }, undefined), false);
+  });
+});
+
+describe('lệnh khởi động lại tunnel', () => {
+  it('dừng tunnel cũ rồi chạy đúng lệnh tunnel', () => {
+    assert.ok(IOS_TUNNEL_RESTART_COMMAND.endsWith(IOS_TUNNEL_COMMAND));
+  });
+
+  /** Mẫu mà tự khớp dòng `sudo pkill …` thì pkill giết luôn sudo cha của nó. */
+  it('mẫu pkill khớp tiến trình tunnel nhưng không khớp chính nó', () => {
+    const pattern = /'([^']+)'/.exec(IOS_TUNNEL_RESTART_COMMAND)![1]!;
+    const re = new RegExp(pattern);
+    assert.ok(re.test('/usr/local/bin/node ./scripts/tunnel-creation.mjs'));
+    assert.ok(!re.test(IOS_TUNNEL_RESTART_COMMAND));
   });
 });

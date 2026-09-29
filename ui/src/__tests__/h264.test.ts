@@ -65,12 +65,26 @@ describe('AnnexBAssembler', () => {
   });
 
   it('đọc được cả mã bắt đầu ba byte', () => {
-    const shortStart = [0, 0, 1, 1, 0x11];
+    // 0x9a: bit cao 1 — first_mb_in_slice = 0, slice mở ảnh mới như slice thật.
+    const shortStart = [0, 0, 1, 1, 0x9a];
     const assembler = new AnnexBAssembler();
     const units = assembler.push(bytes(SPS, PPS, IDR, shortStart, FRAME));
 
     expect(units).toHaveLength(2);
     expect(units[0]!.key).toBe(true);
+  });
+
+  /**
+   * Khung chia nhiều slice: slice sau có first_mb_in_slice ≠ 0 (bit cao 0).
+   * Coi mỗi NAL ảnh là khung mới thì khung bị cắt đôi — "Decoder failure".
+   */
+  it('khung nhiều slice là MỘT đơn vị, không cắt đôi', () => {
+    const idrSecondSlice = nal(5, [0x2a, 0x84]);
+    const assembler = new AnnexBAssembler();
+    const units = assembler.push(bytes(SPS, PPS, IDR, idrSecondSlice, FRAME, FRAME));
+    expect(units).toHaveLength(2);
+    expect(units[0]!.key).toBe(true);
+    expect(units[0]!.data).toEqual(bytes(SPS, PPS, IDR, idrSecondSlice));
   });
 
   it('không có mã bắt đầu thì không phát gì, và không mất byte', () => {

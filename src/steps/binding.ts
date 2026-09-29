@@ -8,6 +8,13 @@ import { STEP_RULES } from './vocabulary.js';
 import { parseContextualRowAction } from '../core/contextual.js';
 import { normalizeHumanText } from '../core/text.js';
 
+/** Một dòng cho người duyệt: dòng mấy, bước nào, vì sao — không kèm cả trang gợi ý. */
+function stepErrorText(err: unknown, line: number, text: string): string {
+  if (err instanceof StepBindingError) return `Dòng ${line}: chưa hiểu thao tác “${text}”.`;
+  const first = ((err as Error).message ?? '').split('\n')[0] ?? '';
+  return `Dòng ${line}: ${first}`;
+}
+
 export class StepBindingError extends Error {
   constructor(
     readonly uri: string,
@@ -42,7 +49,17 @@ function elementIndex(registry: Registry): Map<string, string[]> {
   return idx;
 }
 
-export function parseFeature(uri: string, source: string, registry: Registry): FeatureSpec {
+export function parseFeature(
+  uri: string,
+  source: string,
+  registry: Registry,
+  /**
+   * `lenient`: bước chưa hiểu thì ghi vào `bindErrors` của kịch bản và bỏ qua,
+   * thay vì ném lỗi cho cả file. Chỉ dành cho màn DUYỆT: một bước lạ từng làm
+   * cả file hiện "0 kịch bản", dù lỗi bind chính là thứ người duyệt cần sửa.
+   */
+  opts: { lenient?: boolean } = {},
+): FeatureSpec {
   const parser = new Parser(new AstBuilder(IdGenerator.uuid()), new GherkinClassicTokenMatcher());
   const doc = parser.parse(source);
   const feature = doc.feature;
@@ -247,13 +264,33 @@ export function parseFeature(uri: string, source: string, registry: Registry): F
       dynamicValues: new Set(backgroundContext.dynamicValues),
     };
 
+    // Chế độ khoan dung: gom lỗi của TỪNG kịch bản thay vì ném cho cả file.
+    const bindAll = (
+      steps: readonly { keyword: string; text: string; location: { line: number } }[],
+      text: (raw: string) => string = (raw) => raw,
+    ): { steps: StepSpec[]; errors: string[] } => {
+      const out: StepSpec[] = [];
+      const errors: string[] = [];
+      for (const s of steps) {
+        try {
+          out.push(bindStep(s.keyword, text(s.text), s.location.line, scenarioContext));
+        } catch (err) {
+          if (!opts.lenient) throw err;
+          errors.push(stepErrorText(err, s.location.line, text(s.text)));
+        }
+      }
+      return { steps: out, errors };
+    };
+
     if (sc.examples.length === 0) {
+      const bound = bindAll(sc.steps);
       scenarios.push({
         id: slug(`${feature.name}-${sc.name}`),
         name: sc.name,
         tags,
         platforms,
-        steps: sc.steps.map((s) => bindStep(s.keyword, s.text, s.location.line, scenarioContext)),
+        steps: bound.steps,
+        ...(bound.errors.length > 0 ? { bindErrors: bound.errors } : {}),
       });
       continue;
     }
@@ -266,14 +303,14 @@ export function parseFeature(uri: string, source: string, registry: Registry): F
         const subs = new Map<string, string>();
         headers.forEach((h, j) => subs.set(h, row.cells[j]?.value ?? ''));
         const name = `${sc.name} [${headers.map((h) => `${h}=${subs.get(h)}`).join(', ')}]`;
+        const bound = bindAll(sc.steps, (raw) => substitute(raw, subs));
         scenarios.push({
           id: slug(`${feature.name}-${sc.name}-${i}`),
           name,
           tags,
           platforms,
-          steps: sc.steps.map((s) =>
-            bindStep(s.keyword, substitute(s.text, subs), s.location.line, scenarioContext),
-          ),
+          steps: bound.steps,
+          ...(bound.errors.length > 0 ? { bindErrors: bound.errors } : {}),
         });
       }
     }
